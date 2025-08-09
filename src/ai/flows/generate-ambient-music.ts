@@ -22,9 +22,9 @@ const GenerateAmbientMusicInputSchema = z.object({
 export type GenerateAmbientMusicInput = z.infer<typeof GenerateAmbientMusicInputSchema>;
 
 const GenerateAmbientMusicOutputSchema = z.object({
-  soloPart: z.string().describe('The generated solo part music.'),
-  accompanimentPart: z.string().describe('The generated accompaniment part music.'),
-  bassPart: z.string().describe('The generated bass part music.'),
+  soloPart: z.string().describe("The generated solo part music as a space-separated sequence of notes (e.g., 'C4 D4 E4'). Should be between 4 and 8 notes long."),
+  accompanimentPart: z.string().describe("The generated accompaniment part music as a space-separated sequence of notes. Should be between 2 and 4 notes long."),
+  bassPart: z.string().describe("The generated bass part music as a space-separated sequence of notes. Should be 1 or 2 notes long."),
 });
 
 export type GenerateAmbientMusicOutput = z.infer<typeof GenerateAmbientMusicOutputSchema>;
@@ -43,35 +43,22 @@ const prompt = ai.definePrompt({
 
 You will generate three parts: solo, accompaniment, and bass.
 
-The style is ambient.
+The style is ambient, minimalist, and looping. The notes should be in a consistent key, like C major or A minor.
 
 The instruments are:
 - Solo: {{{soloInstrument}}}
 - Accompaniment: {{{accompanimentInstrument}}}
 - Bass: {{{bassInstrument}}}
 
-Ensure variety and evolution in all parts.
-Limit the total number of concurrent voices to 8-10 to ensure crisp and clear audio, focusing on performance for mobile devices
-
-Output each of the parts as a text description.
-
-Solo:
-
-{{#soloPart}}
-{{soloPart}}
-{{/soloPart}}
-
-Accompaniment:
-
-{{#accompanimentPart}}
-{{accompanimentPart}}
-{{/accompanimentPart}}
-
-Bass:
-
-{{#bassPart}}
-{{bassPart}}
-{{/bassPart}}`,
+Constraints:
+- The output must be ONLY space-separated musical notes in scientific pitch notation (e.g., 'C4 G4 E4').
+- Solo Part: Generate a sequence of 4-8 notes.
+- Accompaniment Part: Generate a sequence of 2-4 notes that harmonize with the solo part.
+- Bass Part: Generate a sequence of 1-2 low-pitched notes that provide a foundation.
+- Ensure variety and evolution in all parts but they should sound good when looped.
+- Limit the total number of concurrent voices to 8-10 to ensure crisp and clear audio, focusing on performance for mobile devices.
+- Do not include any other text, labels, or explanations.
+`,
 });
 
 const generateAmbientMusicFlow = ai.defineFlow(
