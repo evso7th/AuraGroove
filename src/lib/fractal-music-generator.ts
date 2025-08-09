@@ -3,7 +3,7 @@ import * as Tone from "tone";
 
 interface MusicData {
   soloPart: string[];
-  accompanimentPart: string[];
+  accompanimentPart: (string | string[])[];
   bassPart: string[];
 }
 
@@ -67,7 +67,6 @@ export function generateFractalMusic(): { musicData: MusicData } {
   // --- Configuration ---
   const soloOctave = 4;
   const accompanimentOctave = 3;
-  const bassOctave = 2;
   const soloScaleName = getRandom(Object.keys(scales) as ScaleName[]);
   const accompanimentScaleName = getRandom(Object.keys(scales) as ScaleName[]);
   const bassScaleName = getRandom(['minorPentatonic', 'aeolian', 'blues'] as ScaleName[]);
@@ -106,11 +105,17 @@ export function generateFractalMusic(): { musicData: MusicData } {
     return [rootNote, thirdNote];
   });
 
-
   // Generate Bass Part (slow, rhythmic foundation)
   const bassLSystem = generateLSystem("E", { E: "E-F", F: "E+F" }, bassIterations);
   const bassPart = bassLSystem.split("").map(() => {
-      return mapValueToNote(prng.next(), bassScale, bassOctave);
+    const value = prng.next();
+    const octave = value < 0.3 ? 1 : 2; // 30% chance to go to 1st octave
+    const note = mapValueToNote(value, bassScale, octave);
+    // Ensure we don't go below F1
+    if (octave === 1 && ["C1", "D1", "Eb1", "E1"].includes(note)) {
+      return "F1";
+    }
+    return note;
   });
   
   const musicData: MusicData = {
