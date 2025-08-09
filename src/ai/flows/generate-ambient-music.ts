@@ -39,25 +39,24 @@ const prompt = ai.definePrompt({
   name: 'generateAmbientMusicPrompt',
   input: {schema: GenerateAmbientMusicInputSchema},
   output: {schema: GenerateAmbientMusicOutputSchema},
-  prompt: `You are a composer specializing in ambient music.
+  prompt: `You are an expert composer specializing in creating deep, evolving ambient music. Your goal is to generate a short, loopable musical piece with a clear sense of atmosphere and harmony.
 
-You will generate three parts: solo, accompaniment, and bass.
+You will compose three distinct parts: a solo melody, an accompaniment harmony, and a bass line. The overall style should be minimalist, atmospheric, and suitable for looping, creating an evolving soundscape. All parts must be in a harmonically consistent key (e.g., C Major, A Minor).
 
-The style is ambient, minimalist, and looping. The notes should be in a consistent key, like C major or A minor.
-
-The instruments are:
+Instruments:
 - Solo: {{{soloInstrument}}}
 - Accompaniment: {{{accompanimentInstrument}}}
 - Bass: {{{bassInstrument}}}
 
-Constraints:
-- The output must be ONLY space-separated musical notes in scientific pitch notation (e.g., 'C4 G4 E4').
-- Solo Part: Generate a sequence of 4-8 notes.
-- Accompaniment Part: Generate a sequence of 2-4 notes that harmonize with the solo part.
-- Bass Part: Generate a sequence of 1-2 low-pitched notes that provide a foundation.
-- Ensure variety and evolution in all parts but they should sound good when looped.
-- Limit the total number of concurrent voices to 8-10 to ensure crisp and clear audio, focusing on performance for mobile devices.
+Compositional Guidelines:
+- Solo Part: Create a simple, memorable, and expressive melody. It should be a sequence of 4-8 notes. Use varying note durations and rhythms to add interest.
+- Accompaniment Part: Generate a harmonic progression that supports the solo melody. This could be slow-moving chords or a gentle arpeggio. Use 2-4 notes. This part should complement the solo, not overpower it.
+- Bass Part: Provide a foundational bass line with 1-2 low-pitched notes. These notes should anchor the harmony and be rhythmically simple, often holding for a long duration.
+
+Technical Constraints:
+- The output MUST consist of only space-separated musical notes in scientific pitch notation (e.g., 'C4 G4 E4').
 - Do not include any other text, labels, or explanations.
+- To ensure a clear and crisp sound suitable for mobile devices, the total number of simultaneous notes (polyphony) should not exceed 8-10 voices.
 `,
 });
 
