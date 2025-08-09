@@ -7,12 +7,6 @@ interface MusicData {
   bassPart: string[];
 }
 
-interface Instruments {
-  soloInstrument: 'synthesizer' | 'organ' | 'piano';
-  accompanimentInstrument: 'synthesizer' | 'organ' | 'piano';
-  bassInstrument: 'bass guitar';
-}
-
 // --- FRACTAL AND MUSIC GENERATION LOGIC ---
 
 // Helper to get a random element from an array
@@ -66,7 +60,7 @@ function generateLSystem(
 }
 
 // Generate music data using fractal algorithms
-export function generateFractalMusic(): { musicData: MusicData, instruments: Instruments } {
+export function generateFractalMusic(): { musicData: MusicData } {
   const seed = Math.random() * 1000;
   const prng = new PRNG(seed);
 
@@ -125,11 +119,5 @@ export function generateFractalMusic(): { musicData: MusicData, instruments: Ins
     bassPart,
   };
 
-  const instruments: Instruments = {
-    soloInstrument: getRandom(['synthesizer', 'piano']),
-    accompanimentInstrument: getRandom(['synthesizer', 'organ']),
-    bassInstrument: 'bass guitar',
-  }
-
-  return { musicData, instruments };
+  return { musicData };
 }

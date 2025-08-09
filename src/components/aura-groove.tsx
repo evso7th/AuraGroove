@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Loader2, Pause, Play } from "lucide-react";
-import { audioPlayer } from "@/lib/audio-player";
+import { audioPlayer, Instruments } from "@/lib/audio-player";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,19 +13,35 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/icons";
 import { generateFractalMusic } from "@/lib/fractal-music-generator";
 
 export function AuraGroove() {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isLoading, setIsLoading] = useState(false); // We can keep this for potential future async operations
+  const [isLoading, setIsLoading] = useState(false);
+  const [instruments, setInstruments] = useState<Instruments>({
+    soloInstrument: "synthesizer",
+    accompanimentInstrument: "piano",
+    bassInstrument: "bass guitar",
+  });
   const { toast } = useToast();
+
+  const handleInstrumentChange = (part: keyof Instruments) => (value: Instruments[keyof Instruments]) => {
+    setInstruments(prev => ({ ...prev, [part]: value }));
+  };
 
   const handlePlay = async () => {
     setIsLoading(true);
     try {
-      // Generate music client-side
-      const { musicData, instruments } = generateFractalMusic();
+      const { musicData } = generateFractalMusic();
       
       await audioPlayer.play(musicData, instruments);
       setIsPlaying(true);
@@ -64,10 +80,74 @@ export function AuraGroove() {
         <CardTitle className="font-headline text-3xl">AuraGroove</CardTitle>
         <CardDescription>Fractal-powered ambient music generator</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6 flex items-center justify-center min-h-[196px]">
-        <p className="text-muted-foreground text-center">
-          Press Start to generate an ever-evolving soundscape using mathematical patterns.
-        </p>
+      <CardContent className="space-y-6">
+        <div className="grid gap-4">
+           <div className="grid grid-cols-3 items-center gap-4">
+            <Label htmlFor="solo-instrument" className="text-right">Solo</Label>
+            <Select
+              value={instruments.soloInstrument}
+              onValueChange={handleInstrumentChange('soloInstrument')}
+              disabled={isPlaying || isLoading}
+            >
+              <SelectTrigger id="solo-instrument" className="col-span-2">
+                <SelectValue placeholder="Select instrument" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="synthesizer">Synthesizer</SelectItem>
+                <SelectItem value="piano">Piano</SelectItem>
+                <SelectItem value="organ">Organ</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-3 items-center gap-4">
+            <Label htmlFor="accompaniment-instrument" className="text-right">Accompaniment</Label>
+             <Select
+              value={instruments.accompanimentInstrument}
+              onValueChange={handleInstrumentChange('accompanimentInstrument')}
+              disabled={isPlaying || isLoading}
+            >
+              <SelectTrigger id="accompaniment-instrument" className="col-span-2">
+                <SelectValue placeholder="Select instrument" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="synthesizer">Synthesizer</SelectItem>
+                <SelectItem value="piano">Piano</SelectItem>
+                <SelectItem value="organ">Organ</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+           <div className="grid grid-cols-3 items-center gap-4">
+            <Label htmlFor="bass-instrument" className="text-right">Bass</Label>
+             <Select
+              value={instruments.bassInstrument}
+              onValueChange={handleInstrumentChange('bassInstrument')}
+              disabled={isPlaying || isLoading}
+            >
+              <SelectTrigger id="bass-instrument" className="col-span-2">
+                <SelectValue placeholder="Select instrument" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="bass guitar">Bass Guitar</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+         {isLoading && (
+            <div className="flex flex-col items-center justify-center text-muted-foreground space-y-2 min-h-[40px]">
+                <Loader2 className="h-6 w-6 animate-spin" />
+                <p>Generating soundscape...</p>
+            </div>
+        )}
+        {!isLoading && !isPlaying && (
+            <p className="text-muted-foreground text-center min-h-[40px] flex items-center justify-center px-4">
+              Select your instruments and press Start to generate an ever-evolving soundscape.
+            </p>
+        )}
+        {isPlaying && (
+             <div className="flex flex-col items-center justify-center text-muted-foreground space-y-2 min-h-[40px]">
+                <p>Playing...</p>
+            </div>
+        )}
       </CardContent>
       <CardFooter>
         <Button
