@@ -31,6 +31,7 @@ class AudioPlayer {
     bass?: Tone.Sequence;
   } = {};
   private masterVolume?: Tone.Volume;
+  private lfo?: Tone.LFO;
 
   constructor() {
     // Defer volume creation to initialize method
@@ -50,7 +51,7 @@ class AudioPlayer {
 
   private createSynth(instrument: Instrument): Tone.PolySynth {
     let synthOptions;
-    const commonOptions = { maxPolyphony: 4, volume: -8 };
+    const commonOptions = { maxPolyphony: 4, volume: -10 };
 
     switch (instrument) {
       case 'piano':
@@ -66,13 +67,24 @@ class AudioPlayer {
   }
 
   private createBassSynth(): Tone.MonoSynth {
-    return new Tone.MonoSynth({
-      volume: -4,
-      oscillator: { type: 'fmsquare', modulationType: 'sawtooth', modulationIndex: 0.5 },
-      envelope: { attack: 0.01, decay: 0.1, sustain: 0.4, release: 2 },
-      filterEnvelope: { attack: 0.01, decay: 0.1, sustain: 0.8, release: 1.5, baseFrequency: 50, octaves: 4 },
-      filter: { Q: 2, type: 'lowpass' },
+    const bassSynth = new Tone.MonoSynth({
+      volume: -2,
+      oscillator: { type: 'sine' },
+      envelope: { attack: 0.1, decay: 0.3, sustain: 1, release: 1.5 },
+      filterEnvelope: {
+        attack: 0.01,
+        decay: 0.7,
+        sustain: 0.4,
+        release: 2,
+        baseFrequency: 40,
+        octaves: 3
+      }
     }).connect(this.masterVolume!);
+
+    this.lfo = new Tone.LFO("4n", -4, 0).start();
+    this.lfo.connect(bassSynth.volume);
+    
+    return bassSynth;
   }
 
   private parseNotes(noteString: string): string[] {
@@ -86,6 +98,8 @@ class AudioPlayer {
     if (this.isPlaying) {
       this.stop();
     }
+    
+    await Tone.start();
 
     this.synths.solo = this.createSynth(instruments.soloInstrument);
     this.synths.accompaniment = this.createSynth(instruments.accompanimentInstrument);
@@ -97,7 +111,7 @@ class AudioPlayer {
     
     if (soloNotes.length > 0) {
         this.sequences.solo = new Tone.Sequence((time, note) => {
-            this.synths.solo?.triggerAttackRelease(note, '8n', time);
+            this.synths.solo?.triggerAttackRelease(note, '4n', time);
         }, soloNotes, '4n').start(0);
         this.sequences.solo.loop = true;
     }
@@ -105,7 +119,7 @@ class AudioPlayer {
     if (accompanimentNotes.length > 0) {
         this.sequences.accompaniment = new Tone.Sequence((time, note) => {
             this.synths.accompaniment?.triggerAttackRelease(note, '2n', time);
-        }, accompanimentNotes, '2n').start(0);
+        }, accompanimentNotes, '1m').start(0);
         this.sequences.accompaniment.loop = true;
     }
     
@@ -127,7 +141,7 @@ class AudioPlayer {
     Tone.Transport.cancel(0);
 
     Object.values(this.sequences).forEach(seq => {
-        if(seq) {
+        if (seq) {
             seq.stop();
             seq.dispose();
         }
@@ -136,6 +150,9 @@ class AudioPlayer {
 
     Object.values(this.synths).forEach(synth => synth?.dispose());
     this.synths = {};
+
+    this.lfo?.dispose();
+    this.lfo = undefined;
     
     this.isPlaying = false;
   }

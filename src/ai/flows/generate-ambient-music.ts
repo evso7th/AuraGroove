@@ -51,7 +51,7 @@ Instruments:
 Compositional Guidelines:
 - Solo Part: Create a simple, memorable, and expressive melody. It should be a sequence of 4-8 notes. Use varying note durations and rhythms to add interest.
 - Accompaniment Part: Generate a harmonic progression that supports the solo melody. This could be slow-moving chords or a gentle arpeggio. Use 2-4 notes. This part should complement the solo, not overpower it.
-- Bass Part: Provide a foundational bass line with 1-2 low-pitched notes. These notes should anchor the harmony and be rhythmically simple, often holding for a long duration.
+- Bass Part: Provide a foundational, pulsating bass line using 1-2 low-pitched notes, specifically from the second octave (e.g., C2, G2). These notes should anchor the harmony and be rhythmically simple, often holding for a long duration to create an enveloping sound.
 
 Technical Constraints:
 - The output MUST consist of only space-separated musical notes in scientific pitch notation (e.g., 'C4 G4 E4').
