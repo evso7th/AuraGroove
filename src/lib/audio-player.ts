@@ -126,7 +126,12 @@ class AudioPlayer {
     Tone.Transport.stop();
     Tone.Transport.cancel(0);
 
-    Object.values(this.sequences).forEach(seq => seq?.stop().dispose());
+    Object.values(this.sequences).forEach(seq => {
+        if(seq) {
+            seq.stop();
+            seq.dispose();
+        }
+    });
     this.sequences = {};
 
     Object.values(this.synths).forEach(synth => synth?.dispose());
