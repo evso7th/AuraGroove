@@ -13,7 +13,7 @@ export interface Instruments {
 
 export interface Note {
   time: number;
-  note: number | number[]; // MIDI note number(s)
+  note: number; // MIDI note number
   duration: number; // in seconds
   part: Part;
 }
@@ -100,20 +100,26 @@ class AudioPlayer {
     this.synths.bass = this.createBassSynth();
   }
 
-  public schedulePart(notes: Note[], partDuration: number) {
+  public schedulePart(
+    partDuration: number, 
+    times: Float32Array, 
+    pitches: Float32Array, 
+    durations: Float32Array, 
+    parts: Uint8Array
+  ) {
       if (!this.isInitialized) return;
       
       const startTime = this.nextPartStartTime;
 
-      notes.forEach(noteEvent => {
-          const synth = this.synths[noteEvent.part];
-          if(synth) {
-              const frequency = Array.isArray(noteEvent.note) 
-                ? noteEvent.note.map(n => Tone.Frequency(n, "midi").toFrequency()) 
-                : Tone.Frequency(noteEvent.note, "midi").toFrequency();
-              synth.triggerAttackRelease(frequency, noteEvent.duration, startTime + noteEvent.time);
-          }
-      });
+      for (let i = 0; i < pitches.length; i++) {
+        const part = parts[i] === 0 ? 'solo' : parts[i] === 1 ? 'accompaniment' : 'bass';
+        const synth = this.synths[part];
+
+        if(synth) {
+            const frequency = Tone.Frequency(pitches[i], "midi").toFrequency();
+            synth.triggerAttackRelease(frequency, durations[i], startTime + times[i]);
+        }
+      }
       
       this.nextPartStartTime += partDuration;
   }
