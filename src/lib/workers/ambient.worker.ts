@@ -1,4 +1,5 @@
 
+
 // --- UTILITIES ---
 class PRNG {
   private seed: number;
@@ -37,7 +38,7 @@ let instruments = {
     accompaniment: 'piano',
     bass: 'bass guitar',
 };
-let drumsEnabled = true;
+let drumsEnabled = false;
 
 const soloPrng = new PRNG(Math.random() * 1000);
 const accompanimentPrng = new PRNG(Math.random() * 1000);
@@ -48,42 +49,6 @@ const soloScale = scales.minorPentatonic;
 const accompanimentScale = scales.ionian;
 const bassScale = scales.aeolian;
 
-// --- DRUM SAMPLES ---
-const drumSampleFiles = {
-    kick: '/assets/drums/kickdrum.wav',
-    snare: '/assets/drums/snare.wav',
-    closedHat: '/assets/drums/closed hi hat accented.wav',
-    openHat: '/assets/drums/Open HH (Top) (2).wav',
-    crash: '/assets/drums/Crash (1).wav',
-};
-
-const drumBuffers: { [key: string]: AudioBuffer } = {};
-let drumsLoaded = false;
-
-async function loadDrumSamples() {
-    if (drumsLoaded) return;
-    postMessage({ type: 'loading_start' });
-    try {
-        const context = new (self.OfflineAudioContext || (self as any).webkitOfflineAudioContext)(1, 1, sampleRate);
-        
-        const promises = Object.entries(drumSampleFiles).map(async ([name, url]) => {
-            const response = await fetch(url);
-             if (!response.ok) {
-                throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
-            }
-            const arrayBuffer = await response.arrayBuffer();
-            const decodedBuffer = await context.decodeAudioData(arrayBuffer);
-            drumBuffers[name] = decodedBuffer;
-        });
-        await Promise.all(promises);
-        drumsLoaded = true;
-        console.log("Drum samples loaded successfully.");
-    } catch (error) {
-        console.error("Error loading drum samples:", error);
-        postMessage({ type: 'error', message: `Failed to load drum samples. Please check file paths. Error: ${error instanceof Error ? error.message : String(error)}` });
-        drumsLoaded = false;
-    }
-}
 
 // --- SYNTH CREATION ---
 type Note = { freq: number; time: number; duration: number; velocity: number };
@@ -154,15 +119,6 @@ function createSynthVoice(notes: Note[], totalDuration: number, instrument: stri
     return buffer;
 }
 
-function mix(buffer: Float32Array, sample: AudioBuffer, time: number, volume: number = 1.0) {
-    const startSample = Math.floor(time * sampleRate);
-    const sampleData = sample.getChannelData(0);
-    for (let i = 0; i < sampleData.length; i++) {
-        const bufferIndex = startSample + i;
-        if (bufferIndex >= buffer.length) break;
-        buffer[bufferIndex] += sampleData[i] * volume;
-    }
-}
 
 // --- MUSIC GENERATION ---
 async function generatePart() {
@@ -207,25 +163,7 @@ async function generatePart() {
     for (let i = 0; i < finalBuffer.length; i++) {
       finalBuffer[i] = soloBuffer[i] + accompanimentBuffer[i] + bassBuffer[i];
     }
-    
-    if (drumsEnabled && drumsLoaded) {
-        for (let i = 0; i < 16; i++) {
-             const time = i * 0.25;
-            if (i % 4 === 0) { // Kick on 1, 2, 3, 4
-                 if (drumPrng.next() > 0.1) mix(finalBuffer, drumBuffers.kick, time, 0.9);
-            }
-            if (i % 4 === 2) { // Snare on 2 and 4 (as beats, so i=4, 12)
-                 if (drumPrng.next() > 0.2) mix(finalBuffer, drumBuffers.snare, time + (i*0.25), 0.7);
-            }
-             if (i % 2 !== 0) { // Closed hats on the off-beats
-                 if (drumPrng.next() > 0.15) mix(finalBuffer, drumBuffers.closedHat, time, 0.5);
-             }
-        }
-         if (drumPrng.next() > 0.9) { 
-            mix(finalBuffer, drumBuffers.crash, 0, 0.6);
-        }
-    }
-    
+        
     for (let i = 0; i < finalBuffer.length; i++) {
       finalBuffer[i] = Math.max(-1, Math.min(1, finalBuffer[i]));
     }
@@ -246,18 +184,7 @@ self.onmessage = async function(e) {
     instruments = data.instruments;
     drumsEnabled = data.drumsEnabled;
     if (generationInterval === null) {
-      if (drumsEnabled && !drumsLoaded) {
-          await loadDrumSamples();
-          if (!drumsLoaded && drumsEnabled) { // check again in case loading failed
-             postMessage({ type: 'loading_complete' });
-             generatePart(); // start generation even if drums fail
-          } else {
-             postMessage({ type: 'loading_complete' });
-          }
-      } else {
-         postMessage({ type: 'loading_complete' });
-      }
-      
+      postMessage({ type: 'loading_complete' });
       generatePart();
       generationInterval = setInterval(generatePart, (partDuration * 1000) - 20); 
     }
@@ -271,8 +198,5 @@ self.onmessage = async function(e) {
   } 
   else if (command === 'toggle_drums') {
     drumsEnabled = data;
-    if(drumsEnabled && !drumsLoaded) {
-        loadDrumSamples(); 
-    }
   }
 };

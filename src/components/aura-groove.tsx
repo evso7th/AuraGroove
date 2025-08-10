@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useRef } from "react";
@@ -35,7 +36,7 @@ export function AuraGroove() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingText, setLoadingText] = useState("Loading...");
-  const [drumsEnabled, setDrumsEnabled] = useState(true);
+  const [drumsEnabled, setDrumsEnabled] = useState(false);
   const [instruments, setInstruments] = useState<Instruments>({
     solo: "synthesizer",
     accompaniment: "piano",
@@ -132,6 +133,58 @@ export function AuraGroove() {
       handlePlay();
     }
   };
+  
+  // --- TEMPORARY FUNCTION TO ENCODE SAMPLES ---
+  const handleLoadAndEncodeSamples = async () => {
+    const sampleFiles = {
+      kick: '/assets/drums/kickdrum.wav',
+      snare: '/assets/drums/snare.wav',
+      closedHat: '/assets/drums/closed hi hat accented.wav',
+      openHat: '/assets/drums/Open HH (Top) (2).wav',
+      crash: '/assets/drums/Crash (1).wav',
+    };
+
+    const dataUris: { [key: string]: string } = {};
+    
+    console.log("Starting sample encoding...");
+
+    try {
+      for (const [name, url] of Object.entries(sampleFiles)) {
+        console.log(`Fetching ${url}...`);
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
+        }
+        const blob = await response.blob();
+        const reader = new FileReader();
+        const dataUri = await new Promise<string>((resolve, reject) => {
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+        dataUris[name] = dataUri;
+        console.log(`Successfully encoded ${name}.`);
+      }
+
+      console.log("--- COPY THE OBJECT BELOW ---");
+      console.log(JSON.stringify(dataUris, null, 2));
+      console.log("--- PASTE IT IN THE CHAT ---");
+      
+      toast({
+        title: "Encoding Successful",
+        description: "Sample data has been logged to the console. Please copy it.",
+      });
+
+    } catch (error) {
+       const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+       console.error("Error encoding samples:", errorMessage);
+       toast({
+          variant: "destructive",
+          title: "Encoding Failed",
+          description: errorMessage,
+       });
+    }
+  };
 
   return (
     <Card className="w-full max-w-md shadow-2xl">
@@ -193,6 +246,7 @@ export function AuraGroove() {
               </SelectContent>
             </Select>
           </div>
+           {/*
            <div className="flex items-center justify-between pt-2">
             <Label htmlFor="drums-enabled" className="text-right">Drums</Label>
             <Switch
@@ -202,6 +256,7 @@ export function AuraGroove() {
               disabled={isLoading}
             />
           </div>
+          */}
         </div>
          {isLoading && (
             <div className="flex flex-col items-center justify-center text-muted-foreground space-y-2 min-h-[40px]">
@@ -220,7 +275,16 @@ export function AuraGroove() {
             </div>
         )}
       </CardContent>
-      <CardFooter>
+      <CardFooter className="flex-col gap-4">
+        {/* TEMPORARY BUTTON */}
+        <Button
+          type="button"
+          onClick={handleLoadAndEncodeSamples}
+          variant="outline"
+          className="w-full"
+        >
+          Encode Samples
+        </Button>
         <Button
           type="button"
           onClick={handleTogglePlay}
