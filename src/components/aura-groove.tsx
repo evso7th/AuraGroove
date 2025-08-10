@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Loader2, Music, Pause } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -58,6 +58,22 @@ export function AuraGroove() {
   const sampleArrayBuffers = useRef<Record<string, ArrayBuffer>>({});
   const areSamplesLoadedOnMount = useRef(false);
 
+  // Use refs to store the latest state for the worker message handler
+  const instrumentsRef = useRef(instruments);
+  const drumsEnabledRef = useRef(drumsEnabled);
+  useEffect(() => {
+    instrumentsRef.current = instruments;
+    drumsEnabledRef.current = drumsEnabled;
+  }, [instruments, drumsEnabled]);
+
+  const handleStop = useCallback(() => {
+    musicWorkerRef.current?.postMessage({ command: 'stop' });
+    audioPlayer.stop();
+    setIsPlaying(false);
+    setIsLoading(false);
+    setLoadingText("");
+  }, []);
+
   useEffect(() => {
     musicWorkerRef.current = new Worker('/workers/ambient.worker.js', { type: 'module' });
 
@@ -67,13 +83,12 @@ export function AuraGroove() {
       if (type === 'chunk') {
         audioPlayer.schedulePart(data.chunk, data.duration);
       } else if (type === 'samples_loaded') {
-        // Now that worker has samples, we can start generation
         setLoadingText("Generating music...");
         musicWorkerRef.current?.postMessage({
             command: 'start',
             data: {
-                instruments,
-                drumsEnabled,
+                instruments: instrumentsRef.current,
+                drumsEnabled: drumsEnabledRef.current,
                 sampleRate: audioPlayer.getAudioContext()?.sampleRate || 44100
             }
         });
@@ -124,7 +139,7 @@ export function AuraGroove() {
         audioPlayer.stop();
       }
     };
-  }, []);
+  }, [handleStop, toast]);
   
   const handleInstrumentChange = (part: keyof Instruments) => (value: Instruments[keyof Instruments]) => {
     const newInstruments = { ...instruments, [part]: value };
@@ -199,19 +214,10 @@ export function AuraGroove() {
         return;
     }
     
-    // This is the main entry point now. It will init audio, decode, and send to worker.
-    // The worker will then respond with 'samples_loaded', which triggers the start command.
     if (!await prepareAudioAndSendSamples()) {
-        handleStop(); // Clean up if preparation failed
+        handleStop();
         return;
     }
-  };
-
-  const handleStop = () => {
-    musicWorkerRef.current?.postMessage({ command: 'stop' });
-    audioPlayer.stop();
-    setIsPlaying(false);
-    setIsLoading(false);
   };
   
   const handleTogglePlay = () => {
