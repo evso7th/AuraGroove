@@ -87,14 +87,14 @@ const PatternProvider = {
             { sample: 'ride', time: 3.5 },
         ],
     },
-    getDrumPattern(name) {
-        return this.drumPatterns[name] || this.drumPatterns.basic;
+    getDrumPattern(name: string) {
+        return this.drumPatterns[name as keyof typeof this.drumPatterns] || this.drumPatterns.basic;
     },
 };
 
 // --- 2. Instrument Generators (The Composers) ---
 class DrumGenerator {
-    static createScore(patternName, barNumber, totalBars, beatsPerBar = 4) {
+    static createScore(patternName: string, barNumber: number, totalBars: number, beatsPerBar = 4) {
         const pattern = PatternProvider.getDrumPattern(patternName);
         let score = [...pattern];
 
@@ -122,10 +122,10 @@ class BassGenerator {
 
 // --- 3. SampleBank (Decoded Audio Storage) ---
 const SampleBank = {
-    samples: {}, // { kick: Float32Array, snare: Float32Array, ... }
+    samples: {} as Record<string, Float32Array>, // { kick: Float32Array, snare: Float32Array, ... }
     isInitialized: false,
 
-    async init(samples, sampleRate) {
+    async init(samples: Record<string, ArrayBuffer>, sampleRate: number) {
         const tempAudioContext = new OfflineAudioContext(1, 1, sampleRate);
         for (const key in samples) {
             if (samples[key].byteLength > 0) {
@@ -134,7 +134,7 @@ const SampleBank = {
                     this.samples[key] = audioBuffer.getChannelData(0);
                 } catch(e) {
                     // post error back to main thread
-                    self.postMessage({ type: 'error', error: `Failed to decode sample ${key}: ${e.message}` });
+                    self.postMessage({ type: 'error', error: `Failed to decode sample ${key}: ${e instanceof Error ? e.message : String(e)}` });
                 }
             }
         }
@@ -142,7 +142,7 @@ const SampleBank = {
         console.log("SampleBank Initialized with samples:", Object.keys(this.samples));
     },
 
-    getSample(name) {
+    getSample(name: string) {
         return this.samples[name];
     }
 };
@@ -150,7 +150,7 @@ const SampleBank = {
 
 // --- 4. AudioRenderer (The Sound Engine) ---
 const AudioRenderer = {
-    render(score, settings, sampleRate) {
+    render(score: any[], settings: { duration: number, volume: number }, sampleRate: number) {
         const { duration, volume } = settings;
         const totalSamples = Math.floor(duration * sampleRate);
         const chunk = new Float32Array(totalSamples).fill(0);
@@ -162,14 +162,16 @@ const AudioRenderer = {
             const noteVelocity = note.velocity ?? 1.0;
             const finalVolume = volume * noteVelocity;
             
-            const startSample = Math.floor(note.time * sampleRate);
+            const startSample = Math.floor(note.time * Scheduler.secondsPerBeat * sampleRate);
 
             // Ensure we don't write past the end of the chunk buffer
             const endSample = Math.min(startSample + sample.length, totalSamples);
             
             for (let i = 0; i < (endSample - startSample); i++) {
                 // Simple mixing by adding samples
-                chunk[startSample + i] += sample[i] * finalVolume;
+                if (startSample + i < chunk.length) {
+                    chunk[startSample + i] += sample[i] * finalVolume;
+                }
             }
         }
         
@@ -185,15 +187,15 @@ const AudioRenderer = {
 
 // --- 5. Scheduler (The Conductor) ---
 const Scheduler = {
-    intervalId: null,
+    intervalId: null as any,
     isRunning: false,
     barCount: 0,
     
     // Settings from main thread
     sampleRate: 44100,
     bpm: 120,
-    instruments: {},
-    drumSettings: {},
+    instruments: {} as any,
+    drumSettings: {} as any,
 
     // Calculated properties
     get beatsPerBar() { return 4; },
@@ -226,15 +228,16 @@ const Scheduler = {
         this.barCount = 0;
     },
     
-    updateSettings(settings) {
+    updateSettings(settings: any) {
         if (settings.instruments) this.instruments = settings.instruments;
         if (settings.drumSettings) this.drumSettings = settings.drumSettings;
+        if(settings.bpm) this.bpm = settings.bpm;
     },
 
     tick() {
         if (!this.isRunning) return;
 
-        let finalScore = [];
+        let finalScore: any[] = [];
         
         // 1. Ask generators for their scores
         if (this.drumSettings.enabled) {
@@ -275,7 +278,7 @@ const Scheduler = {
 
 
 // --- MessageBus (The "Kafka" entry point) ---
-self.onmessage = async (event) => {
+self.onmessage = async (event: MessageEvent) => {
     const { command, data } = event.data;
 
     try {
@@ -306,6 +309,6 @@ self.onmessage = async (event) => {
                 break;
         }
     } catch (e) {
-        self.postMessage({ type: 'error', error: e.message });
+        self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };

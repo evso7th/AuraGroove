@@ -162,14 +162,16 @@ const AudioRenderer = {
             const noteVelocity = note.velocity ?? 1.0;
             const finalVolume = volume * noteVelocity;
             
-            const startSample = Math.floor(note.time * (60 / Scheduler.bpm) * sampleRate);
+            const startSample = Math.floor(note.time * Scheduler.secondsPerBeat * sampleRate);
 
             // Ensure we don't write past the end of the chunk buffer
             const endSample = Math.min(startSample + sample.length, totalSamples);
             
             for (let i = 0; i < (endSample - startSample); i++) {
                 // Simple mixing by adding samples
-                chunk[startSample + i] += sample[i] * finalVolume;
+                if (startSample + i < chunk.length) {
+                    chunk[startSample + i] += sample[i] * finalVolume;
+                }
             }
         }
         
@@ -229,6 +231,7 @@ const Scheduler = {
     updateSettings(settings: any) {
         if (settings.instruments) this.instruments = settings.instruments;
         if (settings.drumSettings) this.drumSettings = settings.drumSettings;
+        if(settings.bpm) this.bpm = settings.bpm;
     },
 
     tick() {
