@@ -75,7 +75,7 @@ export function AuraGroove() {
         isInitializedRef.current = true;
       }
       
-      musicWorkerRef.current?.postMessage({ command: 'start' });
+      musicWorkerRef.current?.postMessage({ command: 'start', data: instruments });
       audioPlayer.start();
       setIsPlaying(true);
     } catch (error) {

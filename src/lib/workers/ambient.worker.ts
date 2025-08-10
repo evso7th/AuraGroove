@@ -124,6 +124,7 @@ self.onmessage = function(e) {
   const { command, data } = e.data;
 
   if (command === 'start') {
+    instruments = data;
     if (generationInterval === null) {
       generateAndRenderPart(); // Generate first part immediately
       generationInterval = setInterval(generateAndRenderPart, (partDuration * 1000) - 200); // Generate slightly faster than playback
