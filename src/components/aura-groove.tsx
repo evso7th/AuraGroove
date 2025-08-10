@@ -37,9 +37,9 @@ export function AuraGroove() {
   const [loadingText, setLoadingText] = useState("Loading...");
   const [drumsEnabled, setDrumsEnabled] = useState(true);
   const [instruments, setInstruments] = useState<Instruments>({
-    solo: "synthesizer",
-    accompaniment: "piano",
-    bass: "bass guitar",
+    solo: "none",
+    accompaniment: "none",
+    bass: "none",
   });
   const { toast } = useToast();
 
