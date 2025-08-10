@@ -1,235 +1,169 @@
 
-// public/workers/ambient.worker.js
+"use strict";
 
-// --- State ---
+// --- Утилиты ---
+const noteToFrequency = (note) => 440 * Math.pow(2, (note - 69) / 12);
+
+function ADSR(audioParam, time, adsr, sustainLevel = 0.5, maxLevel = 1.0) {
+    const { attack, decay, sustain, release } = adsr;
+    audioParam.cancelScheduledValues(time);
+    audioParam.setValueAtTime(0, time);
+    audioParam.linearRampToValueAtTime(maxLevel, time + attack);
+    audioParam.linearRampToValueAtTime(sustainLevel * maxLevel, time + attack + decay);
+    audioParam.setValueAtTime(sustainLevel * maxLevel, time + attack + decay + sustain);
+    audioParam.linearRampToValueAtTime(0, time + attack + decay + sustain + release);
+}
+
+// --- Осцилляторы ---
+function sine(time, freq) {
+    return Math.sin(freq * 2 * Math.PI * time);
+}
+
+// --- Состояние ---
 let sampleRate = 44100;
-let samples = {};
-let instruments = {
-    solo: 'none',
-    accompaniment: 'none',
-    bass: 'none'
-};
+let time = 0;
+let isRunning = false;
+let instruments = { solo: "none", accompaniment: "none", bass: "none" };
 let drumsEnabled = true;
 
-let isRunning = false;
-let sequencePosition = 0;
-const bpm = 60;
-const beatsPerMeasure = 4;
-const measuresPerSequence = 4; // 4-bar loop for drums
-const samplesPerBeat = () => (60 / bpm) * sampleRate;
-const sequenceDurationInSamples = () => measuresPerSequence * beatsPerMeasure * samplesPerBeat();
+const BPM = 120;
+const beatsPerSecond = BPM / 60;
+const quarterNoteDuration = 1 / beatsPerSecond;
 
-// --- Oscillators & Synthesis ---
-const noteFrequencies = {
-    'E2': 82.41,
-    'G2': 98.00,
-    'A2': 110.00,
-    'B2': 123.47,
-    'C3': 130.81,
-    'D3': 146.83,
-    'E3': 164.81,
-};
+let nextKickTime = 0;
+let nextSnareTime = quarterNoteDuration * 2;
+let nextHiHatTime = 0;
+let nextTom1Time = -1, nextTom2Time = -1, nextTom3Time = -1;
 
-function sineWave(t, freq) {
-    return Math.sin(2 * Math.PI * freq * t);
-}
+const CHUNK_DURATION_SECONDS = 0.1;
 
-function createAdsrEnvelope(sampleRate, attack, decay, sustainLevel, release) {
-    const attackSamples = Math.floor(attack * sampleRate);
-    const decaySamples = Math.floor(decay * sampleRate);
-    const releaseSamples = Math.floor(release * sampleRate);
+// --- Основная логика ---
+function generateAudioChunk() {
+    const samplesPerChunk = Math.floor(sampleRate * CHUNK_DURATION_SECONDS);
+    const chunkBuffer = new Float32Array(samplesPerChunk).fill(0);
+    const timeStep = 1 / sampleRate;
+    const masterGain = 0.5;
 
-    return (sample, totalSamples) => {
-        if (sample < attackSamples) {
-            return sample / attackSamples; // Attack phase
+    // Громкость инструментов
+    const kickGain = 0.5;
+    const snareGain = 0.4;
+    const hiHatGain = 0.2;
+    const tomGain = 0.4;
+    const bassGain = 0.4;
+
+    for (let i = 0; i < samplesPerChunk; i++) {
+        let currentSample = 0;
+
+        // --- Ударные ---
+        if (drumsEnabled) {
+            // Kick
+            if (time >= nextKickTime) {
+                const kickFreq = 60;
+                const attackTime = 0.01;
+                const decayTime = 0.2;
+                if (time < nextKickTime + attackTime) {
+                    currentSample += sine(time - nextKickTime, kickFreq) * (1 - (time - nextKickTime) / attackTime) * kickGain;
+                } else if (time < nextKickTime + decayTime) {
+                    currentSample += sine(time - nextKickTime, kickFreq) * Math.exp(-(time - nextKickTime - attackTime) * 5) * kickGain;
+                }
+                if (time >= nextKickTime + quarterNoteDuration * 4) {
+                    nextKickTime += quarterNoteDuration * 4;
+                }
+            }
+
+            // Snare
+            if (time >= nextSnareTime) {
+                const snareFreq = 250;
+                 const attackTime = 0.01;
+                const decayTime = 0.15;
+                 if (time < nextSnareTime + attackTime) {
+                    currentSample += (Math.random() * 2 - 1) * (1 - (time - nextSnareTime) / attackTime) * snareGain;
+                } else if (time < nextSnareTime + decayTime) {
+                    currentSample += (Math.random() * 2 - 1) * Math.exp(-(time - nextSnareTime-attackTime) * 15) * snareGain;
+                }
+                if (time >= nextSnareTime + quarterNoteDuration * 4) {
+                    nextSnareTime += quarterNoteDuration * 4;
+                }
+            }
+             // Toms Fill
+            if (time >= nextTom1Time && nextTom1Time > 0) {
+                 if (time < nextTom1Time + 0.2) currentSample += sine(time - nextTom1Time, 200) * Math.exp(-(time - nextTom1Time) * 10) * tomGain; else nextTom1Time = -1;
+            }
+            if (time >= nextTom2Time && nextTom2Time > 0) {
+                if (time < nextTom2Time + 0.2) currentSample += sine(time - nextTom2Time, 150) * Math.exp(-(time - nextTom2Time) * 10) * tomGain; else nextTom2Time = -1;
+            }
+             if (time >= nextTom3Time && nextTom3Time > 0) {
+                if (time < nextTom3Time + 0.3) currentSample += sine(time - nextTom3Time, 100) * Math.exp(-(time - nextTom3Time) * 8) * tomGain; else nextTom3Time = -1;
+            }
         }
-        if (sample < attackSamples + decaySamples) {
-            const decayProgress = (sample - attackSamples) / decaySamples;
-            return 1.0 - (1.0 - sustainLevel) * decayProgress; // Decay phase
-        }
-        if (sample < totalSamples - releaseSamples) {
-            return sustainLevel; // Sustain phase
-        }
-        const releaseProgress = (sample - (totalSamples - releaseSamples)) / releaseSamples;
-        return sustainLevel * (1.0 - releaseProgress); // Release phase
-    };
-}
-
-const bassEnvelope = createAdsrEnvelope(44100, 0.01, 0.1, 0.8, 0.2);
-
-
-// --- Music Generation Logic ---
-function getDrumSample(type, positionInSequence) {
-    if (!drumsEnabled || !samples[type]) return 0;
-    
-    const samplesPerSeq = sequenceDurationInSamples();
-    const positionInBeat = (positionInSequence % samplesPerBeat()) / samplesPerBeat();
-    
-    let pattern = [];
-    
-    // 4-bar loop
-    const measure = Math.floor(positionInSequence / (beatsPerMeasure * samplesPerBeat()));
-    const beatInMeasure = Math.floor((positionInSequence % (beatsPerMeasure * samplesPerBeat())) / samplesPerBeat());
-
-    switch (type) {
-        case 'kick':
-            // on beats 1 and 3
-            pattern = [0, 2];
-            if (pattern.includes(beatInMeasure)) {
-                 const sampleIndex = Math.floor(positionInBeat * samples[type].length);
-                 if (sampleIndex < samples[type].length) return samples[type][sampleIndex] * 0.5; // Quieter kick
-            }
-            break;
-        case 'snare':
-            // on beats 2 and 4
-            pattern = [1, 3];
-            if (pattern.includes(beatInMeasure)) {
-                 const sampleIndex = Math.floor(positionInBeat * samples[type].length);
-                 if (sampleIndex < samples[type].length) return samples[type][sampleIndex] * 0.4;
-            }
-            break;
-        case 'hat':
-            // every 8th note
-            const sixteenthsPerBeat = 4;
-            const positionInSixteenths = Math.floor(positionInBeat * sixteenthsPerBeat);
-             // Play on 0, 1, 2, 3 (every 16th of the beat)
-            if (positionInSixteenths < sixteenthsPerBeat) {
-                 const sampleIndex = Math.floor((positionInBeat * sixteenthsPerBeat - positionInSixteenths) * samples.hat.length);
-                 if (sampleIndex < samples.hat.length) return samples.hat[sampleIndex] * 0.2;
-            }
-            break;
-        case 'tom1':
-        case 'tom2':
-        case 'tom3':
-             // Tom fill at the end of the 4th measure
-            if (measure === 3 && beatInMeasure === 3) {
-                 const sixteenthOfBeat = Math.floor(positionInBeat * 4); // 0, 1, 2, 3
-                 if (type === 'tom1' && sixteenthOfBeat === 0) {
-                     const sampleIndex = Math.floor((positionInBeat * 4 - sixteenthOfBeat) * samples.tom1.length);
-                     if(sampleIndex < samples.tom1.length) return samples.tom1[sampleIndex] * 0.6;
-                 }
-                 if (type === 'tom2' && sixteenthOfBeat === 1) {
-                     const sampleIndex = Math.floor((positionInBeat * 4 - sixteenthOfBeat) * samples.tom2.length);
-                     if(sampleIndex < samples.tom2.length) return samples.tom2[sampleIndex] * 0.6;
-                 }
-                 if (type === 'tom3' && sixteenthOfBeat === 2) {
-                     const sampleIndex = Math.floor((positionInBeat * 4 - sixteenthOfBeat) * samples.tom3.length);
-                      if(sampleIndex < samples.tom3.length) return samples.tom3[sampleIndex] * 0.6;
-                 }
-            }
-            break;
-    }
-    return 0;
-}
-
-
-function getBassNote(positionInSequence) {
-    if (instruments.bass !== 'bass guitar') return 0;
-    
-    // Play on the first beat of every measure
-    const beatInMeasure = Math.floor((positionInSequence % (beatsPerMeasure * samplesPerBeat())) / samplesPerBeat());
-    const positionInBeatSamples = positionInSequence % samplesPerBeat();
-    const timeInBeat = positionInBeatSamples / sampleRate;
-
-    if (beatInMeasure === 0) { // Play on beat 1
-        const freq = noteFrequencies['E2'];
-        const envelope = bassEnvelope(positionInBeatSamples, samplesPerBeat());
-        return sineWave(timeInBeat, freq) * envelope * 0.15; // Quieter bass
-    }
-
-    return 0;
-}
-
-// --- Main Audio Generation ---
-function generateAudioChunk(chunkSize) {
-    const chunk = new Float32Array(chunkSize);
-
-    for (let i = 0; i < chunkSize; i++) {
-        const currentSamplePosition = sequencePosition + i;
         
-        let finalSample = 0;
-
-        // Drums
-        if(drumsEnabled) {
-            finalSample += getDrumSample('kick', currentSamplePosition);
-            finalSample += getDrumSample('snare', currentSamplePosition);
-            finalSample += getDrumSample('hat', currentSamplePosition);
-            finalSample += getDrumSample('tom1', currentSamplePosition);
-            finalSample += getDrumSample('tom2', currentSamplePosition);
-            finalSample += getDrumSample('tom3', currentSamplePosition);
-        }
-
-        // Bass
-        if(instruments.bass === 'bass guitar') {
-            finalSample += getBassNote(currentSamplePosition);
-        }
-
-        chunk[i] = finalSample;
-    }
-    
-    sequencePosition = (sequencePosition + chunkSize) % sequenceDurationInSamples();
-
-    return chunk;
-}
-
-// --- Worker Message Handling ---
-let intervalId = null;
-
-function start() {
-    if (isRunning) return;
-    isRunning = true;
-    sequencePosition = 0;
-    
-    const chunkSize = 2048; 
-    const intervalTime = (chunkSize / sampleRate) * 1000;
-
-    const sendChunk = () => {
-        if (!isRunning) return;
-        const chunk = generateAudioChunk(chunkSize);
-        self.postMessage({
-            type: 'chunk',
-            data: {
-                chunk: chunk,
-                duration: chunkSize / sampleRate
+        // Hi-Hat (проблема "призрака" все еще здесь)
+        if (time >= nextHiHatTime) {
+            const decayTime = 0.05;
+            if (time < nextHiHatTime + decayTime) {
+                 currentSample += (Math.random() * 2 - 1) * Math.exp(-(time - nextHiHatTime) * 30) * hiHatGain;
             }
-        }, [chunk.buffer]);
-    };
-    
-    // Initial pre-buffer
-    for(let i=0; i<10; i++) {
-        sendChunk();
+            if (time >= nextHiHatTime + quarterNoteDuration) {
+                nextHiHatTime += quarterNoteDuration;
+                // Сбивка томами в конце каждого 4-го такта
+                if (Math.floor(nextHiHatTime / (quarterNoteDuration * 16)) % 1 === 0 && nextHiHatTime > 0) {
+                     if (drumsEnabled) {
+                        nextTom1Time = nextHiHatTime - quarterNoteDuration * 2;
+                        nextTom2Time = nextHiHatTime - quarterNoteDuration * 1.5;
+                        nextTom3Time = nextHiHatTime - quarterNoteDuration;
+                     }
+                }
+            }
+        }
+
+        // --- Бас ---
+         if (instruments.bass === 'bass guitar') {
+             if (time >= nextKickTime) { // Привязка к бочке
+                const bassNote = 31; // E1
+                const bassFreq = noteToFrequency(bassNote);
+                const decayTime = 0.2;
+                 if (time < nextKickTime + decayTime) {
+                    currentSample += sine(time - nextKickTime, bassFreq) * Math.exp(-(time - nextKickTime) * 5) * bassGain;
+                }
+            }
+        }
+
+
+        chunkBuffer[i] = currentSample * masterGain;
+        time += timeStep;
     }
-    
-    intervalId = setInterval(sendChunk, intervalTime);
+    return chunkBuffer;
 }
 
 
-function stop() {
+// --- Управление Worker'ом ---
+function run() {
     if (!isRunning) return;
-    isRunning = false;
-    if (intervalId) {
-        clearInterval(intervalId);
-        intervalId = null;
-    }
+    const chunk = generateAudioChunk();
+    self.postMessage({ type: 'chunk', data: { chunk, duration: CHUNK_DURATION_SECONDS } }, [chunk.buffer]);
+    setTimeout(run, CHUNK_DURATION_SECONDS * 0.9 * 1000);
 }
 
 self.onmessage = (event) => {
     const { command, data } = event.data;
-
     switch (command) {
-        case 'load_samples':
-            samples = data;
-             // The main thread will call 'start' after this.
-            self.postMessage({ type: 'samples_loaded' });
-            break;
         case 'start':
             sampleRate = data.sampleRate;
             instruments = data.instruments;
             drumsEnabled = data.drumsEnabled;
-            start();
+            isRunning = true;
+            time = 0;
+            // Сброс времени для всех партий
+            nextKickTime = 0;
+            nextSnareTime = quarterNoteDuration * 2;
+            nextHiHatTime = 0;
+            nextTom1Time = -1;
+            nextTom2Time = -1;
+            nextTom3Time = -1;
+            run();
             break;
         case 'stop':
-            stop();
+            isRunning = false;
             break;
         case 'set_instruments':
             instruments = data;
