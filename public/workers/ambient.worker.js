@@ -1,155 +1,182 @@
 
-let isRunning = false;
-let timeoutId = null;
-let samples = {};
-let instruments = {};
-let drumsEnabled = true;
-let sampleRate = 44100;
-let currentTick = 0;
+"use strict";
 
-const BPM = 70;
-const BEATS_PER_BAR = 4;
-const SUBDIVISIONS = 4;
-const SECONDS_PER_MINUTE = 60;
-const sixteenthNoteTime = SECONDS_PER_MINUTE / BPM / SUBDIVISIONS;
+// --- State ---
+let masterState = {
+    isRunning: false,
+    config: {
+        sampleRate: 44100,
+        chunkDuration: 0.2,
+        tempo: 120,
+    },
+    instruments: {
+        solo: "none",
+        accompaniment: "none",
+        bass: "none",
+    },
+    drumsEnabled: true,
+    samples: {},
+    tick: 0,
+    nextScheduleTime: 0,
+    timeoutId: null,
+};
 
-function generateSimpleMusicChunk() {
-  const generatedNotes = [];
-  const time = currentTick * sixteenthNoteTime;
+// --- Music Generation Logic ---
 
-  // --- Drums ---
-  if (drumsEnabled) {
-    // Kick drum on 1st and 3rd beats
-    if (currentTick > 0 && currentTick % 8 === 0) {
-      generatedNotes.push({ sample: 'kick', time: time, gain: 0.7 });
-    }
-    // Snare on 2nd and 4th beats
-    if (currentTick % 16 === 4 || currentTick % 16 === 12) {
-      generatedNotes.push({ sample: 'snare', time: time, gain: 1.0 });
-    }
-    // Hi-hat on every 8th note
-    if (currentTick % 2 === 0) {
-      generatedNotes.push({ sample: 'hat', time: time, gain: 0.4 });
-    }
-    // Crash every 8 bars
-    if (currentTick > 0 && currentTick % (BEATS_PER_BAR * SUBDIVISIONS * 8) === 0) {
-        generatedNotes.push({ sample: 'crash', time: time, gain: 0.6 });
-    }
-    // Ride on every beat
-    if (currentTick % 4 === 0) {
-        generatedNotes.push({ sample: 'ride', time: time, gain: 0.5 });
-    }
-  }
+/**
+ * Generates a single chunk of audio data.
+ * This function is the core of the music generation.
+ * @param {number} currentTick - The current time step.
+ * @returns {Array<Object>} An array of notes to be played in this chunk.
+ */
+function generateMusicChunk(currentTick) {
+    const { instruments, drumsEnabled } = masterState.config;
+    let generatedNotes = [];
+    const sixteenthNoteTicks = masterState.config.tempo / 60 * 16; 
 
-  // --- Melodic Instruments (Placeholder) ---
-  function playNote(instrumentName, noteList, chance, gain) {
-      if (instruments[instrumentName] && instruments[instrumentName] !== 'none' && Math.random() < chance) {
-          const note = noteList[Math.floor(Math.random() * noteList.length)];
-          generatedNotes.push({ instrument: instruments[instrumentName], note, time, gain });
-      }
-  }
-  
-  if (currentTick % 16 === 0) {
-      playNote('solo', ['C5', 'E5', 'G5'], 0.5, 0.5);
-  }
-  if (currentTick % 8 === 0) {
-       playNote('accompaniment', ['C4', 'E4', 'G4', 'B4'], 0.6, 0.4);
-  }
-  if (currentTick % 4 === 0) {
-      playNote('bass', ['C3', 'E3', 'G3'], 0.8, 0.6);
-  }
+    // --- Drums ---
+    if (drumsEnabled) {
+        // We are using a 16-step sequencer (4 beats * 4 sixteenths)
+        const currentMeasure = Math.floor(currentTick / 16);
+        const currentStep = currentTick % 16;
 
-
-  currentTick++;
-  return generatedNotes;
-}
-
-function mix(notes) {
-  const chunkDuration = sixteenthNoteTime;
-  const chunkLength = Math.ceil(sampleRate * chunkDuration);
-  const buffer = new Float32Array(chunkLength).fill(0);
-
-  notes.forEach(note => {
-    let sourceBuffer;
-    if (note.sample && samples[note.sample]) {
-        sourceBuffer = samples[note.sample];
-    } else if (note.instrument) {
-        // This part is a placeholder. Real synthesis would be complex.
-        // We'll just use a simple sine wave for demonstration.
-        const noteFreq = 440 * Math.pow(2, (note.note.charCodeAt(0) - 65 + (parseInt(note.note.slice(1), 10) - 4) * 12) / 12);
-        const synthBuffer = new Float32Array(chunkLength);
-        for(let i = 0; i < chunkLength; i++) {
-            synthBuffer[i] = Math.sin(2 * Math.PI * noteFreq * (i / sampleRate));
+        // Kick (on beats 1 and 3)
+        if (currentStep % 8 === 0) {
+            if (currentTick > 0) { // Skip the very first kick
+                generatedNotes.push({ instrument: 'kick', gain: 0.7 });
+            }
         }
-        sourceBuffer = synthBuffer;
-    }
 
-    if (sourceBuffer) {
-        const gain = note.gain || 0.5;
-        const noteLength = Math.min(sourceBuffer.length, chunkLength);
-        for (let i = 0; i < noteLength; i++) {
-            buffer[i] += sourceBuffer[i] * gain;
+        // Snare (on beats 2 and 4)
+        if ((currentStep - 4) % 8 === 0) {
+            generatedNotes.push({ instrument: 'snare', gain: 1.0 });
+        }
+
+        // Hi-hat (every 8th note)
+        if (currentStep % 2 === 0) {
+            generatedNotes.push({ instrument: 'hat', gain: 0.4 });
+        }
+        
+        // Crash (on the first beat of every 4th measure)
+        if (currentMeasure % 4 === 0 && currentStep === 0) {
+             if (currentTick > 0) { // Don't crash at the very beginning
+                generatedNotes.push({ instrument: 'crash', gain: 0.6 });
+             }
+        }
+        
+        // Ride (every quarter note)
+        if (currentStep % 4 === 0) {
+             generatedNotes.push({ instrument: 'ride', gain: 0.5 });
         }
     }
-  });
 
-  return buffer;
+    // --- Melodic Instruments (Placeholder) ---
+    // This is where you would add logic for solo, accompaniment, and bass
+    // For now, it's silent.
+
+    return generatedNotes;
 }
 
 
-function scheduleNextChunk() {
-  if (!isRunning) {
-    if (timeoutId) clearTimeout(timeoutId);
-    return;
-  }
-  
-  const notes = generateSimpleMusicChunk();
-  const audioChunk = mix(notes);
+/**
+ * Converts generated notes into a raw audio buffer.
+ * @param {Array<Object>} notes - The notes to process.
+ * @returns {Float32Array} The generated audio buffer for this chunk.
+ */
+function processAudio(notes) {
+    const { chunkDuration, sampleRate } = masterState.config;
+    const chunkLength = Math.floor(chunkDuration * sampleRate);
+    const out_buffer = new Float32Array(chunkLength).fill(0);
 
-  if (audioChunk.length > 0) {
-    self.postMessage({
-      type: 'chunk',
-      data: {
-        chunk: audioChunk,
-        duration: sixteenthNoteTime,
-      },
+    if (Object.keys(masterState.samples).length === 0) {
+        return out_buffer;
+    }
+
+    notes.forEach(note => {
+        const sample = masterState.samples[note.instrument];
+        if (sample) {
+            const gain = note.gain || 1.0;
+            for (let i = 0; i < chunkLength && i < sample.length; i++) {
+                out_buffer[i] += sample[i] * gain;
+            }
+        }
     });
-  }
 
-  // Schedule next chunk precisely
-  timeoutId = setTimeout(scheduleNextChunk, sixteenthNoteTime * 1000);
+    return out_buffer;
+}
+
+// --- Worker Control Logic ---
+
+/**
+ * Schedules the next chunk of music to be generated and sent.
+ */
+function scheduleNextChunk() {
+    if (!masterState.isRunning) return;
+
+    const { chunkDuration, tempo } = masterState.config;
+    const sixteenthNoteDuration = 60 / tempo / 4;
+    const notesToPlay = generateMusicChunk(masterState.tick);
+    const audioChunk = processAudio(notesToPlay);
+
+    self.postMessage({
+        type: 'chunk',
+        data: {
+            chunk: audioChunk,
+            duration: chunkDuration
+        }
+    }, [audioChunk.buffer]);
+
+    masterState.tick++;
+    
+    // Recalculate timeout for precision
+    const now = performance.now();
+    masterState.nextScheduleTime += (sixteenthNoteDuration * 1000);
+    const nextTimeout = Math.max(0, masterState.nextScheduleTime - now);
+
+    masterState.timeoutId = setTimeout(scheduleNextChunk, nextTimeout);
+}
+
+function start() {
+    if (masterState.isRunning) return;
+    masterState.isRunning = true;
+    masterState.tick = 0;
+    masterState.nextScheduleTime = performance.now(); // Reset timer to now
+    self.postMessage({ type: 'started' });
+    scheduleNextChunk();
+}
+
+function stop() {
+    if (!masterState.isRunning) return;
+    masterState.isRunning = false;
+    if (masterState.timeoutId) {
+        clearTimeout(masterState.timeoutId);
+        masterState.timeoutId = null;
+    }
+    self.postMessage({ type: 'stopped' });
 }
 
 
-self.onmessage = (event) => {
-  const { command, data } = event.data;
+self.onmessage = function(event) {
+    const { command, data } = event.data;
 
-  switch (command) {
-    case 'load_samples':
-      samples = data;
-      self.postMessage({ type: 'samples_loaded' });
-      break;
-    case 'start':
-      if (isRunning) return;
-      isRunning = true;
-      instruments = data.instruments;
-      drumsEnabled = data.drumsEnabled;
-      sampleRate = data.sampleRate;
-      currentTick = 0;
-      scheduleNextChunk();
-      break;
-    case 'stop':
-      isRunning = false;
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        timeoutId = null;
-      }
-      break;
-    case 'set_instruments':
-      instruments = data;
-      break;
-    case 'toggle_drums':
-      drumsEnabled = data.enabled;
-      break;
-  }
+    switch (command) {
+        case 'load_samples':
+            masterState.samples = data;
+            // Signal back that samples are loaded and worker is ready
+            self.postMessage({ type: 'samples_loaded' });
+            break;
+        case 'start':
+            Object.assign(masterState.config, data);
+            start();
+            break;
+        case 'stop':
+            stop();
+            break;
+        case 'set_instruments':
+            masterState.instruments = data;
+            break;
+        case 'toggle_drums':
+            masterState.drumsEnabled = data.enabled;
+            break;
+    }
 };
