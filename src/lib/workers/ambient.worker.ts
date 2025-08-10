@@ -80,7 +80,7 @@ function createSynthVoice(notes: Note[], totalDuration: number, instrument: stri
             synthOptions = { oscType: 'sawtooth', attack: 0.2, decay: 0.1, sustain: 0.9, release: 0.8, volume: 0.3 };
             break;
         case 'bass guitar':
-             synthOptions = { oscType: 'sine', attack: 0.1, decay: 0.3, sustain: 1, release: 2.5, volume: 0.6 };
+             synthOptions = { oscType: 'sine', attack: 0.1, decay: 1.0, sustain: 0.3, release: 2.5, volume: 0.6 };
              break;
         default: // synthesizer
             synthOptions = { oscType: 'pulse', attack: 0.1, decay: 0.5, sustain: 0.4, release: 1.5, volume: 0.3 };
