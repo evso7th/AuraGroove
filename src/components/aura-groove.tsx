@@ -39,8 +39,8 @@ const sampleUrls = {
 
 export function AuraGroove() {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [loadingText, setLoadingText] = useState("Loading...");
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadingText, setLoadingText] = useState("Loading samples...");
   const [drumsEnabled, setDrumsEnabled] = useState(true);
   const [instruments, setInstruments] = useState<Instruments>({
     solo: "none",
@@ -51,6 +51,7 @@ export function AuraGroove() {
 
   const musicWorkerRef = useRef<Worker>();
   const isAudioInitialized = useRef(false);
+  const areSamplesLoaded = useRef(false);
 
   useEffect(() => {
     musicWorkerRef.current = new Worker('/workers/ambient.worker.js');
@@ -71,10 +72,64 @@ export function AuraGroove() {
           description: error,
         });
         handleStop();
+      } else if (type === 'samples_loaded') {
+          areSamplesLoaded.current = true;
+          setIsLoading(false);
+          setLoadingText("");
       }
     };
 
     musicWorkerRef.current.onmessage = handleMessage;
+    
+    const initializeAudioAndLoadSamples = async () => {
+        if (!isAudioInitialized.current) {
+            await audioPlayer.initialize();
+            isAudioInitialized.current = true;
+        }
+        
+        if (!audioPlayer.getAudioContext()) {
+             toast({
+                variant: "destructive",
+                title: "Audio Error",
+                description: "Could not initialize AudioContext.",
+            });
+            setIsLoading(false);
+            return;
+        }
+        
+        try {
+            const audioContext = audioPlayer.getAudioContext()!;
+            const sampleEntries = Object.entries(sampleUrls);
+            
+            const decodedSamples: { [key: string]: Float32Array } = {};
+            const transferableObjects: Transferable[] = [];
+
+            for (const [key, url] of sampleEntries) {
+                const response = await fetch(url);
+                const arrayBuffer = await response.arrayBuffer();
+                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                const float32Array = audioBuffer.getChannelData(0);
+                decodedSamples[key] = float32Array;
+                transferableObjects.push(float32Array.buffer);
+            }
+
+            musicWorkerRef.current?.postMessage({
+                command: 'load_samples',
+                data: decodedSamples
+            }, transferableObjects);
+
+        } catch (error) {
+            console.error("Failed to load samples:", error);
+            toast({
+                variant: "destructive",
+                title: "Sample Error",
+                description: "Could not load drum samples. Please check the file paths and network.",
+            });
+            setIsLoading(false);
+        }
+    };
+
+    initializeAudioAndLoadSamples();
     
     return () => {
       musicWorkerRef.current?.terminate();
@@ -101,69 +156,27 @@ export function AuraGroove() {
     });
   }
   
-  const loadAndSendSamples = async () => {
-    if (!audioPlayer.getAudioContext()) return;
-    
-    setLoadingText("Loading samples...");
-    try {
-        const audioContext = audioPlayer.getAudioContext()!;
-        const sampleEntries = Object.entries(sampleUrls);
-        
-        const decodedSamples: { [key: string]: Float32Array } = {};
-        const transferableObjects: Transferable[] = [];
-
-        for (const [key, url] of sampleEntries) {
-            const response = await fetch(url);
-            const arrayBuffer = await response.arrayBuffer();
-            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-            const float32Array = audioBuffer.getChannelData(0);
-            decodedSamples[key] = float32Array;
-            transferableObjects.push(float32Array.buffer);
-        }
-
-        musicWorkerRef.current?.postMessage({
-            command: 'load_samples',
-            data: decodedSamples
-        }, transferableObjects);
-
-    } catch (error) {
-        console.error("Failed to load samples:", error);
-        toast({
-            variant: "destructive",
-            title: "Sample Error",
-            description: "Could not load drum samples. Please check the file paths and network.",
-        });
-        throw error;
-    }
-  };
-
-
   const handlePlay = async () => {
-    setIsLoading(true);
-
-    if (!isAudioInitialized.current) {
-        setLoadingText("Initializing audio...");
-        await audioPlayer.initialize();
-        isAudioInitialized.current = true;
-    }
-
-    try {
-        await loadAndSendSamples();
-
-        setLoadingText("Generating music...");
-        const sampleRate = audioPlayer.getAudioContext()?.sampleRate || 44100;
-    
-        musicWorkerRef.current?.postMessage({
-            command: 'start',
-            data: {
-                instruments,
-                drumsEnabled,
-                sampleRate
-            }
+    if (!areSamplesLoaded.current) {
+        toast({
+            title: "Still loading",
+            description: "Samples are still being prepared, please wait.",
         });
-    } catch(error) {
-        handleStop();
+        return;
     }
+    
+    setIsLoading(true);
+    setLoadingText("Generating music...");
+    const sampleRate = audioPlayer.getAudioContext()?.sampleRate || 44100;
+
+    musicWorkerRef.current?.postMessage({
+        command: 'start',
+        data: {
+            instruments,
+            drumsEnabled,
+            sampleRate
+        }
+    });
   };
 
   const handleStop = () => {
@@ -174,7 +187,7 @@ export function AuraGroove() {
   };
   
   const handleTogglePlay = () => {
-    if (isPlaying || isLoading) {
+    if (isPlaying || isLoading && isPlaying) {
       handleStop();
     } else {
       handlePlay();
@@ -282,18 +295,16 @@ export function AuraGroove() {
           disabled={isLoading}
           className="w-full text-lg py-6"
         >
-          {isLoading ? (
+          {isLoading && !isPlaying ? (
             <Loader2 className="mr-2 h-6 w-6 animate-spin" />
           ) : isPlaying ? (
             <Pause className="mr-2 h-6 w-6" />
           ) : (
             <Music className="mr-2 h-6 w-6" />
           )}
-          {isLoading ? loadingText : isPlaying ? "Stop" : "Play"}
+          {isLoading && !isPlaying ? loadingText : isPlaying ? "Stop" : "Play"}
         </Button>
       </CardFooter>
     </Card>
   );
 }
-
-    
