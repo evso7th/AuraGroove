@@ -53,6 +53,11 @@ export function AuraGroove() {
     const handleMessage = (event: MessageEvent) => {
       const { type, buffer, duration, message } = event.data;
       if (type === 'music_part') {
+        if (!audioPlayer.getIsPlaying()) {
+            audioPlayer.start();
+            setIsPlaying(true);
+            setIsLoading(false);
+        }
         audioPlayer.schedulePart(buffer, duration);
       } else if (type === 'error') {
          toast({
@@ -61,17 +66,6 @@ export function AuraGroove() {
             description: message,
          });
          handleStop();
-      } else if (type === 'loading_start') {
-        setLoadingText("Loading samples...");
-        setIsLoading(true);
-      }
-      else if (type === 'loading_complete') {
-        setIsLoading(false);
-        setLoadingText("Loading...");
-        if (!audioPlayer.getIsPlaying()) {
-          audioPlayer.start();
-          setIsPlaying(true);
-        }
       }
     };
 
@@ -98,24 +92,59 @@ export function AuraGroove() {
     }
   }
   
+  const loadAndSendSamples = async () => {
+    if (!drumsEnabled) {
+       musicWorkerRef.current?.postMessage({ command: 'set_samples', data: {} });
+       return;
+    }
+
+    setLoadingText("Loading drum samples...");
+    
+    try {
+        const sampleUrl = '/assets/drums/snare.wav';
+        const response = await fetch(sampleUrl);
+        if (!response.ok) {
+            throw new Error(`Failed to fetch ${sampleUrl}: ${response.statusText}`);
+        }
+        const arrayBuffer = await response.arrayBuffer();
+
+        // We use the main AudioContext to decode, as it's already initialized.
+        const audioBuffer = await audioPlayer.getAudioContext()?.decodeAudioData(arrayBuffer);
+
+        if (audioBuffer) {
+            // Transfer the decoded AudioBuffer to the worker
+            musicWorkerRef.current?.postMessage({ 
+                command: 'set_samples', 
+                data: { snare: audioBuffer }
+            }, [audioBuffer]);
+        }
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred while loading samples";
+        toast({
+            variant: "destructive",
+            title: "Sample Loading Error",
+            description: errorMessage,
+        });
+        throw error; // Stop the process
+    }
+  };
+
   const handlePlay = async () => {
     setIsLoading(true);
     try {
       if (!isInitializedRef.current) {
+        setLoadingText("Initializing audio engine...");
         await audioPlayer.initialize();
         isInitializedRef.current = true;
       }
       
-      const baseUrl = window.location.origin;
-      musicWorkerRef.current?.postMessage({ command: 'start', data: { instruments, drumsEnabled, baseUrl } });
+      await loadAndSendSamples();
+
+      setLoadingText("Generating music...");
+      musicWorkerRef.current?.postMessage({ command: 'start', data: { instruments, drumsEnabled } });
 
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: errorMessage,
-      });
+      console.error("Failed to start playback:", error);
       setIsPlaying(false);
       setIsLoading(false);
     }
@@ -202,7 +231,7 @@ export function AuraGroove() {
                 id="drums-enabled"
                 checked={drumsEnabled}
                 onCheckedChange={handleDrumsToggle}
-                disabled={isLoading}
+                disabled={isLoading || isPlaying}
                 />
                 <Label htmlFor="drums-enabled">Drums</Label>
             </div>
@@ -239,7 +268,7 @@ export function AuraGroove() {
           ) : (
             <Play className="mr-2 h-6 w-6" />
           )}
-          {isLoading ? "Loading..." : isPlaying ? "Stop" : "Start"}
+          {isLoading ? loadingText : isPlaying ? "Stop" : "Start"}
         </Button>
       </CardFooter>
     </Card>

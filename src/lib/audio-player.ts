@@ -15,6 +15,10 @@ class AudioPlayer {
     return this._isPlaying;
   }
   
+  public getAudioContext(): AudioContext | null {
+      return this.audioContext;
+  }
+
   public async initialize() {
     if (this.isInitialized) return;
     

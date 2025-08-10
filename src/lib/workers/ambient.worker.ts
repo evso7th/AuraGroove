@@ -39,12 +39,10 @@ let instruments = {
     bass: 'bass guitar',
 };
 let drumsEnabled = false;
-let baseUrl = '';
 
 const soloPrng = new PRNG(Math.random() * 1000);
 const accompanimentPrng = new PRNG(Math.random() * 1000);
 const bassPrng = new PRNG(Math.random() * 1000);
-const drumPrng = new PRNG(Math.random() * 1000);
 
 const soloScale = scales.minorPentatonic;
 const accompanimentScale = scales.ionian;
@@ -55,53 +53,9 @@ const bassScale = scales.aeolian;
 const drumSamples: { [key: string]: AudioBuffer } = {};
 let samplesLoaded = false;
 
-const drumSampleFiles = {
-    snare: '/assets/drums/snare.wav',
-};
-
 const drumSequencerPattern = {
     snare: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
 };
-
-
-async function loadDrumSamples(audioContext: any, baseUrl: string) {
-    postMessage({ type: 'loading_start' });
-    try {
-        console.log('Worker: Starting drum sample loading...');
-        const samplePromises = Object.entries(drumSampleFiles).map(async ([key, path]) => {
-            const fullUrl = baseUrl ? baseUrl + path : path;
-            console.log(`Worker: Fetching sample for ${key} from ${fullUrl}`);
-
-            const timeoutPromise = new Promise((_, reject) =>
-              setTimeout(() => reject(new Error(`Request timed out for ${fullUrl}`)), 5000)
-            );
-            
-            const fetchPromise = fetch(fullUrl);
-
-            const response = await Promise.race([fetchPromise, timeoutPromise]) as Response;
-
-            console.log(`Worker: Fetch response for ${fullUrl}`, { status: response.status, ok: response.ok });
-
-            if (!response.ok) {
-                throw new Error(`Failed to fetch ${fullUrl}: ${response.status} ${response.statusText}`);
-            }
-            const arrayBuffer = await response.arrayBuffer();
-            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-            drumSamples[key] = audioBuffer;
-             console.log(`Worker: Successfully decoded sample for ${key}`);
-        });
-
-        await Promise.all(samplePromises);
-        samplesLoaded = true;
-        console.log("Worker: All drum samples loaded successfully.");
-    } catch (error) {
-        console.error("Worker: Error loading drum samples:", error);
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        postMessage({ type: 'error', message: `Failed to load drum samples. Details: ${errorMessage}` });
-        throw error; // re-throw to stop execution if loading fails
-    }
-}
-
 
 function createDrumPart() {
     const buffer = new Float32Array(partDuration * sampleRate).fill(0);
@@ -268,23 +222,7 @@ self.onmessage = async function(e) {
   if (command === 'start') {
     instruments = data.instruments;
     drumsEnabled = data.drumsEnabled;
-    baseUrl = data.baseUrl;
-
-    const offlineContext = new OfflineAudioContext(1, 1, sampleRate);
     
-    if (drumsEnabled) {
-      try {
-        await loadDrumSamples(offlineContext, baseUrl);
-        postMessage({ type: 'loading_complete' });
-      } catch (error) {
-        // Error is already posted from loadDrumSamples, just stop here
-        return;
-      }
-    } else {
-        postMessage({ type: 'loading_complete' });
-    }
-    
-
     if (generationInterval === null) {
       generatePart();
       generationInterval = setInterval(generatePart, (partDuration * 1000) - 20); 
@@ -294,18 +232,15 @@ self.onmessage = async function(e) {
       clearInterval(generationInterval);
       generationInterval = null;
     }
+    samplesLoaded = false;
+    Object.keys(drumSamples).forEach(key => delete drumSamples[key]);
   } else if (command === 'set_instruments') {
     instruments = data;
-  } 
-  else if (command === 'toggle_drums') {
+  } else if (command === 'toggle_drums') {
     drumsEnabled = data;
-     if (drumsEnabled && !samplesLoaded && baseUrl) {
-        const offlineContext = new OfflineAudioContext(1, 1, sampleRate);
-        loadDrumSamples(offlineContext, baseUrl).then(() => {
-             console.log("Worker: Samples loaded after toggle.");
-        }).catch(err => {
-            console.error("Worker: Failed to load samples on toggle", err);
-        });
-    }
+  } else if (command === 'set_samples') {
+    Object.assign(drumSamples, data);
+    samplesLoaded = Object.keys(drumSamples).length > 0;
+    console.log("Worker: Received samples. Samples loaded:", samplesLoaded);
   }
 };
