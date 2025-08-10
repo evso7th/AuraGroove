@@ -1,240 +1,228 @@
-
 // public/workers/ambient.worker.js
 
-let sampleRate = 44100;
-let isGenerating = false;
-let instruments = {
-    solo: 'none',
-    accompaniment: 'none',
-    bass: 'bass guitar',
-};
+let decodedSamples = {};
+let instruments = {};
 let drumsEnabled = true;
+let isRunning = false;
+let sampleRate = 44100;
+let lastTickTime = 0;
+const TICK_INTERVAL = 100; // ms
+const CHUNK_DURATION = 2; // seconds
 
-const decodedSamples = {};
+// --- Утилиты для генерации ---
+function generateSynthesizer(duration, sampleRate) {
+    const totalSamples = Math.floor(duration * sampleRate);
+    const buffer = new Float32Array(totalSamples);
+    const frequency = 440.0 * Math.pow(2, (Math.floor(Math.random() * 24) - 12) / 12);
+    let lastValue = 0;
 
-// --- UTILITY FUNCTIONS ---
-function generateSineWave(frequency, duration, volume = 0.5) {
-    const numSamples = Math.floor(sampleRate * duration);
-    const buffer = new Float32Array(numSamples);
-    for (let i = 0; i < numSamples; i++) {
-        buffer[i] = Math.sin(2 * Math.PI * frequency * (i / sampleRate)) * volume;
-    }
-    return buffer;
-}
-
-function generateOrganSound(frequency, duration, volume = 0.3) {
-    const numSamples = Math.floor(sampleRate * duration);
-    const buffer = new Float32Array(numSamples);
-    const harmonics = [1, 2, 3, 4, 6]; 
-    const harmonicAmplitudes = [0.6, 0.2, 0.1, 0.05, 0.02];
-
-    for (let i = 0; i < numSamples; i++) {
-        let sample = 0;
-        for (let h = 0; h < harmonics.length; h++) {
-            sample += Math.sin(2 * Math.PI * frequency * harmonics[h] * (i / sampleRate)) * harmonicAmplitudes[h];
-        }
-        buffer[i] = sample * volume;
-    }
-    return applyEnvelope(buffer);
-}
-
-function generatePianoSound(frequency, duration, volume = 0.4) {
-    const numSamples = Math.floor(sampleRate * duration);
-    const buffer = new Float32Array(numSamples);
-    const decay = 4.0; 
-
-    for (let i = 0; i < numSamples; i++) {
+    for (let i = 0; i < totalSamples; i++) {
         const time = i / sampleRate;
-        let sample = 0;
-        // Simple additive synthesis for piano-like timbre
-        sample += Math.sin(2 * Math.PI * frequency * time) * Math.exp(-decay * time);
-        sample += 0.5 * Math.sin(2 * Math.PI * frequency * 2 * time) * Math.exp(-decay * time);
-        sample += 0.25 * Math.sin(2 * Math.PI * frequency * 3 * time) * Math.exp(-decay * time);
-        buffer[i] = sample * volume;
-    }
-     return applyEnvelope(buffer, 0.01, 0.3, 0.2, 0.2);
-}
+        // Simple FM synthesis for a bit more texture
+        const modulator = Math.sin(2 * Math.PI * frequency * 0.5 * time);
+        const wav = Math.sin(2 * Math.PI * (frequency + modulator * 50) * time);
+        const envelope = 1 - (i / totalSamples); // simple decay
+        const value = wav * envelope * 0.3;
 
-
-function applyEnvelope(buffer, attack = 0.02, decay = 0.1, sustain = 0.6, release = 0.1) {
-    const totalDuration = buffer.length / sampleRate;
-    const attackSamples = Math.floor(sampleRate * attack);
-    const decaySamples = Math.floor(sampleRate * decay);
-    const releaseSamples = Math.floor(sampleRate * release);
-    const sustainSamples = buffer.length - attackSamples - decaySamples - releaseSamples;
-
-    // Attack
-    for (let i = 0; i < attackSamples; i++) {
-        buffer[i] *= (i / attackSamples);
+        // Low-pass filter to smooth it out
+        const smoothedValue = (value + lastValue) / 2;
+        buffer[i] = smoothedValue;
+        lastValue = value;
     }
-    // Decay and Sustain
-    for (let i = attackSamples; i < attackSamples + decaySamples; i++) {
-        buffer[i] *= (1.0 - (1.0 - sustain) * ((i - attackSamples) / decaySamples));
-    }
-    // Release
-     for (let i = buffer.length - releaseSamples; i < buffer.length; i++) {
-        buffer[i] *= (1.0 - ((i - (buffer.length - releaseSamples)) / releaseSamples));
-    }
-
     return buffer;
 }
 
+function generatePiano(duration, sampleRate) {
+    const totalSamples = Math.floor(duration * sampleRate);
+    const buffer = new Float32Array(totalSamples);
+    const fundamental = 261.63 * Math.pow(2, Math.floor(Math.random() * 5) / 12); // C4 to G4
+    const harmonics = [1, 0.5, 0.25, 0.125, 0.06];
 
-function generateSynthesizerPart(duration) {
-    return generateOrganSound(220, duration);
-}
-
-function generatePianoPart(duration) {
-    return generatePianoSound(440, duration);
-}
-
-function generateBassPart(duration) {
-    return generateSineWave(110, duration, 0.6);
-}
-
-function generateDrumPart(duration) {
-    const numSamples = Math.floor(sampleRate * duration);
-    const buffer = new Float32Array(numSamples);
-    const beatInterval = Math.floor(sampleRate / 2); // Two beats per second (120 bpm)
-
-    for (let i = 0; i < numSamples; i += beatInterval) {
-        // Kick on the beat
-        if (decodedSamples.kick) {
-            const kick = decodedSamples.kick;
-            buffer.set(kick, i);
+    for (let i = 0; i < totalSamples; i++) {
+        const time = i / sampleRate;
+        let value = 0;
+        for (let h = 0; h < harmonics.length; h++) {
+            value += Math.sin(2 * Math.PI * fundamental * (h + 1) * time) * harmonics[h];
         }
-        // Snare on the off-beat
-        if (decodedSamples.snare && (i + beatInterval / 2) < numSamples) {
-            const snare = decodedSamples.snare;
-            buffer.set(snare, i + beatInterval / 2);
-        }
+        const envelope = Math.exp(-time * 5); // Exponential decay
+        buffer[i] = value * envelope * 0.4;
     }
     return buffer;
 }
 
 
-// --- MAIN WORKER LOGIC ---
+function generateOrgan(duration, sampleRate) {
+    const totalSamples = Math.floor(duration * sampleRate);
+    const buffer = new Float32Array(totalSamples);
+    const fundamental = 220.0 * Math.pow(2, Math.floor(Math.random() * 7 - 3) / 12);
+    const overtones = [1, 0.5, 0.2, 0.1]; // Organ-like harmonics
 
-self.onmessage = function(e) {
-    const { command, data } = e.data;
+    for (let i = 0; i < totalSamples; i++) {
+        const time = i / sampleRate;
+        let value = 0;
+        for (let o = 0; o < overtones.length; o++) {
+            value += Math.sin(2 * Math.PI * fundamental * Math.pow(2, o) * time) * overtones[o];
+        }
+        const attack = Math.min(1, time * 10);
+        const release = Math.max(0, 1 - (time / duration));
+        buffer[i] = value * attack * release * 0.3;
+    }
+    return buffer;
+}
 
-    switch (command) {
-        case 'load_samples':
-            Object.assign(decodedSamples, data);
-            self.postMessage({ type: 'samples_loaded' });
-            break;
-        case 'start':
-            if (data && data.sampleRate) {
-                sampleRate = data.sampleRate;
+function generateBass(duration, sampleRate) {
+    const totalSamples = Math.floor(duration * sampleRate);
+    const buffer = new Float32Array(totalSamples);
+    const frequency = 82.41 * Math.pow(2, Math.floor(Math.random() * 4) / 12); // E2 to G#2
+
+    for (let i = 0; i < totalSamples; i++) {
+        const time = i / sampleRate;
+        const value = Math.sin(2 * Math.PI * frequency * time) + Math.sin(2 * Math.PI * frequency * 2 * time) * 0.5;
+        const envelope = Math.exp(-time * 3.0);
+        buffer[i] = value * envelope * 0.5;
+    }
+    return buffer;
+}
+
+function generateDrumPart(duration, sampleRate) {
+    if (!decodedSamples.kick || !decodedSamples.hat || !decodedSamples.snare) {
+        return new Float32Array(Math.floor(duration * sampleRate));
+    }
+    const totalSamples = Math.floor(duration * sampleRate);
+    const buffer = new Float32Array(totalSamples);
+
+    const drumPattern = [
+        { sample: 'kick', time: 0 },
+        { sample: 'hat', time: 0 },
+        { sample: 'hat', time: 0.25 },
+        { sample: 'snare', time: 0.5 },
+        { sample: 'hat', time: 0.5 },
+        { sample: 'hat', time: 0.75 },
+    ];
+    
+    for(const hit of drumPattern) {
+        const sampleData = decodedSamples[hit.sample];
+        if (!sampleData) continue;
+
+        const startSample = Math.floor(hit.time * totalSamples);
+        
+        // --- Исправление ошибки RangeError ---
+        if (startSample + sampleData.length <= buffer.length) {
+            // Сэмпл полностью помещается
+            buffer.set(sampleData, startSample);
+        } else {
+            // Основной сэмпл не помещается, пробуем короткий
+            const shortSample = decodedSamples['hat'];
+            if (shortSample && startSample + shortSample.length <= buffer.length) {
+                 buffer.set(shortSample, startSample);
             }
-            if (data && data.instruments) {
-                instruments = data.instruments;
-            }
-            if(data && typeof data.drumsEnabled !== 'undefined') {
-                drumsEnabled = data.drumsEnabled;
-            }
+            // Если даже короткий не влезает, ничего не делаем
+        }
+    }
+    return buffer;
+}
+
+
+// --- Основная логика воркера ---
+self.onmessage = function(event) {
+    const { command, data } = event.data;
+
+    if (command === 'load_samples') {
+        decodedSamples = data;
+        sampleRate = data.sampleRate;
+        self.postMessage({ type: 'samples_loaded' });
+    } else if (command === 'start') {
+        instruments = data.instruments;
+        drumsEnabled = data.drumsEnabled;
+        sampleRate = data.sampleRate;
+        if (!isRunning) {
             startGenerator();
-            break;
-        case 'stop':
-            stopGenerator();
-            break;
-        case 'set_instruments':
-            instruments = data;
-            break;
-        case 'toggle_drums':
-             if(data && typeof data.enabled !== 'undefined') {
-                drumsEnabled = data.enabled;
-            }
-            break;
+        }
+    } else if (command === 'stop') {
+        stopGenerator();
+    } else if (command === 'set_instruments') {
+        instruments = data;
+    } else if (command === 'toggle_drums') {
+        drumsEnabled = data.enabled;
     }
 };
 
 function startGenerator() {
-    if (isGenerating) return;
-    isGenerating = true;
+    isRunning = true;
+    lastTickTime = performance.now();
     runGenerator();
 }
 
 function stopGenerator() {
-    isGenerating = false;
+    isRunning = false;
 }
 
-function mix(buffer1, buffer2) {
-    const minLength = Math.min(buffer1.length, buffer2.length);
-    const result = new Float32Array(minLength);
-    for (let i = 0; i < minLength; i++) {
-        result[i] = (buffer1[i] || 0) + (buffer2[i] || 0);
-    }
-    return result;
-}
+function runGenerator() {
+    if (!isRunning) return;
 
-function mixAll(parts) {
-    if (parts.length === 0) {
-        // Return a buffer of silence if no parts are generated.
-        // This is important to keep the audio flowing.
-        const duration = 2.0; // Standard duration for a silent chunk
-        return new Float32Array(Math.floor(sampleRate * duration));
-    }
+    const now = performance.now();
+    if (now >= lastTickTime + TICK_INTERVAL) {
+        const duration = CHUNK_DURATION;
+        const totalSamples = Math.floor(duration * sampleRate);
+        const finalMix = new Float32Array(totalSamples).fill(0);
+        let partCount = 0;
 
-    let mixed = new Float32Array(parts[0].length);
-    parts.forEach(part => {
-        if(part) { // Ensure part is not undefined
-             for (let i = 0; i < Math.min(mixed.length, part.length); i++) {
-                mixed[i] += part[i];
+        // Generate parts based on selected instruments
+        let soloPart, accompanimentPart, bassPart, drumPart;
+
+        if (instruments.solo !== 'none') {
+            const soloGenerator = getGeneratorForInstrument(instruments.solo);
+            if (soloGenerator) soloPart = soloGenerator(duration, sampleRate);
+        }
+        if (instruments.accompaniment !== 'none') {
+            const accompanimentGenerator = getGeneratorForInstrument(instruments.accompaniment);
+            if (accompanimentGenerator) accompanimentPart = accompanimentGenerator(duration, sampleRate);
+        }
+        if (instruments.bass !== 'none' && instruments.bass === 'bass guitar') {
+             bassPart = generateBass(duration, sampleRate);
+        }
+        if (drumsEnabled) {
+            drumPart = generateDrumPart(duration, sampleRate);
+        }
+
+        // Mix parts together, only if they exist
+        const parts = [soloPart, accompanimentPart, bassPart, drumPart];
+        for (const part of parts) {
+            if (part) { // Проверяем, что партия сгенерирована
+                for (let i = 0; i < totalSamples; i++) {
+                    finalMix[i] += part[i];
+                }
+                partCount++;
             }
         }
-    });
-
-    // Normalize
-    let max = 0;
-    for (let i = 0; i < mixed.length; i++) {
-        max = Math.max(max, Math.abs(mixed[i]));
-    }
-    if (max > 1) {
-        for (let i = 0; i < mixed.length; i++) {
-            mixed[i] /= max;
+        
+        // Normalize if parts were mixed
+        if (partCount > 1) {
+            for (let i = 0; i < totalSamples; i++) {
+                finalMix[i] /= partCount;
+            }
         }
+        
+        // Send the complete chunk to the main thread
+        self.postMessage({ type: 'chunk', data: { chunk: finalMix, duration } }, [finalMix.buffer]);
+        
+        lastTickTime += CHUNK_DURATION * 1000;
     }
 
-    return mixed;
+    // Continue the loop
+    setTimeout(runGenerator, TICK_INTERVAL);
 }
 
-async function runGenerator() {
-    while (isGenerating) {
-        const duration = 2.0; // Generate 2 seconds of audio at a time
-        const generatedParts = [];
 
-        if (instruments.solo === 'synthesizer') {
-            generatedParts.push(generateSynthesizerPart(duration));
-        } else if (instruments.solo === 'piano') {
-            generatedParts.push(generatePianoPart(duration));
-        } else if (instruments.solo === 'organ') {
-             generatedParts.push(generateOrganSound(330, duration));
-        }
-
-        if (instruments.accompaniment === 'synthesizer') {
-            generatedParts.push(generateSynthesizerPart(duration));
-        } else if (instruments.accompaniment === 'piano') {
-            generatedParts.push(generatePianoPart(duration));
-        } else if (instruments.accompaniment === 'organ') {
-            generatedParts.push(generateOrganSound(330, duration, 0.2));
-        }
-
-
-        if (instruments.bass === 'bass guitar') {
-            generatedParts.push(generateBassPart(duration));
-        }
-
-        if (drumsEnabled) {
-            generatedParts.push(generateDrumPart(duration));
-        }
-        
-        const chunk = mixAll(generatedParts.filter(p => p)); // Filter out any null/undefined parts
-        
-        if (chunk.length > 0) {
-           self.postMessage({ type: 'chunk', data: { chunk, duration } }, [chunk.buffer]);
-        }
-
-        await new Promise(resolve => setTimeout(resolve, duration * 1000));
+function getGeneratorForInstrument(instrument) {
+    switch (instrument) {
+        case 'synthesizer':
+            return generateSynthesizer;
+        case 'piano':
+            return generatePiano;
+        case 'organ':
+            return generateOrgan;
+        default:
+            return null;
     }
 }
