@@ -4,6 +4,7 @@
 class AudioPlayer {
   private isInitialized = false;
   private audioContext: AudioContext | null = null;
+  private masterGain: GainNode | null = null;
   private nextPartStartTime = 0;
   private bufferQueue: { buffer: AudioBuffer, time: number }[] = [];
   private _isPlaying = false;
@@ -26,6 +27,10 @@ class AudioPlayer {
     if (this.audioContext.state === 'suspended') {
         await this.audioContext.resume();
     }
+
+    this.masterGain = this.audioContext.createGain();
+    this.masterGain.gain.value = 0.7; // Set a reasonable default volume
+    this.masterGain.connect(this.audioContext.destination);
     
     this.isInitialized = true;
     this._isPlaying = false;
@@ -33,7 +38,7 @@ class AudioPlayer {
   }
   
   private scheduleBuffers() {
-    if (!this._isPlaying || !this.audioContext) return;
+    if (!this._isPlaying || !this.audioContext || !this.masterGain) return;
     
     const now = this.audioContext.currentTime;
     
@@ -42,7 +47,7 @@ class AudioPlayer {
       
       const source = this.audioContext.createBufferSource();
       source.buffer = buffer;
-      source.connect(this.audioContext.destination);
+      source.connect(this.masterGain);
       
       const startTime = Math.max(now, time);
       source.start(startTime);
