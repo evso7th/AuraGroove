@@ -1,204 +1,152 @@
+// public/workers/ambient.worker.js
 
-// Import the music generation logic.
-// This path is relative to the 'public' directory.
+// Import the music generation logic
 self.importScripts('/lib/fractal-music-generator.js');
 
-
-// --- Worker State ---
-let isRunning = false;
-let sampleRate = 44100;
 let instruments = {
     solo: 'synthesizer',
     accompaniment: 'piano',
     bass: 'bass guitar',
 };
 let drumsEnabled = true;
-let samples = {}; // To store loaded audio samples like snare, kick, etc.
+let sampleRate = 44100;
+let samples = {}; // To store decoded audio data for drums
 
-// Seed the random number generator for deterministic output
-const random = lcg(Date.now());
+let tempo = 100; // beats per minute
+let beatDuration; // seconds per beat
+let isPlaying = false;
+let timerId = null;
 
-// --- Synthesis Functions ---
-// These functions convert MIDI notes into raw audio data (PCM).
+let nextGenerationTime = 0;
+let generationChunkDuration = 2; // Generate 2 seconds of audio at a time
 
-const NOTE_DURATION_SECONDS = 0.5;
-const GAIN = 0.2;
+// State for the 8-bar drum pattern
+let drumPatternPosition = 0;
 
-function midiToFrequency(midi) {
-    return 440 * Math.pow(2, (midi - 69) / 12);
-}
+// --- Core Generation Loop ---
+function generateAndPostChunk() {
+    if (!isPlaying) return;
 
-function createOscillator(type, frequency, duration, sampleRate) {
-    const numSamples = Math.floor(duration * sampleRate);
-    const buffer = new Float32Array(numSamples);
-    const angularFrequency = 2 * Math.PI * frequency / sampleRate;
+    const chunkStartTime = nextGenerationTime;
+    const chunkEndTime = chunkStartTime + generationChunkDuration;
 
-    for (let i = 0; i < numSamples; i++) {
-        let sample = 0;
-        switch (type) {
-            case 'sine':
-                sample = Math.sin(angularFrequency * i);
-                break;
-            case 'square':
-                sample = Math.sign(Math.sin(angularFrequency * i));
-                break;
-            case 'sawtooth': // organ-like
-                 sample = 2 * ( (i * frequency / sampleRate) % 1) - 1;
-                break;
-            case 'triangle': // piano-like
-                 sample = 2 * Math.abs(2 * ( (i * frequency / sampleRate) % 1) - 1) - 1;
-                break;
-            default:
-                sample = Math.sin(angularFrequency * i);
-        }
-        // Simple ADSR-like envelope
-        const envelope = 1.0 - (i / numSamples);
-        buffer[i] = sample * GAIN * envelope;
+    let chunkParts = {
+        solo: [],
+        accompaniment: [],
+        bass: [],
+        drums: []
+    };
+
+    // --- Generate Instrument Parts (Placeholders) ---
+    if (instruments.solo !== 'none') {
+        chunkParts.solo = generateFractalSolo(chunkStartTime, generationChunkDuration);
     }
-    return buffer;
-}
-
-function getSynthTypeForInstrument(instrument) {
-    switch (instrument) {
-        case 'synthesizer': return 'sine';
-        case 'organ': return 'sawtooth';
-        case 'piano': return 'triangle';
-        case 'bass guitar': return 'square';
-        default: return 'sine';
+    if (instruments.accompaniment !== 'none') {
+        chunkParts.accompaniment = generateFractalAccompaniment(chunkStartTime, generationChunkDuration);
     }
-}
+    if (instruments.bass !== 'none') {
+        chunkParts.bass = generateFractalBass(chunkStartTime, generationChunkDuration);
+    }
+    
+    // --- Generate Drum Part from the long pattern ---
+    if (drumsEnabled) {
+        const loopStartTimeBeats = (chunkStartTime / beatDuration) % DRUM_LOOP_DURATION_BEATS;
+        const loopEndTimeBeats = (chunkEndTime / beatDuration) % DRUM_LOOP_DURATION_BEATS;
 
+        for (const hit of DRUM_PATTERN_4_BARS) {
+            // Check if the note falls within the current chunk's time range
+            let hitTimeInBeats = hit.time;
+            
+            // This logic handles the loop correctly.
+            // We check the pattern twice to catch notes that cross the loop boundary.
+            for (let i = 0; i < 2; i++) {
+                const currentLoopHitTimeBeats = hitTimeInBeats + i * DRUM_LOOP_DURATION_BEATS;
+                const chunkStartBeats = (chunkStartTime / beatDuration);
+                const chunkEndBeats = (chunkEndTime / beatDuration);
 
-// --- Main Generation Loop ---
-
-// We generate audio in small chunks to avoid blocking and send it to the main thread.
-const CHUNK_DURATION_SECONDS = 0.5;
-
-function generateAudioChunk() {
-    const numSamplesInChunk = Math.floor(CHUNK_DURATION_SECONDS * sampleRate);
-    const audioChunk = new Float32Array(numSamplesInChunk).fill(0);
-
-    // Generate notes for each instrument
-    const soloNotes = instruments.solo !== 'none' ? generateSimpleSolo(random) : [];
-    const accompanimentNotes = instruments.accompaniment !== 'none' ? generateSimpleAccompaniment(random) : [];
-    const bassNotes = instruments.bass !== 'none' ? generateSimpleBass(random) : [];
-
-    // Mix the audio for each instrument into the main chunk
-    [
-        { notes: soloNotes, type: getSynthTypeForInstrument(instruments.solo) },
-        { notes: accompanimentNotes, type: getSynthTypeForInstrument(instruments.accompaniment) },
-        { notes: bassNotes, type: getSynthTypeForInstrument(instruments.bass) }
-    ].forEach(({ notes, type }) => {
-        if (!notes || notes.length === 0) return;
-        
-        notes.forEach(note => {
-            const frequency = midiToFrequency(note);
-            const noteBuffer = createOscillator(type, frequency, NOTE_DURATION_SECONDS, sampleRate);
-            for (let i = 0; i < noteBuffer.length && i < numSamplesInChunk; i++) {
-                audioChunk[i] += noteBuffer[i];
-            }
-        });
-    });
-
-    // Generate and mix drum samples
-    if (drumsEnabled && samples.snare) { // Check if snare sample is loaded
-        const beatsPerChunk = CHUNK_DURATION_SECONDS / (60 / 120); // Assume 120 BPM
-        
-        // This is a simplified drum pattern for stability
-        const step = Math.floor(random() * 4); // Pick one beat per chunk randomly for now
-        const drumBeat = simpleDrumPattern[step];
-
-        drumBeat.forEach(drumHit => {
-            if (samples[drumHit.sample]) {
-                const sampleBuffer = samples[drumHit.sample];
-                const startSample = Math.floor(drumHit.time * (numSamplesInChunk / beatsPerChunk));
-                for(let i=0; i < sampleBuffer.length && startSample + i < numSamplesInChunk; i++) {
-                    audioChunk[startSample + i] += sampleBuffer[i] * 0.5; // drum gain
+                if (currentLoopHitTimeBeats >= chunkStartBeats && currentLoopHitTimeBeats < chunkEndBeats) {
+                     chunkParts.drums.push({
+                        sample: hit.sample,
+                        // Calculate precise time relative to the absolute start
+                        time: currentLoopHitTimeBeats * beatDuration,
+                    });
                 }
             }
-        });
-    }
-
-    // Normalize to prevent clipping (simple version)
-    let max = 0;
-    for(let i=0; i < audioChunk.length; i++) {
-        max = Math.max(max, Math.abs(audioChunk[i]));
-    }
-    if (max > 1) {
-        for(let i=0; i < audioChunk.length; i++) {
-            audioChunk[i] /= max;
         }
     }
 
-    return audioChunk;
+
+    self.postMessage({
+        type: 'chunk',
+        data: {
+            chunk: chunkParts,
+            duration: generationChunkDuration
+        }
+    });
+
+    nextGenerationTime += generationChunkDuration;
+
+    // Schedule the next chunk generation
+    // This timeout keeps the generation going.
+    const delay = (nextGenerationTime - getCurrentTime()) * 1000 - 1000; // 1 sec lookahead
+    timerId = setTimeout(generateAndPostChunk, Math.max(0, delay));
 }
 
 
-function startGeneration() {
-    if (!isRunning) return;
+// --- Message Handling ---
+self.onmessage = function(e) {
+    const { command, data } = e.data;
 
-    // IMPORTANT: Signal to the main thread that generation has started.
-    // This prevents the UI from getting stuck in a "loading" state.
-    self.postMessage({ type: 'generation_started' });
+    switch (command) {
+        case 'start':
+            if (isPlaying) return;
+            isPlaying = true;
+            
+            instruments = data.instruments;
+            drumsEnabled = data.drumsEnabled;
+            sampleRate = data.sampleRate || 44100;
+            tempo = data.tempo || 100;
+            beatDuration = 60.0 / tempo;
 
-    const generationLoop = () => {
-        if (!isRunning) return;
-        
-        const chunk = generateAudioChunk();
-        
-        self.postMessage({
-            type: 'chunk',
-            data: {
-                chunk: chunk,
-                duration: CHUNK_DURATION_SECONDS
+            // Use a small offset to ensure the audio player has time to prepare
+            const audioStartTime = getCurrentTime() + 0.2; 
+            nextGenerationTime = audioStartTime;
+
+            self.postMessage({ type: 'generation_started', data: { startTime: audioStartTime } });
+            
+            generateAndPostChunk();
+            break;
+
+        case 'stop':
+            isPlaying = false;
+            if (timerId) {
+                clearTimeout(timerId);
+                timerId = null;
             }
-        }, [chunk.buffer]); // Transfer buffer ownership for performance
+            drumPatternPosition = 0;
+            break;
 
-        // Schedule the next chunk generation
-        setTimeout(generationLoop, CHUNK_DURATION_SECONDS * 1000 * 0.9); // Schedule slightly ahead
-    };
-    
-    generationLoop();
-}
+        case 'set_instruments':
+            instruments = data;
+            break;
 
-// --- Worker Message Handling ---
-
-self.onmessage = (event) => {
-    const { command, data } = event.data;
-
-    try {
-        switch (command) {
-            case 'start':
-                isRunning = true;
-                instruments = data.instruments;
-                drumsEnabled = data.drumsEnabled;
-                sampleRate = data.sampleRate;
-                // Wait a moment for samples to be loaded before starting
-                setTimeout(startGeneration, 100); 
-                break;
-            case 'stop':
-                isRunning = false;
-                break;
-            case 'set_instruments':
-                instruments = data;
-                break;
-            case 'toggle_drums':
-                drumsEnabled = data.enabled;
-                break;
-            case 'load_samples':
-                // The main thread sends decoded Float32Array data
-                samples.snare = data.snare;
-                // In a real app, you'd handle kick, hat, etc. the same way
-                samples.kick = data.snare; // Using snare as placeholder for kick
-                samples.hat = data.snare; // Using snare as placeholder for hat
-                break;
-            default:
-                console.warn('Unknown worker command:', command);
-        }
-    } catch (error) {
-        self.postMessage({
-            type: 'error',
-            error: error.message,
-        });
+        case 'toggle_drums':
+            drumsEnabled = data.enabled;
+            break;
+        
+        case 'load_samples':
+            // The main thread now sends decoded Float32Array data
+            for(const key in data) {
+                if (data[key] instanceof Float32Array) {
+                    samples[key] = data[key];
+                }
+            }
+            break;
     }
 };
+
+// --- Utilities ---
+let workerStartTime = Date.now();
+function getCurrentTime() {
+    return (Date.now() - workerStartTime) / 1000.0;
+}
