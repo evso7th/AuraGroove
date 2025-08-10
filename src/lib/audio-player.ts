@@ -11,6 +11,13 @@ export interface Instruments {
   bass: InstrumentType;
 }
 
+export interface Note {
+  time: number;
+  note: string | string[];
+  duration: Tone.Unit.Time;
+  part: Part;
+}
+
 class AudioPlayer {
   private isInitialized = false;
   private synths: {
@@ -22,6 +29,7 @@ class AudioPlayer {
   private masterVolume?: Tone.Volume;
   private reverb?: Tone.Reverb;
   private delay?: Tone.FeedbackDelay;
+  private partDuration: number = 4; // in seconds, assuming 1 measure at 120bpm
 
   constructor() {}
 
@@ -39,8 +47,16 @@ class AudioPlayer {
     this.setInstrument('accompaniment', instruments.accompaniment);
     this.setInstrument('bass', instruments.bass);
 
-    Tone.Transport.start();
+    Tone.Transport.bpm.value = 120; // Set a consistent tempo
     this.isInitialized = true;
+  }
+  
+  public get context() {
+    return Tone.context;
+  }
+
+  public getPartDuration() {
+    return this.partDuration;
   }
 
   private createSynth(instrument: InstrumentType): Tone.PolySynth {
@@ -92,26 +108,34 @@ class AudioPlayer {
     }
   }
 
-  public playNote(part: Part, note: string | string[]) {
-    if (!this.isInitialized) return;
-    
-    const synth = this.synths[part];
-    if (synth) {
-      try {
-        const duration = part === 'accompaniment' ? '1m' : part === 'bass' ? '1m' : '8n';
-        // Schedule the note slightly in the future to avoid clicks
-        const playTime = Tone.context.currentTime + 0.1;
-        synth.triggerAttackRelease(note, duration, playTime);
-      } catch (e) {
-        console.error(`Error playing note on part ${part}:`, e);
+  public schedulePart(notes: Note[], startTime: number) {
+      if (!this.isInitialized) return;
+
+      notes.forEach(noteEvent => {
+          const synth = this.synths[noteEvent.part];
+          if(synth) {
+              synth.triggerAttackRelease(noteEvent.note, noteEvent.duration, startTime + noteEvent.time);
+          }
+      });
+  }
+
+  public scheduleTransportEvent(callback: (time: number) => void, interval: Tone.Unit.Time) {
+      return Tone.Transport.scheduleRepeat(callback, interval);
+  }
+
+  public clearTransportEvent(eventId: number) {
+      Tone.Transport.clear(eventId);
+  }
+
+  public start() {
+      if (this.isInitialized && Tone.Transport.state !== 'started') {
+          Tone.Transport.start();
       }
-    }
   }
 
   public stop() {
     if (!this.isInitialized) return;
 
-    // Stop the transport and cancel all scheduled events
     if (Tone.Transport.state === 'started') {
         Tone.Transport.stop();
     }
@@ -120,16 +144,8 @@ class AudioPlayer {
     Object.values(this.synths).forEach(synth => {
       if (synth) {
         synth.releaseAll();
-        synth.dispose();
       }
     });
-    this.synths = {};
-    
-    this.delay?.dispose();
-    this.reverb?.dispose();
-    this.masterVolume?.dispose();
-    
-    this.isInitialized = false;
   }
 }
 

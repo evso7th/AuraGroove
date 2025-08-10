@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Loader2, Pause, Play } from "lucide-react";
-import { audioPlayer, Instruments, Part } from "@/lib/audio-player";
+import { audioPlayer, Instruments, Part, Note } from "@/lib/audio-player";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,14 +35,18 @@ export function AuraGroove() {
 
   const musicWorkerRef = useRef<Worker>();
   const isInitializedRef = useRef(false);
+  const nextPartStartTime = useRef(0);
+  const schedulerEventId = useRef<number | null>(null);
 
   useEffect(() => {
     musicWorkerRef.current = new Worker(new URL('../lib/workers/ambient.worker.ts', import.meta.url));
 
     const handleMessage = (event: MessageEvent) => {
-      const { type, note, part } = event.data;
-      if (type === 'note' && part) {
-        audioPlayer.playNote(part as Part, note);
+      const { type, part, notes, partDuration } = event.data;
+      if (type === 'music_part' && notes) {
+        const startTime = nextPartStartTime.current;
+        audioPlayer.schedulePart(notes, startTime);
+        nextPartStartTime.current += partDuration;
       }
     };
 
@@ -52,6 +56,9 @@ export function AuraGroove() {
       musicWorkerRef.current?.terminate();
       if(isInitializedRef.current) {
         audioPlayer.stop();
+        if(schedulerEventId.current) {
+            audioPlayer.clearTransportEvent(schedulerEventId.current);
+        }
         isInitializedRef.current = false;
       }
     };
@@ -61,6 +68,14 @@ export function AuraGroove() {
     setInstruments(prev => ({ ...prev, [part]: value }));
     audioPlayer.setInstrument(part, value);
   };
+  
+  const scheduleNextPart = (time: number) => {
+      // Check if we need to request more music
+      // Buffer of half a part duration
+      if (time > nextPartStartTime.current - audioPlayer.getPartDuration() / 2) {
+          musicWorkerRef.current?.postMessage({ command: 'generate' });
+      }
+  };
 
   const handlePlay = async () => {
     setIsLoading(true);
@@ -69,7 +84,14 @@ export function AuraGroove() {
         await audioPlayer.initialize(instruments);
         isInitializedRef.current = true;
       }
-      musicWorkerRef.current?.postMessage({ command: 'start' });
+      
+      nextPartStartTime.current = audioPlayer.context.currentTime + 0.2;
+      musicWorkerRef.current?.postMessage({ command: 'generate' }); // Generate initial part
+      
+      // Start the scheduler
+      schedulerEventId.current = audioPlayer.scheduleTransportEvent(scheduleNextPart, "16n");
+
+      audioPlayer.start();
       setIsPlaying(true);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
@@ -85,10 +107,13 @@ export function AuraGroove() {
   };
 
   const handleStop = () => {
+    audioPlayer.stop();
+    if (schedulerEventId.current) {
+      audioPlayer.clearTransportEvent(schedulerEventId.current);
+      schedulerEventId.current = null;
+    }
     musicWorkerRef.current?.postMessage({ command: 'stop' });
     setIsPlaying(false);
-    // Note: We don't call audioPlayer.stop() here anymore to keep instruments loaded.
-    // Full stop/cleanup happens on component unmount.
   };
   
   const handleTogglePlay = () => {

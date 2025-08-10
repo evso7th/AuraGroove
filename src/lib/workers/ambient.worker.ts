@@ -2,10 +2,6 @@
 
 // --- SINGLE WORKER FOR ALL MUSIC GENERATION ---
 
-let soloInterval: any;
-let accompanimentInterval: any;
-let bassInterval: any;
-
 // Simple pseudo-random number generator for deterministic sequences
 class PRNG {
   private seed: number;
@@ -41,50 +37,62 @@ const accompanimentScale = scales.ionian;
 const bassScale = scales.aeolian;
 
 
-function generateSolo() {
-  const note = mapValueToNote(soloPrng.next(), soloScale, 4);
-  postMessage({ type: 'note', part: 'solo', note });
-}
+// --- GENERATION LOGIC ---
+const partDuration = 4; // seconds for 2 measures at 120bpm
+const soloNotesPerPart = 8;
+const accompanimentNotesPerPart = 2;
+const bassNotesPerPart = 2;
 
-function generateAccompaniment() {
-  const rootNote = mapValueToNote(accompanimentPrng.next(), accompanimentScale, 3);
-  const thirdNote = mapValueToNote(accompanimentPrng.next(), accompanimentScale, 3);
-  postMessage({ type: 'note', part: 'accompaniment', note: [rootNote, thirdNote] });
-}
 
-function generateBass() {
-  const value = bassPrng.next();
-  const octave = value < 0.3 ? 1 : 2; // 30% chance to go to 1st octave
-  let note = mapValueToNote(value, bassScale, octave);
-  // Ensure we don't go below F1
-  if (octave === 1 && ["C1", "D1", "Eb1", "E1"].includes(note)) {
-    note = "F1";
-  }
-  postMessage({ type: 'note', part: 'bass', note });
-}
+function generateMusicPart() {
+    const notes = [];
+    
+    // Generate solo notes
+    for (let i = 0; i < soloNotesPerPart; i++) {
+        notes.push({
+            time: i * 0.5, // 8th notes
+            note: mapValueToNote(soloPrng.next(), soloScale, 4),
+            duration: '8n',
+            part: 'solo'
+        });
+    }
 
-function stop() {
-    if (soloInterval) clearInterval(soloInterval);
-    if (accompanimentInterval) clearInterval(accompanimentInterval);
-    if (bassInterval) clearInterval(bassInterval);
-    soloInterval = null;
-    accompanimentInterval = null;
-    bassInterval = null;
-}
+    // Generate accompaniment chords
+    for (let i = 0; i < accompanimentNotesPerPart; i++) {
+        const rootNote = mapValueToNote(accompanimentPrng.next(), accompanimentScale, 3);
+        const thirdNote = mapValueToNote(accompanimentPrng.next(), accompanimentScale, 3);
+        notes.push({
+            time: i * 2, // half notes
+            note: [rootNote, thirdNote],
+            duration: '1m',
+            part: 'accompaniment'
+        });
+    }
 
-function start() {
-    stop();
-    // Start intervals for each part
-    soloInterval = setInterval(generateSolo, 500); // every beat
-    accompanimentInterval = setInterval(generateAccompaniment, 4000); // every measure
-    bassInterval = setInterval(generateBass, 4000); // every measure
+    // Generate bass notes
+    for (let i = 0; i < bassNotesPerPart; i++) {
+        const value = bassPrng.next();
+        const octave = value < 0.3 ? 1 : 2; 
+        let note = mapValueToNote(value, bassScale, octave);
+        if (octave === 1 && ["C1", "D1", "Eb1", "E1"].includes(note)) {
+            note = "F1";
+        }
+        notes.push({
+            time: i * 2, // half notes
+            note: note,
+            duration: '1m',
+            part: 'bass'
+        });
+    }
+    
+    postMessage({ type: 'music_part', notes, partDuration });
 }
 
 
 self.onmessage = function(e) {
-  if (e.data.command === 'start') {
-    start();
+  if (e.data.command === 'generate') {
+    generateMusicPart();
   } else if (e.data.command === 'stop') {
-    stop();
+    // No active timers to stop, worker is passive
   }
 };
