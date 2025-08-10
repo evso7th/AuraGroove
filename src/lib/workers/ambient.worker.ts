@@ -1,3 +1,4 @@
+
 // Simple audio worker without Tone.js to avoid OfflineAudioContext issues.
 // It generates raw audio buffers and sends them to the main thread.
 
@@ -54,6 +55,14 @@ type Note = { freq: number; time: number; duration: number; velocity: number };
 function adsrEnvelope(t: number, attack: number, decay: number, sustain: number, release: number, duration: number) {
     const sustainLevel = sustain;
     if (t < 0) return 0;
+    
+    // Ensure total AD time is less than note duration
+    const totalAD = attack + decay;
+    if (totalAD > duration - release) {
+        attack = (attack / totalAD) * (duration - release);
+        decay = (decay / totalAD) * (duration - release);
+    }
+
     if (t < attack) {
         return t / attack;
     }
@@ -64,6 +73,7 @@ function adsrEnvelope(t: number, attack: number, decay: number, sustain: number,
         return sustainLevel;
     }
     if (t < duration) {
+        // Start release from sustain level
         return sustainLevel * (1.0 - (t - (duration - release)) / release);
     }
     return 0;
@@ -133,6 +143,13 @@ function generatePart() {
     
     // Accompaniment
     const accompanimentNotes: Note[] = [];
+    for (let i = 0; i < 4; i++) {
+        const time = i * 1;
+        const value = accompanimentPrng.next();
+        const octave = value < 0.5 ? 0 : 1;
+        const noteMidi = mapValueToMidi(value, accompanimentScale, octave);
+        accompanimentNotes.push({ freq: midiToFreq(noteMidi), time, duration: 0.9, velocity: 0.4 });
+    }
 
     // Bass
     const bassNotes: Note[] = [];
@@ -141,7 +158,7 @@ function generatePart() {
         const value = bassPrng.next();
         const octave = value < 0.3 ? -2 : -1;
         const noteMidi = mapValueToMidi(value, bassScale, octave);
-        bassNotes.push({ freq: midiToFreq(noteMidi), time, duration: 3.8, velocity: 0.8 });
+        bassNotes.push({ freq: midiToFreq(noteMidi), time, duration: 1.9, velocity: 0.8 });
     }
     
     const soloBuffer = createSynthVoice(soloNotes, partDuration, instruments.solo);
