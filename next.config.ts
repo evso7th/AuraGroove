@@ -32,11 +32,13 @@ const nextConfig: NextConfig = {
   },
   // Add the experimental block here to resolve cross-origin warnings
   experimental: {
-    allowedDevOrigins: [
-      'https://*.cloudworkstations.dev',
-      'https://*.firebase.studio',
-    ],
+    // allowedDevOrigins is not an experimental feature.
+    // It should be at the top level of the config.
   },
+  allowedDevOrigins: [
+    'https://*.cloudworkstations.dev',
+    'https://*.firebase.studio',
+  ],
 };
 
 export default nextConfig;
