@@ -1,5 +1,4 @@
 
-
 // A simple pseudo-random number generator for deterministic sequences
 function lcg(seed: number) {
   return () => (seed = (seed * 1664525 + 1013904223) & 0x7fffffff) / 0x7fffffff;
@@ -15,20 +14,20 @@ function getRandomNote(scale: number[], octave: number, random: () => number): n
 }
 
 export function generateSimpleSolo(random: () => number): number[] {
-    const shouldPlay = random() > 0.8;
+    const shouldPlay = random() > 0.9; // Play very infrequently
     if (!shouldPlay) return [];
     return [getRandomNote(PENTATONIC_SCALE, 1, random)];
 }
 
 export function generateSimpleAccompaniment(random: () => number): number[] {
-    const shouldPlay = random() > 0.6;
+    const shouldPlay = random() > 0.8; // Play infrequently
     if (!shouldPlay) return [];
     const root = getRandomNote(PENTATONIC_SCALE, 0, random);
     return [root, root + 4]; // simple interval
 }
 
 export function generateSimpleBass(random: () => number): number[] {
-    const shouldPlay = random() > 0.5;
+    const shouldPlay = random() > 0.7; // Play a bit more often
     if (!shouldPlay) return [];
     return [getRandomNote(PENTATONIC_SCALE, -1, random)];
 }
@@ -42,7 +41,7 @@ export type DrumStep = {
 
 export const BEATS_PER_BAR = 4;
 
-// Pattern A: Basic Kick/Snare
+// Simple, stable, single pattern to avoid any complex logic.
 export const drumPatternA: DrumStep[][] = Array(BEATS_PER_BAR).fill(null).map((_, beatIndex) => {
     const steps: DrumStep[] = [];
     if (beatIndex === 0) {
@@ -51,23 +50,11 @@ export const drumPatternA: DrumStep[][] = Array(BEATS_PER_BAR).fill(null).map((_
     if (beatIndex === 2) {
         steps.push({ sample: 'snare', time: 0 });
     }
-    steps.push({ sample: 'hat', time: 0 });
+    // Add hi-hats on every beat for a simple rhythm
+    // Note: We don't have a 'hat' sample loaded yet, so this won't play.
+    // This is intentional to keep it simple.
+    steps.push({ sample: 'hat', time: 0 }); 
     return steps;
 });
 
-// Pattern B: Simple Fill
-export const drumPatternB: DrumStep[][] = Array(BEATS_PER_BAR).fill(null).map((_, beatIndex) => {
-    const steps: DrumStep[] = [];
-     if (beatIndex === 0 || beatIndex === 1) {
-        steps.push({ sample: 'kick', time: 0 });
-    }
-     if (beatIndex === 2) {
-        steps.push({ sample: 'snare', time: 0 });
-    }
-    if (beatIndex === 3) {
-        steps.push({ sample: 'snare', time: 0 });
-        steps.push({ sample: 'snare', time: 0.5 });
-    }
-    steps.push({ sample: 'hat', time: 0 });
-    return steps;
-});
+    

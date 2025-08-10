@@ -1,203 +1,229 @@
-// public/workers/ambient.worker.js
 
-import {
-  generateSimpleSolo,
-  generateSimpleAccompaniment,
-  generateSimpleBass,
-  drumPatternA,
-  drumPatternB,
-  BEATS_PER_BAR,
-} from '/lib/fractal-music-generator.js';
+"use strict";
 
-
-// --- State ---
-let isRunning = false;
+// --- Worker Scope ---
+let currentBeat = 0;
+let totalBeatsGenerated = 0;
+let isGenerating = false;
+let timerId = null;
 let sampleRate = 44100;
-let instruments = {};
+let instruments = {
+    solo: 'synthesizer',
+    accompaniment: 'piano',
+    bass: 'bass guitar',
+};
 let drumsEnabled = true;
-let samples = {};
-let tempo = 120.0;
-let sixteenthNoteDuration;
-let currentBar = 0;
 
-
-// --- Synthesis (Simple Oscillators) ---
-// We generate raw audio frames here, no complex synth engines.
-
-function midiToFreq(midi) {
-  return 440 * Math.pow(2, (midi - 69) / 12);
-}
-
-function createOscillator(type = 'sine') {
-  let phase = 0;
-  return (freq, amp, duration) => {
-    const buffer = new Float32Array(Math.floor(duration * sampleRate));
-    const increment = (2 * Math.PI * freq) / sampleRate;
-    for (let i = 0; i < buffer.length; i++) {
-      if (type === 'sine') {
-        buffer[i] = Math.sin(phase) * amp;
-      } else if (type === 'sawtooth') {
-         buffer[i] = ((phase / Math.PI) - 1) * amp;
-      } else if (type === 'square') {
-         buffer[i] = Math.sign(Math.sin(phase)) * amp;
-      }
-      phase += increment;
-      if (phase > 2 * Math.PI) phase -= 2 * Math.PI;
-    }
-    return buffer;
-  };
-}
-
-const synths = {
-  synthesizer: createOscillator('sawtooth'),
-  piano: createOscillator('square'), // Placeholder sound
-  organ: createOscillator('sine'), // Placeholder sound
-  'bass guitar': createOscillator('sine'),
+// --- Sample Data (will be loaded from main thread) ---
+const samples = {
+    'snare': null
 };
 
-function applyEnvelope(buffer) {
+// --- Constants ---
+const BPM = 90;
+const BEAT_DURATION_SECONDS = 60.0 / BPM;
+const CHUNK_DURATION_SECONDS = 0.5; // Generate audio in smaller chunks
+const CHUNK_SAMPLES = Math.floor(CHUNK_DURATION_SECONDS * sampleRate);
+
+// --- Music Generation (simplified) ---
+// Note: We are keeping the other instruments extremely simple for now to focus on the drums.
+importScripts('/lib/fractal-music-generator.js');
+
+
+// --- DSP Functions (moved from generators) ---
+function midiToFrequency(midi) {
+    return 440 * Math.pow(2, (midi - 69) / 12);
+}
+
+function createEnvelope(level, duration, sampleRate) {
     const attackTime = 0.01 * sampleRate;
-    const decayTime = 0.1 * sampleRate;
-    const sustainLevel = 0.7;
-    const releaseTime = 0.2 * sampleRate;
+    const decayTime = (duration * 0.5) * sampleRate;
+    const sustainLevel = level * 0.7;
+    const releaseTime = (duration * 0.4) * sampleRate;
+    const totalSamples = duration * sampleRate;
 
-    for (let i = 0; i < buffer.length; i++) {
-        const t = i / buffer.length;
-        let amp = 0;
+    const envelope = new Float32Array(totalSamples);
+    for (let i = 0; i < totalSamples; i++) {
         if (i < attackTime) {
-            amp = i / attackTime;
+            envelope[i] = level * (i / attackTime);
         } else if (i < attackTime + decayTime) {
-            amp = 1.0 - (1.0 - sustainLevel) * ((i - attackTime) / decayTime);
-        } else if (i < buffer.length - releaseTime) {
-            amp = sustainLevel;
+            envelope[i] = level - (level - sustainLevel) * ((i - attackTime) / decayTime);
+        } else if (i < totalSamples - releaseTime) {
+            envelope[i] = sustainLevel;
         } else {
-            amp = sustainLevel * (1.0 - ((i - (buffer.length - releaseTime)) / releaseTime));
+            envelope[i] = sustainLevel * (1 - (i - (totalSamples - releaseTime)) / releaseTime);
         }
-        buffer[i] *= amp;
     }
-    return buffer;
+    return envelope;
+}
+
+function applyEnvelope(signal, envelope) {
+    const len = Math.min(signal.length, envelope.length);
+    for (let i = 0; i < len; i++) {
+        signal[i] *= envelope[i];
+    }
+    return signal;
 }
 
 
-// --- Music Generation ---
-
-// Simple pseudo-random number generator for deterministic sequences
-function lcg(seed) {
-  return () => (seed = (seed * 1664525 + 1013904223) & 0x7fffffff) / 0x7fffffff;
-}
-let random = lcg(1);
-
-function generatePart(part, noteGenerator) {
-    const instrument = instruments[part];
-    if (instrument === 'none' || !synths[instrument]) {
-        return new Float32Array(Math.floor(sixteenthNoteDuration * sampleRate)).fill(0);
+// --- Instrument Synthesis Functions ---
+function synthesize(notes, duration, type) {
+    const buffer = new Float32Array(Math.floor(duration * sampleRate));
+    if (notes.length === 0 || type === 'none') {
+        return buffer;
     }
 
-    const notes = noteGenerator(random);
-    if (notes.length === 0) {
-        return new Float32Array(Math.floor(sixteenthNoteDuration * sampleRate)).fill(0);
-    }
-    
-    let mixedBuffer = new Float32Array(Math.floor(sixteenthNoteDuration * sampleRate)).fill(0);
+    const envelope = createEnvelope(0.3, duration, sampleRate);
 
     notes.forEach(note => {
-        const freq = midiToFreq(note);
-        const synthFunc = synths[instrument];
-        const noteBuffer = synthFunc(freq, 0.2, sixteenthNoteDuration);
-        const envelopedBuffer = applyEnvelope(noteBuffer);
-        for(let i = 0; i < mixedBuffer.length; i++) {
-            mixedBuffer[i] += envelopedBuffer[i] || 0;
+        const frequency = midiToFrequency(note);
+        for (let i = 0; i < buffer.length; i++) {
+            const time = i / sampleRate;
+            let sampleValue = 0;
+            // Simple oscillators based on type
+            if (type === 'synthesizer') {
+                sampleValue = Math.sin(2 * Math.PI * frequency * time);
+            } else if (type === 'piano') {
+                 // Simplified piano-like sound (multiple harmonics)
+                sampleValue = 0.6 * Math.sin(2 * Math.PI * frequency * time) + 
+                              0.3 * Math.sin(2 * Math.PI * frequency * 2 * time) +
+                              0.1 * Math.sin(2 * Math.PI * frequency * 3 * time);
+            } else if (type === 'organ') {
+                // Simplified organ-like sound
+                 sampleValue = 0.5 * Math.sin(2 * Math.PI * frequency * time) + 
+                               0.3 * Math.sin(2 * Math.PI * frequency * 2 * time) +
+                               0.2 * Math.sin(2 * Math.PI * frequency * 4 * time);
+            } else if (type === 'bass guitar') {
+                 // Simplified bass sound (sine wave)
+                 sampleValue = Math.sin(2 * Math.PI * frequency * time);
+            }
+            buffer[i] += sampleValue / notes.length;
         }
     });
 
-    return mixedBuffer;
+    return applyEnvelope(buffer, envelope);
 }
 
-function generateDrumPart() {
-    let mixedBuffer = new Float32Array(Math.floor(sixteenthNoteDuration * sampleRate)).fill(0);
-    if (!drumsEnabled || !samples.snare) {
-        return mixedBuffer;
+
+function generateAudioChunk() {
+    const chunkBuffer = new Float32Array(CHUNK_SAMPLES).fill(0);
+    const beatsInChunk = CHUNK_DURATION_SECONDS / BEAT_DURATION_SECONDS;
+
+    // Determine the part of the beat we are in
+    const startBeat = totalBeatsGenerated;
+    const endBeat = startBeat + beatsInChunk;
+    
+    // --- Generate Instrument Parts ---
+    if (instruments.solo !== 'none') {
+        const soloNotes = generateSimpleSolo(Math.random);
+        const soloBuffer = synthesize(soloNotes, CHUNK_DURATION_SECONDS, instruments.solo);
+        for (let i = 0; i < CHUNK_SAMPLES; i++) chunkBuffer[i] += soloBuffer[i] * 0.5;
     }
 
-    const barInLoop = currentBar % 4;
-    const pattern = barInLoop === 3 ? drumPatternB : drumPatternA;
+    if (instruments.accompaniment !== 'none') {
+        const accNotes = generateSimpleAccompaniment(Math.random);
+        const accBuffer = synthesize(accNotes, CHUNK_DURATION_SECONDS, instruments.accompaniment);
+        for (let i = 0; i < CHUNK_SAMPLES; i++) chunkBuffer[i] += accBuffer[i] * 0.4;
+    }
 
-    const beatInBar = currentBar % BEATS_PER_BAR;
-    const steps = pattern[beatInBar] || [];
+    if (instruments.bass !== 'none') {
+        const bassNotes = generateSimpleBass(Math.random);
+        const bassBuffer = synthesize(bassNotes, CHUNK_DURATION_SECONDS, instruments.bass);
+        for (let i = 0; i < CHUNK_SAMPLES; i++) chunkBuffer[i] += bassBuffer[i] * 0.6;
+    }
 
-    steps.forEach(step => {
-        const sample = samples[step.sample];
-        if (sample) {
-            const start = Math.floor(step.time * sixteenthNoteDuration * sampleRate);
-            for (let i = 0; i < sample.length && start + i < mixedBuffer.length; i++) {
-                mixedBuffer[start + i] += sample[i] * 0.5; // Mix at 50% volume
-            }
+
+    // --- Generate Drum Part ---
+    if (drumsEnabled) {
+        const currentBeatInBar = Math.floor(totalBeatsGenerated) % BEATS_PER_BAR;
+        const drumSteps = drumPatternA[currentBeatInBar]; // Always use Pattern A
+
+        drumSteps.forEach(step => {
+             const sample = samples[step.sample];
+             if (sample) {
+                 const stepTimeInChunk = (currentBeatInBar - Math.floor(startBeat)) * BEAT_DURATION_SECONDS + step.time * BEAT_DURATION_SECONDS;
+                 const startIndex = Math.floor(stepTimeInChunk * sampleRate);
+
+                 if (startIndex < CHUNK_SAMPLES) {
+                    for (let i = 0; i < sample.length && startIndex + i < CHUNK_SAMPLES; i++) {
+                       chunkBuffer[startIndex + i] += sample[i] * 0.7; // Mix in sample
+                    }
+                 }
+             }
+        });
+    }
+
+
+    totalBeatsGenerated += beatsInChunk;
+    currentBeat = (currentBeat + 1);
+
+    // Send generated chunk back to the main thread
+    self.postMessage({
+        type: 'chunk',
+        data: {
+            chunk: chunkBuffer,
+            duration: CHUNK_DURATION_SECONDS
         }
-    });
-    
-    return mixedBuffer;
-}
-
-function generateNextMusicChunk() {
-  if (!isRunning) return;
-
-  const soloPart = generatePart('solo', generateSimpleSolo);
-  const accompanimentPart = generatePart('accompaniment', generateSimpleAccompaniment);
-  const bassPart = generatePart('bass', generateSimpleBass);
-  const drumPart = generateDrumPart();
-  
-  const finalMix = new Float32Array(soloPart.length);
-  for (let i = 0; i < finalMix.length; i++) {
-      finalMix[i] = (soloPart[i] + accompanimentPart[i] + bassPart[i] + drumPart[i]) / 4;
-  }
-  
-  // Post chunk and schedule next one
-  self.postMessage({ type: 'chunk', data: { chunk: finalMix, duration: sixteenthNoteDuration } });
-
-  currentBar = (currentBar + 1) % (BEATS_PER_BAR * 4); // Loop a 4-bar sequence for patterns
-  setTimeout(generateNextMusicChunk, sixteenthNoteDuration * 1000 * 0.9); // Schedule slightly ahead
+    }, [chunkBuffer.buffer]);
 }
 
 
-function startGeneration(data) {
-    if (isRunning) return;
+function startGeneration(initialSettings) {
+    if (isGenerating) return;
+
+    console.log("Worker starting generation with settings:", initialSettings);
+    isGenerating = true;
+    currentBeat = 0;
+    totalBeatsGenerated = 0;
+    sampleRate = initialSettings.sampleRate || 44100;
+    instruments = initialSettings.instruments || instruments;
+    drumsEnabled = initialSettings.drumsEnabled;
     
-    instruments = data.instruments;
-    drumsEnabled = data.drumsEnabled;
-    sampleRate = data.sampleRate;
-    sixteenthNoteDuration = 60.0 / tempo / 4;
-    random = lcg(Date.now()); // Re-seed random number generator
-    currentBar = 0;
-    
-    isRunning = true;
     self.postMessage({ type: 'generation_started' });
-    generateNextMusicChunk();
+
+    // Use a tight loop with interval to avoid blocking
+    timerId = setInterval(generateAudioChunk, CHUNK_DURATION_SECONDS * 1000 * 0.9); // Run slightly faster to keep buffer full
 }
 
-// --- Worker Event Listener ---
+function stopGeneration() {
+    if (!isGenerating) return;
+    isGenerating = false;
+    if (timerId) {
+        clearInterval(timerId);
+        timerId = null;
+    }
+    console.log("Worker stopped generation.");
+}
 
+
+// --- Message Handling ---
 self.onmessage = (event) => {
-  const { command, data } = event.data;
+    const { command, data } = event.data;
 
-  switch (command) {
-    case 'start':
-      startGeneration(data);
-      break;
-    case 'stop':
-      isRunning = false;
-      break;
-    case 'set_instruments':
-      instruments = data;
-      break;
-    case 'toggle_drums':
-      drumsEnabled = data.enabled;
-      break;
-    case 'load_samples':
-      // Assuming data is { snare: Float32Array, ... }
-      samples = data;
-      // Let's create some placeholder samples for now
-      if (!samples.kick) samples.kick = samples.snare;
-      if (!samples.hat) samples.hat = samples.snare.map(s => s * 0.2); // quieter
-      break;
-  }
+    switch (command) {
+        case 'start':
+            startGeneration(data);
+            break;
+        case 'stop':
+            stopGeneration();
+            break;
+        case 'set_instruments':
+            instruments = data;
+            console.log("Worker instruments updated:", instruments);
+            break;
+        case 'toggle_drums':
+            drumsEnabled = data.enabled;
+            console.log("Worker drums enabled:", drumsEnabled);
+            break;
+        case 'load_samples':
+             if (data.snare) {
+                samples['snare'] = data.snare;
+                console.log("Worker loaded snare sample.");
+            }
+            break;
+        default:
+            console.warn(`Worker received unknown command: ${command}`);
+    }
 };
+
+    
