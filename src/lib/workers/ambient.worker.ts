@@ -104,23 +104,6 @@ function createSynthVoice(notes: Note[], totalDuration: number, instrument: stri
 // --- MUSIC GENERATION ---
 function generatePart() {
   try {
-    const soloNotes: Note[] = [];
-    for (let i = 0; i < 8; i++) {
-        const time = i * 0.5;
-        const noteMidi = mapValueToMidi(soloPrng.next(), soloScale, 1);
-        soloNotes.push({ freq: midiToFreq(noteMidi), time, duration: 0.4, velocity: 0.5 });
-    }
-
-    const accompanimentNotes: Note[] = [];
-    for (let i = 0; i < 2; i++) {
-        const time = i * 2;
-        const rootNoteIndex = Math.floor(accompanimentPrng.next() * accompanimentScale.length);
-        const rootNote = mapValueToMidi(0, accompanimentScale, 0) + accompanimentScale[rootNoteIndex] - 60;
-        const thirdNote = mapValueToMidi(0, accompanimentScale, 0) + accompanimentScale[(rootNoteIndex + 2) % accompanimentScale.length] - 60;
-        accompanimentNotes.push({ freq: midiToFreq(rootNote), time, duration: 1.9, velocity: 0.3 });
-        accompanimentNotes.push({ freq: midiToFreq(thirdNote), time, duration: 1.9, velocity: 0.3 });
-    }
-
     const bassNotes: Note[] = [];
     for (let i = 0; i < 2; i++) {
         const time = i * 2;
@@ -130,14 +113,9 @@ function generatePart() {
         bassNotes.push({ freq: midiToFreq(noteMidi), time, duration: 1.9, velocity: 0.8 });
     }
     
-    const soloBuffer = createSynthVoice(soloNotes, partDuration, instruments.solo);
-    const accompanimentBuffer = createSynthVoice(accompanimentNotes, partDuration, instruments.accompaniment);
     const bassBuffer = createSynthVoice(bassNotes, partDuration, instruments.bass);
 
-    const finalBuffer = new Float32Array(partDuration * sampleRate);
-    for (let i = 0; i < finalBuffer.length; i++) {
-        finalBuffer[i] = (soloBuffer[i] + accompanimentBuffer[i] + bassBuffer[i]) / 3;
-    }
+    const finalBuffer = bassBuffer;
 
     // Clipping to prevent distortion
     for (let i = 0; i < finalBuffer.length; i++) {
