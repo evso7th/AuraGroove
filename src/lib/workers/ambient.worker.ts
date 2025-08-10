@@ -56,7 +56,7 @@ const drumSamples: { [key: string]: AudioBuffer } = {};
 let samplesLoaded = false;
 
 const drumSampleFiles = {
-    snare: '/assets/drums/snare.wav',
+    snare: '/public/assets/drums/snare.wav',
 };
 
 const drumSequencerPattern = {
@@ -67,24 +67,41 @@ const drumSequencerPattern = {
 async function loadDrumSamples(audioContext: any, baseUrl: string) {
     postMessage({ type: 'loading_start' });
     try {
+        console.log('Worker: Starting drum sample loading...');
         const samplePromises = Object.entries(drumSampleFiles).map(async ([key, path]) => {
             const fullUrl = baseUrl ? baseUrl + path : path;
-            const response = await fetch(fullUrl);
+            console.log(`Worker: Fetching sample for ${key} from ${fullUrl}`);
+
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error(`Request timed out for ${fullUrl}`)), 5000)
+            );
+            
+            const fetchPromise = fetch(fullUrl);
+
+            const response = await Promise.race([fetchPromise, timeoutPromise]) as Response;
+
+            console.log(`Worker: Fetch response for ${fullUrl}`, { status: response.status, ok: response.ok });
+
             if (!response.ok) {
-                throw new Error(`Failed to fetch ${fullUrl}: ${response.statusText}`);
+                throw new Error(`Failed to fetch ${fullUrl}: ${response.status} ${response.statusText}`);
             }
             const arrayBuffer = await response.arrayBuffer();
             const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
             drumSamples[key] = audioBuffer;
+             console.log(`Worker: Successfully decoded sample for ${key}`);
         });
+
         await Promise.all(samplePromises);
         samplesLoaded = true;
-        console.log("All drum samples loaded successfully.");
+        console.log("Worker: All drum samples loaded successfully.");
     } catch (error) {
-        console.error("Error loading drum samples:", error);
-        postMessage({ type: 'error', message: `Failed to load drum samples. Please check file paths and network. Error: ${error instanceof Error ? error.message : String(error)}` });
+        console.error("Worker: Error loading drum samples:", error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        postMessage({ type: 'error', message: `Failed to load drum samples. Details: ${errorMessage}` });
+        throw error; // re-throw to stop execution if loading fails
     }
 }
+
 
 function createDrumPart() {
     const buffer = new Float32Array(partDuration * sampleRate).fill(0);
@@ -226,10 +243,10 @@ async function generatePart() {
 
     for (let i = 0; i < finalBuffer.length; i++) {
       let mixedSample = soloBuffer[i] + accompanimentBuffer[i] + bassBuffer[i];
-      if (drumsEnabled) {
+      if (drumsEnabled && samplesLoaded) {
         mixedSample += drumBuffer[i];
       }
-      finalBuffer[i] = mixedSample / (drumsEnabled ? 4 : 3);
+      finalBuffer[i] = mixedSample / (drumsEnabled && samplesLoaded ? 4 : 3);
     }
         
     for (let i = 0; i < finalBuffer.length; i++) {
@@ -239,7 +256,7 @@ async function generatePart() {
     postMessage({ type: 'music_part', buffer: finalBuffer, duration: partDuration }, [finalBuffer.buffer]);
 
   } catch (e: any) {
-      console.error("Error in worker generation:", e);
+      console.error("Worker: Error in music generation loop:", e);
       postMessage({ type: 'error', message: e.message || 'An unknown error occurred in the worker.' });
   }
 }
@@ -253,13 +270,20 @@ self.onmessage = async function(e) {
     drumsEnabled = data.drumsEnabled;
     baseUrl = data.baseUrl;
 
-    // Use a dummy AudioContext for decoding
     const offlineContext = new OfflineAudioContext(1, 1, sampleRate);
     
-    if (drumsEnabled && !samplesLoaded) {
-      await loadDrumSamples(offlineContext, baseUrl);
+    if (drumsEnabled) {
+      try {
+        await loadDrumSamples(offlineContext, baseUrl);
+        postMessage({ type: 'loading_complete' });
+      } catch (error) {
+        // Error is already posted from loadDrumSamples, just stop here
+        return;
+      }
+    } else {
+        postMessage({ type: 'loading_complete' });
     }
-    postMessage({ type: 'loading_complete' });
+    
 
     if (generationInterval === null) {
       generatePart();
@@ -278,7 +302,9 @@ self.onmessage = async function(e) {
      if (drumsEnabled && !samplesLoaded && baseUrl) {
         const offlineContext = new OfflineAudioContext(1, 1, sampleRate);
         loadDrumSamples(offlineContext, baseUrl).then(() => {
-             console.log("Samples loaded after toggle.");
+             console.log("Worker: Samples loaded after toggle.");
+        }).catch(err => {
+            console.error("Worker: Failed to load samples on toggle", err);
         });
     }
   }
