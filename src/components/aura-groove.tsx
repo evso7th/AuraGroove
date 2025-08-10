@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Loader2, Pause, Play } from "lucide-react";
-import { audioPlayer, Instruments } from "@/lib/audio-player";
+import { audioPlayer, Instruments, Note } from "@/lib/audio-player";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,8 +40,17 @@ export function AuraGroove() {
     musicWorkerRef.current = new Worker(new URL('../lib/workers/ambient.worker.ts', import.meta.url));
 
     const handleMessage = (event: MessageEvent) => {
-      const { type, notes, partDuration } = event.data;
-      if (type === 'music_part' && notes) {
+      const { type, partDuration, times, pitches, durations, parts } = event.data;
+      if (type === 'music_part') {
+        const notes: Note[] = [];
+        for (let i = 0; i < pitches.length; i++) {
+            notes.push({
+                time: times[i],
+                note: pitches[i], // MIDI note number
+                duration: durations[i],
+                part: parts[i] === 0 ? 'solo' : parts[i] === 1 ? 'accompaniment' : 'bass'
+            });
+        }
         audioPlayer.schedulePart(notes, partDuration);
       }
     };

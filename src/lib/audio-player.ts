@@ -13,8 +13,8 @@ export interface Instruments {
 
 export interface Note {
   time: number;
-  note: string | string[];
-  duration: Tone.Unit.Time;
+  note: number | number[]; // MIDI note number(s)
+  duration: number; // in seconds
   part: Part;
 }
 
@@ -108,7 +108,10 @@ class AudioPlayer {
       notes.forEach(noteEvent => {
           const synth = this.synths[noteEvent.part];
           if(synth) {
-              synth.triggerAttackRelease(noteEvent.note, noteEvent.duration, startTime + noteEvent.time);
+              const frequency = Array.isArray(noteEvent.note) 
+                ? noteEvent.note.map(n => Tone.Frequency(n, "midi").toFrequency()) 
+                : Tone.Frequency(noteEvent.note, "midi").toFrequency();
+              synth.triggerAttackRelease(frequency, noteEvent.duration, startTime + noteEvent.time);
           }
       });
       
