@@ -333,4 +333,6 @@ export function AuraGroove() {
           {isLoading && !isPlaying ? loadingText : isPlaying ? "Stop" : "Play"}
         </Button>
       </CardFooter>
-    </Card
+    </Card>
+  );
+}
