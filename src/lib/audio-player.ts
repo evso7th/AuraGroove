@@ -2,54 +2,46 @@
 
 import * as Tone from 'tone';
 
-export interface MusicData {
-  soloPart: string[];
-  accompanimentPart: string[];
-  bassPart: string[];
-}
+type InstrumentType = 'synthesizer' | 'organ' | 'piano' | 'bass guitar';
+export type Part = 'solo' | 'accompaniment' | 'bass';
 
 export interface Instruments {
-  soloInstrument: 'synthesizer' | 'organ' | 'piano';
-  accompanimentInstrument: 'synthesizer' | 'organ' | 'piano';
-  bassInstrument: 'bass guitar';
+  solo: InstrumentType;
+  accompaniment: InstrumentType;
+  bass: InstrumentType;
 }
 
 class AudioPlayer {
   private isInitialized = false;
-  private isPlaying = false;
   private synths: {
     solo?: Tone.PolySynth;
     accompaniment?: Tone.PolySynth;
     bass?: Tone.MonoSynth;
   } = {};
-  private sequences: {
-    solo?: Tone.Sequence;
-    accompaniment?: Tone.Sequence;
-    bass?: Tone.Sequence;
-  } = {};
+  
   private masterVolume?: Tone.Volume;
-  private lfo?: Tone.LFO;
   private reverb?: Tone.Reverb;
   private delay?: Tone.FeedbackDelay;
 
-  constructor() {
-    // Defer initialization to user interaction
-  }
+  constructor() {}
 
-  private async initialize() {
+  public async initialize(instruments: Instruments) {
     if (this.isInitialized) return;
     await Tone.start();
     
     this.masterVolume = new Tone.Volume(-12).toDestination();
-    this.reverb = new Tone.Reverb({ decay: 10, wet: 0.6 }).connect(this.masterVolume);
-    this.delay = new Tone.FeedbackDelay("4n", 0.5).connect(this.reverb);
+    this.reverb = new Tone.Reverb({ decay: 8, wet: 0.5 }).connect(this.masterVolume);
+    this.delay = new Tone.FeedbackDelay("8n", 0.4).connect(this.reverb);
 
-    Tone.Transport.bpm.value = 60;
-    Tone.Transport.timeSignature = [4, 4];
+    this.setInstrument('solo', instruments.solo);
+    this.setInstrument('accompaniment', instruments.accompaniment);
+    this.setInstrument('bass', instruments.bass);
+
+    Tone.Transport.start();
     this.isInitialized = true;
   }
 
-  private createSynth(instrument: 'synthesizer' | 'organ' | 'piano'): Tone.PolySynth {
+  private createSynth(instrument: InstrumentType): Tone.PolySynth {
     let synthOptions;
     const commonOptions = { volume: -14 };
 
@@ -67,7 +59,7 @@ class AudioPlayer {
   }
   
   private createBassSynth(): Tone.MonoSynth {
-    const bassSynth = new Tone.MonoSynth({
+    return new Tone.MonoSynth({
       volume: -8,
       oscillator: { type: 'fmsine' },
       envelope: { attack: 0.1, decay: 0.3, sustain: 1, release: 2.5 },
@@ -80,80 +72,45 @@ class AudioPlayer {
         octaves: 4
       }
     }).connect(this.masterVolume!);
-
-    this.lfo = new Tone.LFO("2n", -6, 0).start();
-    this.lfo.connect(bassSynth.volume);
-    
-    return bassSynth;
   }
-  
-  public async play(musicData: MusicData, instruments: Instruments) {
-    await this.initialize();
 
-    if (this.isPlaying) {
-      this.stop();
-    }
-    
-    await Tone.start();
+  public setInstrument(part: Part, instrument: InstrumentType) {
+    if (!this.isInitialized) return;
 
-    this.synths.solo = this.createSynth(instruments.soloInstrument);
-    this.synths.accompaniment = this.createSynth(instruments.accompanimentInstrument);
-    this.synths.bass = this.createBassSynth();
+    this.synths[part]?.dispose();
 
-    const { soloPart, accompanimentPart, bassPart } = musicData;
-    
-    if (soloPart.length > 0) {
-        this.sequences.solo = new Tone.Sequence((time, note) => {
-            this.synths.solo?.triggerAttackRelease(note, '2n', time);
-        }, soloPart, '4n').start(0);
-        this.sequences.solo.loop = true;
+    if (part === 'bass') {
+        this.synths.bass = this.createBassSynth();
+    } else {
+        this.synths[part] = this.createSynth(instrument);
     }
-    
-    if (accompanimentPart.length > 0) {
-        this.sequences.accompaniment = new Tone.Sequence((time, note) => {
-            this.synths.accompaniment?.triggerAttackRelease(note, '1n', time);
-        }, accompanimentPart, '1m').start(0);
-        this.sequences.accompaniment.loop = true;
-    }
-    
-    if (bassPart.length > 0) {
-        this.sequences.bass = new Tone.Sequence((time, note) => {
-            this.synths.bass?.triggerAttackRelease(note, '1n', time);
-        }, bassPart, '1m').start(0);
-        this.sequences.bass.loop = true;
-    }
+  }
 
-    Tone.Transport.start();
-    this.isPlaying = true;
+  public playNote(part: Part, note: string | string[]) {
+    if (!this.isInitialized) return;
+    
+    const synth = this.synths[part];
+    if (synth) {
+      const duration = part === 'accompaniment' ? '1m' : '8n';
+      synth.triggerAttackRelease(note, duration, Tone.now());
+    }
   }
 
   public stop() {
-    if (!this.isPlaying) return;
-
-    Tone.Transport.stop();
-    Tone.Transport.cancel(0);
-
-    Object.values(this.sequences).forEach(seq => {
-        if (seq) {
-            seq.stop();
-            seq.dispose();
-        }
-    });
-    this.sequences = {};
+    if (!this.isInitialized) return;
 
     Object.values(this.synths).forEach(synth => synth?.dispose());
     this.synths = {};
     
-    this.lfo?.dispose();
     this.delay?.dispose();
     this.reverb?.dispose();
+    this.masterVolume?.dispose();
     
-    this.lfo = undefined;
-    this.delay = undefined;
-    this.reverb = undefined;
-    
-    this.isPlaying = false;
+    this.isInitialized = false;
+    Tone.Transport.stop();
+    Tone.Transport.cancel(0);
   }
 }
 
 export const audioPlayer = new AudioPlayer();
+    
