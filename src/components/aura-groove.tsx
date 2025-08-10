@@ -32,9 +32,9 @@ export type Instruments = {
 };
 
 const sampleUrls = {
-    kick: '/samples/drums/kick.wav',
+    kick: '/samples/drums/kick_drum6.wav',
     snare: '/samples/drums/snare.wav',
-    hat: '/samples/drums/hat.wav'
+    hat: '/samples/drums/closed_hi_hat_accented.wav'
 };
 
 export function AuraGroove() {
@@ -106,6 +106,9 @@ export function AuraGroove() {
 
             for (const [key, url] of sampleEntries) {
                 const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
+                }
                 const arrayBuffer = await response.arrayBuffer();
                 const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
                 const float32Array = audioBuffer.getChannelData(0);
@@ -123,7 +126,7 @@ export function AuraGroove() {
             toast({
                 variant: "destructive",
                 title: "Sample Error",
-                description: "Could not load drum samples. Please check the file paths and network.",
+                description: "Could not load drum samples. Please check file paths and network.",
             });
             setIsLoading(false);
         }
@@ -187,7 +190,7 @@ export function AuraGroove() {
   };
   
   const handleTogglePlay = () => {
-    if (isPlaying || isLoading && isPlaying) {
+    if (isPlaying || (isLoading && isPlaying)) {
       handleStop();
     } else {
       handlePlay();
@@ -292,7 +295,7 @@ export function AuraGroove() {
         <Button
           type="button"
           onClick={handleTogglePlay}
-          disabled={isLoading}
+          disabled={isLoading && !isPlaying}
           className="w-full text-lg py-6"
         >
           {isLoading && !isPlaying ? (
