@@ -26,9 +26,9 @@ import { Switch } from "@/components/ui/switch";
 import { audioPlayer } from "@/lib/audio-player";
 
 export type Instruments = {
-  solo: 'synthesizer' | 'piano' | 'organ';
-  accompaniment: 'synthesizer' | 'piano' | 'organ';
-  bass: 'bass guitar';
+  solo: 'synthesizer' | 'piano' | 'organ' | 'none';
+  accompaniment: 'synthesizer' | 'piano' | 'organ' | 'none';
+  bass: 'bass guitar' | 'none';
 };
 
 export function AuraGroove() {
@@ -207,6 +207,7 @@ export function AuraGroove() {
                 <SelectValue placeholder="Select instrument" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="none">None</SelectItem>
                 <SelectItem value="synthesizer">Synthesizer</SelectItem>
                 <SelectItem value="piano">Piano</SelectItem>
                 <SelectItem value="organ">Organ</SelectItem>
@@ -224,6 +225,7 @@ export function AuraGroove() {
                 <SelectValue placeholder="Select instrument" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="none">None</SelectItem>
                 <SelectItem value="synthesizer">Synthesizer</SelectItem>
                 <SelectItem value="piano">Piano</SelectItem>
                 <SelectItem value="organ">Organ</SelectItem>
@@ -241,6 +243,7 @@ export function AuraGroove() {
                 <SelectValue placeholder="Select instrument" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="none">None</SelectItem>
                 <SelectItem value="bass guitar">Bass Guitar</SelectItem>
               </SelectContent>
             </Select>
