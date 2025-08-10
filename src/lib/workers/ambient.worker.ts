@@ -40,24 +40,33 @@ let instruments = {
     bass: 'bass guitar',
 };
 
-const soloPrng = new PRNG(Math.random() * 1000);
-const accompanimentPrng = new PRNG(Math.random() * 1000);
 const bassPrng = new PRNG(Math.random() * 1000);
 
-const soloScale = scales.blues;
-const accompanimentScale = scales.ionian;
 const bassScale = scales.aeolian;
 
 // --- SIMPLE SYNTHESIZERS ---
 type Note = { freq: number; time: number; duration: number; velocity: number };
 
 function adsrEnvelope(t: number, attack: number, decay: number, sustain: number, release: number, duration: number) {
-    if (t < attack) return t / attack;
-    if (t < attack + decay) return 1.0 - (1.0 - sustain) * (t - attack) / decay;
-    if (t < duration - release) return sustain;
-    if (t < duration) return sustain * (1.0 - (t - (duration - release)) / release);
-    return 0.0;
+    if (t < 0 || t > duration) return 0;
+    const sustainLevel = sustain;
+
+    if (t < attack) {
+        return (t / attack);
+    }
+    if (t < attack + decay) {
+        return 1.0 - (1.0 - sustainLevel) * (t - attack) / decay;
+    }
+    // Check if we are in the release phase
+    if (t > duration - release) {
+        const releaseTime = t - (duration - release);
+        const levelAtReleaseStart = sustainLevel;
+        return levelAtReleaseStart * (1.0 - releaseTime / release);
+    }
+    
+    return sustainLevel;
 }
+
 
 function oscillator(type: string, t: number, freq: number) {
     switch (type) {
@@ -90,6 +99,7 @@ function createSynthVoice(notes: Note[], totalDuration: number, instrument: stri
         const startSample = Math.floor(note.time * sampleRate);
         const endSample = startSample + Math.floor(note.duration * sampleRate);
         for (let i = startSample; i < endSample; i++) {
+            if (i >= buffer.length) continue; // Boundary check
             const t = (i - startSample) / sampleRate;
             const envelope = adsrEnvelope(t, synthOptions.attack, synthOptions.decay, synthOptions.sustain, synthOptions.release, note.duration);
             const value = oscillator(synthOptions.oscType, t, note.freq) * envelope * note.velocity * synthOptions.volume;
