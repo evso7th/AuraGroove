@@ -39,6 +39,7 @@ let instruments = {
     bass: 'bass guitar',
 };
 let drumsEnabled = false;
+let baseUrl = '';
 
 const soloPrng = new PRNG(Math.random() * 1000);
 const accompanimentPrng = new PRNG(Math.random() * 1000);
@@ -49,9 +50,75 @@ const soloScale = scales.minorPentatonic;
 const accompanimentScale = scales.ionian;
 const bassScale = scales.aeolian;
 
+
 // --- DRUM SAMPLES & SEQUENCER ---
-// This will be populated with Base64 data later
 const drumSamples: { [key: string]: AudioBuffer } = {};
+let samplesLoaded = false;
+
+const drumSampleFiles = {
+    kick: '/assets/drums/kickdrum.wav',
+    snare: '/assets/drums/snare.wav',
+    closedHat: '/assets/drums/snare_ghost_note.wav', // Using ghost note for a softer hi-hat
+    openHat: '/assets/drums/hightom.wav', // Using a tom for an open hat sound
+    crash: '/assets/drums/midtom.wav', // Using a tom for a crash sound
+};
+
+const drumSequencerPattern = {
+    kick: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
+    snare: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+    closedHat: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    openHat: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
+    crash: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+};
+
+
+async function loadDrumSamples(audioContext: any, baseUrl: string) {
+    postMessage({ type: 'loading_start' });
+    try {
+        const samplePromises = Object.entries(drumSampleFiles).map(async ([key, path]) => {
+            const fullUrl = baseUrl + path;
+            const response = await fetch(fullUrl);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch ${fullUrl}: ${response.statusText}`);
+            }
+            const arrayBuffer = await response.arrayBuffer();
+            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+            drumSamples[key] = audioBuffer;
+        });
+        await Promise.all(samplePromises);
+        samplesLoaded = true;
+        console.log("All drum samples loaded successfully.");
+    } catch (error) {
+        console.error("Error loading drum samples:", error);
+        postMessage({ type: 'error', message: `Failed to load drum samples. Please check file paths and network. Error: ${error instanceof Error ? error.message : String(error)}` });
+    }
+}
+
+function createDrumPart() {
+    const buffer = new Float32Array(partDuration * sampleRate).fill(0);
+    if (!samplesLoaded || !drumsEnabled) return buffer;
+
+    const subdivisions = 16;
+    const timePerSubdivision = partDuration / subdivisions;
+
+    for (let i = 0; i < subdivisions; i++) {
+        const time = i * timePerSubdivision;
+        Object.entries(drumSequencerPattern).forEach(([drumKey, pattern]) => {
+            if (pattern[i] === 1 && drumSamples[drumKey]) {
+                const drumBuffer = drumSamples[drumKey].getChannelData(0);
+                const startSample = Math.floor(time * sampleRate);
+
+                for (let j = 0; j < drumBuffer.length; j++) {
+                    if (startSample + j < buffer.length) {
+                        buffer[startSample + j] += drumBuffer[j] * 0.7; // Mix with volume
+                    }
+                }
+            }
+        });
+    }
+    return buffer;
+}
+
 
 // --- SYNTH CREATION ---
 type Note = { freq: number; time: number; duration: number; velocity: number };
@@ -163,13 +230,13 @@ async function generatePart() {
     const accompanimentBuffer = createSynthVoice(accompanimentNotes, partDuration, instruments.accompaniment);
     const bassBuffer = createSynthVoice(bassNotes, partDuration, instruments.bass);
     
-    // const drumBuffer = createDrumPart();
+    const drumBuffer = createDrumPart();
 
     for (let i = 0; i < finalBuffer.length; i++) {
       let mixedSample = soloBuffer[i] + accompanimentBuffer[i] + bassBuffer[i];
-      // if (drumsEnabled) {
-      //   mixedSample += drumBuffer[i];
-      // }
+      if (drumsEnabled) {
+        mixedSample += drumBuffer[i];
+      }
       finalBuffer[i] = mixedSample / (drumsEnabled ? 4 : 3);
     }
         
@@ -192,8 +259,16 @@ self.onmessage = async function(e) {
   if (command === 'start') {
     instruments = data.instruments;
     drumsEnabled = data.drumsEnabled;
-    // For now, start immediately without loading samples
+    baseUrl = data.baseUrl;
+
+    // Use a dummy AudioContext for decoding
+    const offlineContext = new OfflineAudioContext(1, 1, sampleRate);
+    
+    if (drumsEnabled && !samplesLoaded) {
+      await loadDrumSamples(offlineContext, baseUrl);
+    }
     postMessage({ type: 'loading_complete' });
+
     if (generationInterval === null) {
       generatePart();
       generationInterval = setInterval(generatePart, (partDuration * 1000) - 20); 
@@ -208,5 +283,11 @@ self.onmessage = async function(e) {
   } 
   else if (command === 'toggle_drums') {
     drumsEnabled = data;
+     if (drumsEnabled && !samplesLoaded && baseUrl) {
+        const offlineContext = new OfflineAudioContext(1, 1, sampleRate);
+        loadDrumSamples(offlineContext, baseUrl).then(() => {
+             console.log("Samples loaded after toggle.");
+        });
+    }
   }
 };

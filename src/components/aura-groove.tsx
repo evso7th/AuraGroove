@@ -36,7 +36,7 @@ export function AuraGroove() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingText, setLoadingText] = useState("Loading...");
-  const [drumsEnabled, setDrumsEnabled] = useState(false);
+  const [drumsEnabled, setDrumsEnabled] = useState(true);
   const [instruments, setInstruments] = useState<Instruments>({
     solo: "synthesizer",
     accompaniment: "piano",
@@ -106,7 +106,9 @@ export function AuraGroove() {
         isInitializedRef.current = true;
       }
       
-      musicWorkerRef.current?.postMessage({ command: 'start', data: { instruments, drumsEnabled } });
+      const baseUrl = window.location.origin;
+      musicWorkerRef.current?.postMessage({ command: 'start', data: { instruments, drumsEnabled, baseUrl } });
+
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
       toast({
@@ -131,61 +133,6 @@ export function AuraGroove() {
       handleStop();
     } else {
       handlePlay();
-    }
-  };
-  
-  // --- TEMPORARY FUNCTION TO ENCODE SAMPLES ---
-  const handleLoadAndEncodeSamples = async () => {
-    const sampleFiles = {
-      hightom: '/assets/drums/hightom.wav',
-      kickdrum: '/assets/drums/kickdrum.wav',
-      lowtom: '/assets/drums/lowtom.wav',
-      midtom: '/assets/drums/midtom.wav',
-      snare: '/assets/drums/snare.wav',
-      snare_ghost_note: '/assets/drums/snare_ghost_note.wav',
-      snare_off: '/assets/drums/snare_off.wav',
-      snarepress: '/assets/drums/snarepress.wav',
-    };
-
-    const dataUris: { [key: string]: string } = {};
-    
-    console.log("Starting sample encoding...");
-
-    try {
-      for (const [name, url] of Object.entries(sampleFiles)) {
-        console.log(`Fetching ${url}...`);
-        const response = await fetch(url);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
-        }
-        const blob = await response.blob();
-        const reader = new FileReader();
-        const dataUri = await new Promise<string>((resolve, reject) => {
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
-        });
-        dataUris[name] = dataUri;
-        console.log(`Successfully encoded ${name}.`);
-      }
-
-      console.log("--- COPY THE OBJECT BELOW ---");
-      console.log(JSON.stringify(dataUris, null, 2));
-      console.log("--- PASTE IT IN THE CHAT ---");
-      
-      toast({
-        title: "Encoding Successful",
-        description: "Sample data has been logged to the console. Please copy it.",
-      });
-
-    } catch (error) {
-       const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
-       console.error("Error encoding samples:", errorMessage);
-       toast({
-          variant: "destructive",
-          title: "Encoding Failed",
-          description: errorMessage,
-       });
     }
   };
 
@@ -249,17 +196,17 @@ export function AuraGroove() {
               </SelectContent>
             </Select>
           </div>
-           {/*
            <div className="flex items-center justify-between pt-2">
-            <Label htmlFor="drums-enabled" className="text-right">Drums</Label>
-            <Switch
-              id="drums-enabled"
-              checked={drumsEnabled}
-              onCheckedChange={handleDrumsToggle}
-              disabled={isLoading}
-            />
+            <div className="flex items-center space-x-2">
+                <Switch
+                id="drums-enabled"
+                checked={drumsEnabled}
+                onCheckedChange={handleDrumsToggle}
+                disabled={isLoading}
+                />
+                <Label htmlFor="drums-enabled">Drums</Label>
+            </div>
           </div>
-          */}
         </div>
          {isLoading && (
             <div className="flex flex-col items-center justify-center text-muted-foreground space-y-2 min-h-[40px]">
@@ -279,15 +226,6 @@ export function AuraGroove() {
         )}
       </CardContent>
       <CardFooter className="flex-col gap-4">
-        {/* TEMPORARY BUTTON */}
-        <Button
-          type="button"
-          onClick={handleLoadAndEncodeSamples}
-          variant="outline"
-          className="w-full"
-        >
-          Encode Samples
-        </Button>
         <Button
           type="button"
           onClick={handleTogglePlay}
