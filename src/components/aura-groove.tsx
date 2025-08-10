@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Logo } from "@/components/icons";
+import Logo from "@/components/icons";
 import { Switch } from "@/components/ui/switch";
 import { audioPlayer } from "@/lib/audio-player";
 import { Slider } from "@/components/ui/slider";
@@ -373,3 +373,4 @@ export function AuraGroove() {
     </Card>
   );
 }
+  
