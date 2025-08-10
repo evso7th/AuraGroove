@@ -49,6 +49,9 @@ const soloScale = scales.minorPentatonic;
 const accompanimentScale = scales.ionian;
 const bassScale = scales.aeolian;
 
+// --- DRUM SAMPLES & SEQUENCER ---
+// This will be populated with Base64 data later
+const drumSamples: { [key: string]: AudioBuffer } = {};
 
 // --- SYNTH CREATION ---
 type Note = { freq: number; time: number; duration: number; velocity: number };
@@ -159,9 +162,15 @@ async function generatePart() {
     const soloBuffer = createSynthVoice(soloNotes, partDuration, instruments.solo);
     const accompanimentBuffer = createSynthVoice(accompanimentNotes, partDuration, instruments.accompaniment);
     const bassBuffer = createSynthVoice(bassNotes, partDuration, instruments.bass);
+    
+    // const drumBuffer = createDrumPart();
 
     for (let i = 0; i < finalBuffer.length; i++) {
-      finalBuffer[i] = soloBuffer[i] + accompanimentBuffer[i] + bassBuffer[i];
+      let mixedSample = soloBuffer[i] + accompanimentBuffer[i] + bassBuffer[i];
+      // if (drumsEnabled) {
+      //   mixedSample += drumBuffer[i];
+      // }
+      finalBuffer[i] = mixedSample / (drumsEnabled ? 4 : 3);
     }
         
     for (let i = 0; i < finalBuffer.length; i++) {
@@ -183,8 +192,9 @@ self.onmessage = async function(e) {
   if (command === 'start') {
     instruments = data.instruments;
     drumsEnabled = data.drumsEnabled;
+    // For now, start immediately without loading samples
+    postMessage({ type: 'loading_complete' });
     if (generationInterval === null) {
-      postMessage({ type: 'loading_complete' });
       generatePart();
       generationInterval = setInterval(generatePart, (partDuration * 1000) - 20); 
     }

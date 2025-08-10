@@ -137,11 +137,14 @@ export function AuraGroove() {
   // --- TEMPORARY FUNCTION TO ENCODE SAMPLES ---
   const handleLoadAndEncodeSamples = async () => {
     const sampleFiles = {
-      kick: '/assets/drums/kickdrum.wav',
+      hightom: '/assets/drums/hightom.wav',
+      kickdrum: '/assets/drums/kickdrum.wav',
+      lowtom: '/assets/drums/lowtom.wav',
+      midtom: '/assets/drums/midtom.wav',
       snare: '/assets/drums/snare.wav',
-      closedHat: '/assets/drums/closed hi hat accented.wav',
-      openHat: '/assets/drums/Open HH (Top) (2).wav',
-      crash: '/assets/drums/Crash (1).wav',
+      snare_ghost_note: '/assets/drums/snare_ghost_note.wav',
+      snare_off: '/assets/drums/snare_off.wav',
+      snarepress: '/assets/drums/snarepress.wav',
     };
 
     const dataUris: { [key: string]: string } = {};
