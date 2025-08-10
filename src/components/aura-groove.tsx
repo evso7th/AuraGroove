@@ -40,30 +40,38 @@ export function AuraGroove() {
     musicWorkerRef.current = new Worker(new URL('../lib/workers/ambient.worker.ts', import.meta.url));
 
     const handleMessage = (event: MessageEvent) => {
-      const { partDuration, times, pitches, durations, parts } = event.data;
-      audioPlayer.schedulePart(partDuration, times, pitches, durations, parts);
+      const { type, buffer, duration, message } = event.data;
+      if (type === 'music_part') {
+        audioPlayer.schedulePart(buffer, duration);
+      } else if (type === 'error') {
+         toast({
+            variant: "destructive",
+            title: "Worker Error",
+            description: message,
+         });
+         handleStop();
+      }
     };
 
     musicWorkerRef.current.onmessage = handleMessage;
     
     return () => {
       musicWorkerRef.current?.terminate();
-      if(isInitializedRef.current) {
-        audioPlayer.stop();
-        isInitializedRef.current = false;
-      }
+      audioPlayer.stop();
     };
-  }, []);
+  }, [toast]);
   
   const handleInstrumentChange = (part: keyof Instruments) => (value: Instruments[keyof Instruments]) => {
-    setInstruments(prev => ({ ...prev, [part]: value }));
+    const newInstruments = { ...instruments, [part]: value };
+    setInstruments(newInstruments);
+    musicWorkerRef.current?.postMessage({ command: 'set_instruments', data: newInstruments });
   };
   
   const handlePlay = async () => {
     setIsLoading(true);
     try {
       if (!isInitializedRef.current) {
-        await audioPlayer.initialize(instruments);
+        await audioPlayer.initialize();
         isInitializedRef.current = true;
       }
       
@@ -96,12 +104,6 @@ export function AuraGroove() {
       handlePlay();
     }
   };
-  
-  useEffect(() => {
-    if (isInitializedRef.current) {
-      audioPlayer.setInstruments(instruments);
-    }
-  }, [instruments]);
 
   return (
     <Card className="w-full max-w-md shadow-2xl">
