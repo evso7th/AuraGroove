@@ -102,7 +102,7 @@ export function AuraGroove() {
 
   // Main effect for worker communication
   useEffect(() => {
-    const worker = new Worker('/ambient.worker.js', { type: 'module' });
+    const worker = new Worker(new URL('../app/ambient.worker.ts', import.meta.url), { type: 'module' });
     musicWorkerRef.current = worker;
 
     const handleMessage = (event: MessageEvent) => {

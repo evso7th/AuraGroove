@@ -35,6 +35,18 @@ const nextConfig: NextConfig = {
     'https://*.cloudworkstations.dev',
     'https://*.firebase.studio',
   ],
+   webpack(config, options) {
+    config.module.rules.push({
+      test: /\.worker\.ts$/,
+      loader: 'worker-loader',
+      options: {
+        name: 'static/chunks/[name].[hash].js',
+        publicPath: '/_next/',
+      },
+    });
+
+    return config
+  }
 };
 
 export default nextConfig;
