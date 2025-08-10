@@ -53,7 +53,7 @@ export function AuraGroove() {
 
   const musicWorkerRef = useRef<Worker>();
   const sampleArrayBuffers = useRef<Record<string, ArrayBuffer>>({});
-  const areSamplesLoaded = useRef(false);
+  const areSamplesLoadedOnMount = useRef(false);
 
   useEffect(() => {
     musicWorkerRef.current = new Worker('/workers/ambient.worker.js');
@@ -63,7 +63,18 @@ export function AuraGroove() {
       
       if (type === 'chunk') {
         audioPlayer.schedulePart(data.chunk, data.duration);
-      } else if (type === 'generation_started') {
+      } else if (type === 'samples_loaded') {
+        // Now that worker has samples, we can start generation
+        setLoadingText("Generating music...");
+        audioPlayer.start();
+        musicWorkerRef.current?.postMessage({
+            command: 'start',
+            data: {
+                instruments,
+                drumsEnabled,
+                sampleRate: audioPlayer.getAudioContext()?.sampleRate || 44100
+            }
+        });
         setIsLoading(false);
         setIsPlaying(true);
       } else if (type === 'error') {
@@ -88,7 +99,7 @@ export function AuraGroove() {
                 }
                 sampleArrayBuffers.current[key] = await response.arrayBuffer();
             }
-            areSamplesLoaded.current = true;
+            areSamplesLoadedOnMount.current = true;
             setIsLoading(false);
             setLoadingText("");
         } catch (error) {
@@ -110,23 +121,27 @@ export function AuraGroove() {
         audioPlayer.stop();
       }
     };
-  }, [toast]);
+  }, [toast, instruments, drumsEnabled]);
   
   const handleInstrumentChange = (part: keyof Instruments) => (value: Instruments[keyof Instruments]) => {
     const newInstruments = { ...instruments, [part]: value };
     setInstruments(newInstruments);
-    musicWorkerRef.current?.postMessage({
-      command: 'set_instruments',
-      data: newInstruments,
-    });
+     if (isPlaying) {
+      musicWorkerRef.current?.postMessage({
+        command: 'set_instruments',
+        data: newInstruments,
+      });
+    }
   };
 
   const handleDrumsToggle = (checked: boolean) => {
     setDrumsEnabled(checked);
-    musicWorkerRef.current?.postMessage({
-        command: 'toggle_drums',
-        data: { enabled: checked }
-    });
+    if (isPlaying) {
+        musicWorkerRef.current?.postMessage({
+            command: 'toggle_drums',
+            data: { enabled: checked }
+        });
+    }
   }
   
   const prepareAudioAndSendSamples = async () => {
@@ -134,28 +149,24 @@ export function AuraGroove() {
     setLoadingText("Preparing audio engine...");
 
     try {
-      // 1. Initialize audio context (must be after user gesture)
       await audioPlayer.initialize();
       const audioContext = audioPlayer.getAudioContext();
       if (!audioContext) {
         throw new Error("Could not initialize AudioContext.");
       }
       
-      // 2. Decode samples
       setLoadingText("Decoding samples...");
       const decodedSamples: { [key: string]: Float32Array } = {};
       const transferableObjects: Transferable[] = [];
       const sampleEntries = Object.entries(sampleArrayBuffers.current);
 
       for (const [key, arrayBuffer] of sampleEntries) {
-          // Use slice(0) to create a copy for decoding, as the original buffer might be needed elsewhere
           const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0)); 
           const float32Array = audioBuffer.getChannelData(0);
           decodedSamples[key] = float32Array;
           transferableObjects.push(float32Array.buffer);
       }
       
-      // 3. Send decoded samples to worker
       setLoadingText("Loading instruments...");
       musicWorkerRef.current?.postMessage({
           command: 'load_samples',
@@ -177,7 +188,7 @@ export function AuraGroove() {
   };
 
   const handlePlay = async () => {
-    if (!areSamplesLoaded.current) {
+    if (!areSamplesLoadedOnMount.current) {
         toast({
             title: "Samples not loaded",
             description: "Please wait for samples to finish loading.",
@@ -185,26 +196,12 @@ export function AuraGroove() {
         return;
     }
     
-    if (!audioPlayer.isInitialized) {
-        if (!await prepareAudioAndSendSamples()) {
-            handleStop();
-            return;
-        }
+    // This is the main entry point now. It will init audio, decode, and send to worker.
+    // The worker will then respond with 'samples_loaded', which triggers the start command.
+    if (!await prepareAudioAndSendSamples()) {
+        handleStop(); // Clean up if preparation failed
+        return;
     }
-    
-    setIsLoading(true);
-    setLoadingText("Generating music...");
-    
-    audioPlayer.start();
-
-    musicWorkerRef.current?.postMessage({
-        command: 'start',
-        data: {
-            instruments,
-            drumsEnabled,
-            sampleRate: audioPlayer.getAudioContext()?.sampleRate || 44100
-        }
-    });
   };
 
   const handleStop = () => {
@@ -238,7 +235,7 @@ export function AuraGroove() {
             <Select
               value={instruments.solo}
               onValueChange={handleInstrumentChange('solo')}
-              disabled={isPlaying || isLoading}
+              disabled={isLoading}
             >
               <SelectTrigger id="solo-instrument" className="col-span-2">
                 <SelectValue placeholder="Select instrument" />
@@ -256,7 +253,7 @@ export function AuraGroove() {
              <Select
               value={instruments.accompaniment}
               onValueChange={handleInstrumentChange('accompaniment')}
-              disabled={isPlaying || isLoading}
+              disabled={isLoading}
             >
               <SelectTrigger id="accompaniment-instrument" className="col-span-2">
                 <SelectValue placeholder="Select instrument" />
@@ -274,7 +271,7 @@ export function AuraGroove() {
              <Select
               value={instruments.bass}
               onValueChange={handleInstrumentChange('bass')}
-              disabled={isPlaying || isLoading}
+              disabled={isLoading}
             >
               <SelectTrigger id="bass-instrument" className="col-span-2">
                 <SelectValue placeholder="Select instrument" />
@@ -292,7 +289,7 @@ export function AuraGroove() {
                 id="drums-enabled"
                 checked={drumsEnabled}
                 onCheckedChange={handleDrumsToggle}
-                disabled={isPlaying || isLoading}
+                disabled={isLoading}
                 />
                 <Label htmlFor="drums-enabled">Drums</Label>
             </div>

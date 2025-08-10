@@ -1,205 +1,301 @@
-
-"use strict";
-
-// --- Configuration ---
-const CHUNK_DURATION = 1.0; // seconds
-const PREDICTION_HORIZON = 4.0; // seconds
-const NOTE_VELOCITY = 0.6;
-const BPM = 120;
-const BEATS_PER_BAR = 4;
-const BEAT_DURATION = 60 / BPM; // seconds
-const BAR_DURATION = BEATS_PER_BAR * BEAT_DURATION;
+// Simple generative music worker
+// This is a simplified example and can be expanded with more complex algorithms.
 
 // --- State ---
 let isRunning = false;
-let nextGenerationTime = 0;
 let sampleRate = 44100;
-let instruments = {
-    solo: 'none',
-    accompaniment: 'none',
-    bass: 'none'
-};
+let instruments = { solo: 'none', accompaniment: 'none', bass: 'none' };
 let drumsEnabled = true;
-let samples = {}; // To hold the decoded audio data
+let samples = {}; // To hold the decoded audio data for drums
 
-// --- Music Generation Logic ---
+let soloSynthesizer, accompanimentSynthesizer, bassSynthesizer;
+let mainLoopId = null;
 
-// Placeholder for a more complex chord progression generator
-function getChordProgression() {
-    return ['Cmaj7', 'Fmaj7', 'G7', 'Am7'];
-}
-
-// Simple mapping of chord names to notes
-function getChordNotes(chord) {
-    const chordMap = {
-        'Cmaj7': ['C4', 'E4', 'G4', 'B4'],
-        'Fmaj7': ['F4', 'A4', 'C5', 'E5'],
-        'G7': ['G4', 'B4', 'D5', 'F5'],
-        'Am7': ['A4', 'C5', 'E5', 'G5']
-    };
-    return chordMap[chord] || [];
-}
-
-function noteToFrequency(note) {
-    const noteMap = { 'C4': 261.63, 'D4': 293.66, 'E4': 329.63, 'F4': 349.23, 'G4': 392.00, 'A4': 440.00, 'B4': 493.88,
-                      'C5': 523.25, 'E5': 659.25, 'G5': 783.99, 'F5': 698.46, 'D5': 587.33, 'A5': 880.00,
-                      'C3': 130.81, 'F3': 174.61, 'G3': 196.00, 'A3': 220.00, 'B3': 246.94
-                    };
-    return noteMap[note] || 0;
-}
-
-function createOscillator(type, frequency, startTime, duration, contextTime) {
-    const osc = new OscillatorNode(globalThis, {
-      type: type,
-      frequency: frequency,
-    });
-    const gainNode = new GainNode(globalThis);
-    gainNode.gain.setValueAtTime(0, startTime);
-    gainNode.gain.linearRampToValueAtTime(NOTE_VELOCITY, startTime + 0.02);
-    gainNode.gain.linearRampToValueAtTime(0, startTime + duration);
-
-    osc.connect(gainNode);
-    osc.start(startTime);
-    osc.stop(startTime + duration);
-    return gainNode;
-}
-
-
-// A very basic drum pattern generator
-function generateDrums(startTime, duration) {
-    const drumNotes = [];
-    const sixteenthNoteDuration = BEAT_DURATION / 4;
-
-    for (let time = 0; time < duration; time += sixteenthNoteDuration) {
-        const currentBeat = (time / BEAT_DURATION);
-        const barRelativeBeat = currentBeat % BEATS_PER_BAR;
-        const currentSixteenth = Math.floor(time / sixteenthNoteDuration);
-
-        // Kick on 1 and 3
-        if (barRelativeBeat === 0 || barRelativeBeat === 2) {
-            drumNotes.push({ sampleKey: 'kick_drum6', time: startTime + time, velocity: 1.0 });
-        }
-        // Snare on 2 and 4
-        if (barRelativeBeat === 1 || barRelativeBeat === 3) {
-            drumNotes.push({ sampleKey: 'snare', time: startTime + time, velocity: 0.8 });
-        }
-        // Hi-hat on every 8th note
-        if (currentSixteenth % 2 === 0) {
-            drumNotes.push({ sampleKey: 'closed_hi_hat_accented', time: startTime + time, velocity: 0.6 });
-        }
-        
-        // Crash on the first beat of every 4 bars
-        if (currentSixteenth === 0 && Math.floor(startTime / BAR_DURATION) % 4 === 0) {
-             drumNotes.push({ sampleKey: 'crash1', time: startTime, velocity: 0.7 });
-        }
-        
-        // Ride pattern on every 8th note, can alternate with hi-hat or layer
-        if (currentSixteenth % 2 === 0) { // Simple ride on 8ths
-            drumNotes.push({ sampleKey: 'cymbal1', time: startTime + time, velocity: 0.5 });
-        }
+// --- DSP & Synthesis (Basic) ---
+// A very simple oscillator class
+class Oscillator {
+    constructor(type = 'sine') {
+        this.type = type;
+        this.phase = 0;
     }
-    return drumNotes;
+
+    process(freq, detune = 0) {
+        const finalFreq = freq * Math.pow(2, detune / 1200);
+        const increment = finalFreq / sampleRate;
+        let value = 0;
+
+        switch (this.type) {
+            case 'sine':
+                value = Math.sin(this.phase * 2 * Math.PI);
+                break;
+            case 'square':
+                value = Math.sign(Math.sin(this.phase * 2 * Math.PI));
+                break;
+            case 'sawtooth':
+                 value = (this.phase % 1.0) * 2.0 - 1.0;
+                break;
+            case 'triangle':
+                value = Math.asin(Math.sin(this.phase * 2 * Math.PI)) * (2/Math.PI);
+                break;
+            default:
+                value = Math.sin(this.phase * 2 * Math.PI);
+        }
+
+        this.phase += increment;
+        if (this.phase > 1) this.phase -= 1;
+        return value;
+    }
 }
 
+// A simple ADSR envelope
+class Envelope {
+    constructor(attack, decay, sustain, release) {
+        this.attack = attack;
+        this.decay = decay;
+        this.sustain = sustain;
+        this.releaseTime = release;
+        this.value = 0;
+        this.state = 'idle'; // idle, attack, decay, sustain, release
+    }
 
-function renderAudioChunk(startTime, duration) {
-    const chunkSampleCount = Math.floor(duration * sampleRate);
-    const buffer = new Float32Array(chunkSampleCount).fill(0);
-    
-    // --- Generate Drums ---
-    if (drumsEnabled && Object.keys(samples).length > 0) {
-        const drumNotes = generateDrums(startTime, duration);
-        for (const note of drumNotes) {
-            const sampleBuffer = samples[note.sampleKey];
-            if (!sampleBuffer) continue;
+    trigger() {
+        this.state = 'attack';
+    }
 
-            const startSample = Math.floor((note.time - startTime) * sampleRate);
-            if (startSample >= chunkSampleCount) continue;
+    release() {
+        this.state = 'release';
+    }
 
-            for (let i = 0; i < sampleBuffer.length; i++) {
-                if (startSample + i < chunkSampleCount) {
-                    buffer[startSample + i] += sampleBuffer[i] * note.velocity;
+    process() {
+        const attackSamples = this.attack * sampleRate;
+        const decaySamples = this.decay * sampleRate;
+        const releaseSamples = this.releaseTime * sampleRate;
+
+        switch (this.state) {
+            case 'attack':
+                this.value += 1.0 / attackSamples;
+                if (this.value >= 1.0) {
+                    this.value = 1.0;
+                    this.state = 'decay';
                 }
+                break;
+            case 'decay':
+                this.value -= (1.0 - this.sustain) / decaySamples;
+                if (this.value <= this.sustain) {
+                    this.value = this.sustain;
+                    this.state = 'sustain';
+                }
+                break;
+            case 'sustain':
+                // Value remains at sustain level
+                break;
+            case 'release':
+                this.value -= this.sustain / releaseSamples;
+                if (this.value <= 0) {
+                    this.value = 0;
+                    this.state = 'idle';
+                }
+                break;
+        }
+        return this.value;
+    }
+}
+
+// Simple synthesizer
+class Synthesizer {
+    constructor(type) {
+        this.osc = new Oscillator(type);
+        this.env = new Envelope(0.1, 0.2, 0.5, 0.8);
+        this.active = false;
+        this.note = 0;
+    }
+
+    play(note) {
+        this.note = note;
+        this.env.trigger();
+        this.active = true;
+    }
+
+    stop() {
+        this.env.release();
+    }
+
+    process() {
+        if (this.env.state === 'idle') {
+            this.active = false;
+            return 0;
+        }
+        const freq = 440 * Math.pow(2, (this.note - 69) / 12);
+        const envValue = this.env.process();
+        return this.osc.process(freq) * envValue * 0.5;
+    }
+}
+
+// --- Music Generation (Simple) ---
+const scales = {
+    major: [0, 2, 4, 5, 7, 9, 11],
+    minor: [0, 2, 3, 5, 7, 8, 10],
+};
+const currentScale = scales.major;
+const baseNote = 60; // C4
+
+function getRandomNoteInScale() {
+    const scaleNote = currentScale[Math.floor(Math.random() * currentScale.length)];
+    const octave = Math.floor(Math.random() * 3) -1; // -1, 0, or 1
+    return baseNote + scaleNote + (octave * 12);
+}
+
+// --- Drum Machine (Simple) ---
+let drumSequencer;
+
+class DrumSequencer {
+    constructor() {
+        this.patterns = {
+            basic: [
+                { note: 'kick', steps: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0] },
+                { note: 'snare', steps: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0] },
+                { note: 'hat', steps: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] },
+                 { note: 'ride', steps: [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0] },
+                { note: 'crash', steps: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+            ],
+        };
+        this.currentPattern = 'basic';
+        this.step = 0;
+        this.stepsPerBeat = 4;
+        this.beatsPerBar = 4;
+        this.bar = 0;
+    }
+    
+    getNotesForStep() {
+        const notes = [];
+        const pattern = this.patterns[this.currentPattern];
+        
+        // Simple logic for crash every 4 bars
+        if (this.bar % 4 === 0 && this.step === 0) {
+            notes.push('crash');
+        }
+
+        for (const instrument of pattern) {
+             if (instrument.note === 'crash') continue; // Handled separately
+            if (instrument.steps[this.step]) {
+                notes.push(instrument.note);
             }
         }
-    }
-    
-    // --- Generate Instruments (Simplified) ---
-    // This part is a placeholder. A real implementation would involve oscillators or sample playback
-    // similar to the drum logic, but based on the selected instruments.
-    const progression = getChordProgression();
-    const barIndex = Math.floor(startTime / BAR_DURATION) % progression.length;
-    const currentChord = progression[barIndex];
-    const notes = getChordNotes(currentChord);
-    
-    // This is a highly simplified representation of playing a chord.
-    // A real implementation would need to handle individual note on/off, envelopes, etc.
-    if (instruments.accompaniment !== 'none' && notes.length > 0) {
-         for (let i = 0; i < chunkSampleCount; i++) {
-             // Placeholder for actual synthesis
-         }
+        
+        return notes;
     }
 
-    return buffer;
+    advance() {
+        this.step = (this.step + 1) % (this.stepsPerBeat * this.beatsPerBar);
+        if (this.step === 0) {
+            this.bar++;
+        }
+    }
 }
 
 
-// --- Communication & Control ---
+function initializeSynthesizers() {
+    const synthTypes = {
+        synthesizer: 'sawtooth',
+        piano: 'triangle',
+        organ: 'square',
+    }
+    soloSynthesizer = instruments.solo !== 'none' ? new Synthesizer(synthTypes[instruments.solo]) : null;
+    accompanimentSynthesizer = instruments.accompaniment !== 'none' ? new Synthesizer(synthTypes[instruments.accompaniment]) : null;
+    bassSynthesizer = instruments.bass !== 'none' ? new Synthesizer('sine') : null;
+}
 
-function generateAndPostChunk() {
-    if (!isRunning) return;
+// --- Main Loop ---
+function generateAudioChunk() {
+    const chunkSize = 2048; // A small buffer size for low latency
+    const buffer = new Float32Array(chunkSize);
+    
+    // Musical decisions (very simple)
+    const shouldPlaySolo = Math.random() < 0.1;
+    const shouldPlayAccomp = Math.random() < 0.2;
+    const shouldPlayBass = Math.random() < 0.4;
+    
+    if (soloSynthesizer && !soloSynthesizer.active && shouldPlaySolo) {
+        soloSynthesizer.play(getRandomNoteInScale() + 12);
+    }
+    if (accompanimentSynthesizer && !accompanimentSynthesizer.active && shouldPlayAccomp) {
+        accompanimentSynthesizer.play(getRandomNoteInScale());
+    }
+    if (bassSynthesizer && !bassSynthesizer.active && shouldPlayBass) {
+        bassSynthesizer.play(getRandomNoteInScale() - 12);
+    }
 
-    const currentTime = nextGenerationTime;
-    const chunk = renderAudioChunk(currentTime, CHUNK_DURATION);
+    // Drum sequence
+    const drumNotes = drumsEnabled ? drumSequencer.getNotesForStep() : [];
+
+    for (let i = 0; i < chunkSize; i++) {
+        let sample = 0;
+        
+        if (soloSynthesizer) sample += soloSynthesizer.process();
+        if (accompanimentSynthesizer) sample += accompanimentSynthesizer.process();
+        if (bassSynthesizer) sample += bassSynthesizer.process();
+        
+        // Mix in drums
+        for (const note of drumNotes) {
+            if (samples[note] && i < samples[note].length) {
+                sample += samples[note][i] * 0.8; // Mix drum sample
+            }
+        }
+
+        buffer[i] = Math.max(-1, Math.min(1, sample)); // Clamp to avoid clipping
+    }
+    
+    // Move to the next step in the drum sequence after processing the chunk
+    drumSequencer.advance();
+
+
+    // Release notes randomly
+    if (soloSynthesizer?.active && Math.random() < 0.05) soloSynthesizer.stop();
+    if (accompanimentSynthesizer?.active && Math.random() < 0.05) accompanimentSynthesizer.stop();
+    if (bassSynthesizer?.active && Math.random() < 0.05) bassSynthesizer.stop();
+
 
     self.postMessage({
         type: 'chunk',
         data: {
-            chunk: chunk,
-            duration: CHUNK_DURATION
+            chunk: buffer,
+            duration: chunkSize / sampleRate
         }
-    }, [chunk.buffer]);
-
-    nextGenerationTime += CHUNK_DURATION;
-
-    // Schedule the next chunk generation
-    const timeUntilNextChunk = (nextGenerationTime - currentTime - CHUNK_DURATION) * 1000;
-    setTimeout(generateAndPostChunk, timeUntilNextChunk);
+    });
 }
 
-self.onmessage = function(event) {
+// --- Message Handling ---
+self.onmessage = (event) => {
     const { command, data } = event.data;
 
     switch (command) {
         case 'load_samples':
             samples = data;
-            // Let the main thread know we're ready
+            // Acknowledge that samples are loaded and worker is ready
             self.postMessage({ type: 'samples_loaded' });
             break;
-            
         case 'start':
             if (isRunning) return;
             isRunning = true;
-            sampleRate = data.sampleRate;
+            sampleRate = data.sampleRate || 44100;
             instruments = data.instruments;
             drumsEnabled = data.drumsEnabled;
-            nextGenerationTime = 0; // Reset time
-            self.postMessage({ type: 'generation_started' });
-            generateAndPostChunk();
+            initializeSynthesizers();
+            drumSequencer = new DrumSequencer();
+            mainLoopId = setInterval(generateAudioChunk, (2048 / sampleRate) * 1000 * 0.9); // Run slightly faster to keep buffer full
             break;
-
         case 'stop':
+            if (!isRunning) return;
             isRunning = false;
+            clearInterval(mainLoopId);
+            mainLoopId = null;
             break;
-
         case 'set_instruments':
             instruments = data;
+            initializeSynthesizers();
             break;
-        
         case 'toggle_drums':
             drumsEnabled = data.enabled;
             break;
     }
 };
-
-    
