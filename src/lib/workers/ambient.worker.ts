@@ -40,31 +40,45 @@ let instruments = {
     bass: 'bass guitar',
 };
 
+const soloPrng = new PRNG(Math.random() * 1000);
+const accompanimentPrng = new PRNG(Math.random() * 1000);
 const bassPrng = new PRNG(Math.random() * 1000);
 
+const soloScale = scales.minorPentatonic;
+const accompanimentScale = scales.ionian;
 const bassScale = scales.aeolian;
 
 // --- SIMPLE SYNTHESIZERS ---
 type Note = { freq: number; time: number; duration: number; velocity: number };
 
 function adsrEnvelope(t: number, attack: number, decay: number, sustain: number, release: number, duration: number) {
-    if (t < 0 || t > duration) return 0;
     const sustainLevel = sustain;
+    const totalAD = attack + decay;
+
+    if (t < 0) return 0;
+    
+    // Ensure the note doesn't end before attack+decay is complete
+    const effectiveDuration = Math.max(duration, totalAD + release);
 
     if (t < attack) {
         return (t / attack);
     }
-    if (t < attack + decay) {
+    
+    if (t < totalAD) {
         return 1.0 - (1.0 - sustainLevel) * (t - attack) / decay;
     }
-    // Check if we are in the release phase
-    if (t > duration - release) {
-        const releaseTime = t - (duration - release);
+
+    if (t < effectiveDuration - release) {
+        return sustainLevel;
+    }
+    
+    const releaseTime = t - (effectiveDuration - release);
+    if (releaseTime < release) {
         const levelAtReleaseStart = sustainLevel;
         return levelAtReleaseStart * (1.0 - releaseTime / release);
     }
     
-    return sustainLevel;
+    return 0; // Should return 0 after release phase
 }
 
 
@@ -83,27 +97,39 @@ function createSynthVoice(notes: Note[], totalDuration: number, instrument: stri
 
     switch (instrument) {
         case 'piano':
-            synthOptions = { oscType: 'sine', attack: 0.01, decay: 1.2, sustain: 0.1, release: 2.0, volume: 0.4 };
+            synthOptions = { oscType: 'sine', attack: 0.01, decay: 0.8, sustain: 0.2, release: 0.5, volume: 0.4 };
             break;
         case 'organ':
             synthOptions = { oscType: 'sawtooth', attack: 0.2, decay: 0.1, sustain: 0.9, release: 0.8, volume: 0.3 };
             break;
         case 'bass guitar':
-             synthOptions = { oscType: 'sine', attack: 0.1, decay: 1.0, sustain: 0.3, release: 2.5, volume: 0.6 };
+             synthOptions = { oscType: 'sine', attack: 0.05, decay: 0.3, sustain: 0.4, release: 1.5, volume: 0.5 };
              break;
         default: // synthesizer
-            synthOptions = { oscType: 'pulse', attack: 0.1, decay: 0.5, sustain: 0.4, release: 1.5, volume: 0.3 };
+            synthOptions = { oscType: 'pulse', attack: 0.1, decay: 0.5, sustain: 0.4, release: 1.0, volume: 0.3 };
     }
 
     notes.forEach(note => {
         const startSample = Math.floor(note.time * sampleRate);
         const endSample = startSample + Math.floor(note.duration * sampleRate);
+
         for (let i = startSample; i < endSample; i++) {
-            if (i >= buffer.length) continue; // Boundary check
+            if (i >= buffer.length) continue;
             const t = (i - startSample) / sampleRate;
             const envelope = adsrEnvelope(t, synthOptions.attack, synthOptions.decay, synthOptions.sustain, synthOptions.release, note.duration);
-            const value = oscillator(synthOptions.oscType, t, note.freq) * envelope * note.velocity * synthOptions.volume;
+            let value = oscillator(synthOptions.oscType, t, note.freq) * envelope * note.velocity * synthOptions.volume;
             buffer[i] += value;
+        }
+
+        // Apply a short fade-out at the end of the note to prevent clicks
+        const fadeOutSamples = 500; // ~11ms
+        const fadeStartSample = endSample - fadeOutSamples;
+        if (fadeStartSample > startSample) {
+             for (let i = fadeStartSample; i < endSample; i++) {
+                if (i >= buffer.length) continue;
+                const fadeProgress = (endSample - i) / fadeOutSamples;
+                buffer[i] *= fadeProgress;
+            }
         }
     });
 
@@ -114,19 +140,49 @@ function createSynthVoice(notes: Note[], totalDuration: number, instrument: stri
 // --- MUSIC GENERATION ---
 function generatePart() {
   try {
+    // Solo
+    const soloNotes: Note[] = [];
+    for (let i = 0; i < 4; i++) {
+        const time = i * 1;
+        const value = soloPrng.next();
+        if (value > 0.3) { // Add some silence
+            const octave = value < 0.6 ? 1 : 2;
+            const noteMidi = mapValueToMidi(value, soloScale, octave);
+            soloNotes.push({ freq: midiToFreq(noteMidi), time, duration: 0.8, velocity: 0.7 });
+        }
+    }
+
+    // Accompaniment
+    const accompanimentNotes: Note[] = [];
+     for (let i = 0; i < 4; i++) {
+        const time = i * 1;
+        const value = accompanimentPrng.next();
+        if (value > 0.4) {
+             const octave = value < 0.5 ? 0 : -1;
+             const noteMidi = mapValueToMidi(value, accompanimentScale, octave);
+             accompanimentNotes.push({ freq: midiToFreq(noteMidi), time, duration: 1.9, velocity: 0.5 });
+        }
+    }
+
+    // Bass
     const bassNotes: Note[] = [];
     for (let i = 0; i < 2; i++) {
         const time = i * 2;
         const value = bassPrng.next();
         const octave = value < 0.3 ? -2 : -1;
         const noteMidi = mapValueToMidi(value, bassScale, octave);
-        bassNotes.push({ freq: midiToFreq(noteMidi), time, duration: 1.9, velocity: 0.8 });
+        bassNotes.push({ freq: midiToFreq(noteMidi), time, duration: 3.8, velocity: 0.8 });
     }
     
+    const soloBuffer = createSynthVoice(soloNotes, partDuration, instruments.solo);
+    const accompanimentBuffer = createSynthVoice(accompanimentNotes, partDuration, instruments.accompaniment);
     const bassBuffer = createSynthVoice(bassNotes, partDuration, instruments.bass);
 
-    const finalBuffer = bassBuffer;
-
+    const finalBuffer = new Float32Array(partDuration * sampleRate);
+    for (let i = 0; i < finalBuffer.length; i++) {
+        finalBuffer[i] = soloBuffer[i] + accompanimentBuffer[i] + bassBuffer[i];
+    }
+    
     // Clipping to prevent distortion
     for (let i = 0; i < finalBuffer.length; i++) {
       finalBuffer[i] = Math.max(-1, Math.min(1, finalBuffer[i]));
