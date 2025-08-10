@@ -38,8 +38,8 @@ let instruments = {
     accompaniment: 'piano',
     bass: 'bass guitar',
 };
-// let drumsEnabled = false;
-// let baseUrl = '';
+let drumsEnabled = false;
+let baseUrl = '';
 
 const soloPrng = new PRNG(Math.random() * 1000);
 const accompanimentPrng = new PRNG(Math.random() * 1000);
@@ -50,7 +50,6 @@ const accompanimentScale = scales.ionian;
 const bassScale = scales.aeolian;
 
 
-/*
 // --- DRUM SAMPLES & SEQUENCER ---
 
 const drumSamples: { [key: string]: AudioBuffer } = {};
@@ -158,7 +157,7 @@ function createDrumPart() {
     }
     return buffer;
 }
-*/
+
 
 // --- SYNTH CREATION ---
 type Note = { freq: number; time: number; duration: number; velocity: number };
@@ -270,16 +269,16 @@ async function generatePart() {
     const accompanimentBuffer = createSynthVoice(accompanimentNotes, partDuration, instruments.accompaniment);
     const bassBuffer = createSynthVoice(bassNotes, partDuration, instruments.bass);
     
-    // const drumBuffer = createDrumPart();
+    const drumBuffer = createDrumPart();
 
     for (let i = 0; i < finalBuffer.length; i++) {
       let mixedSample = soloBuffer[i] + accompanimentBuffer[i] + bassBuffer[i];
-      /*
+      
       if (drumsEnabled && samplesLoaded) {
         mixedSample += drumBuffer[i];
       }
-      */
-      finalBuffer[i] = mixedSample / 3; // (drumsEnabled && samplesLoaded ? 4 : 3);
+      
+      finalBuffer[i] = mixedSample / (drumsEnabled && samplesLoaded ? 4 : 3);
     }
         
     for (let i = 0; i < finalBuffer.length; i++) {
@@ -300,17 +299,17 @@ self.onmessage = async function(e) {
 
   if (command === 'start') {
     instruments = data.instruments;
-    /*
+    
     drumsEnabled = data.drumsEnabled;
     baseUrl = data.baseUrl;
-    */
+    
     
     if (generationInterval === null) {
-      /*
+      
       if(drumsEnabled){
           await loadDrumSamples();
       }
-      */
+      
       generatePart();
       generationInterval = setInterval(generatePart, (partDuration * 1000) - 20); 
     }
@@ -319,15 +318,15 @@ self.onmessage = async function(e) {
       clearInterval(generationInterval);
       generationInterval = null;
     }
-    /*
+    
     samplesLoaded = false;
     Object.keys(drumSamples).forEach(key => delete drumSamples[key]);
-    */
+    
   } else if (command === 'set_instruments') {
     instruments = data;
-  /*
+  
   } else if (command === 'toggle_drums') {
     drumsEnabled = data;
-  */
+  
   }
 };
