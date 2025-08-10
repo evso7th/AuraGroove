@@ -49,11 +49,11 @@ const bassScale = scales.aeolian;
 
 // --- DRUM SAMPLES ---
 const drumSampleFiles = {
-    kick: '/drums/kickdrum.wav',
-    snare: '/drums/snare.wav',
-    closedHat: '/drums/closed hi hat accented.wav',
-    openHat: '/drums/Open HH (Top) (2).wav',
-    crash: '/drums/Crash (1).wav',
+    kick: '/public/assets/drums/kickdrum.wav',
+    snare: '/public/assets/drums/snare.wav',
+    closedHat: '/public/assets/drums/closed hi hat accented.wav',
+    openHat: '/public/assets/drums/Open HH (Top) (2).wav',
+    crash: '/public/assets/drums/Crash (1).wav',
 };
 
 const drumBuffers: { [key: string]: AudioBuffer } = {};
@@ -64,7 +64,6 @@ async function loadDrumSamples() {
     if (drumsLoaded) return;
     postMessage({ type: 'loading_start' });
     try {
-        // Create a dummy audio context to decode audio data
         const context = new (self.OfflineAudioContext || (self as any).webkitOfflineAudioContext)(1, 1, sampleRate);
         
         const promises = Object.entries(drumSampleFiles).map(async ([name, url]) => {
@@ -81,7 +80,7 @@ async function loadDrumSamples() {
         console.log("Drum samples loaded successfully.");
     } catch (error) {
         console.error("Error loading drum samples:", error);
-        postMessage({ type: 'error', message: 'Failed to load drum samples. Check network tab and file paths.' });
+        postMessage({ type: 'error', message: `Failed to load drum samples. Please check file paths. Error: ${error instanceof Error ? error.message : String(error)}` });
         drumsLoaded = false;
     }
 }
@@ -95,7 +94,6 @@ function adsrEnvelope(t: number, attack: number, decay: number, sustainLevel: nu
     if (t < attack) return t / attack;
     if (t < attack + decay) return 1.0 - (1.0 - sustainLevel) * (t - attack) / decay;
     if (t < attack + decay + sustainTime) return sustainLevel;
-    // Release is implicitly handled by note duration end
     return 0; 
 }
 
@@ -139,11 +137,9 @@ function createSynthVoice(notes: Note[], totalDuration: number, instrument: stri
             const envelope = adsrEnvelope(t_note, synthOptions.attack, synthOptions.decay, synthOptions.sustain, note.duration);
             let value = oscillator(synthOptions.oscType, t_note, note.freq) * envelope * note.velocity * synthOptions.volume;
             
-            // Add value to buffer
             buffer[currentSample] += value;
         }
 
-        // Add a small fade out at the end of the note to prevent clicks
         const fadeOutSamples = 200;
         const fadeOutStartSample = startSample + noteDurationInSamples - fadeOutSamples;
          for (let i = 0; i < fadeOutSamples; i++) {
@@ -173,7 +169,6 @@ async function generatePart() {
   try {
     const finalBuffer = new Float32Array(partDuration * sampleRate).fill(0);
 
-    // --- Instruments ---
     const soloNotes: Note[] = [];
     for (let i = 0; i < 8; i++) {
         if (soloPrng.next() > 0.6) {
@@ -209,32 +204,25 @@ async function generatePart() {
     const accompanimentBuffer = createSynthVoice(accompanimentNotes, partDuration, instruments.accompaniment);
     const bassBuffer = createSynthVoice(bassNotes, partDuration, instruments.bass);
 
-    // Mix synth buffers
     for (let i = 0; i < finalBuffer.length; i++) {
       finalBuffer[i] = soloBuffer[i] + accompanimentBuffer[i] + bassBuffer[i];
     }
     
-    // --- Drums ---
     if (drumsEnabled && drumsLoaded) {
-        // Simple 4/4 beat
         for (let i = 0; i < 16; i++) {
-             const time = i * 0.25; // 16th notes
-            // Kick on 1, 3
+             const time = i * 0.25;
             if (i % 8 === 0) {
                  if (drumPrng.next() > 0.1) mix(finalBuffer, drumBuffers.kick, time, 0.9);
             }
-            // Snare on 2 and 4
             if (i === 4 || i === 12) {
                  if (drumPrng.next() > 0.2) mix(finalBuffer, drumBuffers.snare, time, 0.7);
             }
-            // Closed hats on every 8th note
              if (i % 2 === 0) {
                  if (drumPrng.next() > 0.15) mix(finalBuffer, drumBuffers.closedHat, time, 0.5);
             }
         }
     }
     
-    // Clipping to prevent distortion
     for (let i = 0; i < finalBuffer.length; i++) {
       finalBuffer[i] = Math.max(-1, Math.min(1, finalBuffer[i]));
     }
@@ -257,12 +245,11 @@ self.onmessage = async function(e) {
     if (generationInterval === null) {
       if (!drumsLoaded && drumsEnabled) {
           await loadDrumSamples();
-          // If loading failed, don't start the music. The error message is already sent.
           if (!drumsLoaded) return;
       }
       
       postMessage({ type: 'loading_complete' });
-      generatePart(); // Generate first part immediately
+      generatePart();
       generationInterval = setInterval(generatePart, (partDuration * 1000) - 20); 
     }
   } else if (command === 'stop') {
@@ -276,7 +263,6 @@ self.onmessage = async function(e) {
   else if (command === 'toggle_drums') {
     drumsEnabled = data;
     if(drumsEnabled && !drumsLoaded) {
-        // Asynchronously load samples if they are enabled and not yet loaded
         loadDrumSamples(); 
     }
   }
