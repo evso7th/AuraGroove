@@ -69,7 +69,6 @@ export function AuraGroove() {
       } else if (type === 'samples_loaded') {
         // Now that worker has samples, we can start generation
         setLoadingText("Generating music...");
-        audioPlayer.start();
         musicWorkerRef.current?.postMessage({
             command: 'start',
             data: {
@@ -78,6 +77,7 @@ export function AuraGroove() {
                 sampleRate: audioPlayer.getAudioContext()?.sampleRate || 44100
             }
         });
+        audioPlayer.start();
         setIsLoading(false);
         setIsPlaying(true);
       } else if (type === 'error') {
