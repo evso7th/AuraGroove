@@ -44,8 +44,8 @@ const sampleUrls = {
 
 export function AuraGroove() {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadingText, setLoadingText] = useState("Loading samples...");
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadingText, setLoadingText] = useState("");
   const [drumsEnabled, setDrumsEnabled] = useState(true);
   const [instruments, setInstruments] = useState<Instruments>({
     solo: "none",
@@ -58,54 +58,10 @@ export function AuraGroove() {
   const sampleArrayBuffers = useRef<Record<string, ArrayBuffer>>({});
   const areSamplesLoadedOnMount = useRef(false);
 
-  // Use refs to store the latest state for the worker message handler
-  const instrumentsRef = useRef(instruments);
-  const drumsEnabledRef = useRef(drumsEnabled);
+  // Load samples on component mount
   useEffect(() => {
-    instrumentsRef.current = instruments;
-    drumsEnabledRef.current = drumsEnabled;
-  }, [instruments, drumsEnabled]);
-
-  const handleStop = useCallback(() => {
-    musicWorkerRef.current?.postMessage({ command: 'stop' });
-    audioPlayer.stop();
-    setIsPlaying(false);
-    setIsLoading(false);
-    setLoadingText("");
-  }, []);
-
-  useEffect(() => {
-    musicWorkerRef.current = new Worker('/workers/ambient.worker.js', { type: 'module' });
-
-    const handleMessage = (event: MessageEvent) => {
-      const { type, data, error } = event.data;
-      
-      if (type === 'chunk') {
-        audioPlayer.schedulePart(data.chunk, data.duration);
-      } else if (type === 'samples_loaded') {
-        setLoadingText("Generating music...");
-        musicWorkerRef.current?.postMessage({
-            command: 'start',
-            data: {
-                instruments: instrumentsRef.current,
-                drumsEnabled: drumsEnabledRef.current,
-                sampleRate: audioPlayer.getAudioContext()?.sampleRate || 44100
-            }
-        });
-        audioPlayer.start();
-        setIsLoading(false);
-        setIsPlaying(true);
-      } else if (type === 'error') {
-        toast({
-          variant: "destructive",
-          title: "Worker Error",
-          description: error,
-        });
-        handleStop();
-      }
-    };
-
-    musicWorkerRef.current.onmessage = handleMessage;
+    setLoadingText("Loading samples...");
+    setIsLoading(true);
     
     const fetchSamples = async () => {
         try {
@@ -130,18 +86,55 @@ export function AuraGroove() {
             setIsLoading(false);
         }
     };
-
     fetchSamples();
+  }, [toast]);
+
+  // Main effect for worker communication
+  useEffect(() => {
+    const worker = new Worker('/workers/ambient.worker.js', { type: 'module' });
+    musicWorkerRef.current = worker;
+
+    const handleMessage = (event: MessageEvent) => {
+      const { type, data, error } = event.data;
+      
+      if (type === 'chunk') {
+        audioPlayer.schedulePart(data.chunk, data.duration);
+      } else if (type === 'samples_loaded') {
+        setLoadingText("Generating music...");
+        worker.postMessage({
+            command: 'start',
+            data: {
+                instruments,
+                drumsEnabled,
+                sampleRate: audioPlayer.getAudioContext()?.sampleRate || 44100
+            }
+        });
+        audioPlayer.start();
+        setIsLoading(false);
+        setIsPlaying(true);
+      } else if (type === 'error') {
+        toast({
+          variant: "destructive",
+          title: "Worker Error",
+          description: error,
+        });
+        audioPlayer.stop();
+        setIsPlaying(false);
+        setIsLoading(false);
+      }
+    };
+
+    worker.onmessage = handleMessage;
     
     return () => {
-      musicWorkerRef.current?.terminate();
+      worker.terminate();
       if (audioPlayer.getIsPlaying()) {
         audioPlayer.stop();
       }
     };
-  }, [handleStop, toast]);
+  }, [toast, instruments, drumsEnabled]); // Re-run if instruments/drums settings change while not playing
   
-  const handleInstrumentChange = (part: keyof Instruments) => (value: Instruments[keyof Instruments]) => {
+  const handleInstrumentChange = useCallback((part: keyof Instruments) => (value: Instruments[keyof Instruments]) => {
     const newInstruments = { ...instruments, [part]: value };
     setInstruments(newInstruments);
      if (isPlaying) {
@@ -150,9 +143,9 @@ export function AuraGroove() {
         data: newInstruments,
       });
     }
-  };
+  }, [instruments, isPlaying]);
 
-  const handleDrumsToggle = (checked: boolean) => {
+  const handleDrumsToggle = useCallback((checked: boolean) => {
     setDrumsEnabled(checked);
     if (isPlaying) {
         musicWorkerRef.current?.postMessage({
@@ -160,9 +153,9 @@ export function AuraGroove() {
             data: { enabled: checked }
         });
     }
-  }
-  
-  const prepareAudioAndSendSamples = async () => {
+  }, [isPlaying]);
+
+  const prepareAndStart = useCallback(async () => {
     setIsLoading(true);
     setLoadingText("Preparing audio engine...");
 
@@ -176,9 +169,8 @@ export function AuraGroove() {
       setLoadingText("Decoding samples...");
       const decodedSamples: { [key: string]: Float32Array } = {};
       const transferableObjects: Transferable[] = [];
-      const sampleEntries = Object.entries(sampleArrayBuffers.current);
-
-      for (const [key, arrayBuffer] of sampleEntries) {
+      
+      for (const [key, arrayBuffer] of Object.entries(sampleArrayBuffers.current)) {
           const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0)); 
           const float32Array = audioBuffer.getChannelData(0);
           decodedSamples[key] = float32Array;
@@ -190,8 +182,6 @@ export function AuraGroove() {
           command: 'load_samples',
           data: decodedSamples
       }, transferableObjects);
-      
-      return true;
 
     } catch (error) {
         console.error("Failed to prepare audio:", error);
@@ -201,32 +191,31 @@ export function AuraGroove() {
             description: `Could not prepare audio. ${error instanceof Error ? error.message : ''}`,
         });
         setIsLoading(false);
-        return false;
     }
-  };
+  }, [toast]);
 
-  const handlePlay = async () => {
-    if (!areSamplesLoadedOnMount.current) {
-        toast({
-            title: "Samples not loaded",
-            description: "Please wait for samples to finish loading.",
-        });
-        return;
-    }
-    
-    if (!await prepareAudioAndSendSamples()) {
-        handleStop();
-        return;
-    }
-  };
+  const handleStop = useCallback(() => {
+    musicWorkerRef.current?.postMessage({ command: 'stop' });
+    audioPlayer.stop();
+    setIsPlaying(false);
+    setIsLoading(false);
+    setLoadingText("");
+  }, []);
   
-  const handleTogglePlay = () => {
-    if (isPlaying || (isLoading && isPlaying)) {
+  const handleTogglePlay = useCallback(() => {
+    if (isPlaying) {
       handleStop();
     } else {
-      handlePlay();
+       if (!areSamplesLoadedOnMount.current) {
+          toast({
+              title: "Samples not loaded",
+              description: "Please wait for samples to finish loading.",
+          });
+          return;
+      }
+      prepareAndStart();
     }
-  };
+  }, [isPlaying, handleStop, prepareAndStart, toast]);
 
   return (
     <Card className="w-full max-w-md shadow-2xl">
@@ -244,7 +233,7 @@ export function AuraGroove() {
             <Select
               value={instruments.solo}
               onValueChange={handleInstrumentChange('solo')}
-              disabled={isLoading}
+              disabled={isLoading || isPlaying}
             >
               <SelectTrigger id="solo-instrument" className="col-span-2">
                 <SelectValue placeholder="Select instrument" />
@@ -262,7 +251,7 @@ export function AuraGroove() {
              <Select
               value={instruments.accompaniment}
               onValueChange={handleInstrumentChange('accompaniment')}
-              disabled={isLoading}
+              disabled={isLoading || isPlaying}
             >
               <SelectTrigger id="accompaniment-instrument" className="col-span-2">
                 <SelectValue placeholder="Select instrument" />
@@ -280,7 +269,7 @@ export function AuraGroove() {
              <Select
               value={instruments.bass}
               onValueChange={handleInstrumentChange('bass')}
-              disabled={isLoading}
+              disabled={isLoading || isPlaying}
             >
               <SelectTrigger id="bass-instrument" className="col-span-2">
                 <SelectValue placeholder="Select instrument" />
@@ -298,17 +287,17 @@ export function AuraGroove() {
                 id="drums-enabled"
                 checked={drumsEnabled}
                 onCheckedChange={handleDrumsToggle}
-                disabled={isLoading}
+                disabled={isLoading || isPlaying}
                 />
                 <Label htmlFor="drums-enabled">Drums</Label>
             </div>
           </div>
           
         </div>
-         {isLoading && (
+         {(isLoading || (isPlaying && loadingText)) && (
             <div className="flex flex-col items-center justify-center text-muted-foreground space-y-2 min-h-[40px]">
                 <Loader2 className="h-6 w-6 animate-spin" />
-                <p>{loadingText}</p>
+                <p>{loadingText || "Loading..."}</p>
             </div>
         )}
          {!isLoading && !isPlaying && (
@@ -316,7 +305,7 @@ export function AuraGroove() {
               Press play to start the music.
             </p>
         )}
-        {!isLoading && isPlaying && (
+        {!isLoading && isPlaying && !loadingText && (
              <p className="text-muted-foreground text-center min-h-[40px] flex items-center justify-center px-4">
               Playing...
             </p>
@@ -326,19 +315,21 @@ export function AuraGroove() {
         <Button
           type="button"
           onClick={handleTogglePlay}
-          disabled={isLoading && !isPlaying}
+          disabled={isLoading}
           className="w-full text-lg py-6"
         >
-          {isLoading && !isPlaying ? (
+          {isLoading ? (
             <Loader2 className="mr-2 h-6 w-6 animate-spin" />
           ) : isPlaying ? (
             <Pause className="mr-2 h-6 w-6" />
           ) : (
             <Music className="mr-2 h-6 w-6" />
           )}
-          {isLoading && !isPlaying ? loadingText : isPlaying ? "Stop" : "Play"}
+          {isLoading ? loadingText : isPlaying ? "Stop" : "Play"}
         </Button>
       </CardFooter>
     </Card>
   );
 }
+
+    
