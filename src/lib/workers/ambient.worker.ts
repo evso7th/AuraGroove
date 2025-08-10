@@ -72,7 +72,7 @@ async function loadDrumSamples() {
             const path = (drumSampleFiles as any)[key];
             const url = `${baseUrl}${path}`;
             
-            postMessage({ type: 'loading_status', message: `Fetching ${key}...` });
+            postMessage({ type: 'loading_status', message: `Fetching ${key} from ${url}...` });
 
             const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Request timed out')), 5000));
             

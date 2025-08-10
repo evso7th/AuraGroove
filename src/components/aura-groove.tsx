@@ -205,7 +205,7 @@ export function AuraGroove() {
                 id="drums-enabled"
                 checked={drumsEnabled}
                 onCheckedChange={handleDrumsToggle}
-                disabled={isLoading || isPlaying}
+                disabled={isLoading}
                 />
                 <Label htmlFor="drums-enabled">Drums</Label>
             </div>
