@@ -1,100 +1,118 @@
 
-"use strict";
+self.importScripts('/lib/fractal-music-generator.js');
 
-importScripts('/lib/fractal-music-generator.js');
-
-let state = {
-    isPlaying: false,
-    instruments: null,
-    drumsEnabled: true,
-    sampleRate: 44100,
-    bpm: 100,
+let generationInterval;
+let currentTime = 0;
+let isGenerating = false;
+let sampleRate = 44100;
+let instruments = {
+    solo: 'synthesizer',
+    accompaniment: 'piano',
+    bass: 'bass guitar'
 };
+let drumsEnabled = true;
 
-let samples = {};
-let nextTickTime = 0;
-let currentBar = 0;
-let currentTickInBar = 0;
-const TICKS_PER_BAR = 16; 
-const BARS_IN_PATTERN = 8;
+const CHUNK_DURATION = 0.5; // seconds
 
 function generateAudioChunk() {
-    if (!state.isPlaying) return;
+    const chunkSamples = Math.floor(CHUNK_DURATION * sampleRate);
+    const chunkBuffer = new Float32Array(chunkSamples).fill(0);
+    
+    const soloPart = instruments.solo !== 'none' ? generatePart('solo', instruments.solo, currentTime, CHUNK_DURATION) : [];
+    const accompanimentPart = instruments.accompaniment !== 'none' ? generatePart('accompaniment', instruments.accompaniment, currentTime, CHUNK_DURATION) : [];
+    const bassPart = instruments.bass !== 'none' ? generatePart('bass', instruments.bass, currentTime, CHUNK_DURATION) : [];
+    const drumPart = drumsEnabled ? generateDrums(currentTime, CHUNK_DURATION) : [];
 
-    const secondsPerTick = 60.0 / state.bpm / 4;
-    const chunkDuration = secondsPerTick;
-    const chunkSamples = Math.floor(chunkDuration * state.sampleRate);
-    const buffer = new Float32Array(chunkSamples).fill(0);
+    const allNotes = [...soloPart, ...accompanimentPart, ...bassPart, ...drumPart];
 
-    const drumNotes = getDrumNotesForTick(currentTickInBar, currentBar);
+    for (const note of allNotes) {
+        const startSample = Math.floor((note.time - currentTime) * sampleRate);
+        const endSample = Math.floor(startSample + note.duration * sampleRate);
 
-    if (state.drumsEnabled && drumNotes.length > 0) {
-        for (const note of drumNotes) {
-            const sample = samples[note.sample];
-            if (sample) {
-                // For simplicity, just overlay the sample at the beginning of the chunk
-                for (let i = 0; i < sample.length && i < buffer.length; i++) {
-                    buffer[i] += sample[i] * note.velocity; // Mix with volume
-                }
+        for (let i = startSample; i < endSample && i < chunkSamples; i++) {
+            if (i < 0) continue;
+            const t = (i - startSample) / (note.duration * sampleRate);
+            
+            let sampleValue = 0;
+            // Simple ADSR envelope
+            const attackTime = 0.01;
+            const decayTime = 0.1;
+            const sustainLevel = 0.7;
+            const releaseTime = 0.1;
+
+            let envelope = 0;
+            if (t < attackTime) {
+                envelope = t / attackTime;
+            } else if (t < attackTime + decayTime) {
+                envelope = 1 - (1 - sustainLevel) * (t - attackTime) / decayTime;
+            } else if (note.duration - t < releaseTime) {
+                const releaseT = t - (note.duration - releaseTime);
+                envelope = sustainLevel * (1 - releaseT / releaseTime);
+            } else {
+                envelope = sustainLevel;
             }
+
+            // Simple sine wave oscillator
+            sampleValue = Math.sin(2 * Math.PI * note.freq * t) * envelope * note.velocity;
+
+            chunkBuffer[i] += sampleValue;
         }
     }
-    
-    // ALWAYS post a chunk, even if it's silence. This keeps the audio stream alive.
+
     self.postMessage({
         type: 'chunk',
         data: {
-            chunk: buffer,
-            duration: chunkDuration
+            chunk: chunkBuffer,
+            duration: CHUNK_DURATION
         }
-    }, [buffer.buffer]);
+    }, [chunkBuffer.buffer]);
 
-
-    // Advance time
-    nextTickTime += chunkDuration;
-    currentTickInBar++;
-    if (currentTickInBar >= TICKS_PER_BAR) {
-        currentTickInBar = 0;
-        currentBar = (currentBar + 1) % BARS_IN_PATTERN;
-    }
-
-    const drift = performance.now() - nextTickTime * 1000;
-    setTimeout(generateAudioChunk, chunkDuration * 1000 - drift);
+    currentTime += CHUNK_DURATION;
 }
 
+function startGeneration() {
+    if (isGenerating) return;
+    isGenerating = true;
+    currentTime = 0;
+    
+    self.postMessage({ type: 'generation_started' });
+
+    if (generationInterval) {
+        clearInterval(generationInterval);
+    }
+    // Call it immediately once, then set interval
+    generateAudioChunk();
+    generationInterval = setInterval(generateAudioChunk, CHUNK_DURATION * 1000 * 0.9); // Schedule slightly faster
+}
+
+function stopGeneration() {
+    if (!isGenerating) return;
+    isGenerating = false;
+    if (generationInterval) {
+        clearInterval(generationInterval);
+        generationInterval = null;
+    }
+    self.postMessage({ type: 'generation_stopped' });
+}
 
 self.onmessage = function(e) {
     const { command, data } = e.data;
 
     switch (command) {
-        case 'load_samples':
-            samples = data;
-            console.log("Worker: Samples loaded.");
-            break;
         case 'start':
-            console.log("Worker: Start command received", data);
-            state.instruments = data.instruments;
-            state.drumsEnabled = data.drumsEnabled;
-            state.sampleRate = data.sampleRate || 44100;
-
-            if (!state.isPlaying) {
-                state.isPlaying = true;
-                currentBar = 0;
-                currentTickInBar = 0;
-                nextTickTime = performance.now() / 1000;
-                self.postMessage({ type: 'generation_started' });
-                generateAudioChunk();
-            }
+            sampleRate = data.sampleRate;
+            instruments = data.instruments;
+            drumsEnabled = data.drumsEnabled;
+            startGeneration();
             break;
         case 'stop':
-            console.log("Worker: Stop command received");
-            state.isPlaying = false;
+            stopGeneration();
             break;
         case 'set_instruments':
-            state.instruments = data;
+            instruments = data;
             break;
         case 'toggle_drums':
-            state.drumsEnabled = data.enabled;
+            drumsEnabled = data.enabled;
             break;
     }
 };
