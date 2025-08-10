@@ -1,6 +1,4 @@
-
-// Simple audio worker without Tone.js to avoid OfflineAudioContext issues.
-// It generates raw audio buffers and sends them to the main thread.
+import * as Tone from 'tone';
 
 // --- UTILITIES ---
 class PRNG {
@@ -34,51 +32,68 @@ function mapValueToMidi(value: number, scale: number[], octave: number) {
 // --- STATE ---
 let generationInterval: any = null;
 const partDuration = 4; // seconds
-const sampleRate = 44100; // Standard sample rate
+const sampleRate = 44100;
 let instruments = {
     solo: 'synthesizer',
     accompaniment: 'piano',
     bass: 'bass guitar',
 };
+let drumsEnabled = true;
 
 const soloPrng = new PRNG(Math.random() * 1000);
 const accompanimentPrng = new PRNG(Math.random() * 1000);
 const bassPrng = new PRNG(Math.random() * 1000);
+const drumPrng = new PRNG(Math.random() * 1000);
 
 const soloScale = scales.minorPentatonic;
 const accompanimentScale = scales.ionian;
 const bassScale = scales.aeolian;
 
-// --- SIMPLE SYNTHESIZERS ---
+// --- DRUM SAMPLES ---
+const drumSamples = {
+    kick: '/assets/drums/kickdrum.wav',
+    snare: '/assets/drums/snare.wav',
+    closedHat: '/assets/drums/closed hi hat accented.wav',
+    openHat: '/assets/drums/Open HH (Top) (2).wav',
+    crash: '/assets/drums/Crash (1).wav',
+};
+let drumSamplers: { [key: string]: Tone.Player } = {};
+let drumsLoaded = false;
+
+async function loadDrumSamples() {
+    try {
+        const players = await new Promise<{[key: string]: Tone.Player}>((resolve, reject) => {
+            const tempPlayers = new Tone.Players(drumSamples, () => {
+                resolve(tempPlayers.get.bind(tempPlayers) as any);
+            }).toDestination();
+        });
+
+        // The object from Tone.Players can't be used directly, we need to get each player.
+        for(const key in drumSamples) {
+            drumSamplers[key] = players.get(key);
+        }
+
+        drumsLoaded = true;
+        console.log("Drum samples loaded successfully.");
+    } catch (error) {
+        console.error("Error loading drum samples:", error);
+        postMessage({ type: 'error', message: 'Failed to load drum samples.' });
+    }
+}
+
+
+// --- SYNTH CREATION (from previous steps) ---
 type Note = { freq: number; time: number; duration: number; velocity: number };
 
 function adsrEnvelope(t: number, attack: number, decay: number, sustain: number, release: number, duration: number) {
     const sustainLevel = sustain;
     if (t < 0) return 0;
-    
-    // Ensure total AD time is less than note duration
-    const totalAD = attack + decay;
-    if (totalAD > duration - release) {
-        attack = (attack / totalAD) * (duration - release);
-        decay = (decay / totalAD) * (duration - release);
-    }
-
-    if (t < attack) {
-        return t / attack;
-    }
-    if (t < attack + decay) {
-        return 1.0 - (1.0 - sustainLevel) * (t - attack) / decay;
-    }
-    if (t < duration - release) {
-        return sustainLevel;
-    }
-    if (t < duration) {
-        // Start release from sustain level
-        return sustainLevel * (1.0 - (t - (duration - release)) / release);
-    }
+    if (t < attack) return t / attack;
+    if (t < attack + decay) return 1.0 - (1.0 - sustainLevel) * (t - attack) / decay;
+    if (t < duration - release) return sustainLevel;
+    if (t < duration) return sustainLevel * (1.0 - (t - (duration - release)) / release);
     return 0;
 }
-
 
 function oscillator(type: string, t: number, freq: number) {
     switch (type) {
@@ -90,7 +105,7 @@ function oscillator(type: string, t: number, freq: number) {
 }
 
 function createSynthVoice(notes: Note[], totalDuration: number, instrument: string) {
-    const buffer = new Float32Array(totalDuration * sampleRate);
+    const buffer = new Float32Array(totalDuration * sampleRate).fill(0);
     let synthOptions;
 
     switch (instrument) {
@@ -101,7 +116,7 @@ function createSynthVoice(notes: Note[], totalDuration: number, instrument: stri
             synthOptions = { oscType: 'sawtooth', attack: 0.2, decay: 0.1, sustain: 0.9, release: 0.8, volume: 0.3 };
             break;
         case 'bass guitar':
-             synthOptions = { oscType: 'sine', attack: 0.05, decay: 0.3, sustain: 0.4, release: 1.5, volume: 0.5 };
+             synthOptions = { oscType: 'sine', attack: 0.05, decay: 0.3, sustain: 0.4, release: 0.4, volume: 0.6 };
              break;
         default: // synthesizer
             synthOptions = { oscType: 'pulse', attack: 0.1, decay: 0.5, sustain: 0.4, release: 1.0, volume: 0.3 };
@@ -119,8 +134,7 @@ function createSynthVoice(notes: Note[], totalDuration: number, instrument: stri
             buffer[i] += value;
         }
 
-        // Apply a short fade-out at the end of the note to prevent clicks
-        const fadeOutSamples = 500; // ~11ms
+        const fadeOutSamples = 500;
         const fadeStartSample = endSample - fadeOutSamples;
         if (fadeStartSample > startSample) {
              for (let i = fadeStartSample; i < endSample; i++) {
@@ -134,24 +148,32 @@ function createSynthVoice(notes: Note[], totalDuration: number, instrument: stri
     return buffer;
 }
 
-
 // --- MUSIC GENERATION ---
-function generatePart() {
+async function generatePart() {
   try {
-    // Solo
+    const offlineContext = new Tone.OfflineContext(1, partDuration, sampleRate);
+
+    // --- Instruments ---
     const soloNotes: Note[] = [];
-    
-    // Accompaniment
+    for (let i = 0; i < 8; i++) {
+        if (soloPrng.next() > 0.6) {
+            const time = i * 0.5;
+            const value = soloPrng.next();
+            const octave = value < 0.2 ? 1 : 2;
+            const noteMidi = mapValueToMidi(value, soloScale, octave);
+            soloNotes.push({ freq: midiToFreq(noteMidi), time, duration: soloPrng.next() * 0.4 + 0.1, velocity: 0.6 });
+        }
+    }
+
     const accompanimentNotes: Note[] = [];
     for (let i = 0; i < 4; i++) {
         const time = i * 1;
         const value = accompanimentPrng.next();
         const octave = value < 0.5 ? 0 : 1;
         const noteMidi = mapValueToMidi(value, accompanimentScale, octave);
-        accompanimentNotes.push({ freq: midiToFreq(noteMidi), time, duration: 0.9, velocity: 0.4 });
+        accompanimentNotes.push({ freq: midiToFreq(noteMidi), time, duration: 1.9, velocity: 0.4 });
     }
 
-    // Bass
     const bassNotes: Note[] = [];
     for (let i = 0; i < 2; i++) {
         const time = i * 2;
@@ -165,17 +187,42 @@ function generatePart() {
     const accompanimentBuffer = createSynthVoice(accompanimentNotes, partDuration, instruments.accompaniment);
     const bassBuffer = createSynthVoice(bassNotes, partDuration, instruments.bass);
 
-    const finalBuffer = new Float32Array(partDuration * sampleRate);
-    for (let i = 0; i < finalBuffer.length; i++) {
-        finalBuffer[i] = soloBuffer[i] + accompanimentBuffer[i] + bassBuffer[i];
+    // --- Drums ---
+    if (drumsEnabled && drumsLoaded) {
+        const now = offlineContext.currentTime;
+        // Simple 4/4 beat
+        for (let i = 0; i < 16; i++) {
+             const time = i * 0.25; // 16th notes
+            // Kick on 1, 2, 3, 4
+            if (i % 4 === 0) {
+                drumSamplers.kick.start(now + time);
+            }
+            // Snare on 2 and 4
+            if ((i-2) % 8 === 0 || (i-6) % 8 === 0) {
+                 drumSamplers.snare.start(now + time);
+            }
+            // Closed hats on every 8th note
+             if (i % 2 === 0) {
+                drumSamplers.closedHat.start(now + time);
+            }
+        }
     }
     
+    // --- Mixdown using Tone.Offline ---
+    const finalBuffer = await offlineContext.render();
+    const channelData = finalBuffer.getChannelData(0);
+
+    // Manually add the synth buffers
+    for (let i = 0; i < channelData.length; i++) {
+      channelData[i] += soloBuffer[i] + accompanimentBuffer[i] + bassBuffer[i];
+    }
+
     // Clipping to prevent distortion
-    for (let i = 0; i < finalBuffer.length; i++) {
-      finalBuffer[i] = Math.max(-1, Math.min(1, finalBuffer[i]));
+    for (let i = 0; i < channelData.length; i++) {
+      channelData[i] = Math.max(-1, Math.min(1, channelData[i]));
     }
     
-    postMessage({ type: 'music_part', buffer: finalBuffer, duration: partDuration }, [finalBuffer.buffer]);
+    postMessage({ type: 'music_part', buffer: channelData, duration: partDuration }, [channelData.buffer]);
 
   } catch (e: any) {
       console.error("Error in worker generation:", e);
@@ -184,14 +231,19 @@ function generatePart() {
 }
 
 // --- WORKER MESSAGE HANDLING ---
-self.onmessage = function(e) {
+self.onmessage = async function(e) {
   const { command, data } = e.data;
 
   if (command === 'start') {
-    instruments = data;
+    instruments = data.instruments;
+    drumsEnabled = data.drumsEnabled;
     if (generationInterval === null) {
+      if (!drumsLoaded) {
+          await loadDrumSamples();
+      }
+      postMessage({ type: 'loading_complete' });
       generatePart(); // Generate first part immediately
-      generationInterval = setInterval(generatePart, (partDuration * 1000) - 200); // Generate slightly faster than playback
+      generationInterval = setInterval(generatePart, partDuration * 1000); 
     }
   } else if (command === 'stop') {
     if (generationInterval !== null) {
@@ -200,5 +252,7 @@ self.onmessage = function(e) {
     }
   } else if (command === 'set_instruments') {
     instruments = data;
+  } else if (command === 'toggle_drums') {
+    drumsEnabled = data;
   }
 };

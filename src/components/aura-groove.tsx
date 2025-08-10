@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Loader2, Pause, Play } from "lucide-react";
+import { Loader2, Pause, Play, Drum } from "lucide-react";
 import { audioPlayer, Instruments } from "@/lib/audio-player";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -21,11 +21,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Logo } from "@/components/icons";
 
 export function AuraGroove() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [drumsEnabled, setDrumsEnabled] = useState(true);
   const [instruments, setInstruments] = useState<Instruments>({
     solo: "synthesizer",
     accompaniment: "piano",
@@ -50,6 +52,10 @@ export function AuraGroove() {
             description: message,
          });
          handleStop();
+      } else if (type === 'loading_complete') {
+        setIsLoading(false);
+        audioPlayer.start();
+        setIsPlaying(true);
       }
     };
 
@@ -67,6 +73,11 @@ export function AuraGroove() {
     musicWorkerRef.current?.postMessage({ command: 'set_instruments', data: newInstruments });
   };
   
+  const handleDrumsToggle = (enabled: boolean) => {
+    setDrumsEnabled(enabled);
+    musicWorkerRef.current?.postMessage({ command: 'toggle_drums', data: enabled });
+  };
+
   const handlePlay = async () => {
     setIsLoading(true);
     try {
@@ -75,9 +86,8 @@ export function AuraGroove() {
         isInitializedRef.current = true;
       }
       
-      musicWorkerRef.current?.postMessage({ command: 'start', data: instruments });
-      audioPlayer.start();
-      setIsPlaying(true);
+      musicWorkerRef.current?.postMessage({ command: 'start', data: { instruments, drumsEnabled } });
+      // We now wait for a 'loading_complete' message from the worker before starting the player
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
       toast({
@@ -86,7 +96,6 @@ export function AuraGroove() {
         description: errorMessage,
       });
       setIsPlaying(false);
-    } finally {
       setIsLoading(false);
     }
   };
@@ -165,11 +174,25 @@ export function AuraGroove() {
               </SelectContent>
             </Select>
           </div>
+          <div className="grid grid-cols-3 items-center gap-4">
+            <Label htmlFor="drums-toggle" className="text-right flex items-center gap-2">
+                <Drum className="h-5 w-5" />
+                Drums
+            </Label>
+            <div className="col-span-2">
+                <Switch
+                    id="drums-toggle"
+                    checked={drumsEnabled}
+                    onCheckedChange={handleDrumsToggle}
+                    disabled={isLoading || isPlaying}
+                />
+            </div>
+          </div>
         </div>
          {isLoading && (
             <div className="flex flex-col items-center justify-center text-muted-foreground space-y-2 min-h-[40px]">
                 <Loader2 className="h-6 w-6 animate-spin" />
-                <p>Starting audio engine...</p>
+                <p>Loading samples...</p>
             </div>
         )}
         {!isLoading && !isPlaying && (
@@ -197,7 +220,7 @@ export function AuraGroove() {
           ) : (
             <Play className="mr-2 h-6 w-6" />
           )}
-          {isLoading ? "Starting..." : isPlaying ? "Stop" : "Start"}
+          {isLoading ? "Loading..." : isPlaying ? "Stop" : "Start"}
         </Button>
       </CardFooter>
     </Card>
