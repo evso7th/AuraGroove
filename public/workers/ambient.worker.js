@@ -1,134 +1,146 @@
 
 "use strict";
 
+// --- State ---
 let isRunning = false;
+let scheduleTimeoutId = null;
 let tick = 0;
-let instruments = {};
+let instruments = {
+    solo: 'none',
+    accompaniment: 'none',
+    bass: 'none'
+};
+let drumsEnabled = true;
 let sampleRate = 44100;
 let samples = {};
 
-// ====================================================================================
-// NEW: Pattern-based sequencer for reliability and clarity
-// ====================================================================================
+const sixteenthNoteTime = 0.125; // 120 BPM
+const chunkDuration = sixteenthNoteTime * 16; // One measure of 4/4
 
-const drumPatterns = {
-    // 16 steps per bar (16th notes)
-    kick_drum6: {
-        pattern: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0], // Four-on-the-floor
-        gain: 0.7, // Quieter kick
-    },
-    snare: {
-        pattern: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0], // On beats 2 and 4
-        gain: 1.0, // Louder snare
-    },
-    closed_hi_hat_accented: {
-        pattern: [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], // 8th notes
-        gain: 0.4,
-    },
-    crash1: {
-        // Plays once every 8 bars (128 steps)
-        pattern: Array(128).fill(0).map((_, i) => i === 0 ? 1 : 0),
-        gain: 0.5,
-    },
-    cymbal1: { // This is our Ride
-        pattern: [1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1], // Syncopated ride
-        gain: 0.6,
-    }
-};
-
-const noteFrequencies = {
-    'C3': 130.81, 'D3': 146.83, 'E3': 164.81, 'F3': 174.61, 'G3': 196.00, 'A3': 220.00, 'B3': 246.94,
-    'C4': 261.63, 'D4': 293.66, 'E4': 329.63, 'F4': 349.23, 'G4': 392.00, 'A4': 440.00, 'B4': 493.88,
-    'C5': 523.25, 'D5': 587.33, 'E5': 659.25, 'F5': 698.46, 'G5': 783.99, 'A5': 880.00, 'B5': 987.77
-};
-
+// --- Note Generation Logic ---
 const scales = {
     major: [0, 2, 4, 5, 7, 9, 11],
-    minor: [0, 2, 3, 5, 7, 8, 10]
+    minor: [0, 2, 3, 5, 7, 8, 10],
+};
+const rootNote = 60; // C4
+const scale = scales.major;
+
+function getNote(octave, scaleDegree) {
+    return rootNote + (octave * 12) + scale[scaleDegree % scale.length];
+}
+
+const drumPatterns = {
+    'kick_drum6': {
+        pattern: [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
+        gain: 0.7,
+        skipFirst: true, // Don't play on the very first beat of the song
+    },
+    'snare': {
+        pattern: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+        gain: 1.0,
+    },
+    'closed_hi_hat_accented': {
+        pattern: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        gain: 0.4,
+    },
+    'crash1': {
+        pattern: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        gain: 0.5,
+        interval: 8, // Play every 8 measures
+    },
+    'cymbal1': {
+        pattern: [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0],
+        gain: 0.4,
+    }
 };
 
-let currentProgression = [];
-let currentScale = scales.major;
-let rootNote = 'C';
-let octave = 4;
-let bassOctave = 3;
-
-// ====================================================================================
-// Music Generation
-// ====================================================================================
 
 function generateMusicChunk() {
-    const tempo = 70; // BPM
-    const beatsPerBar = 4;
-    const stepsPerBeat = 4; // 16th notes
-    const stepsPerBar = beatsPerBeat * stepsPerBeat;
-    const barDuration = (60 / tempo) * beatsPerBar;
-    const stepDuration = barDuration / stepsPerBar;
+    const chunkSamples = [];
+    const beatsPerMeasure = 4;
+    const beatsPerBeat = 4; // This was the missing variable
+    const totalSixteenthsInMeasure = beatsPerMeasure * beatsPerBeat;
 
-    const chunkSteps = 4; // Generate 4 steps (a quarter note) at a time
-    const chunkDuration = stepDuration * chunkSteps;
-    const chunkSamples = Math.floor(chunkDuration * sampleRate);
-    const buffer = new Float32Array(chunkSamples).fill(0);
+    const measure = Math.floor(tick / totalSixteenthsInMeasure);
+    const step = tick % totalSixteenthsInMeasure;
 
-    for (let i = 0; i < chunkSteps; i++) {
-        const stepTime = i * stepDuration;
-        const sampleOffset = Math.floor(stepTime * sampleRate);
+    // --- Drums ---
+    if (drumsEnabled) {
+        for (const sampleName in drumPatterns) {
+            const { pattern, gain, skipFirst, interval } = drumPatterns[sampleName];
+            
+            if (skipFirst && tick === 0) continue;
 
-        // --- Drums ---
-        if (instruments.drumsEnabled) {
-            for (const [drum, { pattern, gain }] of Object.entries(drumPatterns)) {
-                
-                // Skip the very first kick drum hit
-                if (drum === 'kick_drum6' && tick === 0) {
-                    continue;
-                }
+            if (interval && (measure % interval !== 0)) continue;
 
-                const currentStepInPattern = tick % pattern.length;
-                if (pattern[currentStepInPattern] === 1 && samples[drum]) {
-                    const sample = samples[drum];
-                    const end = Math.min(sampleOffset + sample.length, buffer.length);
-                    for (let j = 0; j < end - sampleOffset; j++) {
-                        buffer[sampleOffset + j] += sample[j] * gain;
-                    }
-                }
+            if (pattern[step] && samples[sampleName]) {
+                 chunkSamples.push({
+                    sample: samples[sampleName],
+                    gain: gain,
+                    time: 0 // all samples in the chunk start at the same relative time
+                });
             }
         }
-        
-        // --- Melodic Instruments (Placeholder for future implementation) ---
-        // TODO: Add melodic generation based on patterns and scales
-        
-        tick++;
+    }
+    
+    // --- Melodic parts (placeholder) ---
+    // A simple logic for melodic instruments can be added here
+    // For now, they remain silent to focus on drums
+    const time = tick * sixteenthNoteTime;
+    if (instruments.solo !== 'none' && (tick % 8 === 0)) {
+       // generate solo note
+    }
+    if (instruments.accompaniment !== 'none' && (tick % 4 === 0)) {
+        // generate accompaniment chord
+    }
+    if (instruments.bass !== 'none' && (tick % 16 === 0)) {
+        // generate bass note
     }
 
-    return buffer;
+
+    const chunkBuffer = mixAudio(chunkSamples);
+    
+    tick++;
+    if (tick >= totalSixteenthsInMeasure * 8) { // Reset after 8 measures
+        tick = 0;
+    }
+
+    return chunkBuffer;
 }
 
 
-// ====================================================================================
-// Worker Lifecycle
-// ====================================================================================
+function mixAudio(chunkSamples) {
+    if (chunkSamples.length === 0) {
+        return new Float32Array(0);
+    }
+    const mixBuffer = new Float32Array(Math.floor(chunkDuration * sampleRate));
+    
+    chunkSamples.forEach(({ sample, gain }) => {
+        for (let i = 0; i < sample.length; i++) {
+            if (i < mixBuffer.length) {
+                mixBuffer[i] += sample[i] * (gain !== undefined ? gain : 1.0);
+            }
+        }
+    });
+
+    return mixBuffer;
+}
+
 
 function scheduleNextChunk() {
     if (!isRunning) return;
 
-    const chunkData = generateMusicChunk();
-    const duration = chunkData.length / sampleRate;
-
-    self.postMessage({
-        type: 'chunk',
-        data: {
-            chunk: chunkData.buffer,
-            duration: duration
-        }
-    }, [chunkData.buffer]);
-
-    // Schedule the next chunk slightly before the current one finishes
-    const timeout = Math.max(0, (duration * 1000) * 0.9);
-    setTimeout(scheduleNextChunk, timeout);
+    const chunk = generateMusicChunk();
+    if(chunk.length > 0) {
+        self.postMessage({ type: 'chunk', data: { chunk, duration: chunkDuration } });
+    }
+    
+    scheduleTimeoutId = setTimeout(scheduleNextChunk, chunkDuration * 1000);
 }
 
 
-self.onmessage = (event) => {
+// --- Message Handling ---
+self.onmessage = function(event) {
     const { command, data } = event.data;
 
     switch (command) {
@@ -136,29 +148,29 @@ self.onmessage = (event) => {
             samples = data;
             self.postMessage({ type: 'samples_loaded' });
             break;
-            
         case 'start':
             if (isRunning) return;
-            isRunning = true;
             instruments = data.instruments;
+            drumsEnabled = data.drumsEnabled;
             sampleRate = data.sampleRate;
-            tick = 0; // Reset tick on start
+            tick = 0;
+            isRunning = true;
             scheduleNextChunk();
             break;
-
         case 'stop':
             isRunning = false;
-            tick = 0;
+            if (scheduleTimeoutId) {
+                clearTimeout(scheduleTimeoutId);
+                scheduleTimeoutId = null;
+            }
             break;
-            
         case 'set_instruments':
             instruments = data;
             break;
-        
         case 'toggle_drums':
-            if(instruments) {
-                instruments.drumsEnabled = data.enabled;
-            }
+            drumsEnabled = data.enabled;
             break;
     }
 };
+
+    
