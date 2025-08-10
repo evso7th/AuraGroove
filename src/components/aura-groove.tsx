@@ -59,7 +59,7 @@ export function AuraGroove() {
   const areSamplesLoadedOnMount = useRef(false);
 
   useEffect(() => {
-    musicWorkerRef.current = new Worker('/workers/ambient.worker.js');
+    musicWorkerRef.current = new Worker('/workers/ambient.worker.js', { type: 'module' });
 
     const handleMessage = (event: MessageEvent) => {
       const { type, data, error } = event.data;
