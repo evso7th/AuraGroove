@@ -39,6 +39,7 @@ let instruments = {
     bass: 'bass guitar',
 };
 let drumsEnabled = false;
+let baseUrl = '';
 
 const soloPrng = new PRNG(Math.random() * 1000);
 const accompanimentPrng = new PRNG(Math.random() * 1000);
@@ -53,9 +54,56 @@ const bassScale = scales.aeolian;
 const drumSamples: { [key: string]: AudioBuffer } = {};
 let samplesLoaded = false;
 
+const drumSampleFiles = {
+  snare: '/assets/drums/snare.wav',
+};
+
 const drumSequencerPattern = {
     snare: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
 };
+
+async function loadDrumSamples() {
+    postMessage({ type: 'loading_status', message: 'Loading drum samples...' });
+    samplesLoaded = false;
+    const sampleKeys = Object.keys(drumSampleFiles);
+
+    try {
+        for (const key of sampleKeys) {
+            const path = (drumSampleFiles as any)[key];
+            const url = `${baseUrl}${path}`;
+            
+            postMessage({ type: 'loading_status', message: `Fetching ${key}...` });
+
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Request timed out')), 5000));
+            
+            const fetchPromise = fetch(url).then(response => {
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch ${url}: ${response.statusText} (${response.status})`);
+                }
+                return response.arrayBuffer();
+            });
+
+            const arrayBuffer = await Promise.race([fetchPromise, timeoutPromise]) as ArrayBuffer;
+
+            // In a worker, we can't create an AudioContext, so we create a dummy one for type hints and decode.
+            const tempCtx = new OfflineAudioContext(1, 1, sampleRate);
+            const audioBuffer = await tempCtx.decodeAudioData(arrayBuffer);
+            drumSamples[key] = audioBuffer;
+        }
+        samplesLoaded = true;
+        postMessage({ type: 'loading_status', message: 'Samples loaded!' });
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred during sample loading";
+        console.error('Worker: Sample loading failed:', errorMessage);
+        postMessage({ type: 'error', message: `Sample loading failed: ${errorMessage}` });
+        // Optionally, stop generation if samples are critical
+        if (generationInterval) {
+            clearInterval(generationInterval);
+            generationInterval = null;
+        }
+    }
+}
+
 
 function createDrumPart() {
     const buffer = new Float32Array(partDuration * sampleRate).fill(0);
@@ -222,8 +270,12 @@ self.onmessage = async function(e) {
   if (command === 'start') {
     instruments = data.instruments;
     drumsEnabled = data.drumsEnabled;
+    baseUrl = data.baseUrl;
     
     if (generationInterval === null) {
+      if(drumsEnabled){
+          await loadDrumSamples();
+      }
       generatePart();
       generationInterval = setInterval(generatePart, (partDuration * 1000) - 20); 
     }
@@ -238,9 +290,5 @@ self.onmessage = async function(e) {
     instruments = data;
   } else if (command === 'toggle_drums') {
     drumsEnabled = data;
-  } else if (command === 'set_samples') {
-    Object.assign(drumSamples, data);
-    samplesLoaded = Object.keys(drumSamples).length > 0;
-    console.log("Worker: Received samples. Samples loaded:", samplesLoaded);
   }
 };

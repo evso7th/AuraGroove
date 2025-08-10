@@ -66,6 +66,8 @@ export function AuraGroove() {
             description: message,
          });
          handleStop();
+      } else if (type === 'loading_status') {
+        setLoadingText(message);
       }
     };
 
@@ -91,60 +93,32 @@ export function AuraGroove() {
       musicWorkerRef.current?.postMessage({ command: 'toggle_drums', data: checked });
     }
   }
-  
-  const loadAndSendSamples = async () => {
-    if (!drumsEnabled) {
-       musicWorkerRef.current?.postMessage({ command: 'set_samples', data: {} });
-       return;
-    }
-
-    setLoadingText("Loading drum samples...");
-    
-    try {
-        const sampleUrl = '/assets/drums/snare.wav';
-        const response = await fetch(sampleUrl);
-        if (!response.ok) {
-            throw new Error(`Failed to fetch ${sampleUrl}: ${response.statusText}`);
-        }
-        const arrayBuffer = await response.arrayBuffer();
-
-        // We use the main AudioContext to decode, as it's already initialized.
-        const audioBuffer = await audioPlayer.getAudioContext()?.decodeAudioData(arrayBuffer);
-
-        if (audioBuffer) {
-            // Transfer the decoded AudioBuffer to the worker
-            musicWorkerRef.current?.postMessage({ 
-                command: 'set_samples', 
-                data: { snare: audioBuffer }
-            }, [audioBuffer]);
-        }
-    } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred while loading samples";
-        toast({
-            variant: "destructive",
-            title: "Sample Loading Error",
-            description: errorMessage,
-        });
-        throw error; // Stop the process
-    }
-  };
 
   const handlePlay = async () => {
     setIsLoading(true);
+    setLoadingText("Initializing...");
     try {
       if (!isInitializedRef.current) {
-        setLoadingText("Initializing audio engine...");
         await audioPlayer.initialize();
         isInitializedRef.current = true;
       }
       
-      await loadAndSendSamples();
-
-      setLoadingText("Generating music...");
-      musicWorkerRef.current?.postMessage({ command: 'start', data: { instruments, drumsEnabled } });
+      musicWorkerRef.current?.postMessage({ 
+        command: 'start', 
+        data: { 
+          instruments, 
+          drumsEnabled,
+          baseUrl: window.location.origin
+        } 
+      });
 
     } catch (error) {
-      console.error("Failed to start playback:", error);
+      const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+      toast({
+        variant: "destructive",
+        title: "Playback Error",
+        description: errorMessage,
+      });
       setIsPlaying(false);
       setIsLoading(false);
     }
