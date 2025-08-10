@@ -1,70 +1,99 @@
 
-import { AmbientMusicGenerator } from './generators/AmbientMusicGenerator.js';
+import { DrumMachine } from './drum-machine.js';
+import { Instrument } from './instrument.js';
 
-let generator;
-let audioChunkInterval;
+let drumMachine = null;
+let instruments = {};
+let isRunning = false;
+let sampleRate = 44100;
+let nextTickTime = 0;
+const TICK_INTERVAL = 0.5; // seconds
+const CHUNK_DURATION = TICK_INTERVAL;
+
+function generateAudioChunk() {
+    if (!isRunning) return;
+
+    const chunkEndTime = nextTickTime + CHUNK_DURATION;
+    let combinedChunk = new Float32Array(Math.floor(CHUNK_DURATION * sampleRate)).fill(0);
+
+    // Generate drum chunk if enabled
+    if (drumMachine && drumMachine.isEnabled) {
+        const drumChunk = drumMachine.generate(nextTickTime, chunkEndTime, sampleRate);
+        for (let i = 0; i < drumChunk.length; i++) {
+            combinedChunk[i] += drumChunk[i];
+        }
+    }
+    
+    // Generate instrument chunks
+    for (const key in instruments) {
+        const instrument = instruments[key];
+        if (instrument.type !== 'none') {
+            const instrumentChunk = instrument.generate(nextTickTime, chunkEndTime, sampleRate);
+            for (let i = 0; i < instrumentChunk.length; i++) {
+                combinedChunk[i] += instrumentChunk[i];
+            }
+        }
+    }
+
+    self.postMessage({
+        type: 'chunk',
+        data: {
+            chunk: combinedChunk,
+            duration: CHUNK_DURATION,
+        },
+    }, [combinedChunk.buffer]);
+    
+    nextTickTime = chunkEndTime;
+}
+
+function start() {
+    if (isRunning) return;
+    isRunning = true;
+    nextTickTime = 0; // Reset time on start
+    
+    // Use a more robust timer loop
+    function loop() {
+        if (!isRunning) return;
+        generateAudioChunk();
+        setTimeout(loop, TICK_INTERVAL * 1000);
+    }
+    loop();
+}
+
+function stop() {
+    isRunning = false;
+}
 
 self.onmessage = (event) => {
     const { command, data } = event.data;
 
-    if (command === 'load_samples') {
-        // In this architecture, samples are decoded and handled by the generator.
-        // We just need to signal back that the worker is ready.
-        // The actual sample data is used when creating the generator instance.
-        if (!generator) {
-            generator = new AmbientMusicGenerator(data, data.sampleRate);
-        }
-        self.postMessage({ type: 'samples_loaded' });
-
-    } else if (command === 'start') {
-        if (!generator) {
-             // Fallback if start is called before load_samples, using provided sampleRate
-            generator = new AmbientMusicGenerator({}, data.sampleRate || 44100);
-        }
-        
-        generator.setInstruments(data.instruments);
-        generator.setDrums(data.drumsEnabled);
-        
-        const chunkDuration = 1.0; // 1 second chunks
-        
-        const sendChunk = () => {
-            if (generator) {
-                const chunk = generator.generateAudioChunk(chunkDuration);
-                self.postMessage({
-                    type: 'chunk',
-                    data: {
-                        chunk: chunk,
-                        duration: chunkDuration
-                    }
-                }, [chunk.buffer]);
+    switch (command) {
+        case 'load_samples':
+            drumMachine = new DrumMachine(data);
+            self.postMessage({ type: 'samples_loaded' });
+            break;
+        case 'start':
+            sampleRate = data.sampleRate;
+            if (drumMachine) {
+                drumMachine.setEnabled(data.drumsEnabled);
             }
-        };
-        
-        // Stop any existing interval
-        if (audioChunkInterval) {
-            clearInterval(audioChunkInterval);
-        }
-        
-        // Start generating immediately and then on an interval
-        sendChunk(); 
-        audioChunkInterval = setInterval(sendChunk, chunkDuration * 1000);
-
-    } else if (command === 'stop') {
-        if (audioChunkInterval) {
-            clearInterval(audioChunkInterval);
-            audioChunkInterval = null;
-        }
-        if (generator) {
-            generator.reset();
-        }
-
-    } else if (command === 'set_instruments') {
-        if (generator) {
-            generator.setInstruments(data);
-        }
-    } else if (command === 'toggle_drums') {
-        if (generator) {
-            generator.setDrums(data.enabled);
-        }
+            instruments['solo'] = new Instrument(data.instruments.solo);
+            instruments['accompaniment'] = new Instrument(data.instruments.accompaniment);
+            instruments['bass'] = new Instrument(data.instruments.bass);
+            start();
+            break;
+        case 'stop':
+            stop();
+            break;
+        case 'toggle_drums':
+             if (drumMachine) {
+                drumMachine.setEnabled(data.enabled);
+            }
+            break;
+        case 'set_instruments':
+            instruments['solo'] = new Instrument(data.solo);
+            instruments['accompaniment'] = new Instrument(data.accompaniment);
+            instruments['bass'] = new Instrument(data.bass);
+            break;
     }
 };
