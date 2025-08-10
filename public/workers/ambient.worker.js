@@ -1,239 +1,178 @@
 
 "use strict";
 
-const PRESETS = {
-  doomBass: {
-    synth: { oscillator: { type: "sine" }, envelope: { attack: 0.1, decay: 0.5, sustain: 0.8, release: 2.0 } },
-    effects: [{ type: "distortion", amount: 0.05 }],
-    notes: ["E1", "B1", "G1", "E2"],
-  },
-  darkDrone: {
-    synth: { type: "fm", voices: 2, settings: { harmonicity: 1, modulationIndex: 3, envelope: { attack: 3.0, decay: 2.0, sustain: 0.4, release: 5.0 } } },
-    effects: [{ type: "filter", frequency: 200, rolloff: -12 }],
-    notes: ["E1", "G1", "B1"],
-  },
-  evolvingPad: {
-    synth: { type: "am", voices: 3, settings: { harmonicity: 2, envelope: { attack: 2.0, decay: 1.0, sustain: 0.3, release: 4.0 } } },
-    effects: [{ type: "chorus", frequency: 0.2, delayTime: 3.5, depth: 0.3 }, { type: "reverb", decay: 8, wet: 0.3 }],
-    chordProgression: ["Em", "G", "Bm"],
-  },
-};
+const CHUNK_DURATION = 2.0; // seconds
 
 // --- State Management ---
-let isRunning = false;
-let sampleRate = 44100;
-let instruments = {};
-let drumsEnabled = true;
-let decodedSamples = {};
+let state = {};
+let samples = {};
 
-let barCount = 0;
-let lastTickTime = 0;
-let tickInterval;
-
-// --- Music Generation Logic ---
-
-function generateNote(noteName, octave) {
-    const noteMap = { "C": 0, "C#": 1, "D": 2, "D#": 3, "E": 4, "F": 5, "F#": 6, "G": 7, "G#": 8, "A": 9, "A#": 10, "B": 11 };
-    const a4 = 440;
-    const n = noteMap[noteName] - noteMap["A"] + (octave - 4) * 12;
-    return a4 * Math.pow(2, n / 12);
-}
-
-function adsrEnvelope(audio, attack, decay, sustainLevel, release, duration, sampleRate) {
-    const attackSamples = Math.floor(attack * sampleRate);
-    const decaySamples = Math.floor(decay * sampleRate);
-    const sustainSamples = Math.max(0, Math.floor(duration * sampleRate) - attackSamples - decaySamples);
-    const releaseSamples = Math.floor(release * sampleRate);
-
-    // Attack phase
-    for (let i = 0; i < attackSamples && i < audio.length; i++) {
-        audio[i] *= i / attackSamples;
-    }
-
-    // Decay and Sustain phase
-    for (let i = attackSamples; i < attackSamples + decaySamples + sustainSamples && i < audio.length; i++) {
-        if (i < attackSamples + decaySamples) {
-            const decayFactor = 1 - ((i - attackSamples) / decaySamples) * (1 - sustainLevel);
-            audio[i] *= decayFactor;
-        } else {
-            audio[i] *= sustainLevel;
-        }
-    }
-    
-    return audio;
-}
-
-
-function generateSynthesizerPart(preset, duration, sampleRate) {
-    const buffer = new Float32Array(Math.floor(duration * sampleRate));
-    const noteFrequency = generateNote(preset.notes[0].slice(0, -1), parseInt(preset.notes[0].slice(-1), 10));
-
-    for (let i = 0; i < buffer.length; i++) {
-        const time = i / sampleRate;
-        buffer[i] = Math.sin(2 * Math.PI * noteFrequency * time);
-    }
-    
-    const { attack, decay, sustain, release } = preset.synth.envelope;
-    adsrEnvelope(buffer, attack, decay, sustain, release, duration, sampleRate);
-    
-    return buffer;
-}
-
-
-function generateDrumPart(duration, sampleRate, barCount) {
-    const totalSamples = Math.floor(duration * sampleRate);
-    const buffer = new Float32Array(totalSamples);
-    if (!drumsEnabled || Object.keys(decodedSamples).length === 0) {
-        return buffer;
-    }
-    
-    const drumPattern = [
-        { sample: "kick", time: 0, velocity: 0.8 },
-        { sample: "hat", time: 0.25, velocity: 0.4 },
-        { sample: "snare", time: 0.5, velocity: 1.0 },
-        { sample: "hat", time: 0.75, velocity: 0.4 },
-    ];
-    
-    // Add crash on the first beat of every 4th bar
-    if (barCount % 4 === 0) {
-       drumPattern.push({ sample: "crash", time: 0, velocity: 0.7 });
-    } else {
-        // Add ride on every beat in other bars
-        drumPattern.push({ sample: "ride", time: 0, velocity: 0.5 });
-        drumPattern.push({ sample: "ride", time: 0.25, velocity: 0.5 });
-        drumPattern.push({ sample: "ride", time: 0.5, velocity: 0.5 });
-        drumPattern.push({ sample: "ride", time: 0.75, velocity: 0.5 });
-    }
-
-    for (const hit of drumPattern) {
-        const sample = decodedSamples[hit.sample];
-        if (!sample) continue;
-
-        const startSample = Math.floor(hit.time * totalSamples);
-        const endSample = startSample + sample.length;
-        
-        let sampleToMix = sample;
-
-        // Check if the sample fits
-        if (endSample > totalSamples) {
-            const remainingSpace = totalSamples - startSample;
-            if (remainingSpace <= 0) continue; // No space left, skip hit
-
-            // If the main sample doesn't fit, try a shorter one
-            const shortSample = decodedSamples["hat"];
-            if (shortSample && startSample + shortSample.length <= totalSamples) {
-                sampleToMix = shortSample;
-            } else {
-                // If even the short one doesn't fit, skip this hit
-                continue;
-            }
-        }
-        
-        // Mix the sample into the buffer
-        for (let i = 0; i < sampleToMix.length; i++) {
-            if (startSample + i < totalSamples) {
-                buffer[startSample + i] += sampleToMix[i] * hit.velocity;
-            }
-        }
-    }
-    return buffer;
-}
-
-
-// --- Worker Control ---
 function resetState() {
-    console.log("Worker state reset.");
-    barCount = 0;
-    lastTickTime = 0;
-    if (tickInterval) {
-        clearInterval(tickInterval);
-        tickInterval = null;
-    }
+  state = {
+    isRunning: false,
+    instruments: { solo: "none", accompaniment: "none", bass: "none" },
+    drumsEnabled: true,
+    sampleRate: 44100,
+    lastTickTime: 0,
+    barCount: 0,
+  };
 }
 
+// Initialize state on script load
+resetState();
+
+// --- Music Generation ---
+
+function generateBassPart(buffer, { sampleRate, instruments }) {
+  if (instruments.bass !== "bass guitar") return;
+  // This is a placeholder for a real bass line generation.
+  // For now, it's a simple sine wave to represent the bass.
+  const frequency = 55.0; // A1
+  for (let i = 0; i < buffer.length; i++) {
+    const time = i / sampleRate;
+    const sampleValue = Math.sin(2 * Math.PI * frequency * time) * 0.4;
+    buffer[i] += sampleValue; // Add to buffer
+  }
+}
+
+function generateDrumPart(buffer, { sampleRate, barCount, drumsEnabled }) {
+  if (!drumsEnabled || Object.keys(samples).length === 0) return;
+
+  const tempo = 120;
+  const beatsPerBar = 4;
+  const barDuration = (60 / tempo) * beatsPerBar;
+  const totalSamples = buffer.length;
+
+  const drumPattern = [
+    { sound: "kick", time: 0.0, velocity: 0.8 },
+    { sound: "hat", time: 0.0, velocity: 0.6 },
+    { sound: "snare", time: 0.5, velocity: 1.0 },
+    { sound: "hat", time: 0.5, velocity: 0.4 },
+  ];
+
+  // Add ride cymbal on every beat in most bars
+  if (barCount % 4 !== 0) {
+    drumPattern.push({ sound: "ride", time: 0.0, velocity: 0.5 });
+    drumPattern.push({ sound: "ride", time: 0.25, velocity: 0.5 });
+    drumPattern.push({ sound: "ride", time: 0.5, velocity: 0.5 });
+    drumPattern.push({ sound: "ride", time: 0.75, velocity: 0.5 });
+  }
+
+  // Add crash cymbal on the first beat of every 4th bar
+  if (barCount % 4 === 0) {
+    drumPattern.push({ sound: "crash", time: 0.0, velocity: 0.9 });
+  }
+
+  for (const hit of drumPattern) {
+    const sample = samples[hit.sound];
+    if (!sample) continue;
+
+    const startSampleIndex = Math.floor(
+      (hit.time * barDuration * sampleRate * (CHUNK_DURATION / barDuration))
+    );
+    
+    // Check if the sample fits
+    if (startSampleIndex + sample.length > totalSamples) {
+      // If the main sample doesn't fit, try a shorter one.
+      const shortSample = samples['hat'];
+      if (shortSample && startSampleIndex + shortSample.length <= totalSamples) {
+         for (let i = 0; i < shortSample.length; i++) {
+            buffer[startSampleIndex + i] += shortSample[i] * (hit.velocity * 0.5);
+        }
+      }
+      // If even the short sample doesn't fit, skip it.
+      continue;
+    }
+
+    // Mix the sample into the buffer
+    for (let i = 0; i < sample.length; i++) {
+      buffer[startSampleIndex + i] += sample[i] * hit.velocity;
+    }
+  }
+}
+
+// --- Main Generator Loop ---
+
+function runGenerator() {
+  if (!state.isRunning) return;
+
+  const now = self.performance.now() / 1000;
+  if (now < state.lastTickTime + CHUNK_DURATION) {
+    // Not time for the next chunk yet
+    requestAnimationFrame(runGenerator);
+    return;
+  }
+  
+  const bufferSize = Math.floor(CHUNK_DURATION * state.sampleRate);
+  const audioChunk = new Float32Array(bufferSize).fill(0);
+
+  // --- Generate audio for each part ---
+  generateBassPart(audioChunk, state);
+  generateDrumPart(audioChunk, state);
+  // Future instrument parts would be called here
+
+  // --- Post chunk and schedule next run ---
+  self.postMessage({
+    type: 'chunk',
+    data: {
+      chunk: audioChunk,
+      duration: CHUNK_DURATION,
+    },
+  }, [audioChunk.buffer]);
+
+  state.barCount++;
+  state.lastTickTime += CHUNK_DURATION;
+
+  requestAnimationFrame(runGenerator);
+}
 
 function startGenerator(data) {
-    if (isRunning) return;
-    
-    resetState();
+  if (state.isRunning) return;
+  
+  resetState(); // Ensure clean state before starting
 
-    isRunning = true;
-    sampleRate = data.sampleRate;
-    instruments = data.instruments;
-    drumsEnabled = data.drumsEnabled;
-    lastTickTime = performance.now();
-
-    tickInterval = setInterval(runGenerator, 500); // Run generator every 500ms
-    console.log("Generator started");
+  state.instruments = data.instruments;
+  state.drumsEnabled = data.drumsEnabled;
+  state.sampleRate = data.sampleRate;
+  state.isRunning = true;
+  state.lastTickTime = self.performance.now() / 1000;
+  
+  console.log("Worker starting generation with state:", state);
+  runGenerator();
 }
 
 function stopGenerator() {
-    if (!isRunning) return;
-    isRunning = false;
-    resetState();
-    console.log("Generator stopped");
+    state.isRunning = false;
+    resetState(); // Reset state on stop
+    console.log("Worker stopped and state reset.");
 }
 
-
-function runGenerator() {
-    if (!isRunning) return;
-
-    const now = performance.now();
-    const duration = 2; // Generate 2 seconds of audio per chunk (4/4 time at 120bpm)
-
-    // Check if it's time to generate the next chunk
-    if (now < lastTickTime + (duration * 1000) / 2) {
-         // Don't generate too far ahead
-        return;
-    }
-
-    // Generate parts
-    const bassPart = generateSynthesizerPart(PRESETS.doomBass, duration, sampleRate);
-    const drumPart = generateDrumPart(duration, sampleRate, barCount);
-
-    // Mix parts
-    const chunk = new Float32Array(Math.floor(duration * sampleRate));
-    for (let i = 0; i < chunk.length; i++) {
-        let sample = 0;
-        if (i < bassPart.length) sample += bassPart[i] * 0.5; // Bass at 50% volume
-        if (i < drumPart.length) sample += drumPart[i] * 0.5; // Drums at 50% volume
-        // Simple clipping
-        chunk[i] = Math.max(-1, Math.min(1, sample));
-    }
-    
-    self.postMessage({ type: 'chunk', data: { chunk, duration } }, [chunk.buffer]);
-    
-    lastTickTime += duration * 1000;
-    barCount++;
-}
+// --- Worker Message Handler ---
 
 self.onmessage = (event) => {
-    const { command, data } = event.data;
-    try {
-        switch (command) {
-            case "load_samples":
-                decodedSamples = data;
-                self.postMessage({ type: "samples_loaded" });
-                break;
-            case "start":
-                startGenerator(data);
-                break;
-            case "stop":
-                stopGenerator();
-                break;
-            case "set_instruments":
-                instruments = data;
-                break;
-            case "toggle_drums":
-                drumsEnabled = data.enabled;
-                break;
-        }
-    } catch (error) {
-        self.postMessage({
-            type: "error",
-            error: `Worker failed on command ${command}: ${error.message} \n ${error.stack}`,
-        });
-    }
-};
+  const { command, data } = event.data;
 
-    
+  switch (command) {
+    case 'load_samples':
+      samples = data;
+      self.postMessage({ type: 'samples_loaded' });
+      break;
+    case 'start':
+      startGenerator(data);
+      break;
+    case 'stop':
+      stopGenerator();
+      break;
+    case 'set_instruments':
+      state.instruments = data;
+      break;
+    case 'toggle_drums':
+      state.drumsEnabled = data.enabled;
+      break;
+    default:
+      self.postMessage({
+        type: 'error',
+        error: `Unknown command: ${command}`,
+      });
+  }
+};
