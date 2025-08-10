@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/icons";
-import { Switch } from "@/components/ui/switch";
+// import { Switch } from "@/components/ui/switch"; // Removed for now
 
 export type Instruments = {
   solo: 'synthesizer' | 'piano' | 'organ';
@@ -36,7 +36,7 @@ export function AuraGroove() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingText, setLoadingText] = useState("Loading...");
-  const [drumsEnabled, setDrumsEnabled] = useState(true);
+  // const [drumsEnabled, setDrumsEnabled] = useState(true); // Removed for now
   const [instruments, setInstruments] = useState<Instruments>({
     solo: "synthesizer",
     accompaniment: "piano",
@@ -87,12 +87,18 @@ export function AuraGroove() {
     }
   };
 
+  /*
+  // To re-enable drums:
+  // 1. Uncomment this function.
+  // 2. Uncomment the Switch component in the JSX below.
+  // 3. Ensure the actual .wav files exist in the /public/assets/drums folder.
   const handleDrumsToggle = (checked: boolean) => {
     setDrumsEnabled(checked);
     if(isPlaying) {
       musicWorkerRef.current?.postMessage({ command: 'toggle_drums', data: checked });
     }
   }
+  */
 
   const handlePlay = async () => {
     setIsLoading(true);
@@ -107,7 +113,7 @@ export function AuraGroove() {
         command: 'start', 
         data: { 
           instruments, 
-          drumsEnabled,
+          // drumsEnabled, // Removed for now
           baseUrl: window.location.origin
         } 
       });
@@ -199,6 +205,11 @@ export function AuraGroove() {
               </SelectContent>
             </Select>
           </div>
+           {/*
+            // To re-enable drums:
+            // 1. Uncomment this section.
+            // 2. Uncomment the handleDrumsToggle function above.
+            // 3. Ensure the actual .wav files exist in the /public/assets/drums folder.
            <div className="flex items-center justify-between pt-2">
             <div className="flex items-center space-x-2">
                 <Switch
@@ -210,6 +221,7 @@ export function AuraGroove() {
                 <Label htmlFor="drums-enabled">Drums</Label>
             </div>
           </div>
+          */}
         </div>
          {isLoading && (
             <div className="flex flex-col items-center justify-center text-muted-foreground space-y-2 min-h-[40px]">

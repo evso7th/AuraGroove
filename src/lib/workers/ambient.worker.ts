@@ -38,8 +38,8 @@ let instruments = {
     accompaniment: 'piano',
     bass: 'bass guitar',
 };
-let drumsEnabled = false;
-let baseUrl = '';
+// let drumsEnabled = false; // Removed for now
+// let baseUrl = ''; // Removed for now
 
 const soloPrng = new PRNG(Math.random() * 1000);
 const accompanimentPrng = new PRNG(Math.random() * 1000);
@@ -50,14 +50,21 @@ const accompanimentScale = scales.ionian;
 const bassScale = scales.aeolian;
 
 
+/*
 // --- DRUM SAMPLES & SEQUENCER ---
+// To re-enable drums:
+// 1. Uncomment this entire section.
+// 2. Ensure the UI components and state are uncommented in aura-groove.tsx.
+// 3. Place actual .wav files in the /public/assets/drums folder.
 const drumSamples: { [key: string]: AudioBuffer } = {};
 let samplesLoaded = false;
 
+// This should contain the files you want to load from /public/assets/drums
 const drumSampleFiles = {
   snare: '/assets/drums/snare.wav',
 };
 
+// This defines when each drum sample plays in a 16-step sequence.
 const drumSequencerPattern = {
     snare: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
 };
@@ -72,7 +79,7 @@ async function loadDrumSamples() {
             const path = (drumSampleFiles as any)[key];
             const url = `${baseUrl}${path}`;
             
-            postMessage({ type: 'loading_status', message: `Fetching ${key} from ${url}...` });
+            postMessage({ type: 'loading_status', message: `Fetching ${key}...` });
 
             const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Request timed out')), 5000));
             
@@ -85,7 +92,6 @@ async function loadDrumSamples() {
 
             const arrayBuffer = await Promise.race([fetchPromise, timeoutPromise]) as ArrayBuffer;
 
-            // In a worker, we can't create an AudioContext, so we create a dummy one for type hints and decode.
             const tempCtx = new OfflineAudioContext(1, 1, sampleRate);
             const audioBuffer = await tempCtx.decodeAudioData(arrayBuffer);
             drumSamples[key] = audioBuffer;
@@ -96,7 +102,6 @@ async function loadDrumSamples() {
         const errorMessage = error instanceof Error ? error.message : "An unknown error occurred during sample loading";
         console.error('Worker: Sample loading failed:', errorMessage);
         postMessage({ type: 'error', message: `Sample loading failed: ${errorMessage}` });
-        // Optionally, stop generation if samples are critical
         if (generationInterval) {
             clearInterval(generationInterval);
             generationInterval = null;
@@ -129,7 +134,7 @@ function createDrumPart() {
     }
     return buffer;
 }
-
+*/
 
 // --- SYNTH CREATION ---
 type Note = { freq: number; time: number; duration: number; velocity: number };
@@ -241,14 +246,16 @@ async function generatePart() {
     const accompanimentBuffer = createSynthVoice(accompanimentNotes, partDuration, instruments.accompaniment);
     const bassBuffer = createSynthVoice(bassNotes, partDuration, instruments.bass);
     
-    const drumBuffer = createDrumPart();
+    // const drumBuffer = createDrumPart(); // Removed for now
 
     for (let i = 0; i < finalBuffer.length; i++) {
       let mixedSample = soloBuffer[i] + accompanimentBuffer[i] + bassBuffer[i];
+      /* // Uncomment to re-enable drums
       if (drumsEnabled && samplesLoaded) {
         mixedSample += drumBuffer[i];
       }
-      finalBuffer[i] = mixedSample / (drumsEnabled && samplesLoaded ? 4 : 3);
+      */
+      finalBuffer[i] = mixedSample / 3; // (drumsEnabled && samplesLoaded ? 4 : 3);
     }
         
     for (let i = 0; i < finalBuffer.length; i++) {
@@ -269,13 +276,17 @@ self.onmessage = async function(e) {
 
   if (command === 'start') {
     instruments = data.instruments;
+    /* // Uncomment to re-enable drums
     drumsEnabled = data.drumsEnabled;
     baseUrl = data.baseUrl;
+    */
     
     if (generationInterval === null) {
+      /* // Uncomment to re-enable drums
       if(drumsEnabled){
           await loadDrumSamples();
       }
+      */
       generatePart();
       generationInterval = setInterval(generatePart, (partDuration * 1000) - 20); 
     }
@@ -284,11 +295,15 @@ self.onmessage = async function(e) {
       clearInterval(generationInterval);
       generationInterval = null;
     }
+    /* // Uncomment to re-enable drums
     samplesLoaded = false;
     Object.keys(drumSamples).forEach(key => delete drumSamples[key]);
+    */
   } else if (command === 'set_instruments') {
     instruments = data;
+  /* // Uncomment to re-enable drums
   } else if (command === 'toggle_drums') {
     drumsEnabled = data;
+  */
   }
 };
