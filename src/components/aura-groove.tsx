@@ -96,52 +96,6 @@ export function AuraGroove() {
     });
   }
   
-  const loadAndSendSamples = async () => {
-    if (!audioPlayer.getAudioContext()) {
-        throw new Error("Audio context not available for decoding.");
-    }
-    setLoadingText("Loading samples...");
-    
-    const samplePath = '/assets/drums/snare.wav';
-    
-    try {
-        console.log(`Fetching sample from: ${samplePath}`);
-        const response = await fetch(samplePath);
-        if (!response.ok) {
-            throw new Error(`Failed to fetch ${samplePath}: ${response.statusText}`);
-        }
-        const arrayBuffer = await response.arrayBuffer();
-        console.log("Sample fetched. Decoding...");
-
-        // Decode on the main thread
-        const audioBuffer = await audioPlayer.getAudioContext()!.decodeAudioData(arrayBuffer);
-        console.log("Sample decoded.");
-
-        // Extract raw channel data
-        const channelData = audioBuffer.getChannelData(0);
-
-        // Send raw data to worker
-        musicWorkerRef.current?.postMessage({
-            command: 'load_samples',
-            data: {
-                snare: channelData
-            }
-        }, [channelData.buffer]); // Transferable object
-        console.log("Sent decoded sample to worker.");
-        return true;
-
-    } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
-        console.error("Error loading samples:", errorMessage);
-        toast({
-            variant: "destructive",
-            title: "Sample Load Error",
-            description: errorMessage,
-        });
-        return false;
-    }
-  }
-
   const handlePlay = async () => {
     setIsLoading(true);
 
@@ -149,12 +103,6 @@ export function AuraGroove() {
         setLoadingText("Initializing audio...");
         await audioPlayer.initialize();
         isAudioInitialized.current = true;
-    }
-    
-    const samplesLoaded = await loadAndSendSamples();
-    if (!samplesLoaded) {
-        setIsLoading(false);
-        return;
     }
     
     setLoadingText("Generating music...");
