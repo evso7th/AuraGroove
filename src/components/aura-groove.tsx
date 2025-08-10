@@ -34,7 +34,9 @@ export type Instruments = {
 const sampleUrls = {
     kick: '/assets/drums/kick_drum6.wav',
     snare: '/assets/drums/snare.wav',
-    hat: '/assets/drums/closed_hi_hat_accented.wav'
+    hat: '/assets/drums/closed_hi_hat_accented.wav',
+    crash: '/assets/drums/crash1.wav',
+    ride: '/assets/drums/cymbal1.wav',
 };
 
 export function AuraGroove() {
@@ -64,7 +66,6 @@ export function AuraGroove() {
       } else if (type === 'generation_started') {
         setIsLoading(false);
         setIsPlaying(true);
-        audioPlayer.start();
       } else if (type === 'error') {
         toast({
           variant: "destructive",
@@ -139,8 +140,9 @@ export function AuraGroove() {
       if (!audioContext) {
         throw new Error("Could not initialize AudioContext.");
       }
-
+      
       // 2. Decode samples
+      setLoadingText("Decoding samples...");
       const decodedSamples: { [key: string]: Float32Array } = {};
       const transferableObjects: Transferable[] = [];
       const sampleEntries = Object.entries(sampleArrayBuffers.current);
@@ -152,8 +154,9 @@ export function AuraGroove() {
           decodedSamples[key] = float32Array;
           transferableObjects.push(float32Array.buffer);
       }
-
+      
       // 3. Send decoded samples to worker
+      setLoadingText("Loading instruments...");
       musicWorkerRef.current?.postMessage({
           command: 'load_samples',
           data: decodedSamples
@@ -181,11 +184,18 @@ export function AuraGroove() {
         });
         return;
     }
-
-    if (!await prepareAudioAndSendSamples()) return;
+    
+    if (!audioPlayer.isInitialized) {
+        if (!await prepareAudioAndSendSamples()) {
+            handleStop();
+            return;
+        }
+    }
     
     setIsLoading(true);
     setLoadingText("Generating music...");
+    
+    audioPlayer.start();
 
     musicWorkerRef.current?.postMessage({
         command: 'start',
