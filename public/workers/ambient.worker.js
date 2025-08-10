@@ -1,67 +1,92 @@
 
-import { DrumMachine } from './drum-machine.js';
-import { Instrument } from './instrument.js';
+import { 
+    generateSynthesizer, 
+    generatePiano, 
+    generateOrgan, 
+    generateBassGuitar, 
+    mixParts 
+} from './generation.js';
 
-let drumMachine = null;
+let timerId = null;
 let instruments = {};
-let isRunning = false;
+let drumsEnabled = true;
 let sampleRate = 44100;
-let nextTickTime = 0;
-const TICK_INTERVAL = 0.5; // seconds
-const CHUNK_DURATION = TICK_INTERVAL;
+let decodedSamples = {};
 
-function generateAudioChunk() {
-    if (!isRunning) return;
+const CHUNK_DURATION = 1; // 1 second chunks
 
-    const chunkEndTime = nextTickTime + CHUNK_DURATION;
-    let combinedChunk = new Float32Array(Math.floor(CHUNK_DURATION * sampleRate)).fill(0);
+function generateNextChunk() {
+    if (!sampleRate) return;
 
-    // Generate drum chunk if enabled
-    if (drumMachine && drumMachine.isEnabled) {
-        const drumChunk = drumMachine.generate(nextTickTime, chunkEndTime, sampleRate);
-        for (let i = 0; i < drumChunk.length; i++) {
-            combinedChunk[i] += drumChunk[i];
+    const chunkSampleLength = Math.floor(CHUNK_DURATION * sampleRate);
+    let activeParts = [];
+
+    // --- Solo ---
+    if (instruments.solo && instruments.solo !== 'none') {
+        let soloPart;
+        if (instruments.solo === 'synthesizer') {
+            soloPart = generateSynthesizer(CHUNK_DURATION, sampleRate, 440, 'sawtooth');
+        } else if (instruments.solo === 'piano') {
+            soloPart = generatePiano(CHUNK_DURATION, sampleRate, 60);
+        } else if (instruments.solo === 'organ') {
+            soloPart = generateOrgan(CHUNK_DURATION, sampleRate, 60);
         }
+        if (soloPart) activeParts.push(soloPart);
     }
     
-    // Generate instrument chunks
-    for (const key in instruments) {
-        const instrument = instruments[key];
-        if (instrument.type !== 'none') {
-            const instrumentChunk = instrument.generate(nextTickTime, chunkEndTime, sampleRate);
-            for (let i = 0; i < instrumentChunk.length; i++) {
-                combinedChunk[i] += instrumentChunk[i];
+    // --- Accompaniment ---
+    if (instruments.accompaniment && instruments.accompaniment !== 'none') {
+        let accompanimentPart;
+        if (instruments.accompaniment === 'synthesizer') {
+            accompanimentPart = generateSynthesizer(CHUNK_DURATION, sampleRate, [220, 261, 329], 'sine');
+        } else if (instruments.accompaniment === 'piano') {
+            accompanimentPart = generatePiano(CHUNK_DURATION, sampleRate, [48, 52, 55]);
+        } else if (instruments.accompaniment === 'organ') {
+            accompanimentPart = generateOrgan(CHUNK_DURATION, sampleRate, [48, 52, 55]);
+        }
+        if (accompanimentPart) activeParts.push(accompanimentPart);
+    }
+    
+    // --- Bass ---
+    if (instruments.bass && instruments.bass !== 'none' && instruments.bass === 'bass guitar') {
+        const bassPart = generateBassGuitar(CHUNK_DURATION, sampleRate, 41.2); // E1
+        if (bassPart) activeParts.push(bassPart);
+    }
+    
+    // --- Drums ---
+    if (drumsEnabled && Object.keys(decodedSamples).length > 0) {
+        const drumsPart = new Float32Array(chunkSampleLength).fill(0);
+        const beatsPerSecond = 2; // 120 BPM
+        
+        for (let i = 0; i < CHUNK_DURATION * beatsPerSecond; i++) {
+            const beatTime = i / beatsPerSecond;
+            const beatSampleIndex = Math.floor(beatTime * sampleRate);
+
+            // Simple 4/4 beat
+            if (i % 4 === 0 || i % 4 === 2) { // Kick on 1 and 3
+                if (decodedSamples.kick) mixParts([drumsPart, decodedSamples.kick], 1, beatSampleIndex);
+            }
+            if (i % 4 === 1 || i % 4 === 3) { // Snare on 2 and 4
+                 if (decodedSamples.snare) mixParts([drumsPart, decodedSamples.snare], 1, beatSampleIndex);
+            }
+            // Hi-hat on every 8th note
+            if (decodedSamples.hat) {
+                 mixParts([drumsPart, decodedSamples.hat], 0.5, beatSampleIndex);
+                 mixParts([drumsPart, decodedSamples.hat], 0.5, beatSampleIndex + Math.floor(sampleRate / (beatsPerSecond * 2)));
             }
         }
+        activeParts.push(drumsPart);
     }
+
+    const finalChunk = mixParts(activeParts, chunkSampleLength);
 
     self.postMessage({
         type: 'chunk',
         data: {
-            chunk: combinedChunk,
+            chunk: finalChunk,
             duration: CHUNK_DURATION,
         },
-    }, [combinedChunk.buffer]);
-    
-    nextTickTime = chunkEndTime;
-}
-
-function start() {
-    if (isRunning) return;
-    isRunning = true;
-    nextTickTime = 0; // Reset time on start
-    
-    // Use a more robust timer loop
-    function loop() {
-        if (!isRunning) return;
-        generateAudioChunk();
-        setTimeout(loop, TICK_INTERVAL * 1000);
-    }
-    loop();
-}
-
-function stop() {
-    isRunning = false;
+    }, [finalChunk.buffer]);
 }
 
 self.onmessage = (event) => {
@@ -69,31 +94,26 @@ self.onmessage = (event) => {
 
     switch (command) {
         case 'load_samples':
-            drumMachine = new DrumMachine(data);
+            decodedSamples = data;
             self.postMessage({ type: 'samples_loaded' });
             break;
         case 'start':
+            instruments = data.instruments;
+            drumsEnabled = data.drumsEnabled;
             sampleRate = data.sampleRate;
-            if (drumMachine) {
-                drumMachine.setEnabled(data.drumsEnabled);
-            }
-            instruments['solo'] = new Instrument(data.instruments.solo);
-            instruments['accompaniment'] = new Instrument(data.instruments.accompaniment);
-            instruments['bass'] = new Instrument(data.instruments.bass);
-            start();
+
+            if (timerId) clearInterval(timerId);
+            timerId = setInterval(generateNextChunk, CHUNK_DURATION * 1000 * 0.9); // Schedule slightly faster to avoid gaps
             break;
         case 'stop':
-            stop();
-            break;
-        case 'toggle_drums':
-             if (drumMachine) {
-                drumMachine.setEnabled(data.enabled);
-            }
+            if (timerId) clearInterval(timerId);
+            timerId = null;
             break;
         case 'set_instruments':
-            instruments['solo'] = new Instrument(data.solo);
-            instruments['accompaniment'] = new Instrument(data.accompaniment);
-            instruments['bass'] = new Instrument(data.bass);
+            instruments = data;
+            break;
+        case 'toggle_drums':
+            drumsEnabled = data.enabled;
             break;
     }
 };
