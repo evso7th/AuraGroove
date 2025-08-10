@@ -32,9 +32,9 @@ export type Instruments = {
 };
 
 const sampleUrls = {
-    kick: '/assets/samples/drums/kick_drum6.wav',
-    snare: '/assets/samples/drums/snare.wav',
-    hat: '/assets/samples/drums/closed_hi_hat_accented.wav'
+    kick: '/assets/drums/kick_drum6.wav',
+    snare: '/assets/drums/snare.wav',
+    hat: '/assets/drums/closed_hi_hat_accented.wav'
 };
 
 export function AuraGroove() {
@@ -326,5 +326,3 @@ export function AuraGroove() {
     </Card>
   );
 }
-
-    
