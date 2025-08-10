@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/icons";
+import { Switch } from "@/components/ui/switch";
 
 export type Instruments = {
   solo: 'synthesizer' | 'piano' | 'organ';
@@ -33,6 +34,8 @@ export type Instruments = {
 export function AuraGroove() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingText, setLoadingText] = useState("Loading...");
+  const [drumsEnabled, setDrumsEnabled] = useState(true);
   const [instruments, setInstruments] = useState<Instruments>({
     solo: "synthesizer",
     accompaniment: "piano",
@@ -57,8 +60,13 @@ export function AuraGroove() {
             description: message,
          });
          handleStop();
-      } else if (type === 'loading_complete') {
+      } else if (type === 'loading_start') {
+        setLoadingText("Loading samples...");
+        setIsLoading(true);
+      }
+      else if (type === 'loading_complete') {
         setIsLoading(false);
+        setLoadingText("Loading...");
         if (!audioPlayer.getIsPlaying()) {
           audioPlayer.start();
           setIsPlaying(true);
@@ -77,8 +85,17 @@ export function AuraGroove() {
   const handleInstrumentChange = (part: keyof Instruments) => (value: Instruments[keyof Instruments]) => {
     const newInstruments = { ...instruments, [part]: value };
     setInstruments(newInstruments);
-    musicWorkerRef.current?.postMessage({ command: 'set_instruments', data: newInstruments });
+     if(isPlaying) {
+      musicWorkerRef.current?.postMessage({ command: 'set_instruments', data: newInstruments });
+    }
   };
+
+  const handleDrumsToggle = (checked: boolean) => {
+    setDrumsEnabled(checked);
+    if(isPlaying) {
+      musicWorkerRef.current?.postMessage({ command: 'toggle_drums', data: checked });
+    }
+  }
   
   const handlePlay = async () => {
     setIsLoading(true);
@@ -88,7 +105,7 @@ export function AuraGroove() {
         isInitializedRef.current = true;
       }
       
-      musicWorkerRef.current?.postMessage({ command: 'start', data: { instruments, drumsEnabled: false } });
+      musicWorkerRef.current?.postMessage({ command: 'start', data: { instruments, drumsEnabled } });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
       toast({
@@ -132,7 +149,7 @@ export function AuraGroove() {
             <Select
               value={instruments.solo}
               onValueChange={handleInstrumentChange('solo')}
-              disabled={isLoading || isPlaying}
+              disabled={isLoading}
             >
               <SelectTrigger id="solo-instrument" className="col-span-2">
                 <SelectValue placeholder="Select instrument" />
@@ -149,7 +166,7 @@ export function AuraGroove() {
              <Select
               value={instruments.accompaniment}
               onValueChange={handleInstrumentChange('accompaniment')}
-              disabled={isLoading || isPlaying}
+              disabled={isLoading}
             >
               <SelectTrigger id="accompaniment-instrument" className="col-span-2">
                 <SelectValue placeholder="Select instrument" />
@@ -166,7 +183,7 @@ export function AuraGroove() {
              <Select
               value={instruments.bass}
               onValueChange={handleInstrumentChange('bass')}
-              disabled={isLoading || isPlaying}
+              disabled={isLoading}
             >
               <SelectTrigger id="bass-instrument" className="col-span-2">
                 <SelectValue placeholder="Select instrument" />
@@ -176,11 +193,20 @@ export function AuraGroove() {
               </SelectContent>
             </Select>
           </div>
+           <div className="flex items-center justify-between pt-2">
+            <Label htmlFor="drums-enabled" className="text-right">Drums</Label>
+            <Switch
+              id="drums-enabled"
+              checked={drumsEnabled}
+              onCheckedChange={handleDrumsToggle}
+              disabled={isLoading}
+            />
+          </div>
         </div>
          {isLoading && (
             <div className="flex flex-col items-center justify-center text-muted-foreground space-y-2 min-h-[40px]">
                 <Loader2 className="h-6 w-6 animate-spin" />
-                <p>Loading...</p>
+                <p>{loadingText}</p>
             </div>
         )}
         {!isLoading && !isPlaying && (

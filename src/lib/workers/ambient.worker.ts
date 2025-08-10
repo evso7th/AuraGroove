@@ -36,52 +36,55 @@ let instruments = {
     accompaniment: 'piano',
     bass: 'bass guitar',
 };
-// let drumsEnabled = true; // Drums are temporarily disabled
+let drumsEnabled = true;
 
 const soloPrng = new PRNG(Math.random() * 1000);
 const accompanimentPrng = new PRNG(Math.random() * 1000);
 const bassPrng = new PRNG(Math.random() * 1000);
-// const drumPrng = new PRNG(Math.random() * 1000);
+const drumPrng = new PRNG(Math.random() * 1000);
 
 const soloScale = scales.minorPentatonic;
 const accompanimentScale = scales.ionian;
 const bassScale = scales.aeolian;
 
-// --- DRUM SAMPLES (Temporarily Disabled) ---
-/*
+// --- DRUM SAMPLES ---
 const drumSampleFiles = {
-    kick: '/assets/drums/kickdrum.wav',
-    snare: '/assets/drums/snare.wav',
-    closedHat: '/assets/drums/closed hi hat accented.wav',
-    openHat: '/assets/drums/Open HH (Top) (2).wav',
-    crash: '/assets/drums/Crash (1).wav',
+    kick: '/drums/kickdrum.wav',
+    snare: '/drums/snare.wav',
+    closedHat: '/drums/closed hi hat accented.wav',
+    openHat: '/drums/Open HH (Top) (2).wav',
+    crash: '/drums/Crash (1).wav',
 };
-const drumBuffers: { [key: string]: Float32Array } = {};
+
+const drumBuffers: { [key: string]: AudioBuffer } = {};
 let drumsLoaded = false;
+let audioContext: OfflineAudioContext | null = null;
 
 async function loadDrumSamples() {
+    if (drumsLoaded) return;
+    postMessage({ type: 'loading_start' });
     try {
+        // Create a dummy audio context to decode audio data
+        const context = new (self.OfflineAudioContext || (self as any).webkitOfflineAudioContext)(1, 1, sampleRate);
+        
         const promises = Object.entries(drumSampleFiles).map(async ([name, url]) => {
             const response = await fetch(url);
              if (!response.ok) {
                 throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
             }
             const arrayBuffer = await response.arrayBuffer();
-            // This is a minimal polyfill for Safari which doesn't have a promise-based decodeAudioData yet
-            const dummyContext = new OfflineAudioContext(1, 1, sampleRate);
-            const decoded = await dummyContext.decodeAudioData(arrayBuffer);
-            drumBuffers[name] = decoded.getChannelData(0);
+            const decodedBuffer = await context.decodeAudioData(arrayBuffer);
+            drumBuffers[name] = decodedBuffer;
         });
         await Promise.all(promises);
         drumsLoaded = true;
         console.log("Drum samples loaded successfully.");
     } catch (error) {
         console.error("Error loading drum samples:", error);
-        postMessage({ type: 'error', message: 'Failed to load drum samples.' });
-        drumsLoaded = false; // Ensure we know loading failed
+        postMessage({ type: 'error', message: 'Failed to load drum samples. Check network tab and file paths.' });
+        drumsLoaded = false;
     }
 }
-*/
 
 // --- SYNTH CREATION ---
 type Note = { freq: number; time: number; duration: number; velocity: number };
@@ -154,16 +157,17 @@ function createSynthVoice(notes: Note[], totalDuration: number, instrument: stri
 
     return buffer;
 }
-/*
-function mix(buffer: Float32Array, sample: Float32Array, time: number, volume: number = 1.0) {
+
+function mix(buffer: Float32Array, sample: AudioBuffer, time: number, volume: number = 1.0) {
     const startSample = Math.floor(time * sampleRate);
-    for (let i = 0; i < sample.length; i++) {
+    const sampleData = sample.getChannelData(0);
+    for (let i = 0; i < sampleData.length; i++) {
         const bufferIndex = startSample + i;
         if (bufferIndex >= buffer.length) break;
-        buffer[bufferIndex] += sample[i] * volume;
+        buffer[bufferIndex] += sampleData[i] * volume;
     }
 }
-*/
+
 // --- MUSIC GENERATION ---
 async function generatePart() {
   try {
@@ -210,27 +214,25 @@ async function generatePart() {
       finalBuffer[i] = soloBuffer[i] + accompanimentBuffer[i] + bassBuffer[i];
     }
     
-    // --- Drums (Temporarily Disabled) ---
-    /*
+    // --- Drums ---
     if (drumsEnabled && drumsLoaded) {
         // Simple 4/4 beat
         for (let i = 0; i < 16; i++) {
              const time = i * 0.25; // 16th notes
             // Kick on 1, 3
             if (i % 8 === 0) {
-                mix(finalBuffer, drumBuffers.kick, time, 0.9);
+                 if (drumPrng.next() > 0.1) mix(finalBuffer, drumBuffers.kick, time, 0.9);
             }
             // Snare on 2 and 4
             if (i === 4 || i === 12) {
-                 mix(finalBuffer, drumBuffers.snare, time, 0.7);
+                 if (drumPrng.next() > 0.2) mix(finalBuffer, drumBuffers.snare, time, 0.7);
             }
             // Closed hats on every 8th note
              if (i % 2 === 0) {
-                mix(finalBuffer, drumBuffers.closedHat, time, 0.5);
+                 if (drumPrng.next() > 0.15) mix(finalBuffer, drumBuffers.closedHat, time, 0.5);
             }
         }
     }
-    */
     
     // Clipping to prevent distortion
     for (let i = 0; i < finalBuffer.length; i++) {
@@ -251,13 +253,14 @@ self.onmessage = async function(e) {
 
   if (command === 'start') {
     instruments = data.instruments;
-    // drumsEnabled = data.drumsEnabled; // Drums are temporarily disabled
+    drumsEnabled = data.drumsEnabled;
     if (generationInterval === null) {
-      /* Drums are temporarily disabled
       if (!drumsLoaded && drumsEnabled) {
           await loadDrumSamples();
+          // If loading failed, don't start the music. The error message is already sent.
+          if (!drumsLoaded) return;
       }
-      */
+      
       postMessage({ type: 'loading_complete' });
       generatePart(); // Generate first part immediately
       generationInterval = setInterval(generatePart, (partDuration * 1000) - 20); 
@@ -270,12 +273,11 @@ self.onmessage = async function(e) {
   } else if (command === 'set_instruments') {
     instruments = data;
   } 
-  /* Drums are temporarily disabled
   else if (command === 'toggle_drums') {
     drumsEnabled = data;
     if(drumsEnabled && !drumsLoaded) {
-        loadDrumSamples(); // Load if enabled and not already loaded
+        // Asynchronously load samples if they are enabled and not yet loaded
+        loadDrumSamples(); 
     }
   }
-  */
 };
