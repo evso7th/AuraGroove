@@ -1,7 +1,5 @@
 // @ts-nocheck
 
-// --- SINGLE WORKER FOR ALL MUSIC GENERATION ---
-
 // Simple pseudo-random number generator for deterministic sequences
 class PRNG {
   private seed: number;
@@ -43,6 +41,7 @@ const soloNotesPerPart = 8;
 const accompanimentNotesPerPart = 2;
 const bassNotesPerPart = 2;
 
+let generationInterval: number | null = null;
 
 function generateMusicPart() {
     const notes = [];
@@ -59,8 +58,9 @@ function generateMusicPart() {
 
     // Generate accompaniment chords
     for (let i = 0; i < accompanimentNotesPerPart; i++) {
-        const rootNote = mapValueToNote(accompanimentPrng.next(), accompanimentScale, 3);
-        const thirdNote = mapValueToNote(accompanimentPrng.next(), accompanimentScale, 3);
+        const rootNoteIndex = Math.floor(accompanimentPrng.next() * accompanimentScale.length);
+        const rootNote = `${accompanimentScale[rootNoteIndex]}3`;
+        const thirdNote = `${accompanimentScale[(rootNoteIndex + 2) % accompanimentScale.length]}3`;
         notes.push({
             time: i * 2, // half notes
             note: [rootNote, thirdNote],
@@ -88,11 +88,16 @@ function generateMusicPart() {
     postMessage({ type: 'music_part', notes, partDuration });
 }
 
-
 self.onmessage = function(e) {
-  if (e.data.command === 'generate') {
-    generateMusicPart();
+  if (e.data.command === 'start') {
+    if (generationInterval === null) {
+        generateMusicPart(); // Generate immediately
+        generationInterval = setInterval(generateMusicPart, partDuration * 1000);
+    }
   } else if (e.data.command === 'stop') {
-    // No active timers to stop, worker is passive
+    if (generationInterval !== null) {
+      clearInterval(generationInterval);
+      generationInterval = null;
+    }
   }
 };

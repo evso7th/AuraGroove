@@ -29,7 +29,7 @@ class AudioPlayer {
   private masterVolume?: Tone.Volume;
   private reverb?: Tone.Reverb;
   private delay?: Tone.FeedbackDelay;
-  private partDuration: number = 4; // in seconds, assuming 1 measure at 120bpm
+  private nextPartStartTime = 0;
 
   constructor() {}
 
@@ -43,20 +43,14 @@ class AudioPlayer {
     this.reverb = new Tone.Reverb({ decay: 8, wet: 0.5 }).connect(this.masterVolume);
     this.delay = new Tone.FeedbackDelay("8n", 0.4).connect(this.reverb);
 
-    this.setInstrument('solo', instruments.solo);
-    this.setInstrument('accompaniment', instruments.accompaniment);
-    this.setInstrument('bass', instruments.bass);
+    this.setInstruments(instruments);
 
-    Tone.Transport.bpm.value = 120; // Set a consistent tempo
+    Tone.Transport.bpm.value = 120;
     this.isInitialized = true;
   }
   
   public get context() {
     return Tone.context;
-  }
-
-  public getPartDuration() {
-    return this.partDuration;
   }
 
   private createSynth(instrument: InstrumentType): Tone.PolySynth {
@@ -96,20 +90,20 @@ class AudioPlayer {
     return bassSynth;
   }
 
-  public setInstrument(part: Part, instrument: InstrumentType) {
+  public setInstruments(instruments: Instruments) {
     if (!this.masterVolume) return;
 
-    this.synths[part]?.dispose();
-
-    if (part === 'bass') {
-        this.synths.bass = this.createBassSynth();
-    } else {
-        this.synths[part] = this.createSynth(instrument);
-    }
+    Object.values(this.synths).forEach(synth => synth?.dispose());
+    
+    this.synths.solo = this.createSynth(instruments.solo);
+    this.synths.accompaniment = this.createSynth(instruments.accompaniment);
+    this.synths.bass = this.createBassSynth();
   }
 
-  public schedulePart(notes: Note[], startTime: number) {
+  public schedulePart(notes: Note[], partDuration: number) {
       if (!this.isInitialized) return;
+      
+      const startTime = this.nextPartStartTime;
 
       notes.forEach(noteEvent => {
           const synth = this.synths[noteEvent.part];
@@ -117,18 +111,14 @@ class AudioPlayer {
               synth.triggerAttackRelease(noteEvent.note, noteEvent.duration, startTime + noteEvent.time);
           }
       });
-  }
-
-  public scheduleTransportEvent(callback: (time: number) => void, interval: Tone.Unit.Time) {
-      return Tone.Transport.scheduleRepeat(callback, interval);
-  }
-
-  public clearTransportEvent(eventId: number) {
-      Tone.Transport.clear(eventId);
+      
+      this.nextPartStartTime += partDuration;
   }
 
   public start() {
-      if (this.isInitialized && Tone.Transport.state !== 'started') {
+      if (!this.isInitialized) return;
+      this.nextPartStartTime = this.context.currentTime + 0.2; // Add small buffer
+      if (Tone.Transport.state !== 'started') {
           Tone.Transport.start();
       }
   }
@@ -138,14 +128,15 @@ class AudioPlayer {
 
     if (Tone.Transport.state === 'started') {
         Tone.Transport.stop();
+        Tone.Transport.cancel(0);
     }
-    Tone.Transport.cancel(0);
-
+    
     Object.values(this.synths).forEach(synth => {
       if (synth) {
         synth.releaseAll();
       }
     });
+    this.nextPartStartTime = 0;
   }
 }
 
