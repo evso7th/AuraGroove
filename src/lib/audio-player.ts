@@ -58,7 +58,7 @@ class AudioPlayer {
       }
       
       if (bufferData.length === 0) {
-        console.warn("Attempted to schedule an empty buffer.");
+        // This was causing the crash. Ignore empty buffers.
         return;
       }
       
