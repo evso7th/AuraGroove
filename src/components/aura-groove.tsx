@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Loader2, Music, Pause } from "lucide-react";
+import { Loader2, Music, Pause, Cymbals, Speaker } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,12 +24,19 @@ import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/icons";
 import { Switch } from "@/components/ui/switch";
 import { audioPlayer } from "@/lib/audio-player";
+import { Slider } from "@/components/ui/slider";
 
 export type Instruments = {
   solo: 'synthesizer' | 'piano' | 'organ' | 'none';
   accompaniment: 'synthesizer' | 'piano' | 'organ' | 'none';
   bass: 'bass guitar' | 'none';
 };
+
+export type DrumSettings = {
+    enabled: boolean;
+    pattern: 'basic' | 'breakbeat' | 'slow' | 'heavy';
+    volume: number;
+}
 
 const sampleUrls = {
     kick: '/assets/drums/kick_drum6.wav',
@@ -46,7 +53,11 @@ export function AuraGroove() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingText, setLoadingText] = useState("");
-  const [drumsEnabled, setDrumsEnabled] = useState(true);
+  const [drumSettings, setDrumSettings] = useState<DrumSettings>({
+      enabled: true,
+      pattern: 'basic',
+      volume: 0.8,
+  });
   const [instruments, setInstruments] = useState<Instruments>({
     solo: "none",
     accompaniment: "none",
@@ -99,16 +110,7 @@ export function AuraGroove() {
       
       if (type === 'chunk') {
         audioPlayer.schedulePart(data.chunk, data.duration);
-      } else if (type === 'samples_loaded') {
-        setLoadingText("Generating music...");
-        worker.postMessage({
-            command: 'start',
-            data: {
-                instruments,
-                drumsEnabled,
-                sampleRate: audioPlayer.getAudioContext()?.sampleRate || 44100
-            }
-        });
+      } else if (type === 'started') {
         audioPlayer.start();
         setIsLoading(false);
         setIsPlaying(true);
@@ -132,9 +134,9 @@ export function AuraGroove() {
         audioPlayer.stop();
       }
     };
-  }, [toast, instruments, drumsEnabled]); // Re-run if instruments/drums settings change while not playing
+  }, [toast]); 
   
-  const handleInstrumentChange = useCallback((part: keyof Instruments) => (value: Instruments[keyof Instruments]) => {
+  const handleInstrumentChange = useCallback((part: keyof Instruments, value: Instruments[keyof Instruments]) => {
     const newInstruments = { ...instruments, [part]: value };
     setInstruments(newInstruments);
      if (isPlaying) {
@@ -145,15 +147,17 @@ export function AuraGroove() {
     }
   }, [instruments, isPlaying]);
 
-  const handleDrumsToggle = useCallback((checked: boolean) => {
-    setDrumsEnabled(checked);
+ const handleDrumsSettingChange = useCallback((key: keyof DrumSettings, value: any) => {
+    const newDrumSettings = { ...drumSettings, [key]: value };
+    setDrumSettings(newDrumSettings);
     if (isPlaying) {
         musicWorkerRef.current?.postMessage({
-            command: 'toggle_drums',
-            data: { enabled: checked }
+            command: 'set_drums',
+            data: newDrumSettings,
         });
     }
-  }, [isPlaying]);
+  }, [drumSettings, isPlaying]);
+
 
   const prepareAndStart = useCallback(async () => {
     setIsLoading(true);
@@ -166,22 +170,24 @@ export function AuraGroove() {
         throw new Error("Could not initialize AudioContext.");
       }
       
-      setLoadingText("Decoding samples...");
-      const decodedSamples: { [key: string]: Float32Array } = {};
-      const transferableObjects: Transferable[] = [];
+      setLoadingText("Initializing worker...");
       
-      for (const [key, arrayBuffer] of Object.entries(sampleArrayBuffers.current)) {
-          const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0)); 
-          const float32Array = audioBuffer.getChannelData(0);
-          decodedSamples[key] = float32Array;
-          transferableObjects.push(float32Array.buffer);
-      }
-      
-      setLoadingText("Loading instruments...");
       musicWorkerRef.current?.postMessage({
-          command: 'load_samples',
-          data: decodedSamples
-      }, transferableObjects);
+        command: 'init',
+        data: {
+          sampleRate: audioContext.sampleRate,
+          samples: sampleArrayBuffers.current,
+        }
+      });
+      
+      setLoadingText("Generating music...");
+      musicWorkerRef.current?.postMessage({
+          command: 'start',
+          data: {
+              instruments,
+              drumSettings
+          }
+      });
 
     } catch (error) {
         console.error("Failed to prepare audio:", error);
@@ -192,7 +198,7 @@ export function AuraGroove() {
         });
         setIsLoading(false);
     }
-  }, [toast]);
+  }, [toast, instruments, drumSettings]);
 
   const handleStop = useCallback(() => {
     musicWorkerRef.current?.postMessage({ command: 'stop' });
@@ -218,7 +224,7 @@ export function AuraGroove() {
   }, [isPlaying, handleStop, prepareAndStart, toast]);
 
   return (
-    <Card className="w-full max-w-md shadow-2xl">
+    <Card className="w-full max-w-lg shadow-2xl">
       <CardHeader className="text-center">
         <div className="mx-auto mb-4">
             <Logo className="h-16 w-16" />
@@ -227,12 +233,13 @@ export function AuraGroove() {
         <CardDescription>AI-powered ambient music generator</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="grid gap-4">
+        <div className="space-y-4 rounded-lg border p-4">
+           <h3 className="text-lg font-medium text-primary">Instruments</h3>
            <div className="grid grid-cols-3 items-center gap-4">
             <Label htmlFor="solo-instrument" className="text-right">Solo</Label>
             <Select
               value={instruments.solo}
-              onValueChange={handleInstrumentChange('solo')}
+              onValueChange={(v) => handleInstrumentChange('solo', v as Instruments['solo'])}
               disabled={isLoading || isPlaying}
             >
               <SelectTrigger id="solo-instrument" className="col-span-2">
@@ -250,7 +257,7 @@ export function AuraGroove() {
             <Label htmlFor="accompaniment-instrument" className="text-right">Accompaniment</Label>
              <Select
               value={instruments.accompaniment}
-              onValueChange={handleInstrumentChange('accompaniment')}
+              onValueChange={(v) => handleInstrumentChange('accompaniment', v as Instruments['accompaniment'])}
               disabled={isLoading || isPlaying}
             >
               <SelectTrigger id="accompaniment-instrument" className="col-span-2">
@@ -268,7 +275,7 @@ export function AuraGroove() {
             <Label htmlFor="bass-instrument" className="text-right">Bass</Label>
              <Select
               value={instruments.bass}
-              onValueChange={handleInstrumentChange('bass')}
+              onValueChange={(v) => handleInstrumentChange('bass', v as Instruments['bass'])}
               disabled={isLoading || isPlaying}
             >
               <SelectTrigger id="bass-instrument" className="col-span-2">
@@ -280,20 +287,50 @@ export function AuraGroove() {
               </SelectContent>
             </Select>
           </div>
-           
-           <div className="flex items-center justify-between pt-2">
-            <div className="flex items-center space-x-2">
-                <Switch
-                id="drums-enabled"
-                checked={drumsEnabled}
-                onCheckedChange={handleDrumsToggle}
-                disabled={isLoading || isPlaying}
-                />
-                <Label htmlFor="drums-enabled">Drums</Label>
-            </div>
-          </div>
-          
         </div>
+
+        <div className="space-y-4 rounded-lg border p-4">
+             <h3 className="text-lg font-medium text-primary flex items-center gap-2"><Cymbals className="h-5 w-5"/> Drums</h3>
+             <div className="flex items-center justify-between pt-2">
+                <Label htmlFor="drums-enabled">Enable Drums</Label>
+                <Switch
+                    id="drums-enabled"
+                    checked={drumSettings.enabled}
+                    onCheckedChange={(c) => handleDrumsSettingChange('enabled', c)}
+                    disabled={isLoading}
+                />
+            </div>
+            <div className="grid grid-cols-3 items-center gap-4">
+                <Label htmlFor="drum-pattern" className="text-right">Pattern</Label>
+                <Select
+                    value={drumSettings.pattern}
+                    onValueChange={(v) => handleDrumsSettingChange('pattern', v)}
+                    disabled={isLoading || !drumSettings.enabled}
+                >
+                    <SelectTrigger id="drum-pattern" className="col-span-2">
+                        <SelectValue placeholder="Select pattern" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="basic">Basic</SelectItem>
+                        <SelectItem value="breakbeat">Breakbeat</SelectItem>
+                        <SelectItem value="slow">Slow</SelectItem>
+                        <SelectItem value="heavy">Heavy</SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
+            <div className="grid grid-cols-3 items-center gap-4">
+                <Label className="text-right flex items-center gap-1.5"><Speaker className="h-4 w-4"/> Volume</Label>
+                <Slider
+                    defaultValue={[drumSettings.volume]}
+                    max={1}
+                    step={0.05}
+                    onValueChange={(v) => handleDrumsSettingChange('volume', v[0])}
+                    className="col-span-2"
+                    disabled={isLoading || !drumSettings.enabled}
+                />
+            </div>
+        </div>
+         
          {(isLoading || (isPlaying && loadingText)) && (
             <div className="flex flex-col items-center justify-center text-muted-foreground space-y-2 min-h-[40px]">
                 <Loader2 className="h-6 w-6 animate-spin" />
@@ -331,5 +368,3 @@ export function AuraGroove() {
     </Card>
   );
 }
-
-    

@@ -1,775 +1,311 @@
-Глубокая проработка: "Iron Man" + Mike Oldfield = Гипнотический прогрессив
-🎯 Концепция стиля:
-Тяжелый рифф Iron Man + Прогрессивные текстуры Mike Oldfield = Гипнотический транс с эволюцией
+/**
+ * @file AuraGroove Ambient Music Worker
+ *
+ * This worker operates on a microservice-style architecture, inspired by the user's feedback.
+ * Each musical component is an isolated entity responsible for a single task.
+ *
+ * Core Entities:
+ * 1.  MessageBus (self): The "Kafka" of the worker. Handles all communication
+ *     between the main thread and the worker's internal systems.
+ *
+ * 2.  Scheduler: The central "conductor" or "event loop". It wakes up at regular
+ *     intervals, determines what musical data is needed, and coordinates the other
+ *     entities. It doesn't generate music itself, only directs the flow.
+ *
+ * 3.  Instrument Generators (e.g., DrumGenerator, BassGenerator): These are the "composers".
+ *     They take a time signature and a pattern name and return a "score" - a simple
+ *     array of note events (`{ time, sample, velocity }`). They are stateless and
+ *     know nothing about audio rendering.
+ *
+ * 4.  PatternProvider: The "music sheet library". It holds all rhythmic and melodic
+ *     patterns. It's a simple data store that the Instrument Generators query.
+ *
+ * 5.  AudioRenderer: The "audio engine". Its ONLY job is to take a score (from any
+ *     generator) and "render" it into a raw audio buffer (Float32Array). It handles
+ *     mixing, volume, and sample placement. It is completely decoupled from musical logic.
+ *
+ * 6.  SampleBank: A repository for decoded audio samples, ensuring they are ready for
+ *     the AudioRenderer to use instantly.
+ *
+ * Data Flow on Start:
+ * - Main thread sends 'init' with samples and sampleRate.
+ * - Worker decodes samples into SampleBank.
+ * - Main thread sends 'start' with instrument/drum settings.
+ * - Scheduler starts its loop.
+ * - In each loop:
+ *   - Scheduler asks the appropriate generators for their scores for the next time slice.
+ *   - Generators ask PatternProvider for their patterns.
+ *   - Generators create their scores and return them to the scheduler.
+ *   - Scheduler passes all scores to the AudioRenderer.
+ *   - AudioRenderer creates a blank audio chunk, "paints" the samples from each score onto it, and returns the mixed chunk.
+ *   - Scheduler posts the final audio chunk back to the main thread.
+ *
+ * This architecture ensures that changing a drum pattern CANNOT break the audio renderer,
+ * and changing the audio renderer CANNOT break the musical logic. Each part is
+ * independent, testable, and replaceable, following the user's core architectural principle.
+ */
 
-Темп: 60 BPM (лучше для глубокого гипноза)
-60 BPM = 1 удар в секунду = идеальный пульс для транса
-70 BPM = слишком активно для гипноза
-🎵 Музыкальная структура:
-Основа:
-
-
-1
-2
-3
-Tempo: 60 BPM
-Time Signature: 4/4
-Key: E minor (как в Iron Man)
-Секционная структура (12 минут):
-
-
-1
-2
-3
-4
-5
-6
-[0:00-2:00]   Вступление (чистый Iron Man рифф)
-[2:00-4:00]   Первый уровень (добавление текстур)
-[4:00-6:00]   Второй уровень (Oldfield прогрессии)
-[6:00-8:00]   Третий уровень (полифония)
-[8:00-10:00]  Кульминация (максимальная плотность)
-[10:00-12:00] Развязка (возврат к простоте)
-🎸 1. Iron Man рифф (основа)
-Классический рифф:
-js
-
-
-1
-2
-3
-4
-5
-6
-7
-⌄
-// 4 такта, повторяется
-const ironManRiff = [
-  { note: 'E1', time: 0, duration: '2n', velocity: 0.9 },
-  { note: 'E1', time: 2, duration: '2n', velocity: 0.9 },
-  { note: 'E1', time: 4, duration: '1n', velocity: 0.9 },
-  { note: 'G1', time: 6, duration: '2n', velocity: 0.8 }
-];
-Эволюция риффа:
-js
-
-
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-⌄
-⌄
-⌄
-⌄
-⌄
-// Уровень 1: Чистый рифф
-// Уровень 2: Добавление октав
-// Уровень 3: Арпеджио элементы
-// Уровень 4: Полиритмия
-
-class RiffEvolver {
-  evolveRiff(level) {
-    switch(level) {
-      case 1:
-        return this.basicRiff();
-      case 2:
-        return this.addOctaves();
-      case 3:
-        return this.addArpeggios();
-      case 4:
-        return this.addPolyrhythms();
-    }
-  }
-  
-  addOctaves() {
-    return [
-      { note: ['E1', 'E2'], time: 0, duration: '2n', velocity: 0.9 },
-      { note: ['E1', 'E2'], time: 2, duration: '2n', velocity: 0.9 },
-      // ...
-    ];
-  }
-}
-🌀 2. Mike Oldfield текстуры
-Характерные элементы:
-Спиральные мелодии
-Наложенные ритмы
-Постепенное нарастание
-Множественные инструменты
-Спиральная мелодия:
-js
-
-
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-29
-30
-31
-32
-33
-34
-35
-⌄
-⌄
-⌄
-⌄
-⌄
-⌄
-⌄
-class SpiralMelodyGenerator {
-  generateSpiral(scale = 'E minor', octaves = 3, speed = '8n') {
-    const notes = this.generateScale(scale, octaves);
-    const spiral = [];
-    
-    // Создаем спиральную структуру
-    for (let i = 0; i < notes.length * 2; i++) {
-      const index = i % notes.length;
-      const octaveOffset = Math.floor(i / notes.length) * 12;
-      
-      spiral.push({
-        note: notes[index] + octaveOffset,
-        time: i * Tone.Time(speed).toSeconds(),
-        duration: speed,
-        velocity: 0.6 + (i / notes.length) * 0.2
-      });
-    }
-    
-    return spiral;
-  }
-  
-  generateScale(scaleName, octaves) {
-    // E minor: E, F#, G, A, B, C, D
-    const intervals = [0, 2, 3, 5, 7, 8, 10];
-    const notes = [];
-    
-    for (let octave = 0; octave < octaves; octave++) {
-      intervals.forEach(interval => {
-        notes.push(interval + (octave * 12));
-      });
-    }
-    
-    return notes;
-  }
-}
-🎛️ 3. Звуковая палитра "Iron Man + Oldfield"
-Основные слои:
-A) Тяжелый бас (Iron Man):
-js
-
-
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-⌄
-⌄
-⌄
-⌄
-const PRESET_HEAVY_BASS = {
-  synth: {
-    oscillator: { type: 'sine' },
-    envelope: { 
-      attack: 0.05,
-      decay: 0.3,
-      sustain: 0.9,
-      release: 1.5
-    }
-  },
-  effects: [
-    { type: 'distortion', amount: 0.1 },
-    { type: 'filter', frequency: 120, type: 'lowpass' }
-  ],
-  color: '#8B0000' // Темно-красный
+// --- 1. PatternProvider (The Music Sheet Library) ---
+const PatternProvider = {
+    drumPatterns: {
+        basic: [
+            { sample: 'kick', time: 0 },
+            { sample: 'hat', time: 0.5 },
+            { sample: 'snare', time: 1 },
+            { sample: 'hat', time: 1.5 },
+            { sample: 'kick', time: 2 },
+            { sample: 'hat', time: 2.5 },
+            { sample: 'snare', time: 3 },
+            { sample: 'hat', time: 3.5 },
+        ],
+        breakbeat: [
+            { sample: 'kick', time: 0 },
+            { sample: 'hat', time: 0.5 },
+            { sample: 'kick', time: 0.75 },
+            { sample: 'snare', time: 1 },
+            { sample: 'hat', time: 1.5 },
+            { sample: 'kick', time: 2 },
+            { sample: 'snare', time: 2.5 },
+            { sample: 'hat', time: 3 },
+            { sample: 'snare', time: 3.25 },
+            { sample: 'hat', time: 3.5 },
+        ],
+        slow: [
+            { sample: 'kick', time: 0 },
+            { sample: 'hat', time: 1 },
+            { sample: 'snare', time: 2 },
+            { sample: 'hat', time: 3 },
+        ],
+        heavy: [
+            { sample: 'kick', time: 0, velocity: 1.0 },
+            { sample: 'ride', time: 0.5 },
+            { sample: 'snare', time: 1, velocity: 1.0 },
+            { sample: 'ride', time: 1.5 },
+            { sample: 'kick', time: 2, velocity: 1.0 },
+            { sample: 'ride', time: 2.5 },
+            { sample: 'snare', time: 3, velocity: 1.0 },
+            { sample: 'ride', time: 3.5 },
+        ],
+    },
+    getDrumPattern(name) {
+        return this.drumPatterns[name] || this.drumPatterns.basic;
+    },
 };
-B) Спиральные гитары (Oldfield):
-js
 
+// --- 2. Instrument Generators (The Composers) ---
+class DrumGenerator {
+    static createScore(patternName, barNumber, totalBars, beatsPerBar = 4) {
+        const pattern = PatternProvider.getDrumPattern(patternName);
+        let score = [...pattern];
 
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-⌄
-⌄
-⌄
-⌄
-⌄
-const PRESET_SPIRAL_GUITAR = {
-  synth: {
-    type: 'poly',
-    voices: 4,
-    settings: {
-      oscillator: { type: 'sawtooth' },
-      envelope: {
-        attack: 0.01,
-        decay: 0.5,
-        sustain: 0.7,
-        release: 1.0
-      }
+        // Add a crash cymbal on the first beat of every 4th bar
+        if (barNumber % 4 === 0) {
+            // Remove any other drum hit at time 0 to avoid conflict
+            score = score.filter(note => note.time !== 0);
+            score.push({ sample: 'crash', time: 0, velocity: 0.8 });
+        }
+        
+        return score;
     }
-  },
-  effects: [
-    { type: 'chorus', frequency: 0.3, depth: 0.4 },
-    { type: 'delay', delayTime: '8n', feedback: 0.3 },
-    { type: 'reverb', decay: 4, wet: 0.3 }
-  ],
-  color: '#4169E1' // Королевский синий
-};
-C) Атмосферные пэды:
-js
+}
 
-
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-⌄
-⌄
-⌄
-⌄
-⌄
-const PRESET_ATMOSPHERIC_PAD = {
-  synth: {
-    type: 'fm',
-    voices: 3,
-    settings: {
-      harmonicity: 3,
-      modulationIndex: 8,
-      envelope: {
-        attack: 2.0,
-        decay: 1.5,
-        sustain: 0.4,
-        release: 3.0
-      }
+class BassGenerator {
+     static createScore(rootNote = 'E', beatsPerBar = 4) {
+        // Simple bassline: root note on the first beat of the bar
+        const score = [
+            { note: `${rootNote}1`, time: 0, duration: beatsPerBar, velocity: 0.9 }
+        ];
+        return score;
     }
-  },
-  effects: [
-    { type: 'filter', frequency: 400, type: 'lowpass' },
-    { type: 'panner', frequency: 0.02, depth: 0.3 },
-    { type: 'reverb', decay: 8, wet: 0.5 }
-  ],
-  color: '#9370DB' // Средний пурпурный
-};
-D) Перкуссия Oldfield:
-js
-
-
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-⌄
-⌄
-⌄
-const PRESET_OLDFIELD_PERCUSSION = {
-  samples: {
-    'C3': 'hand_drum.mp3',
-    'D3': 'bongo.mp3',
-    'E3': 'shaker.mp3',
-    'F3': 'tambourine.mp3'
-  },
-  effects: [
-    { type: 'filter', frequency: 1000, type: 'bandpass' },
-    { type: 'delay', delayTime: '16n', feedback: 0.2 }
-  ],
-  color: '#FFD700' // Золотой
-};
-🌊 4. Система нарастания (crescendo system)
-Многоуровневое нарастание:
-js
-
-
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-29
-30
-31
-32
-33
-34
-35
-36
-37
-⌄
-⌄
-⌄
-⌄
-⌄
-⌄
-⌄
-class MultiLevelCrescendo {
-  constructor() {
-    this.levels = {
-      bass: { start: 0.3, end: 1.0, rate: 0.001 },
-      melody: { start: 0.0, end: 0.8, rate: 0.002 },
-      harmony: { start: 0.0, end: 0.6, rate: 0.0015 },
-      percussion: { start: 0.0, end: 0.7, rate: 0.003 }
-    };
-    
-    this.currentLevels = {
-      bass: 0.3,
-      melody: 0.0,
-      harmony: 0.0,
-      percussion: 0.0
-    };
-  }
-  
-  evolve(timeElapsed) {
-    Object.keys(this.levels).forEach(layer => {
-      const config = this.levels[layer];
-      const progress = Math.min(1, timeElapsed / 600); // 10 минут до максимума
-      
-      this.currentLevels[layer] = this.morph(
-        config.start, 
-        config.end, 
-        progress
-      );
-    });
-    
-    return this.currentLevels;
-  }
-  
-  morph(start, end, progress) {
-    // Используем экспоненциальную кривую для естественного нарастания
-    return start + (end - start) * Math.pow(progress, 1.5);
-  }
 }
-🎯 5. Гипнотическая структура
-Фрактальная структура (по принципу "Tubular Bells"):
-js
 
 
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-29
-30
-31
-32
-33
-34
-35
-36
-37
-38
-39
-40
-41
-42
-43
-44
-45
-46
-47
-⌄
-⌄
-⌄
-⌄
-⌄
-⌄
-⌄
-⌄
-⌄
-⌄
-⌄
-class FractalStructure {
-  constructor() {
-    this.sections = [
-      { name: 'themeA', duration: 120 }, // 2 минуты
-      { name: 'themeB', duration: 120 },
-      { name: 'development', duration: 240 },
-      { name: 'climax', duration: 120 },
-      { name: 'return', duration: 120 }
-    ];
-    
-    this.themeA = {
-      instruments: ['bass', 'simple_melody'],
-      complexity: 0.2
-    };
-    
-    this.themeB = {
-      instruments: ['bass', 'spiral_melody', 'light_percussion'],
-      complexity: 0.4
-    };
-    
-    this.development = {
-      instruments: ['bass', 'spiral_melody', 'harmony_pad', 'percussion'],
-      complexity: 0.7
-    };
-    
-    this.climax = {
-      instruments: ['bass', 'spiral_melody', 'harmony_pad', 'percussion', 'accent_synths'],
-      complexity: 1.0
-    };
-    
-    this.return = {
-      instruments: ['bass', 'simple_melody'],
-      complexity: 0.3
-    };
-  }
-  
-  getCurrentSection(time) {
-    let accumulatedTime = 0;
-    for (let section of this.sections) {
-      if (time < accumulatedTime + section.duration) {
-        return section;
-      }
-      accumulatedTime += section.duration;
+// --- 3. SampleBank (Decoded Audio Storage) ---
+const SampleBank = {
+    samples: {}, // { kick: Float32Array, snare: Float32Array, ... }
+    isInitialized: false,
+
+    async init(samples, sampleRate) {
+        const tempAudioContext = new OfflineAudioContext(1, 1, sampleRate);
+        for (const key in samples) {
+            if (samples[key].byteLength > 0) {
+                try {
+                    const audioBuffer = await tempAudioContext.decodeAudioData(samples[key].slice(0));
+                    this.samples[key] = audioBuffer.getChannelData(0);
+                } catch(e) {
+                    // post error back to main thread
+                    self.postMessage({ type: 'error', error: `Failed to decode sample ${key}: ${e.message}` });
+                }
+            }
+        }
+        this.isInitialized = true;
+        console.log("SampleBank Initialized with samples:", Object.keys(this.samples));
+    },
+
+    getSample(name) {
+        return this.samples[name];
     }
-    return this.sections[0]; // Цикл
-  }
-}
-🧠 6. Трансовая психология
-Элементы для гипноза:
-A) Изохронный ритм:
-js
-
-
-1
-2
-3
-4
-5
-6
-⌄
-// Точный 60 BPM пульс
-const pulseGenerator = {
-  frequency: 1, // 1 Гц = 60 BPM
-  waveform: 'sine',
-  volume: -20 // Очень тихо, подсознательно
 };
-B) Бинауральные биения:
-js
 
 
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-⌄
-⌄
-⌄
-class BinauralBeats {
-  constructor() {
-    this.leftFreq = 200;   // Левое ухо
-    this.rightFreq = 204;  // Правое ухо (4 Hz = тета-ритм)
-  }
-  
-  // Тета-ритм (4-8 Hz) для глубокого расслабления
-  // Альфа-ритм (8-12 Hz) для спокойствия
-  // Бета-ритм (12-30 Hz) для концентрации
-  
-  evolveForMeditation(progress) {
-    // Переход от бета к тета
-    const targetFreq = 30 - (progress * 26); // 30 → 4 Hz
-    this.rightFreq = this.leftFreq + targetFreq;
-  }
-}
-🎵 7. Прогрессивная эволюция
-Система уровней сложности:
-js
+// --- 4. AudioRenderer (The Sound Engine) ---
+const AudioRenderer = {
+    render(score, settings, sampleRate) {
+        const { duration, volume } = settings;
+        const totalSamples = Math.floor(duration * sampleRate);
+        const chunk = new Float32Array(totalSamples).fill(0);
+
+        for (const note of score) {
+            const sample = SampleBank.getSample(note.sample);
+            if (!sample) continue;
+
+            const noteVelocity = note.velocity ?? 1.0;
+            const finalVolume = volume * noteVelocity;
+            
+            const startSample = Math.floor(note.time * sampleRate);
+
+            // Ensure we don't write past the end of the chunk buffer
+            const endSample = Math.min(startSample + sample.length, totalSamples);
+            
+            for (let i = 0; i < (endSample - startSample); i++) {
+                // Simple mixing by adding samples
+                chunk[startSample + i] += sample[i] * finalVolume;
+            }
+        }
+        
+        // Basic clipping prevention
+        for (let i = 0; i < totalSamples; i++) {
+            chunk[i] = Math.max(-1, Math.min(1, chunk[i]));
+        }
+
+        return chunk;
+    }
+};
 
 
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-29
-30
-31
-32
-33
-34
-35
-36
-37
-38
-39
-40
-41
-42
-43
-44
-45
-46
-47
-48
-49
-50
-51
-52
-⌄
-⌄
-⌄
-⌄
-⌄
-⌄
-⌄
-⌄
-⌄
-⌄
-class ProgressiveEvolution {
-  constructor() {
-    this.evolutionStages = [
-      {
-        name: 'grounding',
-        time: [0, 120],
-        elements: ['bass', 'basic_pulse'],
-        complexity: 0.1
-      },
-      {
-        name: 'entrainment',
-        time: [120, 240],
-        elements: ['bass', 'simple_melody', 'light_percussion'],
-        complexity: 0.3
-      },
-      {
-        name: 'journey',
-        time: [240, 480],
-        elements: ['bass', 'spiral_melody', 'harmony_pad', 'percussion'],
-        complexity: 0.6
-      },
-      {
-        name: 'transcendence',
-        time: [480, 600],
-        elements: ['bass', 'spiral_melody', 'harmony_pad', 'percussion', 'effects'],
-        complexity: 0.9
-      },
-      {
-        name: 'return',
-        time: [600, 720],
-        elements: ['bass', 'simple_melody'],
-        complexity: 0.2
-      }
-    ];
-  }
-  
-  getActiveElements(currentTime) {
-    const stage = this.evolutionStages.find(s => 
-      currentTime >= s.time[0] && currentTime < s.time[1]
-    );
+// --- 5. Scheduler (The Conductor) ---
+const Scheduler = {
+    intervalId: null,
+    isRunning: false,
+    barCount: 0,
     
-    return stage ? stage.elements : ['bass'];
-  }
-  
-  getComplexity(currentTime) {
-    const stage = this.evolutionStages.find(s => 
-      currentTime >= s.time[0] && currentTime < s.time[1]
-    );
+    // Settings from main thread
+    sampleRate: 44100,
+    bpm: 120,
+    instruments: {},
+    drumSettings: {},
+
+    // Calculated properties
+    get beatsPerBar() { return 4; },
+    get secondsPerBeat() { return 60 / this.bpm; },
+    get barDuration() { return this.beatsPerBar * this.secondsPerBeat; },
+
+
+    start() {
+        if (this.isRunning) return;
+
+        this.reset();
+        this.isRunning = true;
+        
+        // Generate the first chunk immediately
+        this.tick();
+
+        // Then set up the interval for subsequent chunks
+        this.intervalId = setInterval(() => this.tick(), this.barDuration * 1000);
+        self.postMessage({ type: 'started' });
+    },
+
+    stop() {
+        if (!this.isRunning) return;
+        clearInterval(this.intervalId);
+        this.intervalId = null;
+        this.isRunning = false;
+    },
+
+    reset() {
+        this.barCount = 0;
+    },
     
-    return stage ? stage.complexity : 0.1;
-  }
-}
-🎨 Цветовая карта гипнотического стиля:
+    updateSettings(settings) {
+        if (settings.instruments) this.instruments = settings.instruments;
+        if (settings.drumSettings) this.drumSettings = settings.drumSettings;
+    },
+
+    tick() {
+        if (!this.isRunning) return;
+
+        let finalScore = [];
+        
+        // 1. Ask generators for their scores
+        if (this.drumSettings.enabled) {
+            const drumScore = DrumGenerator.createScore(
+                this.drumSettings.pattern, 
+                this.barCount,
+                -1 // totalBars not needed for this simple generator
+            );
+            finalScore.push(...drumScore);
+        }
+        
+        // Add other instrument generators here (bass, solo, etc.) in the future
+        // For now, bass is conceptual
+        // if (this.instruments.bass !== 'none') {
+        //     const bassScore = BassGenerator.createScore('E');
+        //     // We would need a synth renderer for this, not a sample renderer
+        // }
 
 
-1
-2
-3
-4
-5
-🟥 Темно-красный (#8B0000)    - Тяжелый бас (Iron Man)
-🔵 Королевский синий (#4169E1) - Спиральные мелодии
-🟣 Средний пурпурный (#9370DB) - Атмосферные пэды
-🥇 Золотой (#FFD700)          - Перкуссия
-🌌 Глубокий черный (#000000)   - Подсознательные элементы
-🎯 Рекомендации для максимального гипнотического эффекта:
-Темп 60 BPM - идеальный пульс для транса
-Постепенное нарастание - не более 0.1 сложности в минуту
-Бинауральные биения - переход от альфа к тета
-Изохронный ритм - подсознательный пульс
-Фрактальная структура - самоподобие на разных уровнях
-Минимум резких переходов - все плавно
+        // 2. Pass the final score to the renderer
+        const audioChunk = AudioRenderer.render(finalScore, {
+            duration: this.barDuration,
+            volume: this.drumSettings.volume
+        }, this.sampleRate);
+        
+        // 3. Post the rendered chunk to the main thread
+        self.postMessage({
+            type: 'chunk',
+            data: {
+                chunk: audioChunk,
+                duration: this.barDuration,
+            }
+        }, [audioChunk.buffer]);
 
+        this.barCount++;
+    }
+};
+
+
+// --- MessageBus (The "Kafka" entry point) ---
+self.onmessage = async (event) => {
+    const { command, data } = event.data;
+
+    try {
+        switch (command) {
+            case 'init':
+                Scheduler.sampleRate = data.sampleRate;
+                await SampleBank.init(data.samples, data.sampleRate);
+                break;
+            
+            case 'start':
+                if (!SampleBank.isInitialized) {
+                   throw new Error("Worker is not initialized with samples yet. Call 'init' first.");
+                }
+                Scheduler.updateSettings(data);
+                Scheduler.start();
+                break;
+
+            case 'stop':
+                Scheduler.stop();
+                break;
+            
+            case 'set_instruments':
+                Scheduler.updateSettings({ instruments: data });
+                break;
+
+            case 'set_drums':
+                 Scheduler.updateSettings({ drumSettings: data });
+                break;
+        }
+    } catch (e) {
+        self.postMessage({ type: 'error', error: e.message });
+    }
+};
