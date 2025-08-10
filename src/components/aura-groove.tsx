@@ -37,6 +37,9 @@ const sampleUrls = {
     hat: '/assets/drums/closed_hi_hat_accented.wav',
     crash: '/assets/drums/crash1.wav',
     ride: '/assets/drums/cymbal1.wav',
+    tom1: '/assets/drums/tom_high.wav',
+    tom2: '/assets/drums/tom_mid.wav',
+    tom3: '/assets/drums/tom_low.wav',
 };
 
 export function AuraGroove() {

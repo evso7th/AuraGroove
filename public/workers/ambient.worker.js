@@ -1,177 +1,145 @@
 
-// AuraGroove Ambient Music Worker
-// This worker is responsible for generating and scheduling all music parts.
+// A basic Web Worker for generating ambient music chunks.
 
-"use strict";
-
-// --- State ---
+let tick = 0;
 let sampleRate = 44100;
-let samples = {};
-let isPlaying = false;
 let instruments = {};
 let drumsEnabled = true;
-let tick = 0;
-let scheduleTimeoutId = null;
+let samples = {}; // This will hold the Float32Array sample data
+let intervalId = null;
 
-// --- Rhythm Generation ---
 const tempoBPM = 60;
 const beatsPerBar = 4;
-const subdivisions = 4; // 16th notes
-const ticksPerBeat = subdivisions;
-const ticksPerBar = ticksPerBeat * beatsPerBar;
-const secondsPerTick = 60.0 / tempoBPM / ticksPerBeat;
-const chunkSizeSeconds = 0.5; // Generate audio in chunks
-const chunkSizeTicks = Math.ceil(chunkSizeSeconds / secondsPerTick);
+const barDuration = (60 / tempoBPM) * beatsPerBar;
+const chunkDuration = 0.2; // Generate audio in 200ms chunks
 
-// --- Sample Processing ---
-function applyGain(buffer, gain) {
-    if (gain === 1.0) return buffer;
-    const newBuffer = new Float32Array(buffer.length);
-    for (let i = 0; i < buffer.length; i++) {
-        newBuffer[i] = buffer[i] * gain;
-    }
-    return newBuffer;
+function applyGain(sample, gain) {
+  if (gain === 1) return sample;
+  const newSample = new Float32Array(sample.length);
+  for (let i = 0; i < sample.length; i++) {
+    newSample[i] = sample[i] * gain;
+  }
+  return newSample;
 }
 
-function applyEnvelope(buffer) {
-    const newBuffer = new Float32Array(buffer.length);
-    const length = buffer.length;
-    for (let i = 0; i < length; i++) {
-        const gain = 1.0 - (i / length); // Linear fade out
-        newBuffer[i] = buffer[i] * gain;
+function applyFadeOut(sample) {
+    const newSample = new Float32Array(sample.length);
+    for (let i = 0; i < sample.length; i++) {
+        const gain = 1 - (i / sample.length);
+        newSample[i] = sample[i] * gain;
     }
-    return newBuffer;
+    return newSample;
 }
 
 
-// --- Music Generation ---
+function generateMusicChunk() {
+  const chunkSize = Math.floor(sampleRate * chunkDuration);
+  const chunk = new Float32Array(chunkSize).fill(0);
+  
+  const currentTick = tick;
+  tick += chunkDuration;
 
-const drumPatterns = {
-    kick: {
-      sample: 'kick',
-      pattern: [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0],
-      gain: 0.5,
-      skipFirst: true,
-    },
-    snare: {
-      sample: 'snare',
-      pattern: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
-      gain: 1.0,
-    },
-    hat: {
-      sample: 'hat',
-      pattern: [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0],
-      gain: 0.8,
-    },
-    crash: {
-        sample: 'crash',
-        pattern: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        gain: 0.9,
-        ticksPerBarOverride: ticksPerBar * 4, // Once every 4 bars
-        useEnvelope: true,
-    },
-    ride: {
-        sample: 'ride',
-        pattern: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
-        gain: 1.0,
-    }
-};
-
-function generateMusicChunk(startTick, numTicks) {
-    const chunkDuration = numTicks * secondsPerTick;
-    const bufferSize = Math.floor(sampleRate * chunkDuration);
-    const mainBuffer = new Float32Array(bufferSize).fill(0);
-
-    if (drumsEnabled) {
-        for (const [key, def] of Object.entries(drumPatterns)) {
-            const sampleBuffer = def.useEnvelope ? applyEnvelope(samples[def.sample]) : samples[def.sample];
-            if (!sampleBuffer) continue;
-
-            const processedSample = applyGain(sampleBuffer, def.gain);
-            const patternLength = def.ticksPerBarOverride || ticksPerBar;
-
-            for (let i = 0; i < numTicks; i++) {
-                const currentTick = startTick + i;
-                const patternIndex = currentTick % patternLength;
-                
-                if (def.skipFirst && currentTick === 0) {
-                    continue;
-                }
-
-                if (def.pattern[patternIndex % def.pattern.length] === 1) {
-                    const offset = Math.floor(i * secondsPerTick * sampleRate);
-                    for (let j = 0; j < processedSample.length; j++) {
-                        if (offset + j < mainBuffer.length) {
-                            mainBuffer[offset + j] += processedSample[j];
-                        }
-                    }
-                }
-            }
-        }
-    }
-    
-    // Normalize buffer to prevent clipping
-    let maxAmplitude = 0;
-    for(let i=0; i<mainBuffer.length; i++) {
-        maxAmplitude = Math.max(maxAmplitude, Math.abs(mainBuffer[i]));
-    }
-    if (maxAmplitude > 1.0) {
-        for(let i=0; i<mainBuffer.length; i++) {
-            mainBuffer[i] /= maxAmplitude;
-        }
-    }
-
-    return mainBuffer;
-}
-
-
-// --- Worker Control ---
-
-function scheduleNextChunk() {
-  if (!isPlaying) {
-    return;
+  if (!drumsEnabled) {
+     self.postMessage({ type: 'chunk', data: { chunk, duration: chunkDuration } });
+     return;
   }
 
-  const chunk = generateMusicChunk(tick, chunkSizeTicks);
+  const beatsPerSecond = tempoBPM / 60;
+  const sixteenthNoteDuration = 1 / (beatsPerSecond * 4);
+  const timePerTick = chunkDuration;
+  
+  const drumPatterns = {
+      kick: { sample: samples.kick, gain: 0.5, pattern: [0, 0.5] }, // On beats 1 and 3
+      snare: { sample: samples.snare, gain: 1.0, pattern: [0.25, 0.75] }, // On beats 2 and 4
+      hat: { sample: samples.hat, gain: 0.7, pattern: [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875] }, // 8th notes
+      ride: { sample: samples.ride, gain: 1.0, pattern: [0, 0.25, 0.5, 0.75] }, // Quarter notes
+      crash: { sample: applyFadeOut(samples.crash), gain: 0.8, pattern: [0] }, // Beginning of a 4-bar loop
+      tom1: { sample: samples.tom1, gain: 0.9, pattern: [0.75] },
+      tom2: { sample: samples.tom2, gain: 0.9, pattern: [0.8125] },
+      tom3: { sample: samples.tom3, gain: 0.9, pattern: [0.875] },
+  };
 
-  self.postMessage({
-    type: 'chunk',
-    data: {
-      chunk: chunk,
-      duration: chunkSizeSeconds,
-    },
-  }, [chunk.buffer]);
+  const timeWithinBar = (currentTick % barDuration) / barDuration;
+  const currentBar = Math.floor(currentTick / barDuration);
 
-  tick += chunkSizeTicks;
+  for (const [instrument, { sample, gain, pattern }] of Object.entries(drumPatterns)) {
+    if (!sample) continue;
 
-  const timeToNextChunk = chunkSizeSeconds * 1000 - 100; // schedule a bit ahead
-  scheduleTimeoutId = setTimeout(scheduleNextChunk, Math.max(50, timeToNextChunk));
+    let play = false;
+    let patternDuration = 1; // 1 bar for most
+    let timeInPattern = timeWithinBar;
+
+    if (instrument === 'crash') {
+        if (currentBar % 4 !== 0) continue;
+    } else if (['tom1', 'tom2', 'tom3'].includes(instrument)) {
+        if ((currentBar + 1) % 4 !== 0) continue; // Only on the 4th bar
+    } else if (instrument === 'kick' && currentTick === 0) {
+        continue;
+    }
+
+    for (const beat of pattern) {
+      const scheduledTime = beat * patternDuration;
+      const nextScheduledTime = scheduledTime + timePerTick;
+
+      if (timeInPattern >= scheduledTime && timeInPattern < nextScheduledTime) {
+        play = true;
+        break;
+      }
+    }
+
+    if (play) {
+        const finalSample = applyGain(sample, gain);
+        for (let i = 0; i < Math.min(chunk.length, finalSample.length); i++) {
+            chunk[i] += finalSample[i];
+        }
+    }
+  }
+
+  self.postMessage({ type: 'chunk', data: { chunk, duration: chunkDuration } });
 }
 
-self.onmessage = (event) => {
-  const { command, data } = event.data;
 
+function scheduleNextChunk() {
+  try {
+    generateMusicChunk();
+  } catch (error) {
+    self.postMessage({ type: 'error', error: `Error in generator: ${error.message}`});
+    stop();
+  }
+}
+
+function start(data) {
+  tick = 0;
+  instruments = data.instruments;
+  drumsEnabled = data.drumsEnabled;
+  sampleRate = data.sampleRate || 44100;
+
+  if (intervalId) clearInterval(intervalId);
+  // Schedule the first chunk immediately, then set interval
+  scheduleNextChunk();
+  intervalId = setInterval(scheduleNextChunk, chunkDuration * 1000);
+}
+
+function stop() {
+  if (intervalId) {
+    clearInterval(intervalId);
+    intervalId = null;
+  }
+  tick = 0;
+}
+
+self.onmessage = function(e) {
+  const { command, data } = e.data;
   switch (command) {
     case 'load_samples':
       samples = data;
       self.postMessage({ type: 'samples_loaded' });
       break;
     case 'start':
-      if (isPlaying) return;
-      isPlaying = true;
-      tick = 0;
-      instruments = data.instruments;
-      drumsEnabled = data.drumsEnabled;
-      sampleRate = data.sampleRate;
-      scheduleNextChunk();
+      start(data);
       break;
     case 'stop':
-      isPlaying = false;
-      if (scheduleTimeoutId) {
-        clearTimeout(scheduleTimeoutId);
-        scheduleTimeoutId = null;
-      }
-      tick = 0;
+      stop();
       break;
     case 'set_instruments':
       instruments = data;
@@ -180,9 +148,6 @@ self.onmessage = (event) => {
       drumsEnabled = data.enabled;
       break;
     default:
-      self.postMessage({
-        type: 'error',
-        error: `Unknown command: ${command}`,
-      });
+      console.warn(`Unknown command: ${command}`);
   }
 };
