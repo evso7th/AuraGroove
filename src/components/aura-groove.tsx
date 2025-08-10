@@ -50,7 +50,7 @@ export function AuraGroove() {
   const [instruments, setInstruments] = useState<Instruments>({
     solo: "none",
     accompaniment: "none",
-    bass: "none",
+    bass: "bass guitar",
   });
   const { toast } = useToast();
 
@@ -124,7 +124,7 @@ export function AuraGroove() {
         audioPlayer.stop();
       }
     };
-  }, [toast, instruments, drumsEnabled]);
+  }, []);
   
   const handleInstrumentChange = (part: keyof Instruments) => (value: Instruments[keyof Instruments]) => {
     const newInstruments = { ...instruments, [part]: value };
@@ -333,6 +333,4 @@ export function AuraGroove() {
           {isLoading && !isPlaying ? loadingText : isPlaying ? "Stop" : "Play"}
         </Button>
       </CardFooter>
-    </Card>
-  );
-}
+    </Card
