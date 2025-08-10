@@ -2,7 +2,7 @@
 
 import * as Tone from 'tone';
 
-type InstrumentType = 'synthesizer' | 'organ' | 'piano' | 'bass guitar';
+export type InstrumentType = 'synthesizer' | 'organ' | 'piano' | 'bass guitar';
 export type Part = 'solo' | 'accompaniment' | 'bass';
 
 export interface Instruments {
@@ -26,7 +26,9 @@ class AudioPlayer {
   constructor() {}
 
   public async initialize(instruments: Instruments) {
-    if (this.isInitialized) return;
+    if (this.isInitialized) {
+      this.stop();
+    }
     await Tone.start();
     
     this.masterVolume = new Tone.Volume(-12).toDestination();
@@ -55,11 +57,13 @@ class AudioPlayer {
       default: // synthesizer
         synthOptions = { oscillator: { type: 'pulse', width: 0.6 }, envelope: { attack: 0.1, decay: 0.5, sustain: 0.4, release: 1.5 } };
     }
-    return new Tone.PolySynth(Tone.Synth, { ...commonOptions, ...synthOptions }).connect(this.delay!);
+    const synth = new Tone.PolySynth(Tone.Synth, { ...commonOptions, ...synthOptions });
+    synth.connect(this.delay!);
+    return synth;
   }
   
   private createBassSynth(): Tone.MonoSynth {
-    return new Tone.MonoSynth({
+    const bassSynth = new Tone.MonoSynth({
       volume: -8,
       oscillator: { type: 'fmsine' },
       envelope: { attack: 0.1, decay: 0.3, sustain: 1, release: 2.5 },
@@ -71,11 +75,13 @@ class AudioPlayer {
         baseFrequency: 40,
         octaves: 4
       }
-    }).connect(this.masterVolume!);
+    });
+    bassSynth.connect(this.masterVolume!);
+    return bassSynth;
   }
 
   public setInstrument(part: Part, instrument: InstrumentType) {
-    if (!this.isInitialized) return;
+    if (!this.masterVolume) return;
 
     this.synths[part]?.dispose();
 
@@ -91,15 +97,24 @@ class AudioPlayer {
     
     const synth = this.synths[part];
     if (synth) {
-      const duration = part === 'accompaniment' ? '1m' : '8n';
-      synth.triggerAttackRelease(note, duration, Tone.now());
+      try {
+        const duration = part === 'accompaniment' ? '1m' : part === 'bass' ? '1m' : '8n';
+        synth.triggerAttackRelease(note, duration, Tone.now());
+      } catch (e) {
+        console.error(`Error playing note on part ${part}:`, e);
+      }
     }
   }
 
   public stop() {
     if (!this.isInitialized) return;
 
-    Object.values(this.synths).forEach(synth => synth?.dispose());
+    Object.values(this.synths).forEach(synth => {
+      if (synth) {
+        synth.releaseAll();
+        synth.dispose();
+      }
+    });
     this.synths = {};
     
     this.delay?.dispose();
@@ -107,10 +122,12 @@ class AudioPlayer {
     this.masterVolume?.dispose();
     
     this.isInitialized = false;
-    Tone.Transport.stop();
+    
+    if (Tone.Transport.state === 'started') {
+        Tone.Transport.stop();
+    }
     Tone.Transport.cancel(0);
   }
 }
 
 export const audioPlayer = new AudioPlayer();
-    

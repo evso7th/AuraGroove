@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Loader2, Pause, Play } from "lucide-react";
-import { audioPlayer, Instruments } from "@/lib/audio-player";
+import { audioPlayer, Instruments, Part } from "@/lib/audio-player";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,50 +33,37 @@ export function AuraGroove() {
   });
   const { toast } = useToast();
 
-  const soloWorkerRef = useRef<Worker>();
-  const accompanimentWorkerRef = useRef<Worker>();
-  const bassWorkerRef = useRef<Worker>();
+  const musicWorkerRef = useRef<Worker>();
 
   useEffect(() => {
-    // Initialize workers
-    soloWorkerRef.current = new Worker(new URL('../lib/workers/solo.worker.ts', import.meta.url));
-    accompanimentWorkerRef.current = new Worker(new URL('../lib/workers/accompaniment.worker.ts', import.meta.url));
-    bassWorkerRef.current = new Worker(new URL('../lib/workers/bass.worker.ts', import.meta.url));
+    // Initialize the single worker
+    musicWorkerRef.current = new Worker(new URL('../lib/workers/ambient.worker.ts', import.meta.url));
 
-    // Set up message handlers
     const handleMessage = (event: MessageEvent) => {
       const { type, note, part } = event.data;
       if (type === 'note' && part) {
-        audioPlayer.playNote(part, note);
+        audioPlayer.playNote(part as Part, note);
       }
     };
 
-    soloWorkerRef.current.onmessage = handleMessage;
-    accompanimentWorkerRef.current.onmessage = handleMessage;
-    bassWorkerRef.current.onmessage = handleMessage;
+    musicWorkerRef.current.onmessage = handleMessage;
     
     return () => {
-      // Terminate workers on component unmount
-      soloWorkerRef.current?.terminate();
-      accompanimentWorkerRef.current?.terminate();
-      bassWorkerRef.current?.terminate();
+      // Terminate worker on component unmount
+      musicWorkerRef.current?.terminate();
     };
   }, []);
-
+  
   const handleInstrumentChange = (part: keyof Instruments) => (value: Instruments[keyof Instruments]) => {
     setInstruments(prev => ({ ...prev, [part]: value }));
-    if (isPlaying) {
-      audioPlayer.setInstrument(part, value);
-    }
+    audioPlayer.setInstrument(part, value);
   };
 
   const handlePlay = async () => {
     setIsLoading(true);
     try {
       await audioPlayer.initialize(instruments);
-      soloWorkerRef.current?.postMessage({ command: 'start' });
-      accompanimentWorkerRef.current?.postMessage({ command: 'start' });
-      bassWorkerRef.current?.postMessage({ command: 'start' });
+      musicWorkerRef.current?.postMessage({ command: 'start' });
       setIsPlaying(true);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
@@ -92,9 +79,7 @@ export function AuraGroove() {
   };
 
   const handleStop = () => {
-    soloWorkerRef.current?.postMessage({ command: 'stop' });
-    accompanimentWorkerRef.current?.postMessage({ command: 'stop' });
-    bassWorkerRef.current?.postMessage({ command: 'stop' });
+    musicWorkerRef.current?.postMessage({ command: 'stop' });
     audioPlayer.stop();
     setIsPlaying(false);
   };
@@ -132,7 +117,7 @@ export function AuraGroove() {
             <Select
               value={instruments.solo}
               onValueChange={handleInstrumentChange('solo')}
-              disabled={isLoading}
+              disabled={isLoading || isPlaying}
             >
               <SelectTrigger id="solo-instrument" className="col-span-2">
                 <SelectValue placeholder="Select instrument" />
@@ -149,7 +134,7 @@ export function AuraGroove() {
              <Select
               value={instruments.accompaniment}
               onValueChange={handleInstrumentChange('accompaniment')}
-              disabled={isLoading}
+              disabled={isLoading || isPlaying}
             >
               <SelectTrigger id="accompaniment-instrument" className="col-span-2">
                 <SelectValue placeholder="Select instrument" />
@@ -166,7 +151,7 @@ export function AuraGroove() {
              <Select
               value={instruments.bass}
               onValueChange={handleInstrumentChange('bass')}
-              disabled={isLoading}
+              disabled={isLoading || isPlaying}
             >
               <SelectTrigger id="bass-instrument" className="col-span-2">
                 <SelectValue placeholder="Select instrument" />
@@ -214,5 +199,3 @@ export function AuraGroove() {
     </Card>
   );
 }
-
-    
