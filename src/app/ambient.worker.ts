@@ -162,7 +162,7 @@ const AudioRenderer = {
             const noteVelocity = note.velocity ?? 1.0;
             const finalVolume = volume * noteVelocity;
             
-            const startSample = Math.floor(note.time * sampleRate);
+            const startSample = Math.floor(note.time * (60 / Scheduler.bpm) * sampleRate);
 
             // Ensure we don't write past the end of the chunk buffer
             const endSample = Math.min(startSample + sample.length, totalSamples);

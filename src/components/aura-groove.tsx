@@ -77,13 +77,19 @@ export function AuraGroove() {
     const fetchSamples = async () => {
         try {
             const sampleEntries = Object.entries(sampleUrls);
-            for (const [key, url] of sampleEntries) {
+            const promises = sampleEntries.map(async ([key, url]) => {
                 const response = await fetch(url);
                 if (!response.ok) {
                     throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
                 }
-                sampleArrayBuffers.current[key] = await response.arrayBuffer();
-            }
+                return { key, buffer: await response.arrayBuffer() };
+            });
+
+            const results = await Promise.all(promises);
+            results.forEach(({ key, buffer }) => {
+                sampleArrayBuffers.current[key] = buffer;
+            });
+            
             areSamplesLoadedOnMount.current = true;
             setIsLoading(false);
             setLoadingText("");
@@ -168,8 +174,7 @@ export function AuraGroove() {
       
       setLoadingText("Initializing worker...");
       
-      // Pass transferable objects to avoid cloning large sample buffers
-      const transferableObjects = Object.values(sampleArrayBuffers.current);
+      const transferableObjects = Object.values(sampleArrayBuffers.current).map(buffer => buffer.slice(0));
 
       musicWorkerRef.current?.postMessage({
         command: 'init',
@@ -320,7 +325,7 @@ export function AuraGroove() {
             <div className="grid grid-cols-3 items-center gap-4">
                 <Label className="text-right flex items-center gap-1.5"><Speaker className="h-4 w-4"/> Volume</Label>
                 <Slider
-                    defaultValue={[drumSettings.volume]}
+                    value={[drumSettings.volume]}
                     max={1}
                     step={0.05}
                     onValueChange={(v) => handleDrumsSettingChange('volume', v[0])}
@@ -366,4 +371,3 @@ export function AuraGroove() {
       </CardFooter>
     </Card>
   );
-}
