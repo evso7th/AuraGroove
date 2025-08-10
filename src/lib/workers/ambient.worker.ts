@@ -49,16 +49,15 @@ const bassScale = scales.aeolian;
 
 // --- DRUM SAMPLES ---
 const drumSampleFiles = {
-    kick: '/public/assets/drums/kickdrum.wav',
-    snare: '/public/assets/drums/snare.wav',
-    closedHat: '/public/assets/drums/closed hi hat accented.wav',
-    openHat: '/public/assets/drums/Open HH (Top) (2).wav',
-    crash: '/public/assets/drums/Crash (1).wav',
+    kick: '/assets/drums/kickdrum.wav',
+    snare: '/assets/drums/snare.wav',
+    closedHat: '/assets/drums/closed hi hat accented.wav',
+    openHat: '/assets/drums/Open HH (Top) (2).wav',
+    crash: '/assets/drums/Crash (1).wav',
 };
 
 const drumBuffers: { [key: string]: AudioBuffer } = {};
 let drumsLoaded = false;
-let audioContext: OfflineAudioContext | null = null;
 
 async function loadDrumSamples() {
     if (drumsLoaded) return;
@@ -211,15 +210,15 @@ async function generatePart() {
     if (drumsEnabled && drumsLoaded) {
         for (let i = 0; i < 16; i++) {
              const time = i * 0.25;
-            if (i % 8 === 0) {
+            if (i % 4 === 0) { // Kick on 1, 2, 3, 4
                  if (drumPrng.next() > 0.1) mix(finalBuffer, drumBuffers.kick, time, 0.9);
             }
-            if (i === 4 || i === 12) {
-                 if (drumPrng.next() > 0.2) mix(finalBuffer, drumBuffers.snare, time, 0.7);
+            if (i % 4 === 2) { // Snare on 2 and 4 (as beats, so i=4, 12)
+                 if (drumPrng.next() > 0.2) mix(finalBuffer, drumBuffers.snare, time + (i*0.25), 0.7);
             }
-             if (i % 2 === 0) {
+             if (i % 2 !== 0) { // Closed hats on the off-beats
                  if (drumPrng.next() > 0.15) mix(finalBuffer, drumBuffers.closedHat, time, 0.5);
-            }
+             }
         }
     }
     
@@ -243,12 +242,18 @@ self.onmessage = async function(e) {
     instruments = data.instruments;
     drumsEnabled = data.drumsEnabled;
     if (generationInterval === null) {
-      if (!drumsLoaded && drumsEnabled) {
+      if (drumsEnabled && !drumsLoaded) {
           await loadDrumSamples();
-          if (!drumsLoaded) return;
+          if (!drumsLoaded && drumsEnabled) { // check again in case loading failed
+             postMessage({ type: 'loading_complete' });
+             generatePart(); // start generation even if drums fail
+          } else {
+             postMessage({ type: 'loading_complete' });
+          }
+      } else {
+         postMessage({ type: 'loading_complete' });
       }
       
-      postMessage({ type: 'loading_complete' });
       generatePart();
       generationInterval = setInterval(generatePart, (partDuration * 1000) - 20); 
     }
