@@ -51,11 +51,11 @@ const bassScale = scales.aeolian;
 
 // --- DRUM SAMPLES ---
 const drumSampleFiles = {
-    kick: './assets/drums/kickdrum.wav',
-    snare: './assets/drums/snare.wav',
-    closedHat: './assets/drums/closed hi hat accented.wav',
-    openHat: './assets/drums/Open HH (Top) (2).wav',
-    crash: './assets/drums/Crash (1).wav',
+    kick: '/assets/drums/kickdrum.wav',
+    snare: '/assets/drums/snare.wav',
+    closedHat: '/assets/drums/closed hi hat accented.wav',
+    openHat: '/assets/drums/Open HH (Top) (2).wav',
+    crash: '/assets/drums/Crash (1).wav',
 };
 const drumBuffers: { [key: string]: Float32Array } = {};
 let drumsLoaded = false;
@@ -85,14 +85,12 @@ async function loadDrumSamples() {
 // --- SYNTH CREATION ---
 type Note = { freq: number; time: number; duration: number; velocity: number };
 
-function adsrEnvelope(t: number, attack: number, decay: number, sustain: number, release: number, duration: number) {
+function adsrEnvelope(t: number, attack: number, decay: number, sustain: number, release: number) {
     const sustainLevel = sustain;
     if (t < 0) return 0;
     if (t < attack) return t / attack;
     if (t < attack + decay) return 1.0 - (1.0 - sustainLevel) * (t - attack) / decay;
-    if (t < duration - release) return sustainLevel;
-    if (t < duration) return sustainLevel * (1.0 - (t - (duration - release)) / release);
-    return 0;
+    return sustainLevel;
 }
 
 function oscillator(type: string, t: number, freq: number) {
@@ -123,23 +121,23 @@ function createSynthVoice(notes: Note[], totalDuration: number, instrument: stri
     }
 
     notes.forEach(note => {
+        const noteDurationInSamples = Math.floor(note.duration * sampleRate);
         const startSample = Math.floor(note.time * sampleRate);
-        const endSample = startSample + Math.floor(note.duration * sampleRate);
+        const endSample = startSample + noteDurationInSamples;
+        const releaseSamples = Math.floor(synthOptions.release * sampleRate);
+
 
         for (let i = startSample; i < endSample && i < buffer.length; i++) {
             const t = (i - startSample) / sampleRate;
-            const envelope = adsrEnvelope(t, synthOptions.attack, synthOptions.decay, synthOptions.sustain, synthOptions.release, note.duration);
+            const envelope = adsrEnvelope(t, synthOptions.attack, synthOptions.decay, synthOptions.sustain, synthOptions.release);
             let value = oscillator(synthOptions.oscType, t, note.freq) * envelope * note.velocity * synthOptions.volume;
             buffer[i] += value;
         }
 
-        const fadeOutSamples = 500;
-        const fadeStartSample = endSample - fadeOutSamples;
-        if (fadeStartSample > startSample) {
-             for (let i = fadeStartSample; i < endSample && i < buffer.length; i++) {
-                const fadeProgress = (endSample - i) / fadeOutSamples;
-                buffer[i] *= fadeProgress;
-            }
+        const fadeOutStartSample = Math.max(startSample, endSample - releaseSamples);
+         for (let i = fadeOutStartSample; i < endSample && i < buffer.length; i++) {
+            const fadeOutProgress = (endSample - i) / (endSample - fadeOutStartSample);
+            buffer[i] *= fadeOutProgress;
         }
     });
 
