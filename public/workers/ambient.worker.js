@@ -1,244 +1,239 @@
 
-// public/workers/ambient.worker.js
+"use strict";
 
-// --- State ---
-let isRunning = false;
-let sampleRate = 44100; // Default, will be updated from main thread
-const CHUNK_DURATION_SECONDS = 2; // Generate 2 seconds of audio at a time
-let instruments = {
-  solo: 'none',
-  accompaniment: 'none',
-  bass: 'bass guitar',
+const PRESETS = {
+  doomBass: {
+    synth: { oscillator: { type: "sine" }, envelope: { attack: 0.1, decay: 0.5, sustain: 0.8, release: 2.0 } },
+    effects: [{ type: "distortion", amount: 0.05 }],
+    notes: ["E1", "B1", "G1", "E2"],
+  },
+  darkDrone: {
+    synth: { type: "fm", voices: 2, settings: { harmonicity: 1, modulationIndex: 3, envelope: { attack: 3.0, decay: 2.0, sustain: 0.4, release: 5.0 } } },
+    effects: [{ type: "filter", frequency: 200, rolloff: -12 }],
+    notes: ["E1", "G1", "B1"],
+  },
+  evolvingPad: {
+    synth: { type: "am", voices: 3, settings: { harmonicity: 2, envelope: { attack: 2.0, decay: 1.0, sustain: 0.3, release: 4.0 } } },
+    effects: [{ type: "chorus", frequency: 0.2, delayTime: 3.5, depth: 0.3 }, { type: "reverb", decay: 8, wet: 0.3 }],
+    chordProgression: ["Em", "G", "Bm"],
+  },
 };
+
+// --- State Management ---
+let isRunning = false;
+let sampleRate = 44100;
+let instruments = {};
 let drumsEnabled = true;
-let barCount = 0; // Track bars for musical progression
+let decodedSamples = {};
 
-// --- Audio Data ---
-// This will hold the raw Float32Array data for each sample
-const samples = {};
+let barCount = 0;
+let lastTickTime = 0;
+let tickInterval;
 
-// --- Synthesis Functions ---
+// --- Music Generation Logic ---
 
-function generateSineWave(frequency, duration) {
-  const numSamples = Math.floor(duration * sampleRate);
-  const buffer = new Float32Array(numSamples);
-  for (let i = 0; i < numSamples; i++) {
-    buffer[i] = Math.sin(2 * Math.PI * frequency * (i / sampleRate));
-  }
-  return buffer;
+function generateNote(noteName, octave) {
+    const noteMap = { "C": 0, "C#": 1, "D": 2, "D#": 3, "E": 4, "F": 5, "F#": 6, "G": 7, "G#": 8, "A": 9, "A#": 10, "B": 11 };
+    const a4 = 440;
+    const n = noteMap[noteName] - noteMap["A"] + (octave - 4) * 12;
+    return a4 * Math.pow(2, n / 12);
 }
 
-function applyADSR(buffer, adsr) {
-  const { attack, decay, sustain, release } = adsr;
-  const numSamples = buffer.length;
-  const attackSamples = Math.floor(attack * sampleRate);
-  const decaySamples = Math.floor(decay * sampleRate);
-  const releaseSamples = Math.floor(release * sampleRate);
-  const sustainSamples = numSamples - attackSamples - decaySamples - releaseSamples;
+function adsrEnvelope(audio, attack, decay, sustainLevel, release, duration, sampleRate) {
+    const attackSamples = Math.floor(attack * sampleRate);
+    const decaySamples = Math.floor(decay * sampleRate);
+    const sustainSamples = Math.max(0, Math.floor(duration * sampleRate) - attackSamples - decaySamples);
+    const releaseSamples = Math.floor(release * sampleRate);
 
-  // Attack
-  for (let i = 0; i < attackSamples && i < numSamples; i++) {
-    buffer[i] *= i / attackSamples;
-  }
-  // Decay
-  for (let i = 0; i < decaySamples && i < numSamples; i++) {
-    const t = i / decaySamples;
-    buffer[attackSamples + i] *= (1.0 - t) + (t * sustain);
-  }
-  // Sustain part is already at the right level
-  // Release
-  if (sustainSamples + releaseSamples > 0) {
-      for (let i = 0; i < releaseSamples && (numSamples - releaseSamples + i) < numSamples ; i++) {
-          const frame = numSamples - releaseSamples + i;
-          buffer[frame] *= (1.0 - (i / releaseSamples)) * sustain;
-      }
-  }
-  return buffer;
+    // Attack phase
+    for (let i = 0; i < attackSamples && i < audio.length; i++) {
+        audio[i] *= i / attackSamples;
+    }
+
+    // Decay and Sustain phase
+    for (let i = attackSamples; i < attackSamples + decaySamples + sustainSamples && i < audio.length; i++) {
+        if (i < attackSamples + decaySamples) {
+            const decayFactor = 1 - ((i - attackSamples) / decaySamples) * (1 - sustainLevel);
+            audio[i] *= decayFactor;
+        } else {
+            audio[i] *= sustainLevel;
+        }
+    }
+    
+    return audio;
 }
 
-function generateBassPart(totalSamples) {
-  const buffer = new Float32Array(totalSamples).fill(0);
-  if (instruments.bass === 'none') return buffer;
 
-  // Simple repeating bass line (E1 note)
-  const noteFrequency = 41.20; // E1
-  const noteDuration = CHUNK_DURATION_SECONDS / 4; // quarter note
-  const adsr = { attack: 0.01, decay: 0.1, sustain: 0.8, release: 0.2 };
+function generateSynthesizerPart(preset, duration, sampleRate) {
+    const buffer = new Float32Array(Math.floor(duration * sampleRate));
+    const noteFrequency = generateNote(preset.notes[0].slice(0, -1), parseInt(preset.notes[0].slice(-1), 10));
 
-  for (let i = 0; i < 4; i++) {
-    const noteBuffer = generateSineWave(noteFrequency, noteDuration);
-    applyADSR(noteBuffer, adsr);
-
-    const startSample = Math.floor(i * noteDuration * sampleRate);
-    buffer.set(noteBuffer, startSample);
-  }
-
-  return buffer;
-}
-
-function generateAccompanimentPart(totalSamples) {
-    const buffer = new Float32Array(totalSamples).fill(0);
-    if (instruments.accompaniment === 'none') return buffer;
-    // Placeholder for accompaniment generation
+    for (let i = 0; i < buffer.length; i++) {
+        const time = i / sampleRate;
+        buffer[i] = Math.sin(2 * Math.PI * noteFrequency * time);
+    }
+    
+    const { attack, decay, sustain, release } = preset.synth.envelope;
+    adsrEnvelope(buffer, attack, decay, sustain, release, duration, sampleRate);
+    
     return buffer;
 }
 
-function generateSoloPart(totalSamples) {
-    const buffer = new Float32Array(totalSamples).fill(0);
-    if (instruments.solo === 'none') return buffer;
-    // Placeholder for solo generation
-    return buffer;
-}
 
-function generateDrumPart(totalSamples, currentBar) {
-    const buffer = new Float32Array(totalSamples).fill(0);
-    if (!drumsEnabled) return buffer;
-
+function generateDrumPart(duration, sampleRate, barCount) {
+    const totalSamples = Math.floor(duration * sampleRate);
+    const buffer = new Float32Array(totalSamples);
+    if (!drumsEnabled || Object.keys(decodedSamples).length === 0) {
+        return buffer;
+    }
+    
     const drumPattern = [
-        { sample: 'kick', time: 0, velocity: 0.8 },
-        { sample: 'hat', time: 0, velocity: 0.6 },
-        { sample: 'hat', time: 0.25, velocity: 0.4 },
-        { sample: 'snare', time: 0.5, velocity: 1.0 },
-        { sample: 'hat', time: 0.5, velocity: 0.6 },
-        { sample: 'hat', time: 0.75, velocity: 0.4 },
+        { sample: "kick", time: 0, velocity: 0.8 },
+        { sample: "hat", time: 0.25, velocity: 0.4 },
+        { sample: "snare", time: 0.5, velocity: 1.0 },
+        { sample: "hat", time: 0.75, velocity: 0.4 },
     ];
     
-    // Add Ride on every beat
-    if (samples.ride) {
-       for(let i = 0; i < 4; i++) {
-           drumPattern.push({ sample: 'ride', time: i * 0.25, velocity: 0.3 });
-       }
+    // Add crash on the first beat of every 4th bar
+    if (barCount % 4 === 0) {
+       drumPattern.push({ sample: "crash", time: 0, velocity: 0.7 });
+    } else {
+        // Add ride on every beat in other bars
+        drumPattern.push({ sample: "ride", time: 0, velocity: 0.5 });
+        drumPattern.push({ sample: "ride", time: 0.25, velocity: 0.5 });
+        drumPattern.push({ sample: "ride", time: 0.5, velocity: 0.5 });
+        drumPattern.push({ sample: "ride", time: 0.75, velocity: 0.5 });
     }
-
-    // Add Crash on the first beat of every 4th bar
-    if (currentBar % 4 === 0 && samples.crash) {
-        drumPattern.push({ sample: 'crash', time: 0, velocity: 0.7 });
-    }
-
 
     for (const hit of drumPattern) {
-        let sampleData = samples[hit.sample];
-        if (!sampleData) continue;
+        const sample = decodedSamples[hit.sample];
+        if (!sample) continue;
 
         const startSample = Math.floor(hit.time * totalSamples);
+        const endSample = startSample + sample.length;
+        
+        let sampleToMix = sample;
 
         // Check if the sample fits
-        if (startSample + sampleData.length > totalSamples) {
-            // If the primary sample doesn't fit, try replacing it with a shorter one (hat)
-            const fallbackSample = samples['hat'];
-            if (fallbackSample && startSample + fallbackSample.length <= totalSamples) {
-                 sampleData = fallbackSample;
+        if (endSample > totalSamples) {
+            const remainingSpace = totalSamples - startSample;
+            if (remainingSpace <= 0) continue; // No space left, skip hit
+
+            // If the main sample doesn't fit, try a shorter one
+            const shortSample = decodedSamples["hat"];
+            if (shortSample && startSample + shortSample.length <= totalSamples) {
+                sampleToMix = shortSample;
             } else {
-                // If even the fallback doesn't fit, skip this hit
+                // If even the short one doesn't fit, skip this hit
                 continue;
             }
         }
         
         // Mix the sample into the buffer
-        for (let i = 0; i < sampleData.length; i++) {
-            // Ensure we don't write past the end of the main buffer
-            if (startSample + i < buffer.length) {
-                buffer[startSample + i] += sampleData[i] * hit.velocity;
+        for (let i = 0; i < sampleToMix.length; i++) {
+            if (startSample + i < totalSamples) {
+                buffer[startSample + i] += sampleToMix[i] * hit.velocity;
             }
         }
     }
-
     return buffer;
 }
 
 
-// --- Main Worker Logic ---
+// --- Worker Control ---
+function resetState() {
+    console.log("Worker state reset.");
+    barCount = 0;
+    lastTickTime = 0;
+    if (tickInterval) {
+        clearInterval(tickInterval);
+        tickInterval = null;
+    }
+}
 
-self.onmessage = (event) => {
-  const { command, data } = event.data;
 
-  switch (command) {
-    case 'load_samples':
-      // Copy data from message to our local state
-      for (const key in data) {
-        samples[key] = data[key];
-      }
-      self.postMessage({ type: 'samples_loaded' });
-      break;
-    case 'start':
-      if (isRunning) return;
-      sampleRate = data.sampleRate;
-      instruments = data.instruments;
-      drumsEnabled = data.drumsEnabled;
-      barCount = 0; // Reset bar count on start
-      startGenerator();
-      break;
-    case 'stop':
-      stopGenerator();
-      break;
-    case 'set_instruments':
-        instruments = data;
-        break;
-    case 'toggle_drums':
-        drumsEnabled = data.enabled;
-        break;
-  }
-};
+function startGenerator(data) {
+    if (isRunning) return;
+    
+    resetState();
 
-function startGenerator() {
-  isRunning = true;
-  runGenerator();
+    isRunning = true;
+    sampleRate = data.sampleRate;
+    instruments = data.instruments;
+    drumsEnabled = data.drumsEnabled;
+    lastTickTime = performance.now();
+
+    tickInterval = setInterval(runGenerator, 500); // Run generator every 500ms
+    console.log("Generator started");
 }
 
 function stopGenerator() {
-  isRunning = false;
+    if (!isRunning) return;
+    isRunning = false;
+    resetState();
+    console.log("Generator stopped");
 }
 
-function mixBuffers(bufferA, bufferB, weightB = 1.0) {
-    const length = Math.min(bufferA.length, bufferB.length);
-    const mixed = new Float32Array(length);
-    for (let i = 0; i < length; i++) {
-        mixed[i] = bufferA[i] + (bufferB[i] * weightB);
-    }
-    return mixed;
-}
-
-function normalizeBuffer(buffer, targetPeak = 0.9) {
-    let max = 0;
-    for (let i = 0; i < buffer.length; i++) {
-        max = Math.max(max, Math.abs(buffer[i]));
-    }
-    if (max > targetPeak) {
-        const gain = targetPeak / max;
-        for (let i = 0; i < buffer.length; i++) {
-            buffer[i] *= gain;
-        }
-    }
-    return buffer;
-}
 
 function runGenerator() {
-  if (!isRunning) return;
+    if (!isRunning) return;
 
-  const duration = CHUNK_DURATION_SECONDS;
-  const totalSamples = Math.floor(duration * sampleRate);
+    const now = performance.now();
+    const duration = 2; // Generate 2 seconds of audio per chunk (4/4 time at 120bpm)
 
-  // Generate parts
-  const bassPart = generateBassPart(totalSamples);
-  const accompanimentPart = generateAccompanimentPart(totalSamples);
-  const soloPart = generateSoloPart(totalSamples);
-  const drumPart = generateDrumPart(totalSamples, barCount);
-  
-  // Mix parts
-  let finalMix = mixBuffers(bassPart, accompanimentPart);
-  finalMix = mixBuffers(finalMix, soloPart);
-  finalMix = mixBuffers(finalMix, drumPart, 0.5); // Mix drums at 50% volume
+    // Check if it's time to generate the next chunk
+    if (now < lastTickTime + (duration * 1000) / 2) {
+         // Don't generate too far ahead
+        return;
+    }
 
-  // Normalize
-  finalMix = normalizeBuffer(finalMix);
-  
-  // Send chunk to main thread
-  // The second argument is a list of transferable objects.
-  // This transfers ownership of the underlying ArrayBuffer instead of copying, which is much faster.
-  self.postMessage({ type: 'chunk', data: { chunk: finalMix, duration } }, [finalMix.buffer]);
-  
-  barCount++;
-  
-  // Schedule next chunk
-  setTimeout(runGenerator, duration * 1000);
+    // Generate parts
+    const bassPart = generateSynthesizerPart(PRESETS.doomBass, duration, sampleRate);
+    const drumPart = generateDrumPart(duration, sampleRate, barCount);
+
+    // Mix parts
+    const chunk = new Float32Array(Math.floor(duration * sampleRate));
+    for (let i = 0; i < chunk.length; i++) {
+        let sample = 0;
+        if (i < bassPart.length) sample += bassPart[i] * 0.5; // Bass at 50% volume
+        if (i < drumPart.length) sample += drumPart[i] * 0.5; // Drums at 50% volume
+        // Simple clipping
+        chunk[i] = Math.max(-1, Math.min(1, sample));
+    }
+    
+    self.postMessage({ type: 'chunk', data: { chunk, duration } }, [chunk.buffer]);
+    
+    lastTickTime += duration * 1000;
+    barCount++;
 }
+
+self.onmessage = (event) => {
+    const { command, data } = event.data;
+    try {
+        switch (command) {
+            case "load_samples":
+                decodedSamples = data;
+                self.postMessage({ type: "samples_loaded" });
+                break;
+            case "start":
+                startGenerator(data);
+                break;
+            case "stop":
+                stopGenerator();
+                break;
+            case "set_instruments":
+                instruments = data;
+                break;
+            case "toggle_drums":
+                drumsEnabled = data.enabled;
+                break;
+        }
+    } catch (error) {
+        self.postMessage({
+            type: "error",
+            error: `Worker failed on command ${command}: ${error.message} \n ${error.stack}`,
+        });
+    }
+};
+
+    
