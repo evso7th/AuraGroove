@@ -34,9 +34,9 @@ export function AuraGroove() {
   const { toast } = useToast();
 
   const musicWorkerRef = useRef<Worker>();
+  const isInitializedRef = useRef(false);
 
   useEffect(() => {
-    // Initialize the single worker
     musicWorkerRef.current = new Worker(new URL('../lib/workers/ambient.worker.ts', import.meta.url));
 
     const handleMessage = (event: MessageEvent) => {
@@ -49,8 +49,11 @@ export function AuraGroove() {
     musicWorkerRef.current.onmessage = handleMessage;
     
     return () => {
-      // Terminate worker on component unmount
       musicWorkerRef.current?.terminate();
+      if(isInitializedRef.current) {
+        audioPlayer.stop();
+        isInitializedRef.current = false;
+      }
     };
   }, []);
   
@@ -62,7 +65,10 @@ export function AuraGroove() {
   const handlePlay = async () => {
     setIsLoading(true);
     try {
-      await audioPlayer.initialize(instruments);
+      if (!isInitializedRef.current) {
+        await audioPlayer.initialize(instruments);
+        isInitializedRef.current = true;
+      }
       musicWorkerRef.current?.postMessage({ command: 'start' });
       setIsPlaying(true);
     } catch (error) {
@@ -80,8 +86,9 @@ export function AuraGroove() {
 
   const handleStop = () => {
     musicWorkerRef.current?.postMessage({ command: 'stop' });
-    audioPlayer.stop();
     setIsPlaying(false);
+    // Note: We don't call audioPlayer.stop() here anymore to keep instruments loaded.
+    // Full stop/cleanup happens on component unmount.
   };
   
   const handleTogglePlay = () => {
@@ -94,12 +101,12 @@ export function AuraGroove() {
   
   // Update instruments in the audio player when they change
   useEffect(() => {
-    if (isPlaying) {
+    if (isInitializedRef.current) {
       audioPlayer.setInstrument('solo', instruments.solo);
       audioPlayer.setInstrument('accompaniment', instruments.accompaniment);
       audioPlayer.setInstrument('bass', instruments.bass);
     }
-  }, [instruments, isPlaying]);
+  }, [instruments]);
 
   return (
     <Card className="w-full max-w-md shadow-2xl">

@@ -27,7 +27,7 @@ class AudioPlayer {
 
   public async initialize(instruments: Instruments) {
     if (this.isInitialized) {
-      this.stop();
+      return;
     }
     await Tone.start();
     
@@ -99,7 +99,9 @@ class AudioPlayer {
     if (synth) {
       try {
         const duration = part === 'accompaniment' ? '1m' : part === 'bass' ? '1m' : '8n';
-        synth.triggerAttackRelease(note, duration, Tone.now());
+        // Schedule the note slightly in the future to avoid clicks
+        const playTime = Tone.context.currentTime + 0.1;
+        synth.triggerAttackRelease(note, duration, playTime);
       } catch (e) {
         console.error(`Error playing note on part ${part}:`, e);
       }
@@ -108,6 +110,12 @@ class AudioPlayer {
 
   public stop() {
     if (!this.isInitialized) return;
+
+    // Stop the transport and cancel all scheduled events
+    if (Tone.Transport.state === 'started') {
+        Tone.Transport.stop();
+    }
+    Tone.Transport.cancel(0);
 
     Object.values(this.synths).forEach(synth => {
       if (synth) {
@@ -122,11 +130,6 @@ class AudioPlayer {
     this.masterVolume?.dispose();
     
     this.isInitialized = false;
-    
-    if (Tone.Transport.state === 'started') {
-        Tone.Transport.stop();
-    }
-    Tone.Transport.cancel(0);
   }
 }
 
