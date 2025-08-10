@@ -48,7 +48,10 @@ export function AuraGroove() {
   const isInitializedRef = useRef(false);
 
   useEffect(() => {
-    musicWorkerRef.current = new Worker(new URL('../lib/workers/ambient.worker.ts', import.meta.url));
+    // Use a direct path to the worker script in the public folder.
+    // This is a more robust way to initialize workers in Next.js.
+    musicWorkerRef.current = new Worker('/workers/ambient.worker.js');
+
 
     const handleMessage = (event: MessageEvent) => {
       const { type, buffer, duration, message } = event.data;
@@ -208,7 +211,7 @@ export function AuraGroove() {
                 id="drums-enabled"
                 checked={drumsEnabled}
                 onCheckedChange={handleDrumsToggle}
-                disabled={isLoading}
+                disabled={isLoading || isPlaying}
                 />
                 <Label htmlFor="drums-enabled">Drums</Label>
             </div>

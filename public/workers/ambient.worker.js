@@ -1,9 +1,7 @@
 
-
 // --- UTILITIES ---
 class PRNG {
-  private seed: number;
-  constructor(seed: number) {
+  constructor(seed) {
     this.seed = seed;
   }
   next() {
@@ -20,17 +18,17 @@ const scales = {
   blues: [60, 63, 65, 66, 67, 70],
 };
 
-function midiToFreq(midi: number) {
+function midiToFreq(midi) {
   return Math.pow(2, (midi - 69) / 12) * 440;
 }
 
-function mapValueToMidi(value: number, scale: number[], octave: number) {
+function mapValueToMidi(value, scale, octave) {
   const noteIndex = Math.floor(value * scale.length);
   return scale[noteIndex] + (octave * 12);
 }
 
 // --- STATE ---
-let generationInterval: any = null;
+let generationInterval = null;
 const partDuration = 4; // seconds
 const sampleRate = 44100;
 let instruments = {
@@ -52,46 +50,18 @@ const bassScale = scales.aeolian;
 
 // --- DRUM SAMPLES & SEQUENCER ---
 
-const drumSamples: { [key: string]: AudioBuffer } = {};
+const drumSamples = {};
 let samplesLoaded = false;
 
-// =======================================================================================
-// === ШАГ 1: УКАЖИТЕ ПУТИ К ВАШИМ АУДИОФАЙЛАМ ===
-// =======================================================================================
-//
-// Здесь мы перечисляем все сэмплы ударных, которые хотим использовать.
-//
-// - Ключ (напр., 'snare') - это внутреннее имя для сэмпла.
-// - Значение (напр., '/assets/drums/snare.wav') - это ПУТЬ К ФАЙЛУ.
-//
-// ВАЖНО:
-// 1. Физически файл должен находиться в папке `public/assets/drums/`.
-// 2. Путь в коде должен начинаться с `/` и НЕ должен включать `public`.
-//
+
 const drumSampleFiles = {
   snare: '/assets/drums/snare.wav'
 };
 
-
-// =======================================================================================
-// === ШАГ 2: ОПРЕДЕЛИТЕ РИТМ (ПАТТЕРН) ===
-// =======================================================================================
-//
-// Здесь мы указываем, когда должен играть каждый сэмпл.
-// Паттерн - это массив из 16 шагов (1 такт).
-// 1 = удар, 0 = тишина.
-//
 const drumSequencerPattern = {
     snare: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
 };
 
-
-// =======================================================================================
-// === ШАГ 3: КОД ЗАГРУЗКИ (МЕНЯТЬ НЕ НУЖНО) ===
-// =======================================================================================
-//
-// Эта функция автоматически загружает все файлы, указанные в `drumSampleFiles`.
-//
 async function loadDrumSamples() {
     postMessage({ type: 'loading_status', message: 'Loading drum samples...' });
     samplesLoaded = false;
@@ -99,7 +69,7 @@ async function loadDrumSamples() {
 
     try {
         for (const key of sampleKeys) {
-            const path = (drumSampleFiles as any)[key];
+            const path = drumSampleFiles[key];
             const url = `${baseUrl}${path}`;
             
             postMessage({ type: 'loading_status', message: `Fetching ${key} from ${url}` });
@@ -113,8 +83,9 @@ async function loadDrumSamples() {
                 return response.arrayBuffer();
             });
 
-            const arrayBuffer = await Promise.race([fetchPromise, timeoutPromise]) as ArrayBuffer;
-
+            const arrayBuffer = await Promise.race([fetchPromise, timeoutPromise]);
+            
+            // Correctly call decodeAudioData in the worker's global scope
             const audioBuffer = await self.decodeAudioData(arrayBuffer);
             drumSamples[key] = audioBuffer;
         }
@@ -159,9 +130,7 @@ function createDrumPart() {
 
 
 // --- SYNTH CREATION ---
-type Note = { freq: number; time: number; duration: number; velocity: number };
-
-function adsrEnvelope(t: number, attack: number, decay: number, sustainLevel: number, noteDuration: number) {
+function adsrEnvelope(t, attack, decay, sustainLevel, noteDuration) {
     const sustainTime = noteDuration - attack - decay;
     if (t < 0) return 0;
     if (t < attack) return t / attack;
@@ -171,7 +140,7 @@ function adsrEnvelope(t: number, attack: number, decay: number, sustainLevel: nu
 }
 
 
-function oscillator(type: string, t: number, freq: number) {
+function oscillator(type, t, freq) {
     switch (type) {
         case 'sawtooth': return 2 * (t * freq - Math.floor(0.5 + t * freq));
         case 'square': return Math.sign(Math.sin(2 * Math.PI * t * freq));
@@ -180,7 +149,7 @@ function oscillator(type: string, t: number, freq: number) {
     }
 }
 
-function createSynthVoice(notes: Note[], totalDuration: number, instrument: string) {
+function createSynthVoice(notes, totalDuration, instrument) {
     const buffer = new Float32Array(totalDuration * sampleRate).fill(0);
     let synthOptions;
 
@@ -233,7 +202,7 @@ async function generatePart() {
   try {
     const finalBuffer = new Float32Array(partDuration * sampleRate).fill(0);
 
-    const soloNotes: Note[] = [];
+    const soloNotes = [];
     for (let i = 0; i < 8; i++) {
         if (soloPrng.next() > 0.6) {
             const time = i * 0.5;
@@ -244,7 +213,7 @@ async function generatePart() {
         }
     }
 
-    const accompanimentNotes: Note[] = [];
+    const accompanimentNotes = [];
     for (let i = 0; i < 4; i++) {
         if (accompanimentPrng.next() > 0.3) {
           const time = i * 1;
@@ -255,7 +224,7 @@ async function generatePart() {
         }
     }
 
-    const bassNotes: Note[] = [];
+    const bassNotes = [];
     for (let i = 0; i < 2; i++) {
         const time = i * 2;
         const value = bassPrng.next();
@@ -286,7 +255,7 @@ async function generatePart() {
     
     postMessage({ type: 'music_part', buffer: finalBuffer, duration: partDuration }, [finalBuffer.buffer]);
 
-  } catch (e: any) {
+  } catch (e) {
       console.error("Worker: Error in music generation loop:", e);
       postMessage({ type: 'error', message: e.message || 'An unknown error occurred in the worker.' });
   }
