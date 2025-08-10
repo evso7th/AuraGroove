@@ -1,3 +1,4 @@
+
 // --- UTILITIES ---
 class PRNG {
   private seed: number;
@@ -219,6 +220,9 @@ async function generatePart() {
              if (i % 2 !== 0) { // Closed hats on the off-beats
                  if (drumPrng.next() > 0.15) mix(finalBuffer, drumBuffers.closedHat, time, 0.5);
              }
+        }
+         if (drumPrng.next() > 0.9) { 
+            mix(finalBuffer, drumBuffers.crash, 0, 0.6);
         }
     }
     
