@@ -51,11 +51,11 @@ const bassScale = scales.aeolian;
 
 // --- DRUM SAMPLES ---
 const drumSampleFiles = {
-    kick: '/assets/drums/kickdrum.wav',
-    snare: '/assets/drums/snare.wav',
-    closedHat: '/assets/drums/closed hi hat accented.wav',
-    openHat: '/assets/drums/Open HH (Top) (2).wav',
-    crash: '/assets/drums/Crash (1).wav',
+    kick: '/public/assets/drums/kickdrum.wav',
+    snare: '/public/assets/drums/snare.wav',
+    closedHat: '/public/assets/drums/closed hi hat accented.wav',
+    openHat: '/public/assets/drums/Open HH (Top) (2).wav',
+    crash: '/public/assets/drums/Crash (1).wav',
 };
 const drumBuffers: { [key: string]: Float32Array } = {};
 let drumsLoaded = false;
@@ -64,6 +64,9 @@ async function loadDrumSamples() {
     try {
         const promises = Object.entries(drumSampleFiles).map(async ([name, url]) => {
             const response = await fetch(url);
+             if (!response.ok) {
+                throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
+            }
             const arrayBuffer = await response.arrayBuffer();
             // This is a minimal polyfill for Safari which doesn't have a promise-based decodeAudioData yet
             const decoded = await new Promise<AudioBuffer>((resolve, reject) => {
@@ -123,21 +126,25 @@ function createSynthVoice(notes: Note[], totalDuration: number, instrument: stri
     notes.forEach(note => {
         const noteDurationInSamples = Math.floor(note.duration * sampleRate);
         const startSample = Math.floor(note.time * sampleRate);
-        const endSample = startSample + noteDurationInSamples;
-        const releaseSamples = Math.floor(synthOptions.release * sampleRate);
+        
+        for (let i = 0; i < noteDurationInSamples; i++) {
+            const currentSample = startSample + i;
+            if (currentSample >= buffer.length) break;
 
-
-        for (let i = startSample; i < endSample && i < buffer.length; i++) {
-            const t = (i - startSample) / sampleRate;
+            const t = i / sampleRate;
             const envelope = adsrEnvelope(t, synthOptions.attack, synthOptions.decay, synthOptions.sustain, synthOptions.release);
             let value = oscillator(synthOptions.oscType, t, note.freq) * envelope * note.velocity * synthOptions.volume;
-            buffer[i] += value;
+            buffer[currentSample] += value;
         }
 
-        const fadeOutStartSample = Math.max(startSample, endSample - releaseSamples);
-         for (let i = fadeOutStartSample; i < endSample && i < buffer.length; i++) {
-            const fadeOutProgress = (endSample - i) / (endSample - fadeOutStartSample);
-            buffer[i] *= fadeOutProgress;
+        const fadeOutSamples = 500;
+        const fadeOutStartSample = startSample + noteDurationInSamples - fadeOutSamples;
+         for (let i = 0; i < fadeOutSamples; i++) {
+            const currentSample = fadeOutStartSample + i;
+            if (currentSample < 0 || currentSample >= buffer.length) continue;
+            
+            const fadeOutProgress = 1 - (i / fadeOutSamples);
+            buffer[currentSample] *= fadeOutProgress;
         }
     });
 
