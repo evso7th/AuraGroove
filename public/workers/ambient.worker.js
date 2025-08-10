@@ -1,235 +1,218 @@
 
 "use strict";
 
+// --- State Management ---
 let state = {};
-let generatorInterval = null;
-
-const SAMPLES_PER_CHUNK = 8192; // A small buffer size for low latency
+const BPM = 100;
+const CHUNK_DURATION_SECONDS = 1.5;
 
 function resetState() {
-  console.log("Resetting worker state");
   state = {
     sampleRate: 44100,
-    isRunning: false,
+    samples: {},
     instruments: {
       solo: "none",
       accompaniment: "none",
       bass: "bass guitar",
     },
     drumsEnabled: true,
-    samples: {}, // To store raw audio data for drums
+    isPlaying: false,
+    intervalId: null,
     
-    // Time and rhythm state
+    // Time and rhythm tracking
+    totalTime: 0,
     barCount: 0,
-    lastTickTime: 0,
-    tickCount: 0,
-    tempo: 100, // bpm
-    
-    // Part-specific states
-    bassNote: 'E1', // Starting bass note
-    lastChordTime: 0,
-    
-    // Internal buffer state
-    generatorBuffer: new Float32Array(SAMPLES_PER_CHUNK),
-    bufferPosition: 0,
+    lastTick: 0,
+
+    // Part generators
+    bassPart: [],
+    soloPart: [],
+    accompPart: [],
   };
 }
 
-// Simple synth functions (will be replaced with more complex generation)
-function generateSineWave(freq, duration, sampleRate) {
-    const buffer = new Float32Array(Math.floor(duration * sampleRate));
-    for (let i = 0; i < buffer.length; i++) {
-        buffer[i] = Math.sin(2 * Math.PI * freq * (i / sampleRate));
+// --- Pattern Definition (The "Sheet Music") ---
+const drumPatterns = {
+  // A measure is 4 beats. At 100 BPM, one beat is 0.6 seconds. A measure is 2.4s.
+  // Our chunk is 1.5s, so we'll have patterns that span across chunks.
+  main: [
+    // Time is within a 4-beat measure.
+    { sample: 'kick', time: 0, velocity: 0.9 },
+    { sample: 'hat', time: 0, velocity: 0.5 },
+    { sample: 'hat', time: 0.5, velocity: 0.3 }, // Ghost note
+    { sample: 'snare', time: 1, velocity: 1.0 },
+    { sample: 'hat', time: 1, velocity: 0.5 },
+    { sample: 'hat', time: 1.5, velocity: 0.3 }, // Ghost note
+    { sample: 'kick', time: 2, velocity: 0.9 },
+    { sample: 'hat', time: 2, velocity: 0.5 },
+    { sample: 'hat', time: 2.5, velocity: 0.3 }, // Ghost note
+    { sample: 'snare', time: 3, velocity: 1.0 },
+    { sample: 'hat', time: 3, velocity: 0.5 },
+    { sample: 'hat', time: 3.5, velocity: 0.3 }, // Ghost note
+  ],
+  getFillPattern: (barCount) => {
+    // Every 4th bar has a crash
+    if (barCount > 0 && barCount % 4 === 0) {
+      return [{ sample: 'crash', time: 0, velocity: 0.8 }];
     }
-    return buffer;
-}
-
-function generateBassPart(chunkDuration) {
-    if (state.instruments.bass === 'none') {
-        return new Float32Array(SAMPLES_PER_CHUNK);
+    // Every other bar has a ride
+    if (barCount > 0 && barCount % 2 === 0) {
+        return [
+            { sample: 'ride', time: 0, velocity: 0.6 },
+            { sample: 'ride', time: 1, velocity: 0.6 },
+            { sample: 'ride', time: 2, velocity: 0.6 },
+            { sample: 'ride', time: 3, velocity: 0.6 },
+        ];
     }
-    
-    const noteDuration = 4 * 60 / state.tempo; // One note per bar
-    const bassBuffer = new Float32Array(SAMPLES_PER_CHUNK);
-    
-    // This is a placeholder. A real implementation would be more complex.
-    const freq = state.bassNote === 'E1' ? 41.20 : 55.00; // Simple E1 or A1
-    
-    const samplesInNote = Math.floor(noteDuration * state.sampleRate);
-    for (let i = 0; i < SAMPLES_PER_CHUNK; i++) {
-      const time = state.lastTickTime + (i / state.sampleRate);
-      if (time - state.lastChordTime < noteDuration) {
-          bassBuffer[i] = Math.sin(2 * Math.PI * freq * (time - state.lastChordTime)) * 0.4;
-          // Fade out last 500 samples
-           if (i > samplesInNote - 500) {
-               bassBuffer[i] *= (samplesInNote - i) / 500;
-           }
-      }
-    }
-    
-    // Change note every bar
-    const barLengthInSeconds = 4 * 60 / state.tempo;
-    if (state.lastTickTime + chunkDuration - state.lastChordTime >= barLengthInSeconds) {
-       state.bassNote = state.bassNote === 'E1' ? 'A1' : 'E1';
-       state.lastChordTime += barLengthInSeconds;
-    }
-
-    return bassBuffer;
-}
-
-
-function generateDrumPart(chunkDuration) {
-  if (!state.drumsEnabled || Object.keys(state.samples).length === 0) {
-    return new Float32Array(SAMPLES_PER_CHUNK);
-  }
-
-  const drumBuffer = new Float32Array(SAMPLES_PER_CHUNK);
-  const beatsPerSecond = state.tempo / 60;
-  const samplesPerBeat = state.sampleRate / beatsPerSecond;
-
-  const drumPattern = [
-    { sound: "kick", time: 0.0, velocity: 0.8 },
-    { sound: "hat", time: 0.0, velocity: 0.6 },
-    { sound: "hat", time: 0.25, velocity: 0.3 },
-    { sound: "snare", time: 0.5, velocity: 1.0 },
-    { sound: "hat", time: 0.5, velocity: 0.6 },
-    { sound: "hat", time: 0.75, velocity: 0.3 },
-  ];
-  
-  // Add Ride or Crash based on bar count
-  if (state.barCount % 4 === 0) {
-      drumPattern.push({ sound: 'crash', time: 0.0, velocity: 0.7 });
-  } else {
-      drumPattern.push({ sound: 'ride', time: 0.0, velocity: 0.5 });
-      drumPattern.push({ sound: 'ride', time: 0.25, velocity: 0.2 });
-      drumPattern.push({ sound: 'ride', time: 0.5, velocity: 0.5 });
-      drumPattern.push({ sound: 'ride', time: 0.75, velocity: 0.2 });
-  }
-
-  const barDurationInSamples = 4 * samplesPerBeat;
-
-  for (let i = 0; i < SAMPLES_PER_CHUNK; i++) {
-    const currentSampleInBar = (state.tickCount + i) % barDurationInSamples;
-    const timeInBar = currentSampleInBar / samplesPerBeat; // Time in beats
-
-    for (const hit of drumPattern) {
-      if (Math.abs(timeInBar - hit.time) < 0.001) { // Check if it's time for a hit
-        const sample = state.samples[hit.sound];
-        if (!sample) continue;
-
-        const startSample = i;
-        const endSample = startSample + sample.length;
-
-        if (endSample > SAMPLES_PER_CHUNK) {
-          // If the sample doesn't fit, skip it to prevent errors.
-          // A more robust solution might fade it out or use a shorter sample.
-          continue;
-        }
-
-        // Mix the drum sample into the buffer
-        for (let j = 0; j < sample.length; j++) {
-          if (startSample + j < SAMPLES_PER_CHUNK) {
-            drumBuffer[startSample + j] += sample[j] * hit.velocity;
-          }
-        }
-      }
-    }
-  }
-
-  return drumBuffer;
-}
-
-
-function runGenerator() {
-    const chunkDuration = SAMPLES_PER_CHUNK / state.sampleRate;
-
-    // Generate parts
-    const drumPart = generateDrumPart(chunkDuration);
-    const bassPart = generateBassPart(chunkDuration);
-    // Other instruments would be generated here
-
-    const finalChunk = new Float32Array(SAMPLES_PER_CHUNK);
-
-    // Mix parts
-    for (let i = 0; i < SAMPLES_PER_CHUNK; i++) {
-        const mix = (drumPart[i] || 0) + (bassPart[i] || 0);
-        finalChunk[i] = Math.max(-1, Math.min(1, mix)); // Basic clipping
-    }
-    
-    self.postMessage({
-        type: 'chunk',
-        data: {
-            chunk: finalChunk,
-            duration: chunkDuration
-        }
-    }, [finalChunk.buffer]);
-    
-    // --- Update State ---
-    state.tickCount += SAMPLES_PER_CHUNK;
-
-    const barLengthInSamples = 4 * (state.sampleRate / (state.tempo / 60));
-    if (state.tickCount > (state.barCount + 1) * barLengthInSamples) {
-      state.barCount++;
-       console.log(`Bar: ${state.barCount}`);
-    }
-    state.lastTickTime += chunkDuration;
-}
-
-function startGenerator() {
-  if (state.isRunning || generatorInterval !== null) {
-    console.log("Generator is already running.");
-    return;
-  }
-  console.log("Starting generator...");
-  state.isRunning = true;
-  
-  const intervalTime = (SAMPLES_PER_CHUNK / state.sampleRate) * 1000 * 0.95; // Run slightly faster to stay ahead
-
-  generatorInterval = setInterval(runGenerator, intervalTime);
-}
-
-function stopGenerator() {
-  if (!state.isRunning || generatorInterval === null) return;
-  console.log("Stopping generator...");
-  clearInterval(generatorInterval);
-  generatorInterval = null;
-  state.isRunning = false;
-  resetState(); // Reset state on stop
-}
-
-
-self.onmessage = function (e) {
-  const { command, data } = e.data;
-
-  switch (command) {
-    case 'load_samples':
-      resetState();
-      state.samples = data;
-      self.postMessage({ type: 'samples_loaded' });
-      break;
-    case 'start':
-      if (state.isRunning) return;
-      // Do not reset here, reset is handled on stop and load.
-      state.instruments = data.instruments;
-      state.drumsEnabled = data.drumsEnabled;
-      state.sampleRate = data.sampleRate || 44100;
-      state.lastTickTime = 0;
-      state.lastChordTime = 0;
-      state.tickCount = 0;
-      state.barCount = 0;
-      startGenerator();
-      break;
-    case 'stop':
-      stopGenerator();
-      break;
-    case 'set_instruments':
-      state.instruments = data;
-      break;
-    case 'toggle_drums':
-      state.drumsEnabled = data.enabled;
-      break;
+    return [];
   }
 };
 
-// Initialize state on worker load
+
+// --- Generator (The "Musician") ---
+
+function generateDrums(chunkBuffer, startTime, endTime) {
+  if (!state.drumsEnabled) return;
+
+  const beatsPerSecond = BPM / 60;
+  const measureDuration = 4 / beatsPerSecond; // 4 beats per measure
+
+  let currentGlobalTime = startTime;
+
+  while (currentGlobalTime < endTime) {
+    const timeInMeasure = state.totalTime % measureDuration;
+    const currentMeasureIndex = Math.floor(state.totalTime / measureDuration);
+    
+    // Main pattern
+    for (const hit of drumPatterns.main) {
+      const hitTimeInMeasure = hit.time / beatsPerSecond;
+      if (hitTimeInMeasure >= timeInMeasure && hitTimeInMeasure < (timeInMeasure + (endTime - currentGlobalTime))) {
+        const timeInChunk = hitTimeInMeasure - timeInMeasure;
+        renderSample(chunkBuffer, hit.sample, timeInChunk, hit.velocity);
+      }
+    }
+
+    // Fill pattern (Crash/Ride)
+    const fillPattern = drumPatterns.getFillPattern(currentMeasureIndex);
+     for (const hit of fillPattern) {
+        const hitTimeInMeasure = hit.time / beatsPerSecond;
+        if (hitTimeInMeasure >= timeInMeasure && hitTimeInMeasure < (timeInMeasure + (endTime - currentGlobalTime))) {
+            const timeInChunk = hitTimeInMeasure - timeInMeasure;
+            renderSample(chunkBuffer, hit.sample, timeInChunk, hit.velocity);
+        }
+    }
+
+    const timeToAdvance = endTime - currentGlobalTime;
+    state.totalTime += timeToAdvance;
+    currentGlobalTime = endTime;
+  }
+}
+
+/**
+ * Renders a single sample into the output buffer.
+ * This is the core audio processing function.
+ */
+function renderSample(outputBuffer, sampleName, timeInChunk, velocity) {
+  const sample = state.samples[sampleName];
+  if (!sample) return;
+
+  const startFrame = Math.floor(timeInChunk * state.sampleRate);
+  const endFrame = startFrame + sample.length;
+
+  // This check prevents the "RangeError"
+  if (endFrame > outputBuffer.length) {
+    // If it doesn't fit, we just don't play it. No clipping, no errors.
+    return;
+  }
+
+  for (let i = 0; i < sample.length; i++) {
+    // Mix, not overwrite, by adding the samples together.
+    outputBuffer[startFrame + i] += sample[i] * velocity;
+  }
+}
+
+// This function will generate the next block of audio data.
+function generateNextChunk() {
+  const chunkFrameCount = Math.floor(CHUNK_DURATION_SECONDS * state.sampleRate);
+  const chunkBuffer = new Float32Array(chunkFrameCount).fill(0);
+
+  // --- Generate Parts ---
+  // In a real scenario, you'd have similar pattern-based generators for bass, solo, etc.
+  // For now, we focus on making the drums robust.
+  generateDrums(chunkBuffer, state.totalTime, state.totalTime + CHUNK_DURATION_SECONDS);
+
+  // --- Post a transferable message back to the main thread ---
+  self.postMessage({
+    type: 'chunk',
+    data: {
+      chunk: chunkBuffer,
+      duration: CHUNK_DURATION_SECONDS
+    }
+  }, [chunkBuffer.buffer]);
+}
+
+
+// --- Command Handlers (The "Conductor") ---
+function startGenerator() {
+  if (state.isPlaying) return;
+  
+  // Reset state ONCE before starting.
+  resetState(); 
+  state.isPlaying = true;
+  
+  // This ensures generation starts immediately, then intervals.
+  generateNextChunk(); 
+  state.intervalId = setInterval(generateNextChunk, CHUNK_DURATION_SECONDS * 1000);
+}
+
+function stopGenerator() {
+  if (!state.isPlaying) return;
+  state.isPlaying = false;
+  if (state.intervalId) {
+    clearInterval(state.intervalId);
+    state.intervalId = null;
+  }
+  // Reset state on stop to be clean for the next run.
+  resetState();
+}
+
+// --- Message Listener (The "Mailbox") ---
+self.onmessage = (event) => {
+  const { command, data } = event.data;
+
+  switch (command) {
+    case 'load_samples':
+      state.samples = data;
+      self.postMessage({ type: 'samples_loaded' });
+      break;
+
+    case 'start':
+      if (data) {
+          state.instruments = data.instruments;
+          state.drumsEnabled = data.drumsEnabled;
+          state.sampleRate = data.sampleRate;
+      }
+      startGenerator();
+      break;
+
+    case 'stop':
+      stopGenerator();
+      break;
+
+    case 'set_instruments':
+      state.instruments = data;
+      break;
+
+    case 'toggle_drums':
+      state.drumsEnabled = data.enabled;
+      break;
+      
+    default:
+      self.postMessage({ type: 'error', error: 'Unknown command' });
+  }
+};
+
+// Initialize state when worker loads
 resetState();
+
+    
