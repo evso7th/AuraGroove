@@ -69,7 +69,7 @@ let samplesLoaded = false;
 // 2. Путь в коде должен начинаться с `/` и НЕ должен включать `public`.
 //
 const drumSampleFiles = {
-  snare: '/assets/drums/snare.wav',
+  snare: '/assets/drums/snare.wav'
 };
 
 
@@ -115,8 +115,7 @@ async function loadDrumSamples() {
 
             const arrayBuffer = await Promise.race([fetchPromise, timeoutPromise]) as ArrayBuffer;
 
-            const tempCtx = new OfflineAudioContext(1, 1, sampleRate);
-            const audioBuffer = await tempCtx.decodeAudioData(arrayBuffer);
+            const audioBuffer = await self.decodeAudioData(arrayBuffer);
             drumSamples[key] = audioBuffer;
         }
         samplesLoaded = true;
@@ -327,6 +326,8 @@ self.onmessage = async function(e) {
   
   } else if (command === 'toggle_drums') {
     drumsEnabled = data;
-  
+    if(drumsEnabled && !samplesLoaded && generationInterval !== null) {
+        loadDrumSamples();
+    }
   }
 };

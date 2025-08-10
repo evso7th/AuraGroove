@@ -157,7 +157,7 @@ export function AuraGroove() {
             <Select
               value={instruments.solo}
               onValueChange={handleInstrumentChange('solo')}
-              disabled={isLoading}
+              disabled={isLoading || isPlaying}
             >
               <SelectTrigger id="solo-instrument" className="col-span-2">
                 <SelectValue placeholder="Select instrument" />
@@ -174,7 +174,7 @@ export function AuraGroove() {
              <Select
               value={instruments.accompaniment}
               onValueChange={handleInstrumentChange('accompaniment')}
-              disabled={isLoading}
+              disabled={isLoading || isPlaying}
             >
               <SelectTrigger id="accompaniment-instrument" className="col-span-2">
                 <SelectValue placeholder="Select instrument" />
@@ -191,7 +191,7 @@ export function AuraGroove() {
              <Select
               value={instruments.bass}
               onValueChange={handleInstrumentChange('bass')}
-              disabled={isLoading}
+              disabled={isLoading || isPlaying}
             >
               <SelectTrigger id="bass-instrument" className="col-span-2">
                 <SelectValue placeholder="Select instrument" />
