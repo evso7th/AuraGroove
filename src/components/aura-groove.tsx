@@ -31,6 +31,12 @@ export type Instruments = {
   bass: 'bass guitar' | 'none';
 };
 
+const sampleUrls = {
+    kick: '/samples/drums/kick.wav',
+    snare: '/samples/drums/snare.wav',
+    hat: '/samples/drums/hat.wav'
+};
+
 export function AuraGroove() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -47,7 +53,6 @@ export function AuraGroove() {
   const isAudioInitialized = useRef(false);
 
   useEffect(() => {
-    // Use the direct path to the JS worker in the public folder
     musicWorkerRef.current = new Worker('/workers/ambient.worker.js');
 
     const handleMessage = (event: MessageEvent) => {
@@ -96,6 +101,43 @@ export function AuraGroove() {
     });
   }
   
+  const loadAndSendSamples = async () => {
+    if (!audioPlayer.getAudioContext()) return;
+    
+    setLoadingText("Loading samples...");
+    try {
+        const audioContext = audioPlayer.getAudioContext()!;
+        const sampleEntries = Object.entries(sampleUrls);
+        
+        const decodedSamples: { [key: string]: Float32Array } = {};
+        const transferableObjects: Transferable[] = [];
+
+        for (const [key, url] of sampleEntries) {
+            const response = await fetch(url);
+            const arrayBuffer = await response.arrayBuffer();
+            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+            const float32Array = audioBuffer.getChannelData(0);
+            decodedSamples[key] = float32Array;
+            transferableObjects.push(float32Array.buffer);
+        }
+
+        musicWorkerRef.current?.postMessage({
+            command: 'load_samples',
+            data: decodedSamples
+        }, transferableObjects);
+
+    } catch (error) {
+        console.error("Failed to load samples:", error);
+        toast({
+            variant: "destructive",
+            title: "Sample Error",
+            description: "Could not load drum samples. Please check the file paths and network.",
+        });
+        throw error;
+    }
+  };
+
+
   const handlePlay = async () => {
     setIsLoading(true);
 
@@ -104,18 +146,24 @@ export function AuraGroove() {
         await audioPlayer.initialize();
         isAudioInitialized.current = true;
     }
-    
-    setLoadingText("Generating music...");
-    const sampleRate = audioPlayer.getAudioContext()?.sampleRate || 44100;
 
-    musicWorkerRef.current?.postMessage({
-        command: 'start',
-        data: {
-            instruments,
-            drumsEnabled,
-            sampleRate
-        }
-    });
+    try {
+        await loadAndSendSamples();
+
+        setLoadingText("Generating music...");
+        const sampleRate = audioPlayer.getAudioContext()?.sampleRate || 44100;
+    
+        musicWorkerRef.current?.postMessage({
+            command: 'start',
+            data: {
+                instruments,
+                drumsEnabled,
+                sampleRate
+            }
+        });
+    } catch(error) {
+        handleStop();
+    }
   };
 
   const handleStop = () => {
@@ -247,3 +295,5 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    
