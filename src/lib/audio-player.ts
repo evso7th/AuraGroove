@@ -1,34 +1,29 @@
 
 "use client";
 
-import * as Tone from 'tone';
-
-export type InstrumentType = 'synthesizer' | 'organ' | 'piano' | 'bass guitar';
-
-export interface Instruments {
-  solo: InstrumentType;
-  accompaniment: InstrumentType;
-  bass: InstrumentType;
-}
-
 class AudioPlayer {
   private isInitialized = false;
   private audioContext: AudioContext | null = null;
   private nextPartStartTime = 0;
   private bufferQueue: { buffer: AudioBuffer, time: number }[] = [];
   private isPlaying = false;
-  private scheduleTimeout: number | null = null;
+  private scheduleTimeoutId: number | null = null;
 
   constructor() {}
 
   public async initialize() {
     if (this.isInitialized) return;
-    // Tone.start() returns a promise that resolves when the audio context is started
-    await Tone.start(); 
-    this.audioContext = Tone.context.rawContext as AudioContext;
+    
+    // Create a new AudioContext
+    this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    // Resume context if it's in a suspended state (required by modern browsers)
+    if (this.audioContext.state === 'suspended') {
+        await this.audioContext.resume();
+    }
+    
     this.isInitialized = true;
     this.isPlaying = false;
-    console.log("AudioPlayer initialized");
+    console.log("AudioPlayer initialized with sample rate:", this.audioContext.sampleRate);
   }
   
   private scheduleBuffers() {
@@ -36,23 +31,21 @@ class AudioPlayer {
     
     const now = this.audioContext.currentTime;
     
-    // Schedule buffers that should start in the next 0.5 seconds
-    while(this.bufferQueue.length > 0 && this.bufferQueue[0].time < now + 0.5) {
+    // Schedule all buffers that should have started by now + a small lookahead window
+    while(this.bufferQueue.length > 0 && this.bufferQueue[0].time < now + 0.1) {
       const { buffer, time } = this.bufferQueue.shift()!;
       
       const source = this.audioContext.createBufferSource();
       source.buffer = buffer;
       source.connect(this.audioContext.destination);
       
-      // Ensure the start time is not in the past
+      // If the scheduled time is in the past, play it immediately. Otherwise, play it at the scheduled time.
       const startTime = Math.max(now, time);
       source.start(startTime);
     }
-
-    if (this.isPlaying) {
-       // Check for new buffers to schedule every 100ms
-       this.scheduleTimeout = window.setTimeout(() => this.scheduleBuffers(), 100);
-    }
+    
+    // Continue scheduling
+    this.scheduleTimeoutId = window.setTimeout(() => this.scheduleBuffers(), 50);
   }
 
   public schedulePart(bufferData: Float32Array, duration: number) {
@@ -62,10 +55,10 @@ class AudioPlayer {
       }
 
       // Create an AudioBuffer from the raw Float32Array data
-      const buffer = this.audioContext.createBuffer(1, bufferData.length, this.audioContext.sampleRate);
-      buffer.copyToChannel(bufferData, 0);
+      const audioBuffer = this.audioContext.createBuffer(1, bufferData.length, this.audioContext.sampleRate);
+      audioBuffer.copyToChannel(bufferData, 0);
       
-      this.bufferQueue.push({ buffer, time: this.nextPartStartTime });
+      this.bufferQueue.push({ buffer: audioBuffer, time: this.nextPartStartTime });
       
       // Increment the start time for the next part
       this.nextPartStartTime += duration;
@@ -74,9 +67,8 @@ class AudioPlayer {
   public start() {
     if (!this.isInitialized || !this.audioContext || this.isPlaying) return;
     this.isPlaying = true;
-    // Start playing a little bit in the future to avoid initial glitches
-    this.nextPartStartTime = this.audioContext.currentTime + 0.1;
-    this.bufferQueue = [];
+    // Start playing a little bit in the future to ensure the first buffer is ready
+    this.nextPartStartTime = this.audioContext.currentTime + 0.2;
     this.scheduleBuffers();
     console.log("AudioPlayer started");
   }
@@ -84,10 +76,9 @@ class AudioPlayer {
   public stop() {
     if (!this.isInitialized || !this.isPlaying) return;
     this.isPlaying = false;
-    // Stop the scheduling loop
-    if (this.scheduleTimeout) {
-      clearTimeout(this.scheduleTimeout);
-      this.scheduleTimeout = null;
+    if (this.scheduleTimeoutId) {
+      clearTimeout(this.scheduleTimeoutId);
+      this.scheduleTimeoutId = null;
     }
     // Clear any pending buffers
     this.bufferQueue = [];
