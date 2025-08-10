@@ -47,7 +47,7 @@ class AudioPlayer {
     
     const now = this.audioContext.currentTime;
     
-    while(this.bufferQueue.length > 0 && this.bufferQueue[0].time < now + 0.1) {
+    while(this.bufferQueue.length > 0 && this.bufferQueue[0].time < now + 0.2) {
       const { buffer, time } = this.bufferQueue.shift()!;
       
       const source = this.audioContext.createBufferSource();
@@ -58,6 +58,7 @@ class AudioPlayer {
       source.start(startTime);
     }
     
+    // Keep the scheduler running
     this.scheduleTimeoutId = window.setTimeout(() => this.scheduleBuffers(), 50);
   }
 
@@ -68,6 +69,9 @@ class AudioPlayer {
       }
       
       if (bufferData.length === 0) {
+        // If we receive an empty buffer, we still need to advance the timeline
+        // to avoid a gap and prevent future parts from being scheduled in the past.
+        this.nextPartStartTime += duration;
         return;
       }
       
@@ -87,7 +91,8 @@ class AudioPlayer {
     }
 
     this._isPlaying = true;
-    this.nextPartStartTime = this.audioContext.currentTime + 0.2;
+    // Set the initial start time slightly in the future to allow for buffering.
+    this.nextPartStartTime = this.audioContext.currentTime + 0.1;
     this.scheduleBuffers();
     console.log("AudioPlayer started");
   }
@@ -102,10 +107,11 @@ class AudioPlayer {
       this.scheduleTimeoutId = null;
     }
 
-    // Instead of closing, we suspend. This allows for quick resume.
-    // We also clear the queue to prevent old notes from playing.
+    // Clear the queue and reset time to prevent old notes from playing on restart.
     this.bufferQueue = [];
     this.nextPartStartTime = 0;
+    
+    // Suspend the context to save resources. It will be resumed on next start.
     if (this.audioContext.state === 'running') {
        this.audioContext.suspend();
     }
