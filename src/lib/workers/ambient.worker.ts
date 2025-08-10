@@ -68,7 +68,7 @@ async function loadDrumSamples(audioContext: any, baseUrl: string) {
     postMessage({ type: 'loading_start' });
     try {
         const samplePromises = Object.entries(drumSampleFiles).map(async ([key, path]) => {
-            const fullUrl = baseUrl + path;
+            const fullUrl = baseUrl ? baseUrl + path : path;
             const response = await fetch(fullUrl);
             if (!response.ok) {
                 throw new Error(`Failed to fetch ${fullUrl}: ${response.statusText}`);
