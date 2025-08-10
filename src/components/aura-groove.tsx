@@ -102,7 +102,7 @@ export function AuraGroove() {
 
   // Main effect for worker communication
   useEffect(() => {
-    const worker = new Worker('/workers/ambient.worker.js', { type: 'module' });
+    const worker = new Worker('/ambient.worker.js', { type: 'module' });
     musicWorkerRef.current = worker;
 
     const handleMessage = (event: MessageEvent) => {
@@ -139,24 +139,20 @@ export function AuraGroove() {
   const handleInstrumentChange = useCallback((part: keyof Instruments, value: Instruments[keyof Instruments]) => {
     const newInstruments = { ...instruments, [part]: value };
     setInstruments(newInstruments);
-     if (isPlaying) {
-      musicWorkerRef.current?.postMessage({
+     musicWorkerRef.current?.postMessage({
         command: 'set_instruments',
         data: newInstruments,
       });
-    }
-  }, [instruments, isPlaying]);
+  }, [instruments]);
 
  const handleDrumsSettingChange = useCallback((key: keyof DrumSettings, value: any) => {
     const newDrumSettings = { ...drumSettings, [key]: value };
     setDrumSettings(newDrumSettings);
-    if (isPlaying) {
-        musicWorkerRef.current?.postMessage({
-            command: 'set_drums',
-            data: newDrumSettings,
-        });
-    }
-  }, [drumSettings, isPlaying]);
+    musicWorkerRef.current?.postMessage({
+        command: 'set_drums',
+        data: newDrumSettings,
+    });
+  }, [drumSettings]);
 
 
   const prepareAndStart = useCallback(async () => {
@@ -172,13 +168,16 @@ export function AuraGroove() {
       
       setLoadingText("Initializing worker...");
       
+      // Pass transferable objects to avoid cloning large sample buffers
+      const transferableObjects = Object.values(sampleArrayBuffers.current);
+
       musicWorkerRef.current?.postMessage({
         command: 'init',
         data: {
           sampleRate: audioContext.sampleRate,
           samples: sampleArrayBuffers.current,
         }
-      });
+      }, transferableObjects);
       
       setLoadingText("Generating music...");
       musicWorkerRef.current?.postMessage({
@@ -240,7 +239,7 @@ export function AuraGroove() {
             <Select
               value={instruments.solo}
               onValueChange={(v) => handleInstrumentChange('solo', v as Instruments['solo'])}
-              disabled={isLoading || isPlaying}
+              disabled={isLoading}
             >
               <SelectTrigger id="solo-instrument" className="col-span-2">
                 <SelectValue placeholder="Select instrument" />
@@ -258,7 +257,7 @@ export function AuraGroove() {
              <Select
               value={instruments.accompaniment}
               onValueChange={(v) => handleInstrumentChange('accompaniment', v as Instruments['accompaniment'])}
-              disabled={isLoading || isPlaying}
+              disabled={isLoading}
             >
               <SelectTrigger id="accompaniment-instrument" className="col-span-2">
                 <SelectValue placeholder="Select instrument" />
@@ -276,7 +275,7 @@ export function AuraGroove() {
              <Select
               value={instruments.bass}
               onValueChange={(v) => handleInstrumentChange('bass', v as Instruments['bass'])}
-              disabled={isLoading || isPlaying}
+              disabled={isLoading}
             >
               <SelectTrigger id="bass-instrument" className="col-span-2">
                 <SelectValue placeholder="Select instrument" />

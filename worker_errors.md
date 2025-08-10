@@ -1,31 +1,87 @@
-Проблема "self.decodeAudioData is not a function" исчезла после изменения логики и декодирования аудио в основном потоке с последующей передачей сырых аудиоданных (ArrayBuffer или Float32Array) в воркер.
+import type {Config} from 'tailwindcss';
 
-Резюме и уроки на будущее, чтобы избежать подобных ошибок:
-
-Вот ключевые моменты и лучшие практики, которые следует помнить при работе с Web Workers и Web Audio API:
-
-Назначение Web Workers: Web Workers созданы для выполнения ресурсоемких вычислений и операций, которые могут заблокировать основной поток пользовательского интерфейса (UI). Это идеально подходит для генерации музыки, сложных алгоритмов обработки данных и других длительных задач.
-
-Доступные API в Web Workers: У Web Workers есть доступ к подмножеству JavaScript API. Они имеют доступ к:
-
-Стандартным объектам JavaScript (Array, Object, JSON, Math и т.д.).
-fetch для сетевых запросов.
-self.postMessage и self.onmessage для обмена сообщениями с основным потоком.
-Некоторым другим API, но не ко всем API, доступным в основном потоке (UI).
-Web Audio API и Web Workers:
-
-decodeAudioData: Функция decodeAudioData (для декодирования закодированных аудиоданных, таких как MP3, WAV и т.п., в сырые аудиоданные - AudioBuffer) может быть доступна в Dedicated Workers (new Worker()), но это зависит от браузера и его версии. Как показал ваш опыт, полагаться на ее доступность напрямую в воркере рискованно и может вызвать ошибки в некоторых окружениях.
-AudioContext: Создание и полная работа с AudioContext (для воспроизведения звука, применения эффектов и т.п.) обычно выполняется в основном потоке. Воркеры не имеют прямого доступа к аудиовыходу устройства.
-Лучший подход: Наиболее надежный и кроссбраузерный способ работы с аудио в связке основной поток + воркер:
-В основном потоке: Загружайте аудиофайлы (fetch), декодируйте их (decodeAudioData) и создавайте/управляйте AudioContext.
-В воркере: Выполняйте ресурсоемкие задачи, такие как генерация музыки, расчеты для эффектов, анализ аудио. Передавайте сырые аудиоданные (полученные после декодирования в основном потоке) в воркер для обработки или используйте воркер для генерации сырых аудиоданных, которые затем отправляются обратно в основной поток для воспроизведения через AudioContext.
-Передача данных между основным потоком и воркером: Используйте postMessage для отправки данных. Для больших объемов данных, таких как сырые аудиоданные (ArrayBuffer, Float32Array), используйте передаваемые объекты (Transferable Objects), указывая их вторым аргументом postMessage: worker.postMessage(data, [data.buffer]). Это позволяет передать владение данными воркеру без копирования, что гораздо эффективнее.
-
-Диагностика ошибок Web Worker:
-
-Изоляция: Если возникает ошибка в воркере, первым делом изолируйте проблемный участок кода. Создайте минимальный тестовый пример, как вы сделали с заглушкой, чтобы убедиться, что базовые функции (например, обмен сообщениями, доступность API) работают правильно.
-Консоль воркера: Всегда проверяйте консоль самого воркера (в Инструментах разработчика, вкладка "Application" или "Sources"), так как ошибки внутри воркера могут не всегда полностью отображаться в основной консоли.
-Проверка доступности API: Используйте typeof self.apiName для проверки, определен ли нужный API в контексте воркера перед его использованием.
-Ваш финальный успешный подход (декодирование в основном потоке, передача сырых данных в воркер) является правильной и рекомендуемой архитектурой для работы с аудио в Web Workers. Ошибка "self.decodeAudioData is not a function" четко показала, что полагаться на доступность этой функции в воркере небезопасно.
-
-Поздравляю с успешным решением! Этот опыт — ценный урок в понимании особенностей работы Web Workers и Web Audio API.
+export default {
+  darkMode: ['class'],
+  content: [
+    './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/components/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+  ],
+  theme: {
+    extend: {
+      fontFamily: {
+        body: ['Montserrat', 'sans-serif'],
+      },
+      colors: {
+        background: 'hsl(var(--background))',
+        foreground: 'hsl(var(--foreground))',
+        card: {
+          DEFAULT: 'hsl(var(--card))',
+          foreground: 'hsl(var(--card-foreground))',
+        },
+        popover: {
+          DEFAULT: 'hsl(var(--popover))',
+          foreground: 'hsl(var(--popover-foreground))',
+        },
+        primary: {
+          DEFAULT: 'hsl(var(--primary))',
+          foreground: 'hsl(var(--primary-foreground))',
+        },
+        secondary: {
+          DEFAULT: 'hsl(var(--secondary))',
+          foreground: 'hsl(var(--secondary-foreground))',
+        },
+        muted: {
+          DEFAULT: 'hsl(var(--muted))',
+          foreground: 'hsl(var(--muted-foreground))',
+        },
+        accent: {
+          DEFAULT: 'hsl(var(--accent))',
+          foreground: 'hsl(var(--accent-foreground))',
+        },
+        destructive: {
+          DEFAULT: 'hsl(var(--destructive))',
+          foreground: 'hsl(var(--destructive-foreground))',
+        },
+        border: 'hsl(var(--border))',
+        input: 'hsl(var(--input))',
+        ring: 'hsl(var(--ring))',
+        chart: {
+          '1': 'hsl(var(--chart-1))',
+          '2': 'hsl(var(--chart-2))',
+          '3': 'hsl(var(--chart-3))',
+          '4': 'hsl(var(--chart-4))',
+          '5': 'hsl(var(--chart-5))',
+        },
+      },
+      borderRadius: {
+        lg: 'var(--radius)',
+        md: 'calc(var(--radius) - 2px)',
+        sm: 'calc(var(--radius) - 4px)',
+      },
+      keyframes: {
+        'accordion-down': {
+          from: {
+            height: '0',
+          },
+          to: {
+            height: 'var(--radix-accordion-content-height)',
+          },
+        },
+        'accordion-up': {
+          from: {
+            height: 'var(--radix-accordion-content-height)',
+          },
+          to: {
+            height: '0',
+          },
+        },
+      },
+      animation: {
+        'accordion-down': 'accordion-down 0.2s ease-out',
+        'accordion-up': 'accordion-up 0.2s ease-out',
+      },
+    },
+  },
+  plugins: [require('tailwindcss-animate')],
+} satisfies Config;

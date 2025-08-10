@@ -310,5 +310,3 @@ self.onmessage = async (event) => {
         self.postMessage({ type: 'error', error: e.message });
     }
 };
-
-    
