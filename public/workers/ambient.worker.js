@@ -1,228 +1,211 @@
 // public/workers/ambient.worker.js
 
-let decodedSamples = {};
-let instruments = {};
-let drumsEnabled = true;
+// --- State ---
 let isRunning = false;
 let sampleRate = 44100;
-let lastTickTime = 0;
-const TICK_INTERVAL = 100; // ms
-const CHUNK_DURATION = 2; // seconds
+let instruments = {
+    solo: 'none',
+    accompaniment: 'none',
+    bass: 'none'
+};
+let drumsEnabled = true;
+let decodedSamples = null; // Will hold the decoded audio data for drums
 
-// --- Утилиты для генерации ---
-function generateSynthesizer(duration, sampleRate) {
-    const totalSamples = Math.floor(duration * sampleRate);
-    const buffer = new Float32Array(totalSamples);
-    const frequency = 440.0 * Math.pow(2, (Math.floor(Math.random() * 24) - 12) / 12);
-    let lastValue = 0;
+// --- DSP & Synthesis ---
 
-    for (let i = 0; i < totalSamples; i++) {
-        const time = i / sampleRate;
-        // Simple FM synthesis for a bit more texture
-        const modulator = Math.sin(2 * Math.PI * frequency * 0.5 * time);
-        const wav = Math.sin(2 * Math.PI * (frequency + modulator * 50) * time);
-        const envelope = 1 - (i / totalSamples); // simple decay
-        const value = wav * envelope * 0.3;
-
-        // Low-pass filter to smooth it out
-        const smoothedValue = (value + lastValue) / 2;
-        buffer[i] = smoothedValue;
-        lastValue = value;
-    }
-    return buffer;
+// Basic sine wave oscillator
+function sine(freq, time) {
+    return Math.sin(freq * 2 * Math.PI * time);
 }
 
-function generatePiano(duration, sampleRate) {
-    const totalSamples = Math.floor(duration * sampleRate);
-    const buffer = new Float32Array(totalSamples);
-    const fundamental = 261.63 * Math.pow(2, Math.floor(Math.random() * 5) / 12); // C4 to G4
-    const harmonics = [1, 0.5, 0.25, 0.125, 0.06];
+// ADSR Envelope
+function applyAdsr(sample, adsr) {
+    const { attack, decay, sustain, release } = adsr;
+    const totalLength = sample.length;
+    const attackEnd = Math.floor(attack * totalLength);
+    const decayEnd = attackEnd + Math.floor(decay * totalLength);
+    const sustainLevel = sustain;
 
-    for (let i = 0; i < totalSamples; i++) {
-        const time = i / sampleRate;
-        let value = 0;
-        for (let h = 0; h < harmonics.length; h++) {
-            value += Math.sin(2 * Math.PI * fundamental * (h + 1) * time) * harmonics[h];
+    for (let i = 0; i < totalLength; i++) {
+        const time = i / totalLength;
+        let amp = 0;
+        if (i < attackEnd) {
+            amp = time / attack;
+        } else if (i < decayEnd) {
+            amp = 1 - (1 - sustainLevel) * ((i - attackEnd) / (decayEnd - attackEnd));
+        } else {
+            amp = sustainLevel;
         }
-        const envelope = Math.exp(-time * 5); // Exponential decay
-        buffer[i] = value * envelope * 0.4;
+        // A simple linear release isn't easy here without knowing note-off time.
+        // For simplicity, we'll let the synth part have a natural decay.
+        sample[i] *= amp;
     }
-    return buffer;
+    return sample;
 }
 
+function generateSynthesizerPart(notes, totalSamples, adsr) {
+    const buffer = new Float32Array(totalSamples).fill(0);
+    notes.forEach(note => {
+        const noteDurationSamples = Math.floor(note.duration * sampleRate);
+        const noteStartSample = Math.floor(note.time * totalSamples);
+        const freq = 440 * Math.pow(2, (note.pitch - 69) / 12);
 
-function generateOrgan(duration, sampleRate) {
-    const totalSamples = Math.floor(duration * sampleRate);
-    const buffer = new Float32Array(totalSamples);
-    const fundamental = 220.0 * Math.pow(2, Math.floor(Math.random() * 7 - 3) / 12);
-    const overtones = [1, 0.5, 0.2, 0.1]; // Organ-like harmonics
-
-    for (let i = 0; i < totalSamples; i++) {
-        const time = i / sampleRate;
-        let value = 0;
-        for (let o = 0; o < overtones.length; o++) {
-            value += Math.sin(2 * Math.PI * fundamental * Math.pow(2, o) * time) * overtones[o];
+        for (let i = 0; i < noteDurationSamples && (noteStartSample + i) < totalSamples; i++) {
+            const t = i / sampleRate;
+            buffer[noteStartSample + i] += sine(freq, t) * note.velocity;
         }
-        const attack = Math.min(1, time * 10);
-        const release = Math.max(0, 1 - (time / duration));
-        buffer[i] = value * attack * release * 0.3;
-    }
+        
+        // Apply envelope to the note segment
+        const noteSegment = buffer.subarray(noteStartSample, noteStartSample + noteDurationSamples);
+        applyAdsr(noteSegment, adsr);
+
+    });
     return buffer;
 }
 
-function generateBass(duration, sampleRate) {
-    const totalSamples = Math.floor(duration * sampleRate);
-    const buffer = new Float32Array(totalSamples);
-    const frequency = 82.41 * Math.pow(2, Math.floor(Math.random() * 4) / 12); // E2 to G#2
 
-    for (let i = 0; i < totalSamples; i++) {
-        const time = i / sampleRate;
-        const value = Math.sin(2 * Math.PI * frequency * time) + Math.sin(2 * Math.PI * frequency * 2 * time) * 0.5;
-        const envelope = Math.exp(-time * 3.0);
-        buffer[i] = value * envelope * 0.5;
+// --- Drum Machine ---
+
+function generateDrumHits(duration) {
+    // Simple 4/4 rock beat
+    const hits = [];
+    const sixteenth = duration / 16;
+    for (let i = 0; i < 16; i++) {
+        const time = i * sixteenth;
+        // Kick on 1 and 3
+        if (i === 0 || i === 8) {
+            hits.push({ instrument: 'kick', time });
+        }
+        // Snare on 2 and 4
+        if (i === 4 || i === 12) {
+            hits.push({ instrument: 'snare', time });
+        }
+        // Hats on all 16ths, with accents
+        hits.push({ instrument: 'hat', time });
     }
-    return buffer;
+    return hits;
 }
 
-function generateDrumPart(duration, sampleRate) {
-    if (!decodedSamples.kick || !decodedSamples.hat || !decodedSamples.snare) {
-        return new Float32Array(Math.floor(duration * sampleRate));
-    }
-    const totalSamples = Math.floor(duration * sampleRate);
-    const buffer = new Float32Array(totalSamples);
 
-    const drumPattern = [
-        { sample: 'kick', time: 0 },
-        { sample: 'hat', time: 0 },
-        { sample: 'hat', time: 0.25 },
-        { sample: 'snare', time: 0.5 },
-        { sample: 'hat', time: 0.5 },
-        { sample: 'hat', time: 0.75 },
-    ];
-    
-    for(const hit of drumPattern) {
-        const sampleData = decodedSamples[hit.sample];
-        if (!sampleData) continue;
+function generateDrumPart(drumHits, totalSamples) {
+    const buffer = new Float32Array(totalSamples).fill(0);
+    if (!decodedSamples) return buffer;
+
+    drumHits.forEach(hit => {
+        let sample = decodedSamples[hit.instrument];
+        if (!sample) return;
 
         const startSample = Math.floor(hit.time * totalSamples);
-        
-        // --- Исправление ошибки RangeError ---
-        if (startSample + sampleData.length <= buffer.length) {
-            // Сэмпл полностью помещается
-            buffer.set(sampleData, startSample);
-        } else {
-            // Основной сэмпл не помещается, пробуем короткий
-            const shortSample = decodedSamples['hat'];
-            if (shortSample && startSample + shortSample.length <= buffer.length) {
-                 buffer.set(shortSample, startSample);
+
+        // Check if the sample fits
+        if (startSample + sample.length > totalSamples) {
+            // If it doesn't fit, try to replace it with a shorter sample (hat)
+            const shorterSample = decodedSamples['hat'];
+            if (shorterSample && (startSample + shorterSample.length <= totalSamples)) {
+                sample = shorterSample; // Replace with hat
+            } else {
+                // If even the shorter sample doesn't fit, skip this hit
+                return; 
             }
-            // Если даже короткий не влезает, ничего не делаем
         }
-    }
+        
+        // Mix the sample into the buffer
+        // Note: Simple addition for mixing. For better quality, one might use averaging or a limiter.
+        for (let i = 0; i < sample.length; i++) {
+            if (startSample + i < buffer.length) {
+                buffer[startSample + i] += sample[i];
+            }
+        }
+    });
+
     return buffer;
 }
 
 
-// --- Основная логика воркера ---
+// --- Main Worker Logic ---
+
 self.onmessage = function(event) {
     const { command, data } = event.data;
 
-    if (command === 'load_samples') {
-        decodedSamples = data;
-        sampleRate = data.sampleRate;
-        self.postMessage({ type: 'samples_loaded' });
-    } else if (command === 'start') {
-        instruments = data.instruments;
-        drumsEnabled = data.drumsEnabled;
-        sampleRate = data.sampleRate;
-        if (!isRunning) {
+    switch (command) {
+        case 'load_samples':
+            decodedSamples = data;
+            // Confirm samples are loaded and worker is ready
+            self.postMessage({ type: 'samples_loaded' });
+            break;
+        case 'start':
+            if (isRunning) return;
+            isRunning = true;
+            sampleRate = data.sampleRate;
+            instruments = data.instruments;
+            drumsEnabled = data.drumsEnabled;
             startGenerator();
-        }
-    } else if (command === 'stop') {
-        stopGenerator();
-    } else if (command === 'set_instruments') {
-        instruments = data;
-    } else if (command === 'toggle_drums') {
-        drumsEnabled = data.enabled;
+            break;
+        case 'stop':
+            isRunning = false;
+            break;
+        case 'set_instruments':
+            instruments = data;
+            break;
+        case 'toggle_drums':
+            drumsEnabled = data.enabled;
+            break;
     }
 };
 
 function startGenerator() {
-    isRunning = true;
-    lastTickTime = performance.now();
+    if (!isRunning) return;
+    // This is a simplified "recursive" call using setTimeout to avoid blocking.
     runGenerator();
-}
-
-function stopGenerator() {
-    isRunning = false;
 }
 
 function runGenerator() {
     if (!isRunning) return;
 
-    const now = performance.now();
-    if (now >= lastTickTime + TICK_INTERVAL) {
-        const duration = CHUNK_DURATION;
-        const totalSamples = Math.floor(duration * sampleRate);
-        const finalMix = new Float32Array(totalSamples).fill(0);
-        let partCount = 0;
+    const duration = 2; // Generate 2 seconds of audio at a time
+    const totalSamples = Math.floor(duration * sampleRate);
 
-        // Generate parts based on selected instruments
-        let soloPart, accompanimentPart, bassPart, drumPart;
+    // --- Generate Parts ---
+    let soloPart, accompanimentPart, bassPart, drumPart;
 
-        if (instruments.solo !== 'none') {
-            const soloGenerator = getGeneratorForInstrument(instruments.solo);
-            if (soloGenerator) soloPart = soloGenerator(duration, sampleRate);
-        }
-        if (instruments.accompaniment !== 'none') {
-            const accompanimentGenerator = getGeneratorForInstrument(instruments.accompaniment);
-            if (accompanimentGenerator) accompanimentPart = accompanimentGenerator(duration, sampleRate);
-        }
-        if (instruments.bass !== 'none' && instruments.bass === 'bass guitar') {
-             bassPart = generateBass(duration, sampleRate);
-        }
-        if (drumsEnabled) {
-            drumPart = generateDrumPart(duration, sampleRate);
-        }
-
-        // Mix parts together, only if they exist
-        const parts = [soloPart, accompanimentPart, bassPart, drumPart];
-        for (const part of parts) {
-            if (part) { // Проверяем, что партия сгенерирована
-                for (let i = 0; i < totalSamples; i++) {
-                    finalMix[i] += part[i];
-                }
-                partCount++;
-            }
-        }
-        
-        // Normalize if parts were mixed
-        if (partCount > 1) {
-            for (let i = 0; i < totalSamples; i++) {
-                finalMix[i] /= partCount;
-            }
-        }
-        
-        // Send the complete chunk to the main thread
-        self.postMessage({ type: 'chunk', data: { chunk: finalMix, duration } }, [finalMix.buffer]);
-        
-        lastTickTime += CHUNK_DURATION * 1000;
+    if (instruments.solo !== 'none') {
+        const soloNotes = [{ pitch: 76, time: 0, duration: 0.5, velocity: 0.8 }, { pitch: 79, time: 1, duration: 0.5, velocity: 0.8 }];
+        soloPart = generateSynthesizerPart(soloNotes, totalSamples, { attack: 0.01, decay: 0.3, sustain: 0.4, release: 0.2 });
     }
 
-    // Continue the loop
-    setTimeout(runGenerator, TICK_INTERVAL);
-}
+    if (instruments.accompaniment !== 'none') {
+        const accompNotes = [{ pitch: 60, time: 0, duration: 1, velocity: 0.5 }, { pitch: 64, time: 1, duration: 1, velocity: 0.5 }];
+        accompanimentPart = generateSynthesizerPart(accompNotes, totalSamples, { attack: 0.1, decay: 0.5, sustain: 0.3, release: 0.2 });
+    }
 
+    if (instruments.bass !== 'none') {
+        const bassNotes = [{ pitch: 36, time: 0, duration: 0.5, velocity: 0.9 }, { pitch: 43, time: 1, duration: 0.5, velocity: 0.9 }];
+        bassPart = generateSynthesizerPart(bassNotes, totalSamples, { attack: 0.05, decay: 0.2, sustain: 0.7, release: 0.1 });
+    }
+    
+    if (drumsEnabled) {
+        const drumHits = generateDrumHits(duration);
+        drumPart = generateDrumPart(drumHits, totalSamples);
+    }
 
-function getGeneratorForInstrument(instrument) {
-    switch (instrument) {
-        case 'synthesizer':
-            return generateSynthesizer;
-        case 'piano':
-            return generatePiano;
-        case 'organ':
-            return generateOrgan;
-        default:
-            return null;
+    // --- Mix Parts ---
+    const chunk = new Float32Array(totalSamples).fill(0);
+    const activeParts = [soloPart, accompanimentPart, bassPart, drumPart].filter(p => p);
+    
+    for (let i = 0; i < totalSamples; i++) {
+        let sampleSum = 0;
+        activeParts.forEach(part => {
+             if (part && i < part.length) {
+                sampleSum += part[i];
+            }
+        });
+        // Simple limiter to prevent clipping
+        chunk[i] = Math.max(-1, Math.min(1, sampleSum / (activeParts.length || 1)));
+    }
+    
+    // --- Post message and schedule next run ---
+    if (isRunning) {
+         self.postMessage({ type: 'chunk', data: { chunk, duration } }, [chunk.buffer]);
+         setTimeout(runGenerator, duration * 900); // Schedule next chunk slightly before the current one ends
     }
 }
