@@ -14,20 +14,20 @@ function getRandomNote(scale: number[], octave: number, random: () => number): n
 }
 
 export function generateSimpleSolo(random: () => number): number[] {
-    const shouldPlay = random() > 0.9; // Play very infrequently
+    const shouldPlay = random() > 0.95; // Play very infrequently
     if (!shouldPlay) return [];
     return [getRandomNote(PENTATONIC_SCALE, 1, random)];
 }
 
 export function generateSimpleAccompaniment(random: () => number): number[] {
-    const shouldPlay = random() > 0.8; // Play infrequently
+    const shouldPlay = random() > 0.9; // Play infrequently
     if (!shouldPlay) return [];
     const root = getRandomNote(PENTATONIC_SCALE, 0, random);
     return [root, root + 4]; // simple interval
 }
 
 export function generateSimpleBass(random: () => number): number[] {
-    const shouldPlay = random() > 0.7; // Play a bit more often
+    const shouldPlay = random() > 0.8; // Play a bit more often
     if (!shouldPlay) return [];
     return [getRandomNote(PENTATONIC_SCALE, -1, random)];
 }
@@ -41,20 +41,14 @@ export type DrumStep = {
 
 export const BEATS_PER_BAR = 4;
 
-// Simple, stable, single pattern to avoid any complex logic.
-export const drumPatternA: DrumStep[][] = Array(BEATS_PER_BAR).fill(null).map((_, beatIndex) => {
-    const steps: DrumStep[] = [];
-    if (beatIndex === 0) {
-        steps.push({ sample: 'kick', time: 0 });
-    }
-    if (beatIndex === 2) {
-        steps.push({ sample: 'snare', time: 0 });
-    }
-    // Add hi-hats on every beat for a simple rhythm
-    // Note: We don't have a 'hat' sample loaded yet, so this won't play.
-    // This is intentional to keep it simple.
-    steps.push({ sample: 'hat', time: 0 }); 
-    return steps;
-});
-
-    
+// The simplest possible pattern to ensure no logic errors.
+export const simpleDrumPattern: DrumStep[][] = [
+    // Beat 1
+    [{ sample: 'kick', time: 0 }, { sample: 'hat', time: 0 }],
+    // Beat 2
+    [{ sample: 'hat', time: 0 }],
+    // Beat 3
+    [{ sample: 'snare', time: 0 }, { sample: 'hat', time: 0 }],
+    // Beat 4
+    [{ sample: 'hat', time: 0 }],
+];
