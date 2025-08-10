@@ -64,7 +64,7 @@ async function loadDrumSamples() {
     try {
         const players = await new Promise<{[key: string]: Tone.Player}>((resolve, reject) => {
             const tempPlayers = new Tone.Players(drumSamples, () => {
-                resolve(tempPlayers.get.bind(tempPlayers) as any);
+                resolve(tempPlayers as any);
             }).toDestination();
         });
 
@@ -152,6 +152,7 @@ function createSynthVoice(notes: Note[], totalDuration: number, instrument: stri
 async function generatePart() {
   try {
     const offlineContext = new Tone.OfflineContext(1, partDuration, sampleRate);
+    Tone.context = offlineContext;
 
     // --- Instruments ---
     const soloNotes: Note[] = [];
@@ -189,21 +190,20 @@ async function generatePart() {
 
     // --- Drums ---
     if (drumsEnabled && drumsLoaded) {
-        const now = offlineContext.currentTime;
         // Simple 4/4 beat
         for (let i = 0; i < 16; i++) {
              const time = i * 0.25; // 16th notes
             // Kick on 1, 2, 3, 4
             if (i % 4 === 0) {
-                drumSamplers.kick.start(now + time);
+                drumSamplers.kick.start(time);
             }
             // Snare on 2 and 4
-            if ((i-2) % 8 === 0 || (i-6) % 8 === 0) {
-                 drumSamplers.snare.start(now + time);
+            if (i === 4 || i === 12) {
+                 drumSamplers.snare.start(time);
             }
             // Closed hats on every 8th note
              if (i % 2 === 0) {
-                drumSamplers.closedHat.start(now + time);
+                drumSamplers.closedHat.start(time);
             }
         }
     }
