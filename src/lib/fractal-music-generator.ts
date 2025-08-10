@@ -40,28 +40,34 @@ export type DrumStep = {
     time: number; // 0 to 1 (percentage of a beat)
 };
 
-const BEATS_PER_BAR = 4;
-const BARS = 4;
-export const TOTAL_BEATS_IN_PATTERN = BEATS_PER_BAR * BARS; // 16 beats
+export const BEATS_PER_BAR = 4;
 
-// Pattern A: Basic, sparse rhythm
-export const drumPatternA: DrumStep[][] = Array(TOTAL_BEATS_IN_PATTERN).fill(null).map((_, beatIndex) => {
+// Pattern A: Basic Kick/Snare
+export const drumPatternA: DrumStep[][] = Array(BEATS_PER_BAR).fill(null).map((_, beatIndex) => {
     const steps: DrumStep[] = [];
-    const bar = Math.floor(beatIndex / BEATS_PER_BAR);
-    const beatInBar = beatIndex % BEATS_PER_BAR;
-
-    // Kick on the first beat of each bar
-    if (beatInBar === 0) {
+    if (beatIndex === 0) {
         steps.push({ sample: 'kick', time: 0 });
     }
-    
-    // Snare on the third beat of each bar (beat 2 in 0-indexed)
-    if (beatInBar === 2) {
+    if (beatIndex === 2) {
         steps.push({ sample: 'snare', time: 0 });
     }
-
-    // Hi-hat on every beat
     steps.push({ sample: 'hat', time: 0 });
-    
+    return steps;
+});
+
+// Pattern B: Simple Fill
+export const drumPatternB: DrumStep[][] = Array(BEATS_PER_BAR).fill(null).map((_, beatIndex) => {
+    const steps: DrumStep[] = [];
+     if (beatIndex === 0 || beatIndex === 1) {
+        steps.push({ sample: 'kick', time: 0 });
+    }
+     if (beatIndex === 2) {
+        steps.push({ sample: 'snare', time: 0 });
+    }
+    if (beatIndex === 3) {
+        steps.push({ sample: 'snare', time: 0 });
+        steps.push({ sample: 'snare', time: 0.5 });
+    }
+    steps.push({ sample: 'hat', time: 0 });
     return steps;
 });
