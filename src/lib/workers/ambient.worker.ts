@@ -1,5 +1,3 @@
-
-
 // --- UTILITIES ---
 class PRNG {
   private seed: number;
@@ -38,18 +36,19 @@ let instruments = {
     accompaniment: 'piano',
     bass: 'bass guitar',
 };
-let drumsEnabled = true;
+// let drumsEnabled = true; // Drums are temporarily disabled
 
 const soloPrng = new PRNG(Math.random() * 1000);
 const accompanimentPrng = new PRNG(Math.random() * 1000);
 const bassPrng = new PRNG(Math.random() * 1000);
-const drumPrng = new PRNG(Math.random() * 1000);
+// const drumPrng = new PRNG(Math.random() * 1000);
 
 const soloScale = scales.minorPentatonic;
 const accompanimentScale = scales.ionian;
 const bassScale = scales.aeolian;
 
-// --- DRUM SAMPLES ---
+// --- DRUM SAMPLES (Temporarily Disabled) ---
+/*
 const drumSampleFiles = {
     kick: '/assets/drums/kickdrum.wav',
     snare: '/assets/drums/snare.wav',
@@ -69,10 +68,8 @@ async function loadDrumSamples() {
             }
             const arrayBuffer = await response.arrayBuffer();
             // This is a minimal polyfill for Safari which doesn't have a promise-based decodeAudioData yet
-            const decoded = await new Promise<AudioBuffer>((resolve, reject) => {
-                 const dummyContext = new OfflineAudioContext(1, 1, sampleRate);
-                 dummyContext.decodeAudioData(arrayBuffer, resolve, reject);
-            });
+            const dummyContext = new OfflineAudioContext(1, 1, sampleRate);
+            const decoded = await dummyContext.decodeAudioData(arrayBuffer);
             drumBuffers[name] = decoded.getChannelData(0);
         });
         await Promise.all(promises);
@@ -81,20 +78,24 @@ async function loadDrumSamples() {
     } catch (error) {
         console.error("Error loading drum samples:", error);
         postMessage({ type: 'error', message: 'Failed to load drum samples.' });
+        drumsLoaded = false; // Ensure we know loading failed
     }
 }
-
+*/
 
 // --- SYNTH CREATION ---
 type Note = { freq: number; time: number; duration: number; velocity: number };
 
-function adsrEnvelope(t: number, attack: number, decay: number, sustain: number, release: number) {
-    const sustainLevel = sustain;
+function adsrEnvelope(t: number, attack: number, decay: number, sustainLevel: number, noteDuration: number) {
+    const sustainTime = noteDuration - attack - decay;
     if (t < 0) return 0;
     if (t < attack) return t / attack;
     if (t < attack + decay) return 1.0 - (1.0 - sustainLevel) * (t - attack) / decay;
-    return sustainLevel;
+    if (t < attack + decay + sustainTime) return sustainLevel;
+    // Release is implicitly handled by note duration end
+    return 0; 
 }
+
 
 function oscillator(type: string, t: number, freq: number) {
     switch (type) {
@@ -111,16 +112,16 @@ function createSynthVoice(notes: Note[], totalDuration: number, instrument: stri
 
     switch (instrument) {
         case 'piano':
-            synthOptions = { oscType: 'sine', attack: 0.01, decay: 0.8, sustain: 0.2, release: 0.5, volume: 0.4 };
+            synthOptions = { oscType: 'sine', attack: 0.01, decay: 0.8, sustain: 0.2, volume: 0.4 };
             break;
         case 'organ':
-            synthOptions = { oscType: 'sawtooth', attack: 0.2, decay: 0.1, sustain: 0.9, release: 0.8, volume: 0.3 };
+            synthOptions = { oscType: 'sawtooth', attack: 0.2, decay: 0.1, sustain: 0.9, volume: 0.3 };
             break;
         case 'bass guitar':
-             synthOptions = { oscType: 'sine', attack: 0.05, decay: 0.3, sustain: 0.4, release: 0.4, volume: 0.6 };
+             synthOptions = { oscType: 'sine', attack: 0.05, decay: 0.3, sustain: 0.4, volume: 0.6 };
              break;
         default: // synthesizer
-            synthOptions = { oscType: 'pulse', attack: 0.1, decay: 0.5, sustain: 0.4, release: 1.0, volume: 0.3 };
+            synthOptions = { oscType: 'pulse', attack: 0.1, decay: 0.5, sustain: 0.4, volume: 0.3 };
     }
 
     notes.forEach(note => {
@@ -131,13 +132,16 @@ function createSynthVoice(notes: Note[], totalDuration: number, instrument: stri
             const currentSample = startSample + i;
             if (currentSample >= buffer.length) break;
 
-            const t = i / sampleRate;
-            const envelope = adsrEnvelope(t, synthOptions.attack, synthOptions.decay, synthOptions.sustain, synthOptions.release);
-            let value = oscillator(synthOptions.oscType, t, note.freq) * envelope * note.velocity * synthOptions.volume;
+            const t_note = i / sampleRate;
+            const envelope = adsrEnvelope(t_note, synthOptions.attack, synthOptions.decay, synthOptions.sustain, note.duration);
+            let value = oscillator(synthOptions.oscType, t_note, note.freq) * envelope * note.velocity * synthOptions.volume;
+            
+            // Add value to buffer
             buffer[currentSample] += value;
         }
 
-        const fadeOutSamples = 500;
+        // Add a small fade out at the end of the note to prevent clicks
+        const fadeOutSamples = 200;
         const fadeOutStartSample = startSample + noteDurationInSamples - fadeOutSamples;
          for (let i = 0; i < fadeOutSamples; i++) {
             const currentSample = fadeOutStartSample + i;
@@ -150,7 +154,7 @@ function createSynthVoice(notes: Note[], totalDuration: number, instrument: stri
 
     return buffer;
 }
-
+/*
 function mix(buffer: Float32Array, sample: Float32Array, time: number, volume: number = 1.0) {
     const startSample = Math.floor(time * sampleRate);
     for (let i = 0; i < sample.length; i++) {
@@ -159,7 +163,7 @@ function mix(buffer: Float32Array, sample: Float32Array, time: number, volume: n
         buffer[bufferIndex] += sample[i] * volume;
     }
 }
-
+*/
 // --- MUSIC GENERATION ---
 async function generatePart() {
   try {
@@ -179,11 +183,13 @@ async function generatePart() {
 
     const accompanimentNotes: Note[] = [];
     for (let i = 0; i < 4; i++) {
-        const time = i * 1;
-        const value = accompanimentPrng.next();
-        const octave = value < 0.5 ? 0 : 1;
-        const noteMidi = mapValueToMidi(value, accompanimentScale, octave);
-        accompanimentNotes.push({ freq: midiToFreq(noteMidi), time, duration: 1.9, velocity: 0.4 });
+        if (accompanimentPrng.next() > 0.3) {
+          const time = i * 1;
+          const value = accompanimentPrng.next();
+          const octave = value < 0.5 ? 0 : 1;
+          const noteMidi = mapValueToMidi(value, accompanimentScale, octave);
+          accompanimentNotes.push({ freq: midiToFreq(noteMidi), time, duration: 1.9, velocity: 0.4 });
+        }
     }
 
     const bassNotes: Note[] = [];
@@ -204,13 +210,14 @@ async function generatePart() {
       finalBuffer[i] = soloBuffer[i] + accompanimentBuffer[i] + bassBuffer[i];
     }
     
-    // --- Drums ---
+    // --- Drums (Temporarily Disabled) ---
+    /*
     if (drumsEnabled && drumsLoaded) {
         // Simple 4/4 beat
         for (let i = 0; i < 16; i++) {
              const time = i * 0.25; // 16th notes
-            // Kick on 1, 2, 3, 4
-            if (i % 4 === 0) {
+            // Kick on 1, 3
+            if (i % 8 === 0) {
                 mix(finalBuffer, drumBuffers.kick, time, 0.9);
             }
             // Snare on 2 and 4
@@ -223,6 +230,7 @@ async function generatePart() {
             }
         }
     }
+    */
     
     // Clipping to prevent distortion
     for (let i = 0; i < finalBuffer.length; i++) {
@@ -243,14 +251,16 @@ self.onmessage = async function(e) {
 
   if (command === 'start') {
     instruments = data.instruments;
-    drumsEnabled = data.drumsEnabled;
+    // drumsEnabled = data.drumsEnabled; // Drums are temporarily disabled
     if (generationInterval === null) {
-      if (!drumsLoaded) {
+      /* Drums are temporarily disabled
+      if (!drumsLoaded && drumsEnabled) {
           await loadDrumSamples();
       }
+      */
       postMessage({ type: 'loading_complete' });
       generatePart(); // Generate first part immediately
-      generationInterval = setInterval(generatePart, (partDuration * 1000) - 20); // Generate slightly faster to avoid gaps
+      generationInterval = setInterval(generatePart, (partDuration * 1000) - 20); 
     }
   } else if (command === 'stop') {
     if (generationInterval !== null) {
@@ -259,7 +269,13 @@ self.onmessage = async function(e) {
     }
   } else if (command === 'set_instruments') {
     instruments = data;
-  } else if (command === 'toggle_drums') {
+  } 
+  /* Drums are temporarily disabled
+  else if (command === 'toggle_drums') {
     drumsEnabled = data;
+    if(drumsEnabled && !drumsLoaded) {
+        loadDrumSamples(); // Load if enabled and not already loaded
+    }
   }
+  */
 };
