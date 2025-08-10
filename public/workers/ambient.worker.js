@@ -1,211 +1,244 @@
-// public/workers/ambient.worker.js
 
-// --- State ---
+// A simple random number generator
+function mulberry32(a) {
+    return function() {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      let t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    }
+}
+
+// Global state
 let isRunning = false;
+let instruments = {};
 let sampleRate = 44100;
-let instruments = {
-    solo: 'none',
-    accompaniment: 'none',
-    bass: 'none'
+let samples = {};
+let lastSeed = 0;
+let rand = mulberry32(lastSeed);
+
+const CHUNK_DURATION = 2.0; // seconds
+
+const scales = {
+    aeolian: [0, 2, 3, 5, 7, 8, 10],
 };
-let drumsEnabled = true;
-let decodedSamples = null; // Will hold the decoded audio data for drums
 
-// --- DSP & Synthesis ---
+const bassPatterns = {
+    minimal: [
+        { time: 0, duration: 0.9, velocity: 1.0 },
+        { time: 1.0, duration: 0.4, velocity: 0.8 },
+    ]
+};
 
-// Basic sine wave oscillator
-function sine(freq, time) {
-    return Math.sin(freq * 2 * Math.PI * time);
-}
+const drumPatterns = {
+    fourOnTheFloor: [
+        { time: 0, instrument: 'kick', velocity: 0.7 }, // Бочка приглушена
+        { time: 0.25, instrument: 'hat', velocity: 1.0 },
+        { time: 0.375, instrument: 'hat', velocity: 0.15 }, // Ghost-нота
+        { time: 0.5, instrument: 'snare', velocity: 0.9 },
+        { time: 0.5, instrument: 'hat', velocity: 0.6 },
+        { time: 0.75, instrument: 'hat', velocity: 1.0 },
+        { time: 0.875, instrument: 'hat', velocity: 0.15 }, // Ghost-нота
+    ],
+    // ... other patterns can be added here
+};
 
-// ADSR Envelope
-function applyAdsr(sample, adsr) {
-    const { attack, decay, sustain, release } = adsr;
-    const totalLength = sample.length;
-    const attackEnd = Math.floor(attack * totalLength);
-    const decayEnd = attackEnd + Math.floor(decay * totalLength);
-    const sustainLevel = sustain;
 
-    for (let i = 0; i < totalLength; i++) {
-        const time = i / totalLength;
-        let amp = 0;
-        if (i < attackEnd) {
-            amp = time / attack;
-        } else if (i < decayEnd) {
-            amp = 1 - (1 - sustainLevel) * ((i - attackEnd) / (decayEnd - attackEnd));
+function generateNote(note, duration, velocity, sampleRate) {
+    const attackTime = 0.01;
+    const decayTime = 0.2;
+    const releaseTime = 0.2;
+    const sustainLevel = 0.7;
+
+    const noteLength = Math.floor(duration * sampleRate);
+    const attackLength = Math.floor(attackTime * sampleRate);
+    const decayLength = Math.floor(decayTime * sampleRate);
+    const releaseLength = Math.floor(releaseTime * sampleRate);
+    const sustainLength = noteLength - attackLength - decayLength - releaseLength;
+
+    if (sustainLength < 0) return new Float32Array(0);
+
+    const buffer = new Float32Array(noteLength);
+    const frequency = 440 * Math.pow(2, (note - 69) / 12);
+
+    let amplitude = 0;
+    for (let i = 0; i < noteLength; i++) {
+        const time = i / sampleRate;
+        const angle = 2 * Math.PI * frequency * time;
+
+        // Envelope
+        if (i < attackLength) {
+            amplitude = velocity * (i / attackLength);
+        } else if (i < attackLength + decayLength) {
+            amplitude = velocity - (velocity - sustainLevel * velocity) * ((i - attackLength) / decayLength);
+        } else if (i < attackLength + decayLength + sustainLength) {
+            amplitude = sustainLevel * velocity;
         } else {
-            amp = sustainLevel;
+            amplitude = sustainLevel * velocity * (1 - (i - (attackLength + decayLength + sustainLength)) / releaseLength);
         }
-        // A simple linear release isn't easy here without knowing note-off time.
-        // For simplicity, we'll let the synth part have a natural decay.
-        sample[i] *= amp;
+
+        buffer[i] = Math.sin(angle) * amplitude * 0.5; // Sine wave oscillator
     }
-    return sample;
-}
-
-function generateSynthesizerPart(notes, totalSamples, adsr) {
-    const buffer = new Float32Array(totalSamples).fill(0);
-    notes.forEach(note => {
-        const noteDurationSamples = Math.floor(note.duration * sampleRate);
-        const noteStartSample = Math.floor(note.time * totalSamples);
-        const freq = 440 * Math.pow(2, (note.pitch - 69) / 12);
-
-        for (let i = 0; i < noteDurationSamples && (noteStartSample + i) < totalSamples; i++) {
-            const t = i / sampleRate;
-            buffer[noteStartSample + i] += sine(freq, t) * note.velocity;
-        }
-        
-        // Apply envelope to the note segment
-        const noteSegment = buffer.subarray(noteStartSample, noteStartSample + noteDurationSamples);
-        applyAdsr(noteSegment, adsr);
-
-    });
     return buffer;
 }
 
 
-// --- Drum Machine ---
+function generateDrumPart(duration, sampleRate, drumSettings) {
+    if (!drumSettings.enabled) return null;
 
-function generateDrumHits(duration) {
-    // Simple 4/4 rock beat
-    const hits = [];
-    const sixteenth = duration / 16;
-    for (let i = 0; i < 16; i++) {
-        const time = i * sixteenth;
-        // Kick on 1 and 3
-        if (i === 0 || i === 8) {
-            hits.push({ instrument: 'kick', time });
-        }
-        // Snare on 2 and 4
-        if (i === 4 || i === 12) {
-            hits.push({ instrument: 'snare', time });
-        }
-        // Hats on all 16ths, with accents
-        hits.push({ instrument: 'hat', time });
-    }
-    return hits;
-}
-
-
-function generateDrumPart(drumHits, totalSamples) {
+    const totalSamples = Math.floor(duration * sampleRate);
     const buffer = new Float32Array(totalSamples).fill(0);
-    if (!decodedSamples) return buffer;
+    const pattern = drumPatterns[drumSettings.pattern];
 
-    drumHits.forEach(hit => {
-        let sample = decodedSamples[hit.instrument];
-        if (!sample) return;
+    for (const hit of pattern) {
+        const sample = samples[hit.instrument];
+        if (!sample) continue;
 
-        const startSample = Math.floor(hit.time * totalSamples);
+        const startSample = Math.floor(hit.time * (duration * 44100 / (drumSettings.bpm / 60)));
+        const velocity = hit.velocity || drumSettings.velocity || 0.8;
 
-        // Check if the sample fits
+        // Check if sample fits
         if (startSample + sample.length > totalSamples) {
-            // If it doesn't fit, try to replace it with a shorter sample (hat)
-            const shorterSample = decodedSamples['hat'];
-            if (shorterSample && (startSample + shorterSample.length <= totalSamples)) {
-                sample = shorterSample; // Replace with hat
-            } else {
-                // If even the shorter sample doesn't fit, skip this hit
-                return; 
+            const shorterSample = samples['hat']; // Fallback to a short sample
+            if (shorterSample && startSample + shorterSample.length <= totalSamples) {
+                 for (let i = 0; i < shorterSample.length; i++) {
+                    buffer[startSample + i] += shorterSample[i] * velocity;
+                }
             }
+            continue; // Skip if even the short sample doesn't fit
         }
         
-        // Mix the sample into the buffer
-        // Note: Simple addition for mixing. For better quality, one might use averaging or a limiter.
+        // Add sample to buffer
         for (let i = 0; i < sample.length; i++) {
-            if (startSample + i < buffer.length) {
-                buffer[startSample + i] += sample[i];
-            }
+            buffer[startSample + i] += sample[i] * velocity;
         }
-    });
-
+    }
     return buffer;
 }
 
 
-// --- Main Worker Logic ---
+function generateInstrumentPart(duration, sampleRate, instrumentSettings) {
+    if (instrumentSettings.instrument === 'none') return null;
+    
+    const totalSamples = Math.floor(duration * sampleRate);
+    const buffer = new Float32Array(totalSamples).fill(0);
+    const pattern = bassPatterns[instrumentSettings.pattern];
+    
+    const scale = scales[instrumentSettings.scale];
+    const rootNote = instrumentSettings.rootNote;
 
-self.onmessage = function(event) {
-    const { command, data } = event.data;
+    for (const noteInfo of pattern) {
+        const noteIndex = Math.floor(rand() * scale.length);
+        const note = rootNote + scale[noteIndex];
+        const noteBuffer = generateNote(note, noteInfo.duration, noteInfo.velocity, sampleRate);
 
-    switch (command) {
-        case 'load_samples':
-            decodedSamples = data;
-            // Confirm samples are loaded and worker is ready
-            self.postMessage({ type: 'samples_loaded' });
-            break;
-        case 'start':
-            if (isRunning) return;
-            isRunning = true;
-            sampleRate = data.sampleRate;
-            instruments = data.instruments;
-            drumsEnabled = data.drumsEnabled;
-            startGenerator();
-            break;
-        case 'stop':
-            isRunning = false;
-            break;
-        case 'set_instruments':
-            instruments = data;
-            break;
-        case 'toggle_drums':
-            drumsEnabled = data.enabled;
-            break;
+        const startSample = Math.floor(noteInfo.time * totalSamples);
+        if (startSample + noteBuffer.length > totalSamples) continue;
+
+        for (let i = 0; i < noteBuffer.length; i++) {
+            buffer[startSample + i] += noteBuffer[i];
+        }
     }
-};
+    return buffer;
+}
 
-function startGenerator() {
-    if (!isRunning) return;
-    // This is a simplified "recursive" call using setTimeout to avoid blocking.
+
+function startGenerator(newInstruments, newSampleRate) {
+    instruments = newInstruments;
+    sampleRate = newSampleRate;
+    isRunning = true;
     runGenerator();
 }
 
+function stopGenerator() {
+    isRunning = false;
+}
+
+self.onmessage = (event) => {
+    const { command, data } = event.data;
+
+    if (command === 'load_samples') {
+        samples = data;
+        self.postMessage({ type: 'samples_loaded' });
+    } else if (command === 'start') {
+        startGenerator(data.instruments, data.sampleRate);
+    } else if (command === 'stop') {
+        stopGenerator();
+    } else if (command === 'set_instruments') {
+        instruments = data;
+    } else if (command === 'toggle_drums') {
+        if(instruments.drums) {
+           instruments.drums.enabled = data.enabled;
+        }
+    }
+};
+
+// --- Main Generator Loop ---
+let lastTickTime = 0;
+
 function runGenerator() {
     if (!isRunning) return;
+    
+    const now = Date.now() / 1000;
+    if (lastTickTime === 0) {
+        lastTickTime = now;
+    }
 
-    const duration = 2; // Generate 2 seconds of audio at a time
+    const duration = CHUNK_DURATION;
+
+    // --- Part Generation ---
+    const soloPart = generateInstrumentPart(duration, sampleRate, {
+        instrument: instruments.solo,
+        pattern: 'minimal',
+        scale: 'aeolian',
+        rootNote: 60, // C4
+    });
+
+    const accompanimentPart = generateInstrumentPart(duration, sampleRate, {
+        instrument: instruments.accompaniment,
+        pattern: 'minimal',
+        scale: 'aeolian',
+        rootNote: 48, // C3
+    });
+
+    const bassPart = generateInstrumentPart(duration, sampleRate, {
+        instrument: instruments.bass,
+        pattern: 'minimal',
+        scale: 'aeolian',
+        rootNote: 36, // C2
+    });
+
+    const drumPart = generateDrumPart(duration, sampleRate, {
+        enabled: instruments.drumsEnabled,
+        pattern: 'fourOnTheFloor',
+        bpm: 120,
+        velocity: 0.8,
+    });
+
+
+    // --- Mixing ---
     const totalSamples = Math.floor(duration * sampleRate);
-
-    // --- Generate Parts ---
-    let soloPart, accompanimentPart, bassPart, drumPart;
-
-    if (instruments.solo !== 'none') {
-        const soloNotes = [{ pitch: 76, time: 0, duration: 0.5, velocity: 0.8 }, { pitch: 79, time: 1, duration: 0.5, velocity: 0.8 }];
-        soloPart = generateSynthesizerPart(soloNotes, totalSamples, { attack: 0.01, decay: 0.3, sustain: 0.4, release: 0.2 });
-    }
-
-    if (instruments.accompaniment !== 'none') {
-        const accompNotes = [{ pitch: 60, time: 0, duration: 1, velocity: 0.5 }, { pitch: 64, time: 1, duration: 1, velocity: 0.5 }];
-        accompanimentPart = generateSynthesizerPart(accompNotes, totalSamples, { attack: 0.1, decay: 0.5, sustain: 0.3, release: 0.2 });
-    }
-
-    if (instruments.bass !== 'none') {
-        const bassNotes = [{ pitch: 36, time: 0, duration: 0.5, velocity: 0.9 }, { pitch: 43, time: 1, duration: 0.5, velocity: 0.9 }];
-        bassPart = generateSynthesizerPart(bassNotes, totalSamples, { attack: 0.05, decay: 0.2, sustain: 0.7, release: 0.1 });
-    }
-    
-    if (drumsEnabled) {
-        const drumHits = generateDrumHits(duration);
-        drumPart = generateDrumPart(drumHits, totalSamples);
-    }
-
-    // --- Mix Parts ---
     const chunk = new Float32Array(totalSamples).fill(0);
-    const activeParts = [soloPart, accompanimentPart, bassPart, drumPart].filter(p => p);
     
-    for (let i = 0; i < totalSamples; i++) {
-        let sampleSum = 0;
-        activeParts.forEach(part => {
-             if (part && i < part.length) {
-                sampleSum += part[i];
+    const parts = [soloPart, accompanimentPart, bassPart, drumPart];
+    
+    for (const part of parts) {
+        if (part) { // Mix only existing parts
+             for (let i = 0; i < totalSamples; i++) {
+                if (i < part.length) {
+                    chunk[i] += part[i];
+                }
             }
-        });
-        // Simple limiter to prevent clipping
-        chunk[i] = Math.max(-1, Math.min(1, sampleSum / (activeParts.length || 1)));
+        }
     }
     
-    // --- Post message and schedule next run ---
+    // --- Post Message ---
     if (isRunning) {
          self.postMessage({ type: 'chunk', data: { chunk, duration } }, [chunk.buffer]);
-         setTimeout(runGenerator, duration * 900); // Schedule next chunk slightly before the current one ends
     }
+    
+    lastTickTime += duration;
+    const nextTickDelay = (lastTickTime - (Date.now() / 1000)) * 1000;
+
+    setTimeout(runGenerator, Math.max(0, nextTickDelay));
 }
