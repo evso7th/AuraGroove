@@ -38,8 +38,8 @@ let instruments = {
     accompaniment: 'piano',
     bass: 'bass guitar',
 };
-// let drumsEnabled = false; // Removed for now
-// let baseUrl = ''; // Removed for now
+// let drumsEnabled = false;
+// let baseUrl = '';
 
 const soloPrng = new PRNG(Math.random() * 1000);
 const accompanimentPrng = new PRNG(Math.random() * 1000);
@@ -52,23 +52,47 @@ const bassScale = scales.aeolian;
 
 /*
 // --- DRUM SAMPLES & SEQUENCER ---
-// To re-enable drums:
-// 1. Uncomment this entire section.
-// 2. Ensure the UI components and state are uncommented in aura-groove.tsx.
-// 3. Place actual .wav files in the /public/assets/drums folder.
+
 const drumSamples: { [key: string]: AudioBuffer } = {};
 let samplesLoaded = false;
 
-// This should contain the files you want to load from /public/assets/drums
+// =======================================================================================
+// === ШАГ 1: УКАЖИТЕ ПУТИ К ВАШИМ АУДИОФАЙЛАМ ===
+// =======================================================================================
+//
+// Здесь мы перечисляем все сэмплы ударных, которые хотим использовать.
+//
+// - Ключ (напр., 'snare') - это внутреннее имя для сэмпла.
+// - Значение (напр., '/assets/drums/snare.wav') - это ПУТЬ К ФАЙЛУ.
+//
+// ВАЖНО:
+// 1. Физически файл должен находиться в папке `public/assets/drums/`.
+// 2. Путь в коде должен начинаться с `/` и НЕ должен включать `public`.
+//
 const drumSampleFiles = {
   snare: '/assets/drums/snare.wav',
 };
 
-// This defines when each drum sample plays in a 16-step sequence.
+
+// =======================================================================================
+// === ШАГ 2: ОПРЕДЕЛИТЕ РИТМ (ПАТТЕРН) ===
+// =======================================================================================
+//
+// Здесь мы указываем, когда должен играть каждый сэмпл.
+// Паттерн - это массив из 16 шагов (1 такт).
+// 1 = удар, 0 = тишина.
+//
 const drumSequencerPattern = {
     snare: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
 };
 
+
+// =======================================================================================
+// === ШАГ 3: КОД ЗАГРУЗКИ (МЕНЯТЬ НЕ НУЖНО) ===
+// =======================================================================================
+//
+// Эта функция автоматически загружает все файлы, указанные в `drumSampleFiles`.
+//
 async function loadDrumSamples() {
     postMessage({ type: 'loading_status', message: 'Loading drum samples...' });
     samplesLoaded = false;
@@ -79,7 +103,7 @@ async function loadDrumSamples() {
             const path = (drumSampleFiles as any)[key];
             const url = `${baseUrl}${path}`;
             
-            postMessage({ type: 'loading_status', message: `Fetching ${key}...` });
+            postMessage({ type: 'loading_status', message: `Fetching ${key} from ${url}` });
 
             const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Request timed out')), 5000));
             
@@ -246,11 +270,11 @@ async function generatePart() {
     const accompanimentBuffer = createSynthVoice(accompanimentNotes, partDuration, instruments.accompaniment);
     const bassBuffer = createSynthVoice(bassNotes, partDuration, instruments.bass);
     
-    // const drumBuffer = createDrumPart(); // Removed for now
+    // const drumBuffer = createDrumPart();
 
     for (let i = 0; i < finalBuffer.length; i++) {
       let mixedSample = soloBuffer[i] + accompanimentBuffer[i] + bassBuffer[i];
-      /* // Uncomment to re-enable drums
+      /*
       if (drumsEnabled && samplesLoaded) {
         mixedSample += drumBuffer[i];
       }
@@ -276,13 +300,13 @@ self.onmessage = async function(e) {
 
   if (command === 'start') {
     instruments = data.instruments;
-    /* // Uncomment to re-enable drums
+    /*
     drumsEnabled = data.drumsEnabled;
     baseUrl = data.baseUrl;
     */
     
     if (generationInterval === null) {
-      /* // Uncomment to re-enable drums
+      /*
       if(drumsEnabled){
           await loadDrumSamples();
       }
@@ -295,13 +319,13 @@ self.onmessage = async function(e) {
       clearInterval(generationInterval);
       generationInterval = null;
     }
-    /* // Uncomment to re-enable drums
+    /*
     samplesLoaded = false;
     Object.keys(drumSamples).forEach(key => delete drumSamples[key]);
     */
   } else if (command === 'set_instruments') {
     instruments = data;
-  /* // Uncomment to re-enable drums
+  /*
   } else if (command === 'toggle_drums') {
     drumsEnabled = data;
   */
