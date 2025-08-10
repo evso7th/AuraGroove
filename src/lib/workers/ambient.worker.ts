@@ -56,7 +56,7 @@ const drumSamples: { [key: string]: AudioBuffer } = {};
 let samplesLoaded = false;
 
 const drumSampleFiles = {
-    snare: '/public/assets/drums/snare.wav',
+    snare: '/assets/drums/snare.wav',
 };
 
 const drumSequencerPattern = {
