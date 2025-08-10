@@ -51,11 +51,11 @@ const bassScale = scales.aeolian;
 
 // --- DRUM SAMPLES ---
 const drumSampleFiles = {
-    kick: '/public/assets/drums/kickdrum.wav',
-    snare: '/public/assets/drums/snare.wav',
-    closedHat: '/public/assets/drums/closed hi hat accented.wav',
-    openHat: '/public/assets/drums/Open HH (Top) (2).wav',
-    crash: '/public/assets/drums/Crash (1).wav',
+    kick: '/assets/drums/kickdrum.wav',
+    snare: '/assets/drums/snare.wav',
+    closedHat: '/assets/drums/closed hi hat accented.wav',
+    openHat: '/assets/drums/Open HH (Top) (2).wav',
+    crash: '/assets/drums/Crash (1).wav',
 };
 const drumBuffers: { [key: string]: Float32Array } = {};
 let drumsLoaded = false;
