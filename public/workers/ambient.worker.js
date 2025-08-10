@@ -1,299 +1,250 @@
-/**
- * AuraGroove Ambient Music Worker
- *
- * This worker is responsible for the real-time procedural generation of ambient music.
- * It operates independently of the main UI thread to prevent performance issues.
- *
- * Architecture:
- * - The worker receives commands from the main thread ('start', 'stop', 'set_instruments', etc.).
- * - It pre-loads raw audio sample data (e.g., for drums) sent from the main thread.
- * - Music is generated in small, sequential chunks (e.g., 4 beats at a time).
- * - Each chunk is an array of floating-point numbers representing the audio waveform.
- * - The generated audio chunks are sent back to the main thread for scheduling and playback via the Web Audio API.
- * - It uses simple synthesis for melodic parts and sample-based generation for drums.
- * - Drum patterns use Markov chains for natural, non-repetitive transitions.
- */
 
-// --- State and Configuration ---
-let isRunning = false;
-let sampleRate = 44100;
-let tempo = 100; // bpm
-let currentBeat = 0;
-let instruments = {
-    solo: 'synthesizer',
-    accompaniment: 'piano',
-    bass: 'bass guitar'
+"use strict";
+
+// --- Утилиты ---
+function noteToFrequency(note) {
+    const a4 = 440;
+    const notes = ["A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#"];
+    const keyNumber = (note.octave - 4) * 12 + notes.indexOf(note.name) - 9;
+    return a4 * Math.pow(2, keyNumber / 12);
+}
+
+function createSineWave(frequency, duration, sampleRate) {
+    const numSamples = Math.floor(duration * sampleRate);
+    const buffer = new Float32Array(numSamples);
+    for (let i = 0; i < numSamples; i++) {
+        buffer[i] = Math.sin(2 * Math.PI * frequency * (i / sampleRate));
+    }
+    return buffer;
+}
+
+function applyADSR(buffer, adsr, sampleRate) {
+    const { attack, decay, sustain, release } = adsr;
+    const numSamples = buffer.length;
+    const attackSamples = Math.floor(attack * sampleRate);
+    const decaySamples = Math.floor(decay * sampleRate);
+    const releaseSamples = Math.floor(release * sampleRate);
+    const sustainSamples = numSamples - attackSamples - decaySamples - releaseSamples;
+
+    if (sustainSamples < 0) {
+        // Handle short notes that don't have a sustain phase
+        return buffer;
+    }
+
+    for (let i = 0; i < numSamples; i++) {
+        let amplitude = 0;
+        if (i < attackSamples) {
+            amplitude = i / attackSamples;
+        } else if (i < attackSamples + decaySamples) {
+            amplitude = 1 - (1 - sustain) * ((i - attackSamples) / decaySamples);
+        } else if (i < attackSamples + decaySamples + sustainSamples) {
+            amplitude = sustain;
+        } else {
+            amplitude = sustain * (1 - (i - (attackSamples + decaySamples + sustainSamples)) / releaseSamples);
+        }
+        buffer[i] *= Math.max(0, amplitude);
+    }
+    return buffer;
+}
+
+const instrumentADSR = {
+    synthesizer: { attack: 0.1, decay: 0.2, sustain: 0.5, release: 0.4 },
+    piano: { attack: 0.01, decay: 0.3, sustain: 0.2, release: 0.2 },
+    organ: { attack: 0.2, decay: 0.1, sustain: 0.8, release: 0.3 },
+    'bass guitar': { attack: 0.05, decay: 0.2, sustain: 0.7, release: 0.3 },
 };
-let drumsEnabled = true;
 
-const samples = {}; // To store raw sample data (Float32Array)
-
-// --- Drum Generation with Markov Chains ---
-
-// Drum sample mapping
-const DRUM_SAMPLES = {
-    KICK: 'kick_drum6',
-    SNARE: 'snare',
-    SNARE_GHOST: 'snare_ghost_note',
-    HAT_CLOSED: 'closed_hi_hat_accented',
-    HAT_GHOST: 'closed_hi_hat_ghost',
-    CYMBAL_BELL: 'cymbal_bell1',
+// --- Состояние воркера ---
+let state = {
+    isPlaying: false,
+    instruments: {
+        solo: 'synthesizer',
+        accompaniment: 'piano',
+        bass: 'bass guitar',
+    },
+    drumsEnabled: true,
+    sampleRate: 44100,
+    samples: {}, // { snare: Float32Array, ... }
+    tempo: 90,
+    currentPatternType: 'main',
+    nextPatternTime: 0,
 };
 
-// Drum Patterns (16 steps per bar, 4 bars per pattern)
+// --- Генерация ударных (с цепями Маркова) ---
 const drumPatterns = {
-    patternA: [
-        // Bar 1
-        { sample: DRUM_SAMPLES.KICK, steps: [0] },
-        { sample: DRUM_SAMPLES.HAT_CLOSED, steps: [0, 4, 8, 12] },
-        { sample: DRUM_SAMPLES.HAT_GHOST, steps: [2, 6, 10, 14] },
-        // Bar 2
-        { sample: DRUM_SAMPLES.KICK, steps: [16] },
-        { sample: DRUM_SAMPLES.HAT_CLOSED, steps: [16, 20, 24, 28] },
-        { sample: DRUM_SAMPLES.HAT_GHOST, steps: [18, 22, 26, 30] },
-        // Bar 3
-        { sample: DRUM_SAMPLES.KICK, steps: [32] },
-        { sample: DRUM_SAMPLES.HAT_CLOSED, steps: [32, 36, 40, 44] },
-        { sample: DRUM_SAMPLES.SNARE_GHOST, steps: [44] },
-        // Bar 4
-        { sample: DRUM_SAMPLES.KICK, steps: [48] },
-        { sample: DRUM_SAMPLES.HAT_CLOSED, steps: [48, 52, 56, 60] },
-        { sample: DRUM_SAMPLES.CYMBAL_BELL, steps: [48] },
+    main: [
+        { sample: 'kick_drum6', time: 0 },
+        { sample: 'closed_hi_hat_accented', time: 0 },
+        { sample: 'closed_hi_hat_ghost', time: 0.25 },
+        { sample: 'snare_ghost_note', time: 0.5 },
+        { sample: 'closed_hi_hat_accented', time: 0.5 },
+        { sample: 'closed_hi_hat_ghost', time: 0.75 },
     ],
-    patternB: [
-        // Bar 1 & 2 (same as A)
-        ...JSON.parse(JSON.stringify(drumPatterns.patternA.slice(0, 6))),
-        // Bar 3
-        { sample: DRUM_SAMPLES.KICK, steps: [32] },
-        { sample: DRUM_SAMPLES.HAT_CLOSED, steps: [32, 36, 40, 44] },
-        { sample: DRUM_SAMPLES.SNARE_GHOST, steps: [40, 44] },
-         // Bar 4
-        { sample: DRUM_SAMPLES.KICK, steps: [48, 58] },
-        { sample: DRUM_SAMPLES.HAT_CLOSED, steps: [48, 52, 56, 60] },
-        { sample: DRUM_SAMPLES.SNARE_GHOST, steps: [56] },
+    calm: [
+        { sample: 'kick_drum6', time: 0 },
+        { sample: 'cymbal_bell1', time: 0.25 },
+        { sample: 'kick_drum6', time: 0.5 },
+        { sample: 'cymbal_bell2', time: 0.75 },
     ],
-    fillA: [
-        // Bars 1-3 are silent to lead into the fill
-        // Bar 4
-        { sample: DRUM_SAMPLES.SNARE_GHOST, steps: [48, 50, 54, 56] },
-        { sample: DRUM_SAMPLES.CYMBAL_BELL, steps: [58] },
+    fill: [
+        { sample: 'hightom', time: 0.5 },
+        { sample: 'midtom', time: 0.625 },
+        { sample: 'lowtom', time: 0.75 },
+        { sample: 'crash1', time: 0.875 },
     ]
 };
 
-// Markov Chain for pattern transitions
-const drumStateTransitions = {
-    patternA: { patternA: 0.7, patternB: 0.2, fillA: 0.1 },
-    patternB: { patternA: 0.8, patternB: 0.1, fillA: 0.1 },
-    fillA: { patternA: 1.0, patternB: 0.0, fillA: 0.0 } // A fill always returns to patternA
+const markovTransitions = {
+    main: { calm: 0.2, main: 0.7, fill: 0.1 },
+    calm: { main: 0.8, calm: 0.2, fill: 0.0 },
+    fill: { main: 1.0, calm: 0.0, fill: 0.0 },
 };
 
-let currentDrumPatternName = 'patternA';
-let patternStep = 0;
-const PATTERN_LENGTH_BEATS = 16; // 4 bars * 4 beats/bar
 
-function getNextDrumPattern() {
-    const transitions = drumStateTransitions[currentDrumPatternName];
+function getNextPatternType(currentType) {
+    const transitions = markovTransitions[currentType];
     let rand = Math.random();
-    for (const patternName in transitions) {
-        rand -= transitions[patternName];
+    for (const nextType in transitions) {
+        rand -= transitions[nextType];
         if (rand <= 0) {
-            return patternName;
+            return nextType;
         }
     }
-    return 'patternA'; // Fallback
+    return 'main'; // Fallback
 }
 
-// --- Synthesis Functions ---
 
-// Oscillator function for basic synth sounds
-function oscillator(freq, time, type = 'sine') {
-    switch (type) {
-        case 'sine':
-            return Math.sin(freq * 2 * Math.PI * time);
-        case 'square':
-            return Math.sign(Math.sin(freq * 2 * Math.PI * time));
-        case 'sawtooth':
-            return 2 * (time * freq - Math.floor(0.5 + time * freq));
-        case 'triangle':
-            return 2 * Math.abs(2 * (time * freq - Math.floor(0.5 + time * freq))) - 1;
-        default:
-            return 0;
-    }
-}
-
-// ADSR Envelope
-function adsr(time, attack, decay, sustain, release, duration) {
-    if (time < attack) return time / attack;
-    if (time < attack + decay) return 1.0 - ((time - attack) / decay) * (1.0 - sustain);
-    if (time < duration) return sustain;
-    // Release is handled by the note duration
-    return 0;
-}
-
-// --- Music Generation ---
-
-function generateMusicChunk(chunkDuration) {
-    const beatsPerSecond = tempo / 60;
-    const samplesPerChunk = Math.floor(sampleRate * chunkDuration);
-    const chunk = new Float32Array(samplesPerChunk).fill(0);
-
-    const notes = []; // { freq, start, duration, instrument, volume }
-    const beatsInChunk = chunkDuration * beatsPerSecond;
-
-    // --- Part Generation ---
-    if (instruments.bass !== 'disabled') {
-        // Simple bass: one long note per chunk
-        const bassFreq = mtof(36); // C2
-        notes.push({ freq: bassFreq, start: 0, duration: chunkDuration, instrument: 'bass', volume: 0.4 });
-    }
-    
-    if (instruments.accompaniment !== 'disabled') {
-        // Simple accompaniment: one chord per chunk
-        const chord = [60, 64, 67]; // C Major
-        chord.forEach(note => {
-            notes.push({ freq: mtof(note), start: 0, duration: chunkDuration, instrument: 'accompaniment', volume: 0.3 });
-        });
-    }
-
-    if (instruments.solo !== 'disabled') {
-        // Simple solo: a few random notes from a scale
-        const scale = [60, 62, 64, 65, 67, 69, 71]; // C Major scale
-        for(let i = 0; i < 2; i++) {
-             const note = scale[Math.floor(Math.random() * scale.length)];
-             const start = Math.random() * chunkDuration * 0.8;
-             const duration = 0.5;
-             notes.push({ freq: mtof(note), start, duration, instrument: 'solo', volume: 0.5 });
-        }
-    }
-
-    // --- Synthesize melodic parts ---
-    for (let i = 0; i < samplesPerChunk; i++) {
-        const time = i / sampleRate;
-        let sampleValue = 0;
-
-        notes.forEach(note => {
-            if (time >= note.start && time < note.start + note.duration) {
-                const noteTime = time - note.start;
-                let envelope = 1;
-                let wave = 0;
-
-                if (note.instrument === 'bass') {
-                    envelope = adsr(noteTime, 0.05, 0.2, 0.7, 0.3, note.duration);
-                    wave = oscillator(note.freq, noteTime, 'sine');
-                } else if (note.instrument === 'accompaniment') {
-                     envelope = adsr(noteTime, 0.2, 0.4, 0.5, 0.4, note.duration);
-                     wave = oscillator(note.freq, noteTime, 'triangle');
-                } else if (note.instrument === 'solo') {
-                    envelope = adsr(noteTime, 0.1, 0.3, 0.6, 0.2, note.duration);
-                    wave = oscillator(note.freq, noteTime, 'sawtooth');
-                }
-                sampleValue += wave * envelope * note.volume;
-            }
-        });
-        chunk[i] += sampleValue;
-    }
-    
-    // --- Generate drum parts ---
-    if (drumsEnabled) {
-        const secondsPerBeat = 60.0 / tempo;
-        const totalStepsInPattern = 64; // 4 bars * 16 steps
-
-        if (patternStep >= totalStepsInPattern) {
-            currentDrumPatternName = getNextDrumPattern();
-            patternStep = 0;
-        }
-
-        const patternData = drumPatterns[currentDrumPatternName];
-        
-        for (const part of patternData) {
-            const sampleData = samples[part.sample];
-            if (!sampleData) continue;
-
-            for (const step of part.steps) {
-                // Check if the step falls within the current chunk
-                const stepOffset = step - patternStep;
-                const timeInChunk = stepOffset * secondsPerBeat / 4; // 16th notes
-
-                if (timeInChunk >= 0 && timeInChunk < chunkDuration) {
-                    const startSample = Math.floor(timeInChunk * sampleRate);
-                    // Mix sample into the chunk
-                    for (let i = 0; i < sampleData.length && startSample + i < chunk.length; i++) {
-                        chunk[startSample + i] += sampleData[i] * 0.7; // Mix volume for drums
-                    }
+function generateDrums(pattern, barDuration) {
+    const drumChunk = new Float32Array(Math.floor(barDuration * state.sampleRate));
+    for (const hit of pattern) {
+        const sampleBuffer = state.samples[hit.sample];
+        if (sampleBuffer) {
+            const startTime = Math.floor(hit.time * barDuration * state.sampleRate);
+            for (let i = 0; i < sampleBuffer.length; i++) {
+                if (startTime + i < drumChunk.length) {
+                    drumChunk[startTime + i] += sampleBuffer[i];
                 }
             }
         }
-        patternStep += beatsInChunk * 4; // Advance pattern steps
     }
-
-    // --- Clipping ---
-    for (let i = 0; i < chunk.length; i++) {
-        chunk[i] = Math.max(-1, Math.min(1, chunk[i]));
-    }
-    
-    currentBeat += beatsInChunk;
-
-    return chunk;
-}
-
-function mtof(midi) {
-    return 440 * Math.pow(2, (midi - 69) / 12);
+    return drumChunk;
 }
 
 
-// --- Worker Main Loop ---
-function loop() {
-    if (!isRunning) return;
+// --- Основной цикл генерации ---
 
-    const chunkDuration = 4 * (60 / tempo); // Generate 4 beats at a time
-    const audioChunk = generateMusicChunk(chunkDuration);
+function generateMusicChunk(barDuration) {
+    const numSamples = Math.floor(barDuration * state.sampleRate);
+    let finalChunk = new Float32Array(numSamples);
 
-    self.postMessage({
-        type: 'chunk',
-        data: {
-            chunk: audioChunk,
-            duration: chunkDuration
+    // Ударные
+    if (state.drumsEnabled) {
+        const pattern = drumPatterns[state.currentPatternType];
+        const drumChunk = generateDrums(pattern, barDuration);
+        for(let i = 0; i < numSamples; i++) finalChunk[i] += drumChunk[i] * 0.4;
+    }
+
+    // Бас
+    if (state.instruments.bass !== 'none') {
+        const adsr = instrumentADSR[state.instruments.bass];
+        const bassWave = createSineWave(noteToFrequency({name: 'C', octave: 2}), barDuration, state.sampleRate);
+        const processedBass = applyADSR(bassWave, adsr, state.sampleRate);
+        for(let i = 0; i < numSamples; i++) finalChunk[i] += processedBass[i] * 0.3;
+    }
+
+    // Аккомпанемент
+    if (state.instruments.accompaniment !== 'none') {
+        const adsr = instrumentADSR[state.instruments.accompaniment];
+        const chordNotes = ['C4', 'E4', 'G4'];
+        for(const noteName of chordNotes) {
+            const noteWave = createSineWave(noteToFrequency({name: noteName.slice(0,-1), octave: parseInt(noteName.slice(-1))}), barDuration, state.sampleRate);
+            const processedNote = applyADSR(noteWave, adsr, state.sampleRate);
+             for(let i = 0; i < numSamples; i++) finalChunk[i] += processedNote[i] * 0.15;
         }
-    }, [audioChunk.buffer]);
+    }
 
-    setTimeout(loop, chunkDuration * 1000 / 2); // Generate next chunk halfway through the current one
+    // Соло
+    if (state.instruments.solo !== 'none') {
+         if (Math.random() > 0.6) { // Play a note sometimes
+            const adsr = instrumentADSR[state.instruments.solo];
+            const soloWave = createSineWave(noteToFrequency({name: 'A', octave: 4}), barDuration * 0.5, state.sampleRate);
+            const processedSolo = applyADSR(soloWave, adsr, state.sampleRate);
+             for(let i = 0; i < processedSolo.length; i++) finalChunk[i] += processedSolo[i] * 0.2;
+        }
+    }
+
+    return finalChunk;
 }
 
+function startGeneration() {
+    if (!state.isPlaying) return;
 
-// --- Message Handling ---
-self.onmessage = function(e) {
-    const { command, data } = e.data;
+    // --- ИСПРАВЛЕНИЕ: Отправляем сообщение о старте ---
+    self.postMessage({ type: 'generation_started' });
+
+    let barCount = 0;
+    const scheduleAheadTime = 1.0; // seconds
+
+    const generatorLoop = () => {
+        if (!state.isPlaying) return;
+
+        const barDuration = 60.0 / state.tempo * 4; // 4/4 time signature
+
+        while (state.nextPatternTime < state.sampleRate * scheduleAheadTime + barCount * barDuration * state.sampleRate) {
+            
+             // Выбираем следующий паттерн на основе цепей Маркова
+            if (barCount % 4 === 0) { // Меняем паттерн каждые 4 такта
+                 state.currentPatternType = getNextPatternType(state.currentPatternType);
+            }
+
+            const chunk = generateMusicChunk(barDuration);
+            self.postMessage({
+                type: 'chunk',
+                data: {
+                    chunk: chunk,
+                    duration: barDuration
+                }
+            }, [chunk.buffer]);
+
+            state.nextPatternTime += chunk.length;
+            barCount++;
+        }
+
+        setTimeout(generatorLoop, (scheduleAheadTime / 2) * 1000);
+    };
+
+    generatorLoop();
+}
+
+// --- Обработчик сообщений ---
+self.onmessage = (event) => {
+    const { command, data } = event.data;
 
     switch (command) {
         case 'start':
-            if (isRunning) return;
-            isRunning = true;
-            sampleRate = data.sampleRate;
-            instruments = data.instruments;
-            drumsEnabled = data.drumsEnabled;
-            currentBeat = 0;
-            patternStep = 0;
-            currentDrumPatternName = 'patternA';
-            self.postMessage({ type: 'generation_started' });
-            loop();
+            Object.assign(state, data);
+            state.isPlaying = true;
+            state.nextPatternTime = 0;
+            startGeneration();
             break;
+
         case 'stop':
-            isRunning = false;
+            state.isPlaying = false;
             break;
-        case 'set_instruments':
-            instruments = data;
-            break;
-        case 'toggle_drums':
-            drumsEnabled = data.enabled;
-            break;
+
         case 'load_samples':
-            // The main thread sends decoded Float32Array data
-            for (const key in data) {
-                if (data.hasOwnProperty(key)) {
-                    samples[DRUM_SAMPLES[key.toUpperCase()]] = data[key];
-                    console.log(`Worker: Received and stored raw sample data for: ${key}`);
-                }
+            for(const key in data) {
+                state.samples[key] = data[key];
+                console.log(`Worker: Received and stored raw sample data for: ${key}`);
             }
+            break;
+            
+        case 'set_instruments':
+            state.instruments = data;
+            break;
+            
+        case 'toggle_drums':
+            state.drumsEnabled = data.enabled;
             break;
     }
 };
