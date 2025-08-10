@@ -132,7 +132,7 @@ class AudioPlayer {
     }
     
     Object.values(this.synths).forEach(synth => {
-      if (synth) {
+      if (synth && typeof synth.releaseAll === 'function') {
         synth.releaseAll();
       }
     });
