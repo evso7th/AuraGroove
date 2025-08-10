@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Loader2, Pause, Play } from "lucide-react";
-import { audioPlayer } from "@/lib/audio-player";
+// import { audioPlayer } from "@/lib/audio-player";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -45,32 +45,29 @@ export function AuraGroove() {
   const { toast } = useToast();
 
   const musicWorkerRef = useRef<Worker>();
-  const isInitializedRef = useRef(false);
+  // const isInitializedRef = useRef(false);
 
   useEffect(() => {
-    // Use a direct path to the worker script in the public folder.
-    // This is a more robust way to initialize workers in Next.js.
     musicWorkerRef.current = new Worker('/workers/ambient.worker.js');
 
-
     const handleMessage = (event: MessageEvent) => {
-      const { type, buffer, duration, message } = event.data;
-      if (type === 'music_part') {
-        if (!audioPlayer.getIsPlaying()) {
-            audioPlayer.start();
-            setIsPlaying(true);
-            setIsLoading(false);
-        }
-        audioPlayer.schedulePart(buffer, duration);
-      } else if (type === 'error') {
+      const { type, message } = event.data;
+      console.log('Message from worker:', event.data);
+      
+      if (type === 'decode_success') {
+        toast({
+            title: "Worker Test Successful",
+            description: message,
+        });
+        setIsLoading(false);
+        setIsPlaying(false);
+      } else if (type === 'decode_error') {
          toast({
             variant: "destructive",
-            title: "Worker Error",
+            title: "Worker Test Failed",
             description: message,
          });
          handleStop();
-      } else if (type === 'loading_status') {
-        setLoadingText(message);
       }
     };
 
@@ -78,66 +75,68 @@ export function AuraGroove() {
     
     return () => {
       musicWorkerRef.current?.terminate();
-      audioPlayer.stop();
+      // audioPlayer.stop();
     };
   }, [toast]);
   
   const handleInstrumentChange = (part: keyof Instruments) => (value: Instruments[keyof Instruments]) => {
     const newInstruments = { ...instruments, [part]: value };
     setInstruments(newInstruments);
-     if(isPlaying) {
-      musicWorkerRef.current?.postMessage({ command: 'set_instruments', data: newInstruments });
-    }
   };
 
 
   const handleDrumsToggle = (checked: boolean) => {
     setDrumsEnabled(checked);
-    if(isPlaying) {
-      musicWorkerRef.current?.postMessage({ command: 'toggle_drums', data: checked });
-    }
   }
+
+  // This function now only serves to test the worker's decoding capability.
+  const testWorkerDecode = async () => {
+      setIsLoading(true);
+      setLoadingText("Testing worker...");
+      console.log('Starting worker test...');
+
+      try {
+        const sampleUrl = '/assets/drums/snare.wav';
+        console.log(`Fetching sample from: ${sampleUrl}`);
+        const response = await fetch(sampleUrl);
+        if (!response.ok) {
+            throw new Error(`Failed to fetch ${sampleUrl}: ${response.statusText}`);
+        }
+        const arrayBuffer = await response.arrayBuffer();
+        console.log(`Sample fetched successfully. Size: ${arrayBuffer.byteLength} bytes.`);
+        
+        musicWorkerRef.current?.postMessage({
+            command: 'test_decode',
+            data: { arrayBuffer }
+        }, [arrayBuffer]); // Transfer the ArrayBuffer
+        console.log('Sent test_decode command to worker.');
+
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+        console.error("Error in testWorkerDecode:", errorMessage);
+        toast({
+            variant: "destructive",
+            title: "Test Error",
+            description: errorMessage,
+        });
+        setIsLoading(false);
+      }
+  };
 
 
   const handlePlay = async () => {
-    setIsLoading(true);
-    setLoadingText("Initializing...");
-    try {
-      if (!isInitializedRef.current) {
-        await audioPlayer.initialize();
-        isInitializedRef.current = true;
-      }
-      
-      musicWorkerRef.current?.postMessage({ 
-        command: 'start', 
-        data: { 
-          instruments, 
-          drumsEnabled, 
-          baseUrl: window.location.origin
-        } 
-      });
-
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
-      toast({
-        variant: "destructive",
-        title: "Playback Error",
-        description: errorMessage,
-      });
-      setIsPlaying(false);
-      setIsLoading(false);
-    }
+    await testWorkerDecode();
   };
 
   const handleStop = () => {
-    musicWorkerRef.current?.postMessage({ command: 'stop' });
-    audioPlayer.stop();
+    // musicWorkerRef.current?.postMessage({ command: 'stop' });
+    // audioPlayer.stop();
     setIsPlaying(false);
     setIsLoading(false);
   };
   
   const handleTogglePlay = () => {
-    if (isPlaying) {
+    if (isPlaying || isLoading) {
       handleStop();
     } else {
       handlePlay();
@@ -160,7 +159,7 @@ export function AuraGroove() {
             <Select
               value={instruments.solo}
               onValueChange={handleInstrumentChange('solo')}
-              disabled={isLoading || isPlaying}
+              disabled={true}
             >
               <SelectTrigger id="solo-instrument" className="col-span-2">
                 <SelectValue placeholder="Select instrument" />
@@ -177,7 +176,7 @@ export function AuraGroove() {
              <Select
               value={instruments.accompaniment}
               onValueChange={handleInstrumentChange('accompaniment')}
-              disabled={isLoading || isPlaying}
+              disabled={true}
             >
               <SelectTrigger id="accompaniment-instrument" className="col-span-2">
                 <SelectValue placeholder="Select instrument" />
@@ -194,7 +193,7 @@ export function AuraGroove() {
              <Select
               value={instruments.bass}
               onValueChange={handleInstrumentChange('bass')}
-              disabled={isLoading || isPlaying}
+              disabled={true}
             >
               <SelectTrigger id="bass-instrument" className="col-span-2">
                 <SelectValue placeholder="Select instrument" />
@@ -211,7 +210,7 @@ export function AuraGroove() {
                 id="drums-enabled"
                 checked={drumsEnabled}
                 onCheckedChange={handleDrumsToggle}
-                disabled={isLoading || isPlaying}
+                disabled={true}
                 />
                 <Label htmlFor="drums-enabled">Drums</Label>
             </div>
@@ -224,15 +223,10 @@ export function AuraGroove() {
                 <p>{loadingText}</p>
             </div>
         )}
-        {!isLoading && !isPlaying && (
+         {!isLoading && (
             <p className="text-muted-foreground text-center min-h-[40px] flex items-center justify-center px-4">
-              Select your instruments and press Start to generate an ever-evolving soundscape.
+              Ready to run worker test.
             </p>
-        )}
-        {isPlaying && (
-             <div className="flex flex-col items-center justify-center text-muted-foreground space-y-2 min-h-[40px]">
-                <p>Playing...</p>
-            </div>
         )}
       </CardContent>
       <CardFooter className="flex-col gap-4">
@@ -244,12 +238,10 @@ export function AuraGroove() {
         >
           {isLoading ? (
             <Loader2 className="mr-2 h-6 w-6 animate-spin" />
-          ) : isPlaying ? (
-            <Pause className="mr-2 h-6 w-6" />
           ) : (
             <Play className="mr-2 h-6 w-6" />
           )}
-          {isLoading ? loadingText : isPlaying ? "Stop" : "Start"}
+          {isLoading ? loadingText : "Run Worker Test"}
         </Button>
       </CardFooter>
     </Card>
