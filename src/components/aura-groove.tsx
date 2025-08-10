@@ -32,9 +32,9 @@ export type Instruments = {
 };
 
 const sampleUrls = {
-    kick: '/samples/drums/kick_drum6.wav',
-    snare: '/samples/drums/snare.wav',
-    hat: '/samples/drums/closed_hi_hat_accented.wav'
+    kick: '/assets/samples/drums/kick_drum6.wav',
+    snare: '/assets/samples/drums/snare.wav',
+    hat: '/assets/samples/drums/closed_hi_hat_accented.wav'
 };
 
 export function AuraGroove() {
@@ -50,8 +50,8 @@ export function AuraGroove() {
   const { toast } = useToast();
 
   const musicWorkerRef = useRef<Worker>();
-  const isAudioReady = useRef(false);
   const sampleArrayBuffers = useRef<Record<string, ArrayBuffer>>({});
+  const areSamplesLoaded = useRef(false);
 
   useEffect(() => {
     musicWorkerRef.current = new Worker('/workers/ambient.worker.js');
@@ -87,6 +87,7 @@ export function AuraGroove() {
                 }
                 sampleArrayBuffers.current[key] = await response.arrayBuffer();
             }
+            areSamplesLoaded.current = true;
             setIsLoading(false);
             setLoadingText("");
         } catch (error) {
@@ -94,7 +95,7 @@ export function AuraGroove() {
             toast({
                 variant: "destructive",
                 title: "Sample Error",
-                description: "Could not load drum samples. Please check file paths and network.",
+                description: `Could not load drum samples. Please check file paths and network. ${error instanceof Error ? error.message : ''}`,
             });
             setIsLoading(false);
         }
@@ -127,36 +128,37 @@ export function AuraGroove() {
     });
   }
   
-  const prepareAudio = async () => {
-    if (isAudioReady.current) return true;
-
+  const prepareAudioAndSendSamples = async () => {
     setIsLoading(true);
     setLoadingText("Preparing audio engine...");
 
     try {
+      // 1. Initialize audio context (must be after user gesture)
       await audioPlayer.initialize();
       const audioContext = audioPlayer.getAudioContext();
       if (!audioContext) {
         throw new Error("Could not initialize AudioContext.");
       }
 
+      // 2. Decode samples
       const decodedSamples: { [key: string]: Float32Array } = {};
       const transferableObjects: Transferable[] = [];
       const sampleEntries = Object.entries(sampleArrayBuffers.current);
 
       for (const [key, arrayBuffer] of sampleEntries) {
-          const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0)); // Use slice to clone for safety
+          // Use slice(0) to create a copy for decoding, as the original buffer might be needed elsewhere
+          const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0)); 
           const float32Array = audioBuffer.getChannelData(0);
           decodedSamples[key] = float32Array;
           transferableObjects.push(float32Array.buffer);
       }
 
+      // 3. Send decoded samples to worker
       musicWorkerRef.current?.postMessage({
           command: 'load_samples',
           data: decodedSamples
       }, transferableObjects);
       
-      isAudioReady.current = true;
       return true;
 
     } catch (error) {
@@ -172,7 +174,15 @@ export function AuraGroove() {
   };
 
   const handlePlay = async () => {
-    if (!await prepareAudio()) return;
+    if (!areSamplesLoaded.current) {
+        toast({
+            title: "Samples not loaded",
+            description: "Please wait for samples to finish loading.",
+        });
+        return;
+    }
+
+    if (!await prepareAudioAndSendSamples()) return;
     
     setIsLoading(true);
     setLoadingText("Generating music...");
@@ -316,3 +326,5 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    
