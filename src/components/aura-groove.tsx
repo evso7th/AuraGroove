@@ -50,8 +50,8 @@ export function AuraGroove() {
   const { toast } = useToast();
 
   const musicWorkerRef = useRef<Worker>();
-  const isAudioInitialized = useRef(false);
-  const areSamplesLoaded = useRef(false);
+  const isAudioReady = useRef(false);
+  const sampleArrayBuffers = useRef<Record<string, ArrayBuffer>>({});
 
   useEffect(() => {
     musicWorkerRef.current = new Worker('/workers/ambient.worker.js');
@@ -72,57 +72,25 @@ export function AuraGroove() {
           description: error,
         });
         handleStop();
-      } else if (type === 'samples_loaded') {
-          areSamplesLoaded.current = true;
-          setIsLoading(false);
-          setLoadingText("");
       }
     };
 
     musicWorkerRef.current.onmessage = handleMessage;
     
-    const initializeAudioAndLoadSamples = async () => {
-        if (!isAudioInitialized.current) {
-            await audioPlayer.initialize();
-            isAudioInitialized.current = true;
-        }
-        
-        if (!audioPlayer.getAudioContext()) {
-             toast({
-                variant: "destructive",
-                title: "Audio Error",
-                description: "Could not initialize AudioContext.",
-            });
-            setIsLoading(false);
-            return;
-        }
-        
+    const fetchSamples = async () => {
         try {
-            const audioContext = audioPlayer.getAudioContext()!;
             const sampleEntries = Object.entries(sampleUrls);
-            
-            const decodedSamples: { [key: string]: Float32Array } = {};
-            const transferableObjects: Transferable[] = [];
-
             for (const [key, url] of sampleEntries) {
                 const response = await fetch(url);
                 if (!response.ok) {
                     throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
                 }
-                const arrayBuffer = await response.arrayBuffer();
-                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-                const float32Array = audioBuffer.getChannelData(0);
-                decodedSamples[key] = float32Array;
-                transferableObjects.push(float32Array.buffer);
+                sampleArrayBuffers.current[key] = await response.arrayBuffer();
             }
-
-            musicWorkerRef.current?.postMessage({
-                command: 'load_samples',
-                data: decodedSamples
-            }, transferableObjects);
-
+            setIsLoading(false);
+            setLoadingText("");
         } catch (error) {
-            console.error("Failed to load samples:", error);
+            console.error("Failed to fetch samples:", error);
             toast({
                 variant: "destructive",
                 title: "Sample Error",
@@ -132,7 +100,7 @@ export function AuraGroove() {
         }
     };
 
-    initializeAudioAndLoadSamples();
+    fetchSamples();
     
     return () => {
       musicWorkerRef.current?.terminate();
@@ -159,25 +127,62 @@ export function AuraGroove() {
     });
   }
   
-  const handlePlay = async () => {
-    if (!areSamplesLoaded.current) {
+  const prepareAudio = async () => {
+    if (isAudioReady.current) return true;
+
+    setIsLoading(true);
+    setLoadingText("Preparing audio engine...");
+
+    try {
+      await audioPlayer.initialize();
+      const audioContext = audioPlayer.getAudioContext();
+      if (!audioContext) {
+        throw new Error("Could not initialize AudioContext.");
+      }
+
+      const decodedSamples: { [key: string]: Float32Array } = {};
+      const transferableObjects: Transferable[] = [];
+      const sampleEntries = Object.entries(sampleArrayBuffers.current);
+
+      for (const [key, arrayBuffer] of sampleEntries) {
+          const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0)); // Use slice to clone for safety
+          const float32Array = audioBuffer.getChannelData(0);
+          decodedSamples[key] = float32Array;
+          transferableObjects.push(float32Array.buffer);
+      }
+
+      musicWorkerRef.current?.postMessage({
+          command: 'load_samples',
+          data: decodedSamples
+      }, transferableObjects);
+      
+      isAudioReady.current = true;
+      return true;
+
+    } catch (error) {
+        console.error("Failed to prepare audio:", error);
         toast({
-            title: "Still loading",
-            description: "Samples are still being prepared, please wait.",
+            variant: "destructive",
+            title: "Audio Error",
+            description: `Could not prepare audio. ${error instanceof Error ? error.message : ''}`,
         });
-        return;
+        setIsLoading(false);
+        return false;
     }
+  };
+
+  const handlePlay = async () => {
+    if (!await prepareAudio()) return;
     
     setIsLoading(true);
     setLoadingText("Generating music...");
-    const sampleRate = audioPlayer.getAudioContext()?.sampleRate || 44100;
 
     musicWorkerRef.current?.postMessage({
         command: 'start',
         data: {
             instruments,
             drumsEnabled,
-            sampleRate
+            sampleRate: audioPlayer.getAudioContext()?.sampleRate || 44100
         }
     });
   };

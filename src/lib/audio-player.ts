@@ -24,6 +24,8 @@ class AudioPlayer {
     if (this.isInitialized) return;
     
     this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    // Resume is essential for browsers that suspend the context by default.
+    // This should be called after a user gesture.
     if (this.audioContext.state === 'suspended') {
         await this.audioContext.resume();
     }
@@ -42,6 +44,7 @@ class AudioPlayer {
     
     const now = this.audioContext.currentTime;
     
+    // Schedule buffers that are due in the next 100ms
     while(this.bufferQueue.length > 0 && this.bufferQueue[0].time < now + 0.1) {
       const { buffer, time } = this.bufferQueue.shift()!;
       
@@ -49,10 +52,12 @@ class AudioPlayer {
       source.buffer = buffer;
       source.connect(this.masterGain);
       
+      // Ensure we don't schedule in the past
       const startTime = Math.max(now, time);
       source.start(startTime);
     }
     
+    // Check again in 50ms
     this.scheduleTimeoutId = window.setTimeout(() => this.scheduleBuffers(), 50);
   }
 
@@ -63,7 +68,6 @@ class AudioPlayer {
       }
       
       if (bufferData.length === 0) {
-        // This was causing the crash. Ignore empty buffers.
         return;
       }
       
@@ -78,6 +82,7 @@ class AudioPlayer {
   public start() {
     if (!this.isInitialized || !this.audioContext || this._isPlaying) return;
     this._isPlaying = true;
+    // Add a small delay to prevent jerky start
     this.nextPartStartTime = this.audioContext.currentTime + 0.2;
     this.scheduleBuffers();
     console.log("AudioPlayer started");
@@ -90,6 +95,12 @@ class AudioPlayer {
       clearTimeout(this.scheduleTimeoutId);
       this.scheduleTimeoutId = null;
     }
+    // Clear any scheduled sources and the queue
+    this.audioContext?.close().then(() => {
+        this.isInitialized = false;
+        this.audioContext = null;
+        console.log("AudioContext closed and reset.");
+    });
     this.bufferQueue = [];
     this.nextPartStartTime = 0;
     console.log("AudioPlayer stopped");
