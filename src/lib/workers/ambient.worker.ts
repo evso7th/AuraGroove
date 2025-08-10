@@ -56,19 +56,11 @@ const drumSamples: { [key: string]: AudioBuffer } = {};
 let samplesLoaded = false;
 
 const drumSampleFiles = {
-    kick: '/assets/drums/kickdrum.wav',
     snare: '/assets/drums/snare.wav',
-    closedHat: '/assets/drums/snare_ghost_note.wav', // Using ghost note for a softer hi-hat
-    openHat: '/assets/drums/hightom.wav', // Using a tom for an open hat sound
-    crash: '/assets/drums/midtom.wav', // Using a tom for a crash sound
 };
 
 const drumSequencerPattern = {
-    kick: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
     snare: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
-    closedHat: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    openHat: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-    crash: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 };
 
 
