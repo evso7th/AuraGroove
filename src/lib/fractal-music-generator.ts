@@ -1,4 +1,5 @@
 
+
 // A simple pseudo-random number generator for deterministic sequences
 function lcg(seed: number) {
   return () => (seed = (seed * 1664525 + 1013904223) & 0x7fffffff) / 0x7fffffff;
@@ -14,16 +15,16 @@ function getRandomNote(scale: number[], octave: number, random: () => number): n
 }
 
 export function generateSimpleSolo(random: () => number): number[] {
-    const shouldPlay = random() > 0.9;
+    const shouldPlay = random() > 0.8;
     if (!shouldPlay) return [];
     return [getRandomNote(PENTATONIC_SCALE, 1, random)];
 }
 
 export function generateSimpleAccompaniment(random: () => number): number[] {
-    const shouldPlay = random() > 0.7;
+    const shouldPlay = random() > 0.6;
     if (!shouldPlay) return [];
     const root = getRandomNote(PENTATONIC_SCALE, 0, random);
-    return [root, root + 4, root + 7];
+    return [root, root + 4]; // simple interval
 }
 
 export function generateSimpleBass(random: () => number): number[] {
@@ -35,7 +36,7 @@ export function generateSimpleBass(random: () => number): number[] {
 // --- Drum Patterns ---
 
 export type DrumStep = {
-    sample: 'kick' | 'snare' | 'snare_ghost_note' | 'closed_hi_hat_ghost' | 'hat' | string; // Allow more sample types
+    sample: 'kick' | 'snare' | 'hat';
     time: number; // 0 to 1 (percentage of a beat)
 };
 
@@ -61,36 +62,6 @@ export const drumPatternA: DrumStep[][] = Array(TOTAL_BEATS_IN_PATTERN).fill(nul
 
     // Hi-hat on every beat
     steps.push({ sample: 'hat', time: 0 });
-    
-    return steps;
-});
-
-// Pattern B: Slightly more complex, with ghost notes
-export const drumPatternB: DrumStep[][] = Array(TOTAL_BEATS_IN_PATTERN).fill(null).map((_, beatIndex) => {
-    const steps: DrumStep[] = [];
-    const bar = Math.floor(beatIndex / BEATS_PER_BAR);
-    const beatInBar = beatIndex % BEATS_PER_BAR;
-    
-    // Kick on beats 1 and 3
-    if (beatInBar === 0 || beatInBar === 2) {
-        steps.push({ sample: 'kick', time: 0 });
-    }
-    
-    // Snare on beat 3
-    if (beatInBar === 2) {
-        steps.push({ sample: 'snare', time: 0 });
-    }
-
-    // Add a ghost snare on the last 16th note of beat 4 in the last bar
-    if (bar === 3 && beatInBar === 3) {
-        steps.push({ sample: 'snare_ghost_note', time: 0.75 });
-    }
-
-    // Hi-hats
-    steps.push({ sample: 'hat', time: 0 });
-    if (beatIndex % 2 !== 0) { // Add off-beat hats
-        steps.push({ sample: 'closed_hi_hat_ghost', time: 0.5 });
-    }
     
     return steps;
 });
