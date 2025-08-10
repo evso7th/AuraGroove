@@ -1,191 +1,244 @@
 
-// Simple synthesis functions
-const createSineOscillator = (audioContext, freq, gain) => {
-    const oscillator = audioContext.createOscillator();
-    oscillator.type = 'sine';
-    oscillator.frequency.setValueAtTime(freq, audioContext.currentTime);
+"use strict";
 
-    const gainNode = audioContext.createGain();
-    gainNode.gain.setValueAtTime(gain, audioContext.currentTime);
+// --- Утилиты и полифиллы ---
 
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-
-    return { oscillator, gainNode };
-};
-
-
-// Global state for the worker
-let audioContext = null;
-let sampleRate = 44100;
-let samples = {};
-let isPlaying = false;
-let instruments = {
-    solo: 'none',
-    accompaniment: 'none',
-    bass: 'none'
-};
-let drumsEnabled = true;
-
-let tempoBPM = 60;
-let currentTick = 0;
-let tickDuration = 0;
-
-// =============================================================================
-// DSP / Synthesis Functions
-// =============================================================================
-
-function applyExponentialDecay(sample) {
-    const decayFactor = 0.9998;
-    const decayedSample = new Float32Array(sample.length);
-    let amp = 1.0;
-    for (let i = 0; i < sample.length; i++) {
-        decayedSample[i] = sample[i] * amp;
-        amp *= decayFactor;
-    }
-    return decayedSample;
+// Полифилл для requestAnimationFrame в воркере
+if (!self.requestAnimationFrame) {
+    let lastTime = 0;
+    self.requestAnimationFrame = (callback) => {
+        const currTime = new Date().getTime();
+        const timeToCall = Math.max(0, 16 - (currTime - lastTime));
+        const id = self.setTimeout(() => {
+            callback(currTime + timeToCall);
+        }, timeToCall);
+        lastTime = currTime + timeToCall;
+        return id;
+    };
+}
+if (!self.cancelAnimationFrame) {
+    self.cancelAnimationFrame = (id) => {
+        clearTimeout(id);
+    };
 }
 
+// --- Основной класс воркера ---
 
-// =============================================================================
-// Music Generation Logic
-// =============================================================================
-function generateBass(tick, duration) {
-    const freq = 65.41; // E2
-    const gain = 0.15;
-    const attack = 0.01;
-    const decay = 0.1;
-    const numSamples = Math.floor(duration * sampleRate);
-    const buffer = new Float32Array(numSamples).fill(0);
+class MusicWorker {
+    constructor() {
+        this.isRunning = false;
+        this.animationFrameId = null;
+        this.scheduleAheadTime = 0.1; // 100ms
+        this.nextNoteTime = 0.0;
+        this.current16thNote = 0;
+        this.tempoBPM = 60;
+        
+        // Настройки инструментов
+        this.instruments = {
+            solo: "none",
+            accompaniment: "none",
+            bass: "none"
+        };
+        this.drumsEnabled = true;
 
-    for (let i = 0; i < numSamples; i++) {
-        const t = i / sampleRate;
-        const envelope = t < attack ? t / attack : Math.exp(-(t - attack) / decay);
-        buffer[i] += Math.sin(2 * Math.PI * freq * t) * gain * envelope;
+        // Звуковые данные (сэмплы)
+        this.samples = {};
+        this.sampleRate = 44100;
+        this.isSamplesLoaded = false;
     }
-    return buffer;
-}
 
+    // --- Обработка команд из основного потока ---
+    
+    handleCommand(command, data) {
+        switch (command) {
+            case 'load_samples':
+                this.loadSamples(data);
+                break;
+            case 'start':
+                this.start(data);
+                break;
+            case 'stop':
+                this.stop();
+                break;
+            case 'set_instruments':
+                this.setInstruments(data);
+                break;
+            case 'toggle_drums':
+                this.toggleDrums(data.enabled);
+                break;
+            default:
+                console.warn(`[Worker] Unknown command: ${command}`);
+        }
+    }
+    
+    loadSamples(samples) {
+        this.samples = samples;
+        this.isSamplesLoaded = true;
+        self.postMessage({ type: 'samples_loaded' });
+    }
 
-function generateDrums(tick, duration) {
-    const numSamples = Math.floor(duration * sampleRate);
-    const buffer = new Float32Array(numSamples).fill(0);
+    start(config) {
+        if (this.isRunning) return;
 
-    const sixteenth = tick % 16;
-    const eighth = tick % 8;
-    const quarter = tick % 4;
+        this.isRunning = true;
+        this.current16thNote = 0;
+        this.nextNoteTime = 0.0; // Будет установлено в первом цикле scheduler
+        this.sampleRate = config.sampleRate || 44100;
+        this.setInstruments(config.instruments);
+        this.toggleDrums(config.drumsEnabled);
+        
+        // Запускаем планировщик
+        this.animationFrameId = self.requestAnimationFrame(this.scheduler.bind(this));
+        
+        console.log("[Worker] Music generation started.");
+    }
 
-    const addSample = (sampleName, gain = 1.0, condition = true) => {
-        if (condition && samples[sampleName]) {
-            const sample = samples[sampleName];
-            const len = Math.min(sample.length, buffer.length);
-            for (let i = 0; i < len; i++) {
-                buffer[i] += sample[i] * gain;
+    stop() {
+        if (!this.isRunning) return;
+        this.isRunning = false;
+        if (this.animationFrameId) {
+            self.cancelAnimationFrame(this.animationFrameId);
+            this.animationFrameId = null;
+        }
+        console.log("[Worker] Music generation stopped.");
+    }
+
+    setInstruments(instruments) {
+        this.instruments = instruments;
+        console.log("[Worker] Instruments updated:", this.instruments);
+    }
+    
+    toggleDrums(enabled) {
+        this.drumsEnabled = enabled;
+        console.log(`[Worker] Drums ${enabled ? 'enabled' : 'disabled'}.`);
+    }
+
+    // --- Планировщик и генерация музыки ---
+    
+    scheduler(currentTime) {
+        if (!this.isRunning) return;
+
+        if (this.nextNoteTime === 0.0) {
+             this.nextNoteTime = currentTime / 1000;
+        }
+        
+        const secondsPerBeat = 60.0 / this.tempoBPM;
+        const noteDuration = secondsPerBeat / 4.0; // 16-е ноты
+
+        while (this.nextNoteTime < (currentTime / 1000) + this.scheduleAheadTime) {
+            const chunk = this.createAudioChunk(noteDuration);
+            
+            // Отправляем чанк в основной поток для воспроизведения
+            if (chunk.length > 0) {
+                 self.postMessage({
+                    type: 'chunk',
+                    data: {
+                        chunk: chunk,
+                        duration: noteDuration
+                    }
+                }, [chunk.buffer]);
+            }
+
+            this.nextNoteTime += noteDuration;
+            this.current16thNote = (this.current16thNote + 1) % 16;
+        }
+
+        this.animationFrameId = self.requestAnimationFrame(this.scheduler.bind(this));
+    }
+    
+    createAudioChunk(duration) {
+        const bufferSize = Math.floor(this.sampleRate * duration);
+        const chunkBuffer = new Float32Array(bufferSize).fill(0);
+        
+        // --- Генерация ударных ---
+        if (this.drumsEnabled) {
+             // Бочка (Kick) - на 1-ю долю (пропускаем самый первый удар)
+            if (this.current16thNote === 0 && this.nextNoteTime > 0) {
+                this.mixSample(chunkBuffer, this.samples.kick, 0.4); 
+            }
+            // Малый барабан (Snare) - на 2-ю и 4-ю доли
+            if (this.current16thNote === 4 || this.current16thNote === 12) {
+                this.mixSample(chunkBuffer, this.samples.snare, 1.0);
+            }
+            // Хай-хэт (Hi-hat) - на каждую 8-ю ноту
+            if (this.current16thNote % 2 === 0) {
+                this.mixSample(chunkBuffer, this.samples.hat, 0.6);
+            }
+            // Крэш (Crash) - в начале каждого 4-го такта
+            if (this.current16thNote === 0 && Math.floor(this.nextNoteTime / (secondsPerBeat * 4)) % 4 === 0) {
+                 const crashSample = this.applyFadeOut(this.samples.crash);
+                 this.mixSample(chunkBuffer, crashSample, 0.8);
+            }
+            // Райд (Ride) - на каждую четвертную ноту
+            if (this.current16thNote % 4 === 0) {
+                this.mixSample(chunkBuffer, this.samples.ride, 1.0);
+            }
+             // Томы (Toms fill) - в конце каждого 4-го такта
+            const barNumber = Math.floor(this.nextNoteTime / (60.0 / this.tempoBPM * 4));
+            if (barNumber % 4 === 3) {
+                 if (this.current16thNote === 13) this.mixSample(chunkBuffer, this.samples.tom1, 0.9);
+                 if (this.current16thNote === 14) this.mixSample(chunkBuffer, this.samples.tom2, 0.9);
+                 if (this.current16thNote === 15) this.mixSample(chunkBuffer, this.samples.tom3, 0.9);
             }
         }
-    };
-    
-    // Kick: On beats 1 and 3 (with first beat skipped sometimes)
-    addSample('kick', 0.4, quarter === 0 && tick > 0);
 
-    // Snare: On beats 2 and 4
-    addSample('snare', 1.0, quarter === 2);
-    
-    // Closed Hi-hat: on every 8th note
-    addSample('hat', 0.5, eighth === 0);
-
-    // Ride: every quarter note
-    addSample('ride', 1.0, quarter === 0);
-
-    // Crash: every 4 bars
-    addSample('crash', 1.0, tick % 64 === 0);
-
-    // Toms Fill at the end of every 4 bars
-    if (tick % 64 >= 60) { // last beat of the 4-bar phrase
-        addSample('tom1', 0.8, tick % 64 === 60);
-        addSample('tom2', 0.8, tick % 64 === 61);
-        addSample('tom3', 0.8, tick % 64 === 62);
+        // --- Генерация баса ---
+        if (this.instruments.bass === 'bass guitar') {
+             // Играем бас вместе с бочкой
+             if (this.current16thNote === 0) {
+                const bassNote = this.createSineWave(220.0, duration, 0.15); // E2 note
+                this.mixSample(chunkBuffer, bassNote);
+             }
+        }
+        
+        return chunkBuffer;
     }
     
-    return buffer;
-}
+    // --- Вспомогательные аудио-функции ---
 
-
-function generateNextChunk() {
-    tickDuration = 60 / tempoBPM / 4; // duration of a 16th note
-    const numSamples = Math.floor(tickDuration * sampleRate);
-    let combinedBuffer = new Float32Array(numSamples).fill(0);
-
-    if (drumsEnabled) {
-       const drumBuffer = generateDrums(currentTick, tickDuration);
-        for(let i=0; i<numSamples; i++) {
-            combinedBuffer[i] += drumBuffer[i];
+    mixSample(outputBuffer, sample, gain = 1.0) {
+        if (!sample) return;
+        const mixLength = Math.min(outputBuffer.length, sample.length);
+        for (let i = 0; i < mixLength; i++) {
+            outputBuffer[i] += sample[i] * gain;
         }
     }
     
-    if (instruments.bass === 'bass guitar') {
-         if (currentTick % 4 === 0 && currentTick > 0) { // Play on quarter notes with kick
-            const bassBuffer = generateBass(currentTick, tickDuration);
-            for(let i=0; i<numSamples; i++) {
-                combinedBuffer[i] += bassBuffer[i];
-            }
+    applyFadeOut(sample) {
+        if (!sample) return null;
+        const newSample = new Float32Array(sample);
+        for (let i = 0; i < newSample.length; i++) {
+            const multiplier = 1.0 - (i / newSample.length);
+            newSample[i] *= multiplier;
         }
+        return newSample;
     }
-
-    currentTick = (currentTick + 1) % 64; // Loop every 4 bars (64 16th notes)
-
-    return combinedBuffer;
-}
-
-
-// =============================================================================
-// Worker Message Handling
-// =============================================================================
-
-function start() {
-    if (isPlaying) return;
-    isPlaying = true;
-    currentTick = 0;
     
-    const sendChunk = () => {
-        if (!isPlaying) return;
-        const chunk = generateNextChunk();
-        self.postMessage({ type: 'chunk', data: { chunk, duration: tickDuration } }, [chunk.buffer]);
-        setTimeout(sendChunk, tickDuration * 1000);
-    };
-    sendChunk();
+    createSineWave(frequency, duration, gain = 1.0) {
+        const bufferSize = Math.floor(this.sampleRate * duration);
+        const buffer = new Float32Array(bufferSize);
+        const angularFrequency = 2 * Math.PI * frequency / this.sampleRate;
+        for (let i = 0; i < bufferSize; i++) {
+            buffer[i] = Math.sin(i * angularFrequency) * gain;
+        }
+        // простое затухание для избежания щелчков
+        for (let i = 0; i < Math.min(buffer.length, 500); i++) {
+             buffer[buffer.length - 1 - i] *= (i / 500);
+        }
+        return buffer;
+    }
 }
 
-function stop() {
-    isPlaying = false;
-}
+// --- Инициализация воркера ---
+const worker = new MusicWorker();
 
 self.onmessage = (event) => {
     const { command, data } = event.data;
-
-    switch (command) {
-        case 'load_samples':
-            samples = data;
-            // Pre-process crash sample
-            if (samples.crash) {
-                samples.crash = applyExponentialDecay(samples.crash);
-            }
-            self.postMessage({ type: 'samples_loaded' });
-            break;
-        case 'start':
-            sampleRate = data.sampleRate;
-            instruments = data.instruments;
-            drumsEnabled = data.drumsEnabled;
-            start();
-            break;
-        case 'stop':
-            stop();
-            break;
-        case 'set_instruments':
-            instruments = data;
-            break;
-        case 'toggle_drums':
-            drumsEnabled = data.enabled;
-            break;
+    try {
+        worker.handleCommand(command, data);
+    } catch(e) {
+        self.postMessage({ type: 'error', error: e.message });
     }
 };
+
+    
