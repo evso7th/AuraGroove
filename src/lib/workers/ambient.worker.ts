@@ -53,32 +53,20 @@ type Note = { freq: number; time: number; duration: number; velocity: number };
 
 function adsrEnvelope(t: number, attack: number, decay: number, sustain: number, release: number, duration: number) {
     const sustainLevel = sustain;
-    const totalAD = attack + decay;
-
     if (t < 0) return 0;
-    
-    // Ensure the note doesn't end before attack+decay is complete
-    const effectiveDuration = Math.max(duration, totalAD + release);
-
     if (t < attack) {
-        return (t / attack);
+        return t / attack;
     }
-    
-    if (t < totalAD) {
+    if (t < attack + decay) {
         return 1.0 - (1.0 - sustainLevel) * (t - attack) / decay;
     }
-
-    if (t < effectiveDuration - release) {
+    if (t < duration - release) {
         return sustainLevel;
     }
-    
-    const releaseTime = t - (effectiveDuration - release);
-    if (releaseTime < release) {
-        const levelAtReleaseStart = sustainLevel;
-        return levelAtReleaseStart * (1.0 - releaseTime / release);
+    if (t < duration) {
+        return sustainLevel * (1.0 - (t - (duration - release)) / release);
     }
-    
-    return 0; // Should return 0 after release phase
+    return 0;
 }
 
 
@@ -142,27 +130,9 @@ function generatePart() {
   try {
     // Solo
     const soloNotes: Note[] = [];
-    for (let i = 0; i < 4; i++) {
-        const time = i * 1;
-        const value = soloPrng.next();
-        if (value > 0.3) { // Add some silence
-            const octave = value < 0.6 ? 1 : 2;
-            const noteMidi = mapValueToMidi(value, soloScale, octave);
-            soloNotes.push({ freq: midiToFreq(noteMidi), time, duration: 0.8, velocity: 0.7 });
-        }
-    }
-
+    
     // Accompaniment
     const accompanimentNotes: Note[] = [];
-     for (let i = 0; i < 4; i++) {
-        const time = i * 1;
-        const value = accompanimentPrng.next();
-        if (value > 0.4) {
-             const octave = value < 0.5 ? 0 : -1;
-             const noteMidi = mapValueToMidi(value, accompanimentScale, octave);
-             accompanimentNotes.push({ freq: midiToFreq(noteMidi), time, duration: 1.9, velocity: 0.5 });
-        }
-    }
 
     // Bass
     const bassNotes: Note[] = [];
