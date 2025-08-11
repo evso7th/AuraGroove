@@ -146,7 +146,8 @@ const Conductor = {
            this.isInitialized = true;
            self.postMessage({ type: 'initialized' });
         });
-
+        
+        // Connect instruments to the master bus immediately after creation
         this.drummer.connect(this.masterBus);
         this.bassist.connect(this.masterBus);
     },
