@@ -165,16 +165,28 @@ export function AuraGroove() {
               break;
             
             case 'bass_score':
-                if (bassSynthRef.current && data.score) {
+                if (bassSynthRef.current && data.score && data.score.length > 0) {
                     const now = Tone.now();
+                    const synth = bassSynthRef.current;
+                    synth.toDestination(); // Connect before playing
+
+                    let lastNoteTime = 0;
                     data.score.forEach((note: BassNote) => {
-                        bassSynthRef.current?.triggerAttackRelease(
+                        synth.triggerAttackRelease(
                             note.note,
                             note.duration,
                             now + note.time,
                             note.velocity
                         );
+                        if ((now + note.time + note.duration) > lastNoteTime) {
+                            lastNoteTime = now + note.time + note.duration;
+                        }
                     });
+
+                    // Schedule disconnection after the last note has finished
+                    Tone.Transport.scheduleOnce(() => {
+                        synth.disconnect();
+                    }, lastNoteTime);
                 }
                 break;
 
@@ -260,7 +272,7 @@ export function AuraGroove() {
                 envelope: bassParams.envelope,
                 filter: { ...bassParams.filter, type: "lowpass", rolloff: -24 },
                 filterEnvelope: bassParams.filterEnvelope
-            }).toDestination();
+            }); // Do NOT connect to destination here
         }
 
         if (!audioPlayerRef.current.isInitialized()) {
@@ -317,7 +329,9 @@ export function AuraGroove() {
 
   const handleStop = useCallback(() => {
     // Immediately trigger the release phase for all synth notes.
-    bassSynthRef.current?.triggerRelease();
+    if (bassSynthRef.current?.connected) {
+        bassSynthRef.current.disconnect();
+    }
     // Stop the transport and cancel all scheduled events.
     Tone.Transport.stop();
     Tone.Transport.cancel();
@@ -501,3 +515,5 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    
