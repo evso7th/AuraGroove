@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import * as Tone from 'tone';
 import { Drum, Loader2, Music, Pause, Speaker } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -29,7 +30,7 @@ import { AudioPlayer } from "@/lib/audio-player";
 export type Instruments = {
   solo: 'synthesizer' | 'piano' | 'organ' | 'none';
   accompaniment: 'synthesizer' | 'piano' | 'organ' | 'none';
-  bass: 'bass guitar' | 'none';
+  bass: 'bass synth' | 'none';
 };
 
 export type DrumSettings = {
@@ -40,9 +41,6 @@ export type DrumSettings = {
 
 // Helper function to decode audio data in the main thread
 async function decodeSamples(samplePaths: Record<string, string>) {
-    // We need a live AudioContext to decode samples, which is only available in the main thread.
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const samples = {} as Record<string, Float32Array>;
     const promises = Object.entries(samplePaths).map(async ([key, path]) => {
         try {
             const response = await fetch(path);
@@ -50,19 +48,24 @@ async function decodeSamples(samplePaths: Record<string, string>) {
                 throw new Error(`Failed to fetch sample: ${key}`);
             }
             const arrayBuffer = await response.arrayBuffer();
-            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-            samples[key] = audioBuffer.getChannelData(0);
+            // We use Tone's context to decode. It's reliable.
+            const audioBuffer = await Tone.getContext().decodeAudioData(arrayBuffer);
+            return { [key]: audioBuffer.getChannelData(0) };
         } catch (e) {
             console.error(`Error decoding sample ${key}:`, e);
-            // In case of an error, provide an empty buffer to avoid crashes downstream
-            samples[key] = new Float32Array(0);
+            return { [key]: new Float32Array(0) };
         }
     });
-    await Promise.all(promises);
-    await audioContext.close(); // Clean up the context after decoding
-    return samples;
+    const decodedPairs = await Promise.all(promises);
+    return decodedPairs.reduce((acc, pair) => ({ ...acc, ...pair }), {});
 }
 
+type BassNote = {
+    note: string;
+    time: number;
+    duration: number;
+    velocity: number;
+}
 
 export function AuraGroove() {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -71,27 +74,26 @@ export function AuraGroove() {
   const [drumSettings, setDrumSettings] = useState<DrumSettings>({
       enabled: true,
       pattern: 'basic',
-      volume: 0.7,
+      volume: 0.5,
   });
   const [instruments, setInstruments] = useState<Instruments>({
     solo: "none",
     accompaniment: "none",
-    bass: "none",
+    bass: "bass synth",
   });
   const [bpm, setBpm] = useState(100);
   const { toast } = useToast();
 
   const musicWorkerRef = useRef<Worker>();
   const audioPlayerRef = useRef<AudioPlayer>();
+  const bassSynthRef = useRef<Tone.Synth | null>(null);
   const isWorkerInitialized = useRef(false);
   
-  // Lazy initialization of AudioPlayer
   if (!audioPlayerRef.current) {
     audioPlayerRef.current = new AudioPlayer();
   }
 
    useEffect(() => {
-    // Correctly point to the worker file in the public directory
     const worker = new Worker('/workers/ambient.worker.js');
     musicWorkerRef.current = worker;
 
@@ -115,6 +117,7 @@ export function AuraGroove() {
              setLoadingText("");
              setIsPlaying(true);
              audioPlayerRef.current?.start();
+             Tone.Transport.start();
              break;
 
         case 'chunk':
@@ -123,9 +126,25 @@ export function AuraGroove() {
           }
           break;
         
+        case 'bass_score':
+            if (bassSynthRef.current && data.score) {
+                const now = Tone.now();
+                data.score.forEach((note: BassNote) => {
+                    bassSynthRef.current?.triggerAttackRelease(
+                        note.note,
+                        note.duration,
+                        now + note.time,
+                        note.velocity
+                    );
+                });
+            }
+            break;
+
         case 'stopped':
             setIsPlaying(false);
             setLoadingText("");
+            Tone.Transport.stop();
+            Tone.Transport.cancel();
             break;
 
         case 'error':
@@ -146,17 +165,20 @@ export function AuraGroove() {
     return () => {
       worker.terminate();
       audioPlayerRef.current?.stop();
+      bassSynthRef.current?.dispose();
+      Tone.Transport.stop();
+      Tone.Transport.cancel();
     };
-  }, [toast, drumSettings, instruments, bpm]); // Added dependencies that are used in the new start command
+  }, [toast, drumSettings, instruments, bpm]);
   
   const updateWorkerSettings = useCallback(() => {
-    if (musicWorkerRef.current && isPlaying) {
+    if (musicWorkerRef.current && (isPlaying || isInitializing)) {
         musicWorkerRef.current?.postMessage({
             command: 'update_settings',
             data: { instruments, drumSettings, bpm },
         });
     }
-  }, [instruments, drumSettings, bpm, isPlaying]);
+  }, [instruments, drumSettings, bpm, isPlaying, isInitializing]);
 
   useEffect(() => {
     updateWorkerSettings();
@@ -169,9 +191,24 @@ export function AuraGroove() {
     setIsInitializing(true);
 
     try {
+        await Tone.start();
+        
+        if (!bassSynthRef.current) {
+            bassSynthRef.current = new Tone.Synth({
+                oscillator: { type: 'fatsawtooth' },
+                envelope: { attack: 0.05, decay: 0.3, sustain: 0.4, release: 1.2 }
+            }).toDestination();
+        }
+
+
         if (!audioPlayerRef.current.isInitialized()) {
             setLoadingText("Preparing audio engine...");
             await audioPlayerRef.current.init();
+        }
+        
+        const sampleRate = audioPlayerRef.current.getSampleRate();
+        if (!sampleRate) {
+            throw new Error("AudioContext not initialized or sample rate not available.");
         }
         
         if (isWorkerInitialized.current) {
@@ -191,12 +228,7 @@ export function AuraGroove() {
             };
             
             const decodedSamples = await decodeSamples(samplePaths);
-
-            const sampleRate = audioPlayerRef.current.getSampleRate();
-            if (!sampleRate) {
-                throw new Error("AudioContext not initialized or sample rate not available.");
-            }
-
+            
             const transferableObjects = Object.values(decodedSamples).map(s => s.buffer);
             
             musicWorkerRef.current.postMessage({
@@ -222,8 +254,6 @@ export function AuraGroove() {
 
   const handleStop = useCallback(() => {
     musicWorkerRef.current?.postMessage({ command: 'stop' });
-    audioPlayerRef.current?.stop();
-    setIsPlaying(false);
   }, []);
   
   const handleTogglePlay = useCallback(() => {
@@ -298,7 +328,7 @@ export function AuraGroove() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">None</SelectItem>
-                <SelectItem value="bass guitar">Bass Guitar</SelectItem>
+                <SelectItem value="bass synth">Bass Synth</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -395,5 +425,3 @@ export function AuraGroove() {
     </Card>
   );
 }
-
-    
