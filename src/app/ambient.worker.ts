@@ -47,10 +47,6 @@ class BassGenerator {
     connect(destination: Tone.OutputNode) {
         this.synth.connect(destination);
     }
-
-    setVolume(gain: number) {
-        this.synth.volume.value = Tone.gainToDb(gain);
-    }
 }
 
 // --- Musician: Drummer ---
@@ -121,10 +117,6 @@ class DrumGenerator {
     connect(destination: Tone.OutputNode) {
         this.sampler.connect(destination);
     }
-    
-    setVolume(gain: number) {
-       this.sampler.volume.value = Tone.gainToDb(gain);
-    }
 }
 
 
@@ -147,7 +139,7 @@ const Conductor = {
         if (this.isInitialized) return;
 
         this.bassist = new BassGenerator();
-        this.masterBus = new Tone.Gain(1);
+        this.masterBus = new Tone.Gain(1).connect(Tone.getDestination());
 
         this.drummer = new DrumGenerator(sampleUrls, () => {
            this.isInitialized = true;
@@ -159,20 +151,26 @@ const Conductor = {
     },
     
     updateSettings(drumSettings?: DrumSettings, instruments?: Instruments) {
-        if (!this.isInitialized) return;
         if (drumSettings) this.drumSettings = drumSettings;
         if (instruments) this.instruments = instruments;
-        
-        if(this.drumSettings.enabled) this.drummer?.setVolume(this.drumSettings.volume);
-        else this.drummer?.setVolume(0);
-
-        if(this.instruments.bass === 'bass guitar') this.bassist?.setVolume(0.7);
-        else this.bassist?.setVolume(0);
     },
 
     async renderNextChunk() {
-        if (!this.isInitialized || !this.masterBus) return;
+        if (!this.isInitialized || !this.masterBus || !this.drummer || !this.bassist) return;
         
+        // Set volumes right before rendering
+        if (this.drumSettings.enabled) {
+            this.drummer.sampler.volume.value = Tone.gainToDb(this.drumSettings.volume);
+        } else {
+            this.drummer.sampler.volume.value = -Infinity; // Mute
+        }
+        
+        if (this.instruments.bass === 'bass guitar') {
+             this.bassist.synth.volume.value = Tone.gainToDb(0.7);
+        } else {
+             this.bassist.synth.volume.value = -Infinity; // Mute
+        }
+
         this.measureDuration = Tone.Time('1m').toSeconds();
         Tone.Transport.bpm.value = this.bpm;
 
