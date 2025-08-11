@@ -15,10 +15,10 @@ export class AudioPlayer {
 
     constructor() {}
 
-    public async init(sampleRate: number) {
+    public async init() {
         if (!this.audioContext) {
             try {
-                this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate });
+                this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
                 if (this.audioContext.state === 'suspended') {
                     await this.audioContext.resume();
                 }

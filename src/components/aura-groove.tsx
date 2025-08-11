@@ -58,13 +58,16 @@ export function AuraGroove() {
   const musicWorkerRef = useRef<Worker>();
   const audioPlayerRef = useRef<AudioPlayer>();
   const isWorkerInitialized = useRef(false);
+  
+  // Lazy initialization of AudioPlayer
+  if (!audioPlayerRef.current) {
+    audioPlayerRef.current = new AudioPlayer();
+  }
 
   useEffect(() => {
     // Correctly instantiate the worker from the public path
     const worker = new Worker('/ambient.worker.js');
     musicWorkerRef.current = worker;
-    
-    audioPlayerRef.current = new AudioPlayer();
 
     const handleMessage = (event: MessageEvent) => {
       const { type, data, error } = event.data;
@@ -139,8 +142,8 @@ export function AuraGroove() {
     setLoadingText("Preparing audio engine...");
 
     try {
-        const sampleRate = 44100; // Standard sample rate
-        await audioPlayerRef.current?.init(sampleRate);
+        await audioPlayerRef.current?.init();
+        const sampleRate = audioPlayerRef.current?.getSampleRate();
         
         setLoadingText("Loading audio samples...");
         
