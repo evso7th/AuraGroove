@@ -40,7 +40,7 @@ export type DrumSettings = {
 };
 
 // Helper function to decode audio data in the main thread
-async function decodeSamples(samplePaths: Record<string, string>) {
+async function decodeSamples(samplePaths: Record<string, string>, toast: (options: any) => void) {
     const context = Tone.getContext();
     const promises = Object.entries(samplePaths).map(async ([key, path]) => {
         try {
@@ -52,12 +52,13 @@ async function decodeSamples(samplePaths: Record<string, string>) {
              if (context.state === 'suspended') {
                 await context.resume();
             }
+            // Use Tone.context.decodeAudioData for consistency
             const audioBuffer = await context.decodeAudioData(arrayBuffer);
+            // We only need the raw channel data for the worker
             return { [key]: audioBuffer.getChannelData(0) };
         } catch (e) {
             console.error(`Error decoding sample ${key}:`, e);
-            // Post an error message back to the UI
-             toast({
+            toast({
                 variant: "destructive",
                 title: "Sample Decoding Error",
                 description: `Failed to decode ${key}. Please check the file path and format.`,
@@ -95,7 +96,7 @@ export function AuraGroove() {
 
   const musicWorkerRef = useRef<Worker>();
   const audioPlayerRef = useRef<AudioPlayer>();
-  const bassSynthRef = useRef<Tone.Synth | null>(null);
+  const bassSynthRef = useRef<Tone.MonoSynth | null>(null);
   const isWorkerInitialized = useRef(false);
   
   if (!audioPlayerRef.current) {
@@ -103,83 +104,88 @@ export function AuraGroove() {
   }
 
    useEffect(() => {
-    const worker = new Worker('/workers/ambient.worker.js');
-    musicWorkerRef.current = worker;
+    // Make sure to create the worker only once.
+    if (!musicWorkerRef.current) {
+        musicWorkerRef.current = new Worker(new URL('../../public/workers/ambient.worker.js', import.meta.url));
 
-    const handleMessage = (event: MessageEvent) => {
-      const { type, data, error } = event.data;
-      
-      switch(type) {
-        case 'initialized':
-          isWorkerInitialized.current = true;
-          setLoadingText("Starting playback...");
-           if (musicWorkerRef.current) {
-                musicWorkerRef.current.postMessage({
-                    command: 'start',
-                    data: { drumSettings, instruments, bpm }
-                });
-            }
-          break;
-        
-        case 'started':
-             setIsInitializing(false);
-             setLoadingText("");
-             setIsPlaying(true);
-             audioPlayerRef.current?.start();
-             Tone.Transport.start();
-             break;
+        const handleMessage = (event: MessageEvent) => {
+          const { type, data, error } = event.data;
+          
+          switch(type) {
+            case 'initialized':
+              isWorkerInitialized.current = true;
+              setLoadingText("Starting playback...");
+               if (musicWorkerRef.current) {
+                    musicWorkerRef.current.postMessage({
+                        command: 'start',
+                        data: { drumSettings, instruments, bpm }
+                    });
+                }
+              break;
+            
+            case 'started':
+                 setIsInitializing(false);
+                 setLoadingText("");
+                 setIsPlaying(true);
+                 audioPlayerRef.current?.start();
+                 Tone.Transport.start();
+                 break;
 
-        case 'chunk':
-          if (data && audioPlayerRef.current && data.chunk && data.duration) {
-             audioPlayerRef.current.scheduleChunk(data.chunk, data.duration);
+            case 'chunk':
+              if (data && audioPlayerRef.current && data.chunk && data.duration) {
+                 // The worker now sends the correct sample rate
+                 audioPlayerRef.current.scheduleChunk(data.chunk, data.duration);
+              }
+              break;
+            
+            case 'bass_score':
+                if (bassSynthRef.current && data.score) {
+                    const now = Tone.now();
+                    data.score.forEach((note: BassNote) => {
+                        bassSynthRef.current?.triggerAttackRelease(
+                            note.note,
+                            note.duration,
+                            now + note.time,
+                            note.velocity
+                        );
+                    });
+                }
+                break;
+
+            case 'stopped':
+                setIsPlaying(false);
+                setLoadingText("");
+                audioPlayerRef.current?.stop();
+                break;
+
+            case 'error':
+              toast({
+                variant: "destructive",
+                title: "Worker Error",
+                description: error,
+              });
+              setIsPlaying(false);
+              setIsInitializing(false);
+              setLoadingText("");
+              break;
           }
-          break;
-        
-        case 'bass_score':
-            if (bassSynthRef.current && data.score) {
-                const now = Tone.now();
-                data.score.forEach((note: BassNote) => {
-                    bassSynthRef.current?.triggerAttackRelease(
-                        note.note,
-                        note.duration,
-                        now + note.time,
-                        note.velocity
-                    );
-                });
-            }
-            break;
+        };
 
-        case 'stopped':
-            setIsPlaying(false);
-            setLoadingText("");
-            audioPlayerRef.current?.stop();
-            Tone.Transport.stop();
-            Tone.Transport.cancel();
-            break;
-
-        case 'error':
-          toast({
-            variant: "destructive",
-            title: "Worker Error",
-            description: error,
-          });
-          setIsPlaying(false);
-          setIsInitializing(false);
-          setLoadingText("");
-          break;
-      }
-    };
-
-    worker.onmessage = handleMessage;
+        musicWorkerRef.current.onmessage = handleMessage;
+    }
     
     return () => {
-      worker.terminate();
+      // Terminate worker on component unmount
+      if (musicWorkerRef.current) {
+        musicWorkerRef.current.terminate();
+        musicWorkerRef.current = undefined;
+      }
       audioPlayerRef.current?.stop();
       bassSynthRef.current?.dispose();
       Tone.Transport.stop();
       Tone.Transport.cancel();
     };
-  }, []); // Keep dependencies empty to avoid re-creating worker
+  }, []); // Keep dependencies empty to run only once.
   
   const updateWorkerSettings = useCallback(() => {
     if (musicWorkerRef.current && (isPlaying || isInitializing)) {
@@ -204,14 +210,11 @@ export function AuraGroove() {
         await Tone.start();
         
         if (!bassSynthRef.current) {
-            bassSynthRef.current = new Tone.Synth({
-                oscillator: { type: 'fatsawtooth' },
-                envelope: { 
-                    attack: 0.05, // Явная атака ("щипок")
-                    decay: 0.3, 
-                    sustain: 0.4, 
-                    release: 1.2  // Заметное затухание
-                }
+            bassSynthRef.current = new Tone.MonoSynth({
+                oscillator: { type: "fmsquare" },
+                envelope: { attack: 0.01, decay: 0.1, sustain: 0.4, release: 0.8 },
+                filter: { Q: 2, type: "lowpass", rolloff: -24 },
+                filterEnvelope: { attack: 0.01, decay: 0.2, sustain: 0.1, release: 1, baseFrequency: 200, octaves: 4 }
             }).toDestination();
         }
 
@@ -242,9 +245,8 @@ export function AuraGroove() {
                 ride: '/assets/drums/cymbal1.wav',
             };
             
-            const decodedSamples = await decodeSamples(samplePaths);
+            const decodedSamples = await decodeSamples(samplePaths, toast);
             
-            // We need to build a transferable list from the buffers inside the Float32Arrays
             const transferableObjects = Object.values(decodedSamples).map(s => s.buffer);
             
             musicWorkerRef.current.postMessage({
@@ -269,6 +271,12 @@ export function AuraGroove() {
   }, [drumSettings, instruments, bpm, toast]);
 
   const handleStop = useCallback(() => {
+    // Immediately trigger the release phase for all synth notes.
+    bassSynthRef.current?.triggerRelease();
+    // Stop the transport and cancel all scheduled events.
+    Tone.Transport.stop();
+    Tone.Transport.cancel();
+    // Use the worker to manage its own state.
     musicWorkerRef.current?.postMessage({ command: 'stop' });
   }, []);
   
@@ -441,3 +449,5 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    
