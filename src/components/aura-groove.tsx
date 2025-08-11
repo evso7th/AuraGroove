@@ -65,7 +65,6 @@ export function AuraGroove() {
   }
 
   useEffect(() => {
-    // Correctly instantiate the worker from the public path
     const worker = new Worker('/ambient.worker.js');
     musicWorkerRef.current = worker;
 
@@ -138,12 +137,13 @@ export function AuraGroove() {
 
 
   const handlePlay = useCallback(async () => {
+    if (!audioPlayerRef.current) return;
     setIsInitializing(true);
     setLoadingText("Preparing audio engine...");
 
     try {
-        await audioPlayerRef.current?.init();
-        const sampleRate = audioPlayerRef.current?.getSampleRate();
+        await audioPlayerRef.current.init();
+        const sampleRate = audioPlayerRef.current.getSampleRate();
         
         setLoadingText("Loading audio samples...");
         
@@ -153,10 +153,23 @@ export function AuraGroove() {
                 data: { drumSettings, instruments, bpm }
             });
         } else {
+             const samplePaths = {
+                kick: '/samples/kick.wav',
+                snare: '/samples/snare.wav',
+                hat: '/samples/hat.wav',
+                crash: '/samples/crash.wav',
+                ride: '/samples/ride.wav',
+            };
+            const samples = {} as Record<string, ArrayBuffer>;
+            for(const key in samplePaths) {
+                const response = await fetch(samplePaths[key as keyof typeof samplePaths]);
+                samples[key] = await response.arrayBuffer();
+            }
+
             musicWorkerRef.current?.postMessage({
                 command: 'init',
-                data: { sampleRate }
-            });
+                data: { sampleRate, samples }
+            }, Object.values(samples));
         }
 
     } catch (error) {
