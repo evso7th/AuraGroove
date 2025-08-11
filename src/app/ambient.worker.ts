@@ -81,6 +81,7 @@ const SampleBank = {
     async init(sampleUrls: Record<string, string>, targetSampleRate: number) {
         if (this.isInitialized) return;
 
+        // This works because we are in a worker context where OfflineAudioContext is available.
         const tempAudioContext = new OfflineAudioContext(1, 1, targetSampleRate);
         for (const key in sampleUrls) {
             try {
@@ -98,7 +99,6 @@ const SampleBank = {
             } catch(e) {
                 const errorMessage = e instanceof Error ? e.message : String(e);
                 self.postMessage({ type: 'error', error: `Failed to fetch/decode sample ${key}: ${errorMessage}` });
-                // In case of error, we stop initialization
                 return;
             }
         }
@@ -157,7 +157,8 @@ const Scheduler = {
     // Settings from main thread
     sampleRate: 44100,
     bpm: 100,
-    drumSettings: {} as any,
+    drumSettings: { enabled: true, pattern: 'basic', volume: 0.7 } as any,
+    instruments: {} as any,
 
     // Calculated properties
     get beatsPerBar() { return 4; },
@@ -170,7 +171,6 @@ const Scheduler = {
         this.reset();
         this.isRunning = true;
         
-        // Use a dynamic interval based on the bar duration to ensure tight scheduling
         const tick = () => {
             if (!this.isRunning) return;
             this.generateAndPostChunk();
@@ -196,7 +196,15 @@ const Scheduler = {
     
     updateSettings(settings: any) {
         if (settings.drumSettings) this.drumSettings = settings.drumSettings;
-        if (settings.bpm) this.bpm = settings.bpm;
+        if (settings.instruments) this.instruments = settings.instruments;
+        if (settings.bpm) {
+            this.bpm = settings.bpm;
+            // If running, we need to restart the loop to apply the new BPM
+            if (this.isRunning) {
+                this.stop();
+                this.start();
+            }
+        }
     },
 
     generateAndPostChunk() {
@@ -210,7 +218,6 @@ const Scheduler = {
             finalScore.push(...drumScore);
         }
         
-        // The renderer uses its own settings for duration and volume
         const audioChunk = AudioRenderer.render(finalScore, {
             duration: this.barDuration,
             volume: this.drumSettings.volume

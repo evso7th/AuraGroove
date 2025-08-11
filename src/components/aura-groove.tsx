@@ -64,6 +64,7 @@ export function AuraGroove() {
     accompaniment: "none",
     bass: "none",
   });
+  const [bpm, setBpm] = useState(100);
   const { toast } = useToast();
 
   const musicWorkerRef = useRef<Worker>();
@@ -74,7 +75,6 @@ export function AuraGroove() {
     const worker = new Worker(new URL('../app/ambient.worker.ts', import.meta.url));
     musicWorkerRef.current = worker;
     
-    // Create AudioPlayer instance here, but initialize AudioContext on user gesture
     audioPlayerRef.current = new AudioPlayer();
 
     const handleMessage = (event: MessageEvent) => {
@@ -84,10 +84,9 @@ export function AuraGroove() {
         case 'initialized':
           isWorkerInitialized.current = true;
           setLoadingText("Starting playback...");
-          // Now that worker is ready, we can tell it to start generating audio
           musicWorkerRef.current?.postMessage({
               command: 'start',
-              data: { drumSettings, instruments }
+              data: { drumSettings, instruments, bpm }
           });
           break;
         
@@ -126,20 +125,20 @@ export function AuraGroove() {
       worker.terminate();
       audioPlayerRef.current?.stop();
     };
-  }, [toast, drumSettings, instruments]); 
+  }, []); 
   
   const updateWorkerSettings = useCallback(() => {
-    if (musicWorkerRef.current && isWorkerInitialized.current) {
+    if (musicWorkerRef.current && isPlaying) {
         musicWorkerRef.current?.postMessage({
             command: 'update_settings',
-            data: { instruments, drumSettings },
+            data: { instruments, drumSettings, bpm },
         });
     }
-  }, [instruments, drumSettings]);
+  }, [instruments, drumSettings, bpm, isPlaying]);
 
   useEffect(() => {
     updateWorkerSettings();
-  }, [drumSettings, instruments, updateWorkerSettings]);
+  }, [drumSettings, instruments, bpm, updateWorkerSettings]);
 
 
   const handlePlay = useCallback(async () => {
@@ -147,17 +146,23 @@ export function AuraGroove() {
     setLoadingText("Preparing audio engine...");
 
     try {
-        // Initialize AudioContext on user gesture
         await audioPlayerRef.current?.init();
         
         setLoadingText("Loading audio samples...");
         
         const sampleRate = audioPlayerRef.current?.getSampleRate() || 44100;
 
-        musicWorkerRef.current?.postMessage({
-            command: 'init',
-            data: { sampleUrls, sampleRate }
-        });
+        if (isWorkerInitialized.current) {
+            musicWorkerRef.current?.postMessage({
+                command: 'start',
+                data: { drumSettings, instruments, bpm }
+            });
+        } else {
+            musicWorkerRef.current?.postMessage({
+                command: 'init',
+                data: { sampleUrls, sampleRate }
+            });
+        }
 
     } catch (error) {
         console.error("Failed to prepare audio:", error);
@@ -168,7 +173,7 @@ export function AuraGroove() {
         });
         setIsInitializing(false);
     }
-  }, [toast]);
+  }, [toast, drumSettings, instruments, bpm]);
 
   const handleStop = useCallback(() => {
     musicWorkerRef.current?.postMessage({ command: 'stop' });
@@ -205,7 +210,7 @@ export function AuraGroove() {
             <Select
               value={instruments.solo}
               onValueChange={(v) => setInstruments(i => ({...i, solo: v as Instruments['solo']}))}
-              disabled={isBusy || isPlaying}
+              disabled={isBusy}
             >
               <SelectTrigger id="solo-instrument" className="col-span-2">
                 <SelectValue placeholder="Select instrument" />
@@ -223,7 +228,7 @@ export function AuraGroove() {
              <Select
               value={instruments.accompaniment}
               onValueChange={(v) => setInstruments(i => ({...i, accompaniment: v as Instruments['accompaniment']}))}
-              disabled={isBusy || isPlaying}
+              disabled={isBusy}
             >
               <SelectTrigger id="accompaniment-instrument" className="col-span-2">
                 <SelectValue placeholder="Select instrument" />
@@ -241,7 +246,7 @@ export function AuraGroove() {
              <Select
               value={instruments.bass}
               onValueChange={(v) => setInstruments(i => ({...i, bass: v as Instruments['bass']}))}
-              disabled={isBusy || isPlaying}
+              disabled={isBusy}
             >
               <SelectTrigger id="bass-instrument" className="col-span-2">
                 <SelectValue placeholder="Select instrument" />
@@ -284,6 +289,18 @@ export function AuraGroove() {
                 </Select>
             </div>
             <div className="grid grid-cols-3 items-center gap-4">
+                <Label className="text-right flex items-center gap-1.5"><Music className="h-4 w-4"/> BPM</Label>
+                <Slider
+                    value={[bpm]}
+                    min={60}
+                    max={160}
+                    step={5}
+                    onValueChange={(v) => setBpm(v[0])}
+                    className="col-span-2"
+                    disabled={isBusy}
+                />
+            </div>
+            <div className="grid grid-cols-3 items-center gap-4">
                 <Label className="text-right flex items-center gap-1.5"><Speaker className="h-4 w-4"/> Volume</Label>
                 <Slider
                     value={[drumSettings.volume]}
@@ -309,7 +326,7 @@ export function AuraGroove() {
         )}
         {!isBusy && isPlaying && (
              <p className="text-muted-foreground text-center min-h-[40px] flex items-center justify-center px-4">
-              Playing...
+              Playing at {bpm} BPM...
             </p>
         )}
       </CardContent>
