@@ -168,7 +168,8 @@ export function AuraGroove() {
                 if (bassSynthRef.current && data.score && data.score.length > 0) {
                     const now = Tone.now();
                     const synth = bassSynthRef.current;
-                    synth.toDestination(); // Connect before playing
+                    // Connect before playing to ensure sound is heard
+                    synth.toDestination();
 
                     let lastNoteTime = 0;
                     data.score.forEach((note: BassNote) => {
@@ -183,10 +184,12 @@ export function AuraGroove() {
                         }
                     });
 
-                    // Schedule disconnection after the last note has finished
+                    // Schedule disconnection after the last note has finished playing
                     Tone.Transport.scheduleOnce(() => {
-                        synth.disconnect();
-                    }, lastNoteTime);
+                        if (synth.connected) {
+                            synth.disconnect();
+                        }
+                    }, lastNoteTime + 0.1); // Add a small buffer
                 }
                 break;
 
@@ -328,7 +331,7 @@ export function AuraGroove() {
   }, [drumSettings, instruments, bpm, toast, bassParams]);
 
   const handleStop = useCallback(() => {
-    // Immediately trigger the release phase for all synth notes.
+    // Immediately disconnect the synth to cut all sound, including hum.
     if (bassSynthRef.current?.connected) {
         bassSynthRef.current.disconnect();
     }
