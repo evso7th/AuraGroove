@@ -38,18 +38,6 @@ export type DrumSettings = {
     volume: number;
 };
 
-const sampleUrls = {
-    kick: '/assets/drums/kick_drum6.wav',
-    snare: '/assets/drums/snare.wav',
-    hat: '/assets/drums/closed_hi_hat_accented.wav',
-    crash: '/assets/drums/crash1.wav',
-    ride: '/assets/drums/cymbal1.wav',
-    tom1: '/assets/drums/hightom.wav',
-    tom2: '/assets/drums/midtom.wav',
-    tom3: '/assets/drums/lowtom.wav',
-};
-
-
 export function AuraGroove() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
@@ -79,7 +67,7 @@ export function AuraGroove() {
     audioPlayerRef.current = new AudioPlayer();
 
     const handleMessage = (event: MessageEvent) => {
-      const { type, chunk, sampleRate, error } = event.data;
+      const { type, data, error } = event.data;
       
       switch(type) {
         case 'initialized':
@@ -99,7 +87,9 @@ export function AuraGroove() {
              break;
 
         case 'chunk':
-          audioPlayerRef.current?.scheduleChunk(chunk, sampleRate);
+          if (data) {
+             audioPlayerRef.current?.scheduleChunk(data.chunk, data.duration);
+          }
           break;
         
         case 'stopped':
@@ -126,7 +116,7 @@ export function AuraGroove() {
       worker.terminate();
       audioPlayerRef.current?.stop();
     };
-  }, []); 
+  }, [toast, instruments, drumSettings, bpm]); 
   
   const updateWorkerSettings = useCallback(() => {
     if (musicWorkerRef.current && isPlaying) {
@@ -138,7 +128,6 @@ export function AuraGroove() {
   }, [instruments, drumSettings, bpm, isPlaying]);
 
   useEffect(() => {
-    // Avoid sending updates before the worker is ready or while not playing
     if (isPlaying && isWorkerInitialized.current) {
         updateWorkerSettings();
     }
@@ -150,22 +139,20 @@ export function AuraGroove() {
     setLoadingText("Preparing audio engine...");
 
     try {
-        await audioPlayerRef.current?.init();
+        const sampleRate = 44100; // Standard sample rate
+        await audioPlayerRef.current?.init(sampleRate);
         
         setLoadingText("Loading audio samples...");
         
-        const sampleRate = audioPlayerRef.current?.getSampleRate() || 44100;
-
         if (isWorkerInitialized.current) {
             musicWorkerRef.current?.postMessage({
                 command: 'start',
                 data: { drumSettings, instruments, bpm }
             });
         } else {
-            // Worker now loads its own samples
             musicWorkerRef.current?.postMessage({
                 command: 'init',
-                data: { sampleUrls, sampleRate }
+                data: { sampleRate }
             });
         }
 
@@ -184,12 +171,9 @@ export function AuraGroove() {
     musicWorkerRef.current?.postMessage({ command: 'stop' });
     audioPlayerRef.current?.stop();
     setIsPlaying(false);
-    // Don't reset initializing state here, it's handled by 'stopped' message
   }, []);
   
   const handleTogglePlay = useCallback(() => {
-    // The AudioContext must be resumed (or created) from a user gesture.
-    // This is the ideal place to do it.
     if (!audioPlayerRef.current?.isInitialized()) {
         handlePlay();
         return;

@@ -9,20 +9,29 @@ export class AudioPlayer {
     private audioContext: AudioContext | null = null;
     private nextStartTime: number = 0;
     private isRunning: boolean = false;
-    private bufferQueue: { chunk: Float32Array; sampleRate: number }[] = [];
+    private bufferQueue: { chunk: Float32Array; duration: number }[] = [];
     private scheduleTimeout: any = null;
 
     constructor() {}
 
-    public async init() {
+    public async init(sampleRate: number) {
         if (!this.audioContext) {
-            this.audioContext = new AudioContext();
-            if (this.audioContext.state === 'suspended') {
-                await this.audioContext.resume();
+            try {
+                this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate });
+                if (this.audioContext.state === 'suspended') {
+                    await this.audioContext.resume();
+                }
+                this.nextStartTime = this.audioContext.currentTime;
+                this.isRunning = false;
+            } catch (e) {
+                console.error("Failed to initialize AudioContext:", e);
+                throw e; // re-throw to be caught by the caller
             }
-            this.nextStartTime = this.audioContext.currentTime;
-            this.isRunning = false;
         }
+    }
+    
+    public isInitialized(): boolean {
+        return !!this.audioContext;
     }
 
     public getSampleRate(): number | null {
@@ -42,17 +51,17 @@ export class AudioPlayer {
 
     public stop() {
         this.isRunning = false;
-        clearTimeout(this.scheduleTimeout);
-        this.bufferQueue = [];
-        if (this.audioContext) {
-            this.audioContext.close().then(() => {
-                this.audioContext = null;
-            });
+        if(this.scheduleTimeout) {
+            clearTimeout(this.scheduleTimeout);
+            this.scheduleTimeout = null;
         }
+        this.bufferQueue = [];
+        // Don't close the context, just stop scheduling
     }
 
-    public scheduleChunk(chunk: Float32Array, sampleRate: number) {
-        this.bufferQueue.push({ chunk, sampleRate });
+    public scheduleChunk(chunk: Float32Array, duration: number) {
+        if (!this.audioContext || chunk.length === 0) return;
+        this.bufferQueue.push({ chunk, duration });
         // If playback has started and we weren't already scheduling, start now
         if (this.isRunning && this.scheduleTimeout === null) {
             this.scheduleNextBuffer();
@@ -65,20 +74,16 @@ export class AudioPlayer {
             return;
         }
 
-        while (this.bufferQueue.length > 0) {
-            const now = this.audioContext.currentTime;
+        // Schedule buffers that should start in the near future.
+        const scheduleAheadTime = 0.5; // seconds
 
-            // If the next start time is too far in the future, wait.
-            if (this.nextStartTime > now + 0.1) {
-                break;
-            }
-            
-            const { chunk, sampleRate } = this.bufferQueue.shift()!;
+        while (this.bufferQueue.length > 0 && this.nextStartTime < this.audioContext.currentTime + scheduleAheadTime) {
+            const { chunk, duration } = this.bufferQueue.shift()!;
 
             const audioBuffer = this.audioContext.createBuffer(
                 1, // number of channels
                 chunk.length,
-                sampleRate
+                this.audioContext.sampleRate
             );
 
             audioBuffer.copyToChannel(chunk, 0);
@@ -86,12 +91,12 @@ export class AudioPlayer {
             const source = this.audioContext.createBufferSource();
             source.buffer = audioBuffer;
             source.connect(this.audioContext.destination);
-
+            
             // If the calculated start time is in the past, start immediately
-            const scheduleTime = Math.max(this.nextStartTime, now);
+            const scheduleTime = Math.max(this.nextStartTime, this.audioContext.currentTime);
             source.start(scheduleTime);
             
-            this.nextStartTime = scheduleTime + audioBuffer.duration;
+            this.nextStartTime = scheduleTime + duration;
         }
 
         // Check back in a bit to see if we need to schedule more.
