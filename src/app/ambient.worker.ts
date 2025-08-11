@@ -92,7 +92,14 @@ class DrumGenerator {
                 F1: sampleUrls.ride, A1: sampleUrls.crash,
                 G1: sampleUrls.tom1, H1: sampleUrls.tom2, I1: sampleUrls.tom3,
             },
-            onload: onLoad
+            onload: () => {
+                console.log('Samples loaded!'); // <-- For debugging
+                onLoad();
+            },
+            onerror: (error) => {
+                console.error('Error loading samples:', error);
+                self.postMessage({ type: 'error', error: `Error loading samples: ${error}` });
+            }
         });
     }
 
@@ -147,7 +154,6 @@ const Conductor = {
            self.postMessage({ type: 'initialized' });
         });
         
-        // Connect instruments to the master bus immediately after creation
         this.drummer.connect(this.masterBus);
         this.bassist.connect(this.masterBus);
     },
@@ -172,8 +178,8 @@ const Conductor = {
 
         try {
             const buffer = await Tone.Offline((transport: Tone.Transport) => {
-                const now = transport.now();
                 this.masterBus!.connect(transport.destination);
+                const now = transport.now();
                 
                 if (this.drumSettings.enabled) {
                     this.drummer?.createPart(this.drumSettings.pattern, this.barCount, now);
@@ -226,3 +232,4 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e)} );
     }
 };
+
