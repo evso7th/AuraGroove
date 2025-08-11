@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import * as Tone from 'tone';
-import { Drum, Loader2, Music, Pause, Speaker } from "lucide-react";
+import { Drum, Loader2, Music, Pause, Settings, Speaker } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,6 +26,7 @@ import Logo from "@/components/icons";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { AudioPlayer } from "@/lib/audio-player";
+import { BassSynthControls, type BassSynthParams } from "./bass-synth-controls";
 
 export type Instruments = {
   solo: 'synthesizer' | 'piano' | 'organ' | 'none';
@@ -77,6 +78,30 @@ type BassNote = {
     velocity: number;
 }
 
+const initialBassParams: BassSynthParams = {
+    oscillator: {
+        harmonicity: 1.5,
+    },
+    envelope: {
+        attack: 0.05,
+        decay: 0.3,
+        sustain: 0.4,
+        release: 1.4,
+    },
+    filter: {
+        Q: 2,
+    },
+    filterEnvelope: {
+        attack: 0.06,
+        decay: 0.2,
+        sustain: 0,
+        release: 1,
+        baseFrequency: 200,
+        octaves: 4,
+    },
+};
+
+
 export function AuraGroove() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
@@ -92,6 +117,7 @@ export function AuraGroove() {
     bass: "bass synth",
   });
   const [bpm, setBpm] = useState(100);
+   const [bassParams, setBassParams] = useState<BassSynthParams>(initialBassParams);
   const { toast } = useToast();
 
   const musicWorkerRef = useRef<Worker>();
@@ -199,6 +225,25 @@ export function AuraGroove() {
   useEffect(() => {
     updateWorkerSettings();
   }, [drumSettings, instruments, bpm, updateWorkerSettings]);
+  
+  // This effect updates the synth's parameters whenever they change in the UI
+  useEffect(() => {
+    if (bassSynthRef.current) {
+        bassSynthRef.current.set({
+            oscillator: {
+                type: "amsine",
+                harmonicity: bassParams.oscillator.harmonicity,
+            },
+            envelope: bassParams.envelope,
+            filter: {
+                ...bassParams.filter,
+                 type: "lowpass", // Keep type fixed
+                 rolloff: -24
+            },
+            filterEnvelope: bassParams.filterEnvelope
+        });
+    }
+  }, [bassParams]);
 
 
   const handlePlay = useCallback(async () => {
@@ -210,11 +255,11 @@ export function AuraGroove() {
         await Tone.start();
         
         if (!bassSynthRef.current) {
-            bassSynthRef.current = new Tone.MonoSynth({
-                oscillator: { type: "amsine", harmonicity: 1.2 },
-                envelope: { attack: 0.04, decay: 0.1, sustain: 0.4, release: 0.6 },
-                filter: { Q: 2, type: "lowpass", rolloff: -24 },
-                filterEnvelope: { attack: 0.06, decay: 0.2, sustain: 0, release: 1, baseFrequency: 200, octaves: 4 }
+             bassSynthRef.current = new Tone.MonoSynth({
+                oscillator: { type: "amsine", harmonicity: bassParams.oscillator.harmonicity },
+                envelope: bassParams.envelope,
+                filter: { ...bassParams.filter, type: "lowpass", rolloff: -24 },
+                filterEnvelope: bassParams.filterEnvelope
             }).toDestination();
         }
 
@@ -247,7 +292,7 @@ export function AuraGroove() {
             
             const decodedSamples = await decodeSamples(samplePaths, toast);
             
-            const transferableObjects = Object.values(decodedSamples).map(s => s.buffer);
+            const transferableObjects = Object.values(decodedSamples).map(s => (s as Float32Array).buffer);
             
             musicWorkerRef.current.postMessage({
                 command: 'init',
@@ -268,7 +313,7 @@ export function AuraGroove() {
         setIsInitializing(false);
         setLoadingText("");
     }
-  }, [drumSettings, instruments, bpm, toast]);
+  }, [drumSettings, instruments, bpm, toast, bassParams]);
 
   const handleStop = useCallback(() => {
     // Immediately trigger the release phase for all synth notes.
@@ -342,19 +387,26 @@ export function AuraGroove() {
           </div>
            <div className="grid grid-cols-3 items-center gap-4">
             <Label htmlFor="bass-instrument" className="text-right">Bass</Label>
-             <Select
-              value={instruments.bass}
-              onValueChange={(v) => setInstruments(i => ({...i, bass: v as Instruments['bass']}))}
-              disabled={isBusy}
-            >
-              <SelectTrigger id="bass-instrument" className="col-span-2">
-                <SelectValue placeholder="Select instrument" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">None</SelectItem>
-                <SelectItem value="bass synth">Bass Synth</SelectItem>
-              </SelectContent>
-            </Select>
+             <div className="col-span-2 flex items-center gap-2">
+                <Select
+                    value={instruments.bass}
+                    onValueChange={(v) => setInstruments(i => ({...i, bass: v as Instruments['bass']}))}
+                    disabled={isBusy}
+                    >
+                    <SelectTrigger id="bass-instrument" className="w-full">
+                        <SelectValue placeholder="Select instrument" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        <SelectItem value="bass synth">Bass Synth</SelectItem>
+                    </SelectContent>
+                </Select>
+                <BassSynthControls 
+                    params={bassParams}
+                    setParams={setBassParams}
+                    disabled={isBusy || instruments.bass === 'none'}
+                />
+             </div>
           </div>
         </div>
 
