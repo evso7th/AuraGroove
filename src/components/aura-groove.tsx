@@ -211,10 +211,10 @@ export function AuraGroove() {
         
         if (!bassSynthRef.current) {
             bassSynthRef.current = new Tone.MonoSynth({
-                oscillator: { type: "fmsquare" },
+                oscillator: { type: "amsine", harmonicity: 1.2 },
                 envelope: { attack: 0.04, decay: 0.1, sustain: 0.4, release: 0.6 },
                 filter: { Q: 2, type: "lowpass", rolloff: -24 },
-                filterEnvelope: { attack: 0.06, decay: 0.2, sustain: 0.1, release: 1, baseFrequency: 200, octaves: 4 }
+                filterEnvelope: { attack: 0.06, decay: 0.2, sustain: 0, release: 1, baseFrequency: 200, octaves: 4 }
             }).toDestination();
         }
 
