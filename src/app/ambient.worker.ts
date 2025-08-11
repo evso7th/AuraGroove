@@ -50,8 +50,8 @@ class BassGenerator {
         this.synth.connect(destination);
     }
 
-    setVolume(gain: number) {
-        this.synth.volume.value = Tone.gainToDb(gain);
+    setVolume(gain: number, time: Tone.Unit.Time) {
+        this.synth.volume.linearRampToValueAtTime(Tone.gainToDb(gain), time);
     }
 }
 
@@ -119,8 +119,8 @@ class DrumGenerator {
         this.sampler.connect(destination);
     }
     
-    setVolume(gain: number) {
-        this.sampler.volume.value = Tone.gainToDb(gain);
+    setVolume(gain: number, time: Tone.Unit.Time) {
+        this.sampler.volume.linearRampToValueAtTime(Tone.gainToDb(gain), time);
     }
 }
 
@@ -173,17 +173,19 @@ const Conductor = {
             this.drummer?.connect(masterBus);
             this.bassist?.connect(masterBus);
 
+            const now = transport.now();
+
             // Update volumes based on settings
-            this.drummer?.setVolume(this.drumSettings.enabled ? this.drumSettings.volume : 0);
-            this.bassist?.setVolume(this.instruments.bass === 'bass guitar' ? 0.7 : 0);
+            this.drummer?.setVolume(this.drumSettings.enabled ? this.drumSettings.volume : 0, now);
+            this.bassist?.setVolume(this.instruments.bass === 'bass guitar' ? 0.7 : 0, now);
 
 
             // Schedule parts
             if (this.drumSettings.enabled) {
-                this.drummer?.createPart(this.drumSettings.pattern, this.barCount, transport.now());
+                this.drummer?.createPart(this.drumSettings.pattern, this.barCount, now);
             }
             if (this.instruments.bass === 'bass guitar') {
-                this.bassist?.createPart(transport.now());
+                this.bassist?.createPart(now);
             }
         };
 
@@ -259,5 +261,3 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e)} );
     }
 };
-
-    
