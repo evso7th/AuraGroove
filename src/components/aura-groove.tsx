@@ -151,11 +151,14 @@ export function AuraGroove() {
 
 
   const handlePlay = useCallback(async () => {
+    if (Tone.context.state !== 'running') {
+        await Tone.start();
+    }
+      
     setIsInitializing(true);
     setLoadingText("Preparing audio engine...");
 
     try {
-        await Tone.start();
         audioPlayerRef.current?.init();
         setLoadingText("Initializing worker...");
         
@@ -169,7 +172,7 @@ export function AuraGroove() {
         toast({
             variant: "destructive",
             title: "Audio Error",
-            description: `Could not start audio context. Please interact with the page first. ${error instanceof Error ? error.message : ''}`,
+            description: `Could not start audio context. ${error instanceof Error ? error.message : ''}`,
         });
         setIsInitializing(false);
     }
