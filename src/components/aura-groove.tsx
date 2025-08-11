@@ -274,10 +274,7 @@ export function AuraGroove() {
                 oscillator: { type: "amsine", harmonicity: bassParams.oscillator.harmonicity },
                 envelope: bassParams.envelope,
                 filter: { ...bassParams.filter, type: "lowpass", rolloff: -24 },
-                filterEnvelope: {
-                  ...bassParams.filterEnvelope,
-                  sustain: 0, // Force sustain to 0 to prevent hum
-                }
+                filterEnvelope: bassParams.filterEnvelope
             }); // Do NOT connect to destination here
         }
 
