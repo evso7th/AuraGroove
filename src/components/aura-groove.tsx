@@ -27,6 +27,8 @@ import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { AudioPlayer } from "@/lib/audio-player";
 import { BassSynthControls, type BassSynthParams } from "./bass-synth-controls";
+import { SoloSynthManager } from "@/lib/solo-synth-manager";
+
 
 export type Instruments = {
   solo: 'synthesizer' | 'piano' | 'organ' | 'none';
@@ -123,10 +125,15 @@ export function AuraGroove() {
   const musicWorkerRef = useRef<Worker>();
   const audioPlayerRef = useRef<AudioPlayer>();
   const bassSynthRef = useRef<Tone.MonoSynth | null>(null);
+  const soloSynthManagerRef = useRef<SoloSynthManager | null>(null);
   const isWorkerInitialized = useRef(false);
   
   if (!audioPlayerRef.current) {
     audioPlayerRef.current = new AudioPlayer();
+  }
+  
+   if (!soloSynthManagerRef.current) {
+    soloSynthManagerRef.current = new SoloSynthManager();
   }
 
    useEffect(() => {
@@ -223,6 +230,7 @@ export function AuraGroove() {
       }
       audioPlayerRef.current?.stop();
       bassSynthRef.current?.dispose();
+      soloSynthManagerRef.current?.dispose();
       Tone.Transport.stop();
       Tone.Transport.cancel();
     };
@@ -239,7 +247,7 @@ export function AuraGroove() {
 
   useEffect(() => {
     updateWorkerSettings();
-  }, [drumSettings, instruments, bpm, updateWorkerSettings]);
+  }, [drumSettings, instruments.bass, bpm, updateWorkerSettings]);
   
   // This effect updates the synth's parameters whenever they change in the UI
   useEffect(() => {
@@ -260,6 +268,13 @@ export function AuraGroove() {
     }
   }, [bassParams]);
 
+  // Handle solo instrument changes
+  useEffect(() => {
+    if (soloSynthManagerRef.current) {
+        soloSynthManagerRef.current.setInstrument(instruments.solo);
+    }
+  }, [instruments.solo]);
+
 
   const handlePlay = useCallback(async () => {
     if (!audioPlayerRef.current || !musicWorkerRef.current) return;
@@ -272,10 +287,14 @@ export function AuraGroove() {
         if (!bassSynthRef.current) {
              bassSynthRef.current = new Tone.MonoSynth({
                 oscillator: { type: "amsine", harmonicity: bassParams.oscillator.harmonicity },
-                envelope: bassParams.envelope,
+                envelope: { ...bassParams.envelope, sustain: 0 },
                 filter: { ...bassParams.filter, type: "lowpass", rolloff: -24 },
-                filterEnvelope: bassParams.filterEnvelope
+                filterEnvelope: { ...bassParams.filterEnvelope, sustain: 0 }
             }); // Do NOT connect to destination here
+        }
+        
+        if (soloSynthManagerRef.current) {
+            soloSynthManagerRef.current.setInstrument(instruments.solo);
         }
 
         if (!audioPlayerRef.current.isInitialized()) {
@@ -335,6 +354,7 @@ export function AuraGroove() {
     if (bassSynthRef.current?.connected) {
         bassSynthRef.current.disconnect();
     }
+    soloSynthManagerRef.current?.releaseAll();
     // Stop the transport and cancel all scheduled events.
     Tone.Transport.stop();
     Tone.Transport.cancel();
@@ -380,7 +400,7 @@ export function AuraGroove() {
                 <SelectItem value="none">None</SelectItem>
                 <SelectItem value="synthesizer" disabled>Synthesizer</SelectItem>
                 <SelectItem value="piano" disabled>Piano</SelectItem>
-                <SelectItem value="organ" disabled>Organ</SelectItem>
+                <SelectItem value="organ">Organ</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -518,7 +538,3 @@ export function AuraGroove() {
     </Card>
   );
 }
-
-    
-
-    
