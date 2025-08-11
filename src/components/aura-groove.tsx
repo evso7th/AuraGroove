@@ -39,7 +39,9 @@ export type DrumSettings = {
 };
 
 // Helper function to decode audio data in the main thread
-async function decodeSamples(samplePaths: Record<string, string>, audioContext: AudioContext) {
+async function decodeSamples(samplePaths: Record<string, string>) {
+    // We need a live AudioContext to decode samples, which is only available in the main thread.
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
     const samples = {} as Record<string, Float32Array>;
     const promises = Object.entries(samplePaths).map(async ([key, path]) => {
         try {
@@ -57,6 +59,7 @@ async function decodeSamples(samplePaths: Record<string, string>, audioContext: 
         }
     });
     await Promise.all(promises);
+    await audioContext.close(); // Clean up the context after decoding
     return samples;
 }
 
@@ -88,6 +91,7 @@ export function AuraGroove() {
   }
 
    useEffect(() => {
+    // Correctly point to the worker file in the public directory
     const worker = new Worker('/workers/ambient.worker.js');
     musicWorkerRef.current = worker;
 
@@ -114,7 +118,7 @@ export function AuraGroove() {
              break;
 
         case 'chunk':
-          if (data && audioPlayerRef.current) {
+          if (data && audioPlayerRef.current && data.chunk && data.duration) {
              audioPlayerRef.current.scheduleChunk(data.chunk, data.duration);
           }
           break;
@@ -143,7 +147,7 @@ export function AuraGroove() {
       worker.terminate();
       audioPlayerRef.current?.stop();
     };
-  }, [toast]);
+  }, [toast, drumSettings, instruments, bpm]); // Added dependencies that are used in the new start command
   
   const updateWorkerSettings = useCallback(() => {
     if (musicWorkerRef.current && isPlaying) {
@@ -155,10 +159,8 @@ export function AuraGroove() {
   }, [instruments, drumSettings, bpm, isPlaying]);
 
   useEffect(() => {
-    if (isPlaying && isWorkerInitialized.current) {
-        updateWorkerSettings();
-    }
-  }, [drumSettings, instruments, bpm, isPlaying, updateWorkerSettings]);
+    updateWorkerSettings();
+  }, [drumSettings, instruments, bpm, updateWorkerSettings]);
 
 
   const handlePlay = useCallback(async () => {
@@ -188,12 +190,12 @@ export function AuraGroove() {
                 ride: '/assets/drums/cymbal1.wav',
             };
             
-            // We need a live AudioContext to decode samples, which is only available in the main thread.
-            const tempAudioContext = new AudioContext();
-            const decodedSamples = await decodeSamples(samplePaths, tempAudioContext);
-            await tempAudioContext.close(); // Clean up the context after decoding
+            const decodedSamples = await decodeSamples(samplePaths);
 
             const sampleRate = audioPlayerRef.current.getSampleRate();
+            if (!sampleRate) {
+                throw new Error("AudioContext not initialized or sample rate not available.");
+            }
 
             const transferableObjects = Object.values(decodedSamples).map(s => s.buffer);
             
@@ -296,7 +298,7 @@ export function AuraGroove() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">None</SelectItem>
-                <SelectItem value="bass guitar" disabled>Bass Guitar</SelectItem>
+                <SelectItem value="bass guitar">Bass Guitar</SelectItem>
               </SelectContent>
             </Select>
           </div>

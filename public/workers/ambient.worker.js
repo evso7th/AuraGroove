@@ -8,82 +8,121 @@
 // --- 1. PatternProvider (The Music Sheet Library) ---
 const PatternProvider = {
     drumPatterns: {
-        basic: [
-            { sample: 'kick', time: 0, velocity: 0.5 },
-            { sample: 'hat', time: 0.5 },
-            { sample: 'snare', time: 1 },
-            { sample: 'hat', time: 1.5 },
-            { sample: 'kick', time: 2, velocity: 0.5 },
-            { sample: 'hat', time: 2.5 },
-            { sample: 'snare', time: 3 },
-            { sample: 'hat', time: 3.5 },
-        ],
-        breakbeat: [
-            { sample: 'kick', time: 0, velocity: 0.5 },
-            { sample: 'hat', time: 0.5 },
-            { sample: 'kick', time: 0.75, velocity: 0.5 },
-            { sample: 'snare', time: 1 },
-            { sample: 'hat', time: 1.5 },
-            { sample: 'kick', time: 2, velocity: 0.5 },
-            { sample: 'snare', time: 2.5 },
-            { sample: 'hat', time: 3 },
-            { sample: 'snare', time: 3.25 },
-            { sample: 'hat', time: 3.5 },
-        ],
-        slow: [
-            { sample: 'kick', time: 0, velocity: 0.5 },
-            { sample: 'hat', time: 1 },
-            { sample: 'snare', time: 2 },
-            { sample: 'hat', time: 3 },
-        ],
-        heavy: [
-            { sample: 'kick', time: 0, velocity: 0.6 },
-            { sample: 'ride', time: 0.5 },
-            { sample: 'snare', time: 1, velocity: 1.0 },
-            { sample: 'ride', time: 1.5 },
-            { sample: 'kick', time: 2, velocity: 0.6 },
-            { sample: 'ride', time: 2.5 },
-            { sample: 'snare', time: 3, velocity: 1.0 },
-            { sample: 'ride', time: 3.5 },
-        ],
+        basic: {
+            score: [
+                { sample: 'kick', time: 0 },
+                { sample: 'hat', time: 0.5 },
+                { sample: 'snare', time: 1 },
+                { sample: 'hat', time: 1.5 },
+                { sample: 'kick', time: 2 },
+                { sample: 'hat', time: 2.5 },
+                { sample: 'snare', time: 3 },
+                { sample: 'hat', time: 3.5 },
+            ],
+            kickVolume: 0.3,
+        },
+        breakbeat: {
+            score: [
+                { sample: 'kick', time: 0 },
+                { sample: 'hat', time: 0.5 },
+                { sample: 'kick', time: 0.75 },
+                { sample: 'snare', time: 1 },
+                { sample: 'hat', time: 1.5 },
+                { sample: 'kick', time: 2 },
+                { sample: 'snare', time: 2.5 },
+                { sample: 'hat', time: 3 },
+                { sample: 'snare', time: 3.25 },
+                { sample: 'hat', time: 3.5 },
+            ],
+            kickVolume: 0.3,
+        },
+        slow: {
+            score: [
+                { sample: 'kick', time: 0 },
+                { sample: 'hat', time: 1 },
+                { sample: 'snare', time: 2 },
+                { sample: 'hat', time: 3 },
+            ],
+            kickVolume: 0.3,
+        },
+        heavy: {
+             score: [
+                { sample: 'kick', time: 0, velocity: 1.0 },
+                { sample: 'ride', time: 0.5 },
+                { sample: 'snare', time: 1, velocity: 1.0 },
+                { sample: 'ride', time: 1.5 },
+                { sample: 'kick', time: 2, velocity: 1.0 },
+                { sample: 'ride', time: 2.5 },
+                { sample: 'snare', time: 3, velocity: 1.0 },
+                { sample: 'ride', time: 3.5 },
+            ],
+            kickVolume: 0.3,
+        },
     },
     getDrumPattern(name) {
-        const pattern = this.drumPatterns[name] || this.drumPatterns.basic;
-        // Add a default low velocity for kicks if not specified
-        if (!pattern) return [];
-        return pattern.map(note => {
-            if (note.sample === 'kick' && note.velocity === undefined) {
-                return { ...note, velocity: 0.5 };
-            }
-            return note;
-        });
+       const patternData = this.drumPatterns[name] || this.drumPatterns.basic;
+       // Set default velocity and apply specific kick volume
+        return patternData.score.map(note => ({
+            ...note,
+            velocity: note.velocity ?? 1.0,
+            volume: note.sample === 'kick' ? patternData.kickVolume : 1.0,
+        }));
     },
+     bassPatterns: {
+        // Bass will follow the kick drum pattern
+        fromKick(drumPattern) {
+            return drumPattern
+                .filter(note => note.sample === 'kick')
+                .map(note => ({
+                    sample: 'bass', // We'll map this to a sample in the renderer
+                    time: note.time,
+                    velocity: 0.8, // Bass is a bit quieter
+                    volume: 1.0
+                }));
+        }
+    }
 };
 
 // --- 2. Instrument Generators (The Composers) ---
 class DrumGenerator {
-    static createScore(patternName, barNumber, totalBars, beatsPerBar = 4) {
+    static createScore(patternName, barNumber) {
         const pattern = PatternProvider.getDrumPattern(patternName);
         let score = [...pattern];
 
         // Add a crash cymbal on the first beat of every 4th bar
-        if (barNumber > 0 && barNumber % 4 === 0) {
+        if (barNumber % 4 === 0) {
             // Remove any other drum hit at time 0 to avoid conflict
             score = score.filter(note => note.time !== 0);
-            score.unshift({ sample: 'crash', time: 0, velocity: 0.7 });
+            score.unshift({ sample: 'crash', time: 0, velocity: 0.8, volume: 1.0 });
         }
         
         return score;
     }
 }
 
+class BassGenerator {
+     static createScore(drumPatternName) {
+        // The bass line is derived from the rhythm of the selected drum pattern
+        const drumPattern = PatternProvider.getDrumPattern(drumPatternName);
+        return PatternProvider.bassPatterns.fromKick(drumPattern);
+    }
+}
+
+
 // --- 3. SampleBank (Decoded Audio Storage) ---
 const SampleBank = {
     samples: {}, // { kick: Float32Array, snare: Float32Array, ... }
-    
-    init(samples) {
-        this.samples = samples;
+    isInitialized: false,
+
+    init(decodedSamples) {
+        this.samples = decodedSamples;
+        // As a placeholder, let's use the kick for the bass sound
+        if (this.samples.kick) {
+            this.samples.bass = this.samples.kick;
+        }
+        this.isInitialized = true;
         console.log("SampleBank Initialized with samples:", Object.keys(this.samples));
+        self.postMessage({ type: 'initialized' });
     },
 
     getSample(name) {
@@ -94,29 +133,33 @@ const SampleBank = {
 
 // --- 4. AudioRenderer (The Sound Engine) ---
 const AudioRenderer = {
-    render(score, settings, sampleRate) {
+    render(scores, settings, sampleRate) {
         const { duration, volume } = settings;
         const totalSamples = Math.floor(duration * sampleRate);
         const chunk = new Float32Array(totalSamples).fill(0);
 
-        for (const note of score) {
+        for (const note of scores.flat()) {
             const sample = SampleBank.getSample(note.sample);
             if (!sample) continue;
 
             const noteVelocity = note.velocity ?? 1.0;
-            const finalVolume = volume * noteVelocity;
+            const noteVolume = note.volume ?? 1.0;
+            const finalVolume = volume * noteVelocity * noteVolume;
             
             const startSample = Math.floor(note.time * Scheduler.secondsPerBeat * sampleRate);
 
+            // Ensure we don't write past the end of the chunk buffer
             const endSample = Math.min(startSample + sample.length, totalSamples);
             
             for (let i = 0; i < (endSample - startSample); i++) {
+                // Simple mixing by adding samples
                 if (startSample + i < chunk.length) {
                     chunk[startSample + i] += sample[i] * finalVolume;
                 }
             }
         }
         
+        // Basic clipping prevention
         for (let i = 0; i < totalSamples; i++) {
             chunk[i] = Math.max(-1, Math.min(1, chunk[i]));
         }
@@ -146,11 +189,14 @@ const Scheduler = {
 
     start() {
         if (this.isRunning) return;
+
         this.reset();
         this.isRunning = true;
         
+        // Generate the first chunk immediately
         this.tick();
 
+        // Then set up the interval for subsequent chunks
         this.intervalId = setInterval(() => this.tick(), this.barDuration * 1000);
         self.postMessage({ type: 'started' });
     },
@@ -170,34 +216,35 @@ const Scheduler = {
     updateSettings(settings) {
         if (settings.instruments) this.instruments = settings.instruments;
         if (settings.drumSettings) this.drumSettings = settings.drumSettings;
-        if(settings.bpm) {
-            this.bpm = settings.bpm;
-             if (this.isRunning) {
-                this.stop();
-                this.start();
-            }
-        }
+        if(settings.bpm) this.bpm = settings.bpm;
     },
 
     tick() {
         if (!this.isRunning) return;
 
-        let finalScore = [];
+        const scores = [];
         
+        // 1. Ask generators for their scores
         if (this.drumSettings.enabled) {
             const drumScore = DrumGenerator.createScore(
                 this.drumSettings.pattern, 
-                this.barCount,
-                -1 // totalBars not needed for this simple generator
+                this.barCount
             );
-            finalScore.push(...drumScore);
+            scores.push(drumScore);
         }
         
-        const audioChunk = AudioRenderer.render(finalScore, {
+        if (this.instruments.bass === 'bass guitar') {
+            const bassScore = BassGenerator.createScore(this.drumSettings.pattern);
+            scores.push(bassScore);
+        }
+
+        // 2. Pass the final score to the renderer
+        const audioChunk = AudioRenderer.render(scores, {
             duration: this.barDuration,
-            volume: this.drumSettings.volume
+            volume: this.drumSettings.volume // Use a global volume for now
         }, this.sampleRate);
         
+        // 3. Post the rendered chunk to the main thread
         self.postMessage({
             type: 'chunk',
             data: {
@@ -212,7 +259,7 @@ const Scheduler = {
 
 
 // --- MessageBus (The "Kafka" entry point) ---
-self.onmessage = (event) => {
+self.onmessage = async (event) => {
     const { command, data } = event.data;
 
     try {
@@ -220,10 +267,12 @@ self.onmessage = (event) => {
             case 'init':
                 Scheduler.sampleRate = data.sampleRate;
                 SampleBank.init(data.samples);
-                self.postMessage({ type: 'initialized' });
                 break;
             
             case 'start':
+                if (!SampleBank.isInitialized) {
+                   throw new Error("Worker is not initialized with samples yet. Call 'init' first.");
+                }
                 Scheduler.updateSettings(data);
                 Scheduler.start();
                 break;
@@ -232,11 +281,11 @@ self.onmessage = (event) => {
                 Scheduler.stop();
                 break;
             
-             case 'update_settings':
-                Scheduler.updateSettings(data);
+            case 'update_settings':
+                 Scheduler.updateSettings(data);
                 break;
         }
     } catch (e) {
-        self.postMessage({ type: 'error', error: e.message });
+        self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
