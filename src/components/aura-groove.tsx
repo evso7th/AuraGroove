@@ -64,7 +64,7 @@ export function AuraGroove() {
     audioPlayerRef.current = new AudioPlayer();
   }
 
-  useEffect(() => {
+   useEffect(() => {
     const worker = new Worker('/ambient.worker.js');
     musicWorkerRef.current = worker;
 
@@ -75,10 +75,12 @@ export function AuraGroove() {
         case 'initialized':
           isWorkerInitialized.current = true;
           setLoadingText("Starting playback...");
-          musicWorkerRef.current?.postMessage({
-              command: 'start',
-              data: { drumSettings, instruments, bpm }
-          });
+           if (musicWorkerRef.current) {
+                musicWorkerRef.current.postMessage({
+                    command: 'start',
+                    data: { drumSettings, instruments, bpm }
+                });
+            }
           break;
         
         case 'started':
@@ -89,8 +91,8 @@ export function AuraGroove() {
              break;
 
         case 'chunk':
-          if (data) {
-             audioPlayerRef.current?.scheduleChunk(data.chunk, data.duration);
+          if (data && audioPlayerRef.current) {
+             audioPlayerRef.current.scheduleChunk(data.chunk, data.duration);
           }
           break;
         
@@ -118,7 +120,7 @@ export function AuraGroove() {
       worker.terminate();
       audioPlayerRef.current?.stop();
     };
-  }, [toast, instruments, drumSettings, bpm]); 
+  }, []); // Empty dependency array, so it only runs once
   
   const updateWorkerSettings = useCallback(() => {
     if (musicWorkerRef.current && isPlaying) {
@@ -133,40 +135,48 @@ export function AuraGroove() {
     if (isPlaying && isWorkerInitialized.current) {
         updateWorkerSettings();
     }
-  }, [drumSettings, instruments, bpm, updateWorkerSettings, isPlaying]);
+  }, [drumSettings, instruments, bpm, isPlaying, updateWorkerSettings]);
 
 
   const handlePlay = useCallback(async () => {
     if (!audioPlayerRef.current) return;
+
     setIsInitializing(true);
     setLoadingText("Preparing audio engine...");
 
     try {
-        await audioPlayerRef.current.init();
+        if (!audioPlayerRef.current.isInitialized()) {
+          await audioPlayerRef.current.init();
+        }
+        
         const sampleRate = audioPlayerRef.current.getSampleRate();
         
         setLoadingText("Loading audio samples...");
         
-        if (isWorkerInitialized.current) {
-            musicWorkerRef.current?.postMessage({
+        if (isWorkerInitialized.current && musicWorkerRef.current) {
+             musicWorkerRef.current.postMessage({
                 command: 'start',
                 data: { drumSettings, instruments, bpm }
             });
-        } else {
+        } else if (musicWorkerRef.current) {
              const samplePaths = {
-                kick: '/samples/kick.wav',
-                snare: '/samples/snare.wav',
-                hat: '/samples/hat.wav',
-                crash: '/samples/crash.wav',
-                ride: '/samples/ride.wav',
+                kick: '/assets/drums/kick_drum6.wav',
+                snare: '/assets/drums/snare.wav',
+                hat: '/assets/drums/closed_hi_hat_accented.wav',
+                crash: '/assets/drums/crash1.wav',
+                ride: '/assets/drums/cymbal1.wav',
             };
             const samples = {} as Record<string, ArrayBuffer>;
+            
             for(const key in samplePaths) {
                 const response = await fetch(samplePaths[key as keyof typeof samplePaths]);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch sample: ${key}`);
+                }
                 samples[key] = await response.arrayBuffer();
             }
 
-            musicWorkerRef.current?.postMessage({
+            musicWorkerRef.current.postMessage({
                 command: 'init',
                 data: { sampleRate, samples }
             }, Object.values(samples));
@@ -177,11 +187,12 @@ export function AuraGroove() {
         toast({
             variant: "destructive",
             title: "Audio Error",
-            description: `Could not start audio context. ${error instanceof Error ? error.message : ''}`,
+            description: `Could not start audio. ${error instanceof Error ? error.message : ''}`,
         });
         setIsInitializing(false);
+        setLoadingText("");
     }
-  }, [toast, drumSettings, instruments, bpm]);
+  }, [drumSettings, instruments, bpm, toast]);
 
   const handleStop = useCallback(() => {
     musicWorkerRef.current?.postMessage({ command: 'stop' });
@@ -190,10 +201,7 @@ export function AuraGroove() {
   }, []);
   
   const handleTogglePlay = useCallback(() => {
-    if (!audioPlayerRef.current?.isInitialized()) {
-        handlePlay();
-        return;
-    }
+    if (!audioPlayerRef.current) return;
     
     if (isPlaying) {
       handleStop();

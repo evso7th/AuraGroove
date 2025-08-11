@@ -1,4 +1,6 @@
 console.log('OfflineAudioContext is defined:', typeof OfflineAudioContext !== 'undefined');
+importScripts('https://unpkg.com/tone@15.0.4/build/Tone.js');
+
 
 /**
  * @file AuraGroove Ambient Music Worker
@@ -128,7 +130,8 @@ const SampleBank = {
     isInitialized: false,
 
     async init(samples, sampleRate) {
-        const tempAudioContext = new OfflineAudioContext(1, 1, sampleRate);
+        // Use Tone's OfflineAudioContext
+        const tempAudioContext = new Tone.OfflineAudioContext(1, 1, sampleRate);
         for (const key in samples) {
             if (samples[key].byteLength > 0) {
                 try {
@@ -141,8 +144,8 @@ const SampleBank = {
             }
         }
         this.isInitialized = true;
-        self.postMessage({ type: 'initialized' });
         console.log("SampleBank Initialized with samples:", Object.keys(this.samples));
+        self.postMessage({ type: 'initialized' });
     },
 
     getSample(name) {
@@ -235,11 +238,18 @@ const Scheduler = {
     updateSettings(settings) {
         if (settings.instruments) this.instruments = settings.instruments;
         if (settings.drumSettings) this.drumSettings = settings.drumSettings;
-        if(settings.bpm) this.bpm = settings.bpm;
+        if(settings.bpm) {
+             this.bpm = settings.bpm;
+             // If running, restart the interval with the new BPM
+             if (this.isRunning) {
+                clearInterval(this.intervalId);
+                this.intervalId = setInterval(() => this.tick(), this.barDuration * 1000);
+             }
+        }
     },
 
     tick() {
-        if (!this.isRunning) return;
+        if (!this.isRunning || !SampleBank.isInitialized) return;
 
         let finalScore = [];
         
@@ -289,8 +299,8 @@ self.onmessage = async (event) => {
         switch (command) {
             case 'init':
                 if (SampleBank.isInitialized) {
-                     self.postMessage({ type: 'initialized' });
-                     return;
+                    self.postMessage({ type: 'initialized' });
+                    return;
                 }
                 Scheduler.sampleRate = data.sampleRate;
                 await SampleBank.init(data.samples, data.sampleRate);
@@ -307,14 +317,12 @@ self.onmessage = async (event) => {
             case 'stop':
                 Scheduler.stop();
                 break;
-            
+
             case 'update_settings':
-                Scheduler.updateSettings(data);
+                 Scheduler.updateSettings(data);
                 break;
         }
     } catch (e) {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
-
-    
