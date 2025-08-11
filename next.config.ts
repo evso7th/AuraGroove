@@ -34,6 +34,8 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: [
     'https://*.cloudworkstations.dev',
     'https://*.firebase.studio',
+    // Add the specific origin from the error log to ensure it's allowed.
+    'https://6000-firebase-studio-1754718606110.cluster-3gc7bglotjgwuxlqpiut7yyqt4.cloudworkstations.dev',
   ],
 };
 
