@@ -128,6 +128,9 @@ export function AuraGroove() {
       
       if (type === 'chunk') {
         audioPlayer.schedulePart(data.chunk, data.duration);
+        if (!audioPlayer.getIsPlaying()) {
+          audioPlayer.start();
+        }
       } else if (type === 'started') {
         setIsInitializing(false);
         setLoadingText("");
@@ -380,3 +383,5 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+  

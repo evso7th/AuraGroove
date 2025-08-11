@@ -38,7 +38,7 @@ class AudioPlayer {
     this.masterGain.connect(this.audioContext.destination);
     
     this.isInitialized = true;
-    this._isPlaying = false;
+    // Do not set isPlaying to false here, let start/stop handle it.
     console.log("AudioPlayer initialized with sample rate:", this.audioContext.sampleRate);
   }
   
@@ -120,3 +120,5 @@ class AudioPlayer {
 }
 
 export const audioPlayer = new AudioPlayer();
+
+  
