@@ -3,8 +3,6 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Drum, Loader2, Music, Pause, Speaker } from "lucide-react";
-import * as Tone from 'tone';
-
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,7 +25,6 @@ import Logo from "@/components/icons";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { AudioPlayer } from "@/lib/audio-player";
-
 
 export type Instruments = {
   solo: 'synthesizer' | 'piano' | 'organ' | 'none';
@@ -60,7 +57,7 @@ export function AuraGroove() {
   const [drumSettings, setDrumSettings] = useState<DrumSettings>({
       enabled: true,
       pattern: 'basic',
-      volume: 0.7, // Volume is now 0-1
+      volume: 0.7,
   });
   const [instruments, setInstruments] = useState<Instruments>({
     solo: "none",
@@ -73,17 +70,12 @@ export function AuraGroove() {
   const audioPlayerRef = useRef<AudioPlayer>();
   const isWorkerInitialized = useRef(false);
 
-  // Function to request the next audio chunk from the worker
-  const requestNextChunk = useCallback(() => {
-    musicWorkerRef.current?.postMessage({ command: 'render_chunk' });
-  }, []);
-
-  // Main effect for worker communication
   useEffect(() => {
     const worker = new Worker(new URL('../app/ambient.worker.ts', import.meta.url));
     musicWorkerRef.current = worker;
+    
+    // Create AudioPlayer instance here, but initialize AudioContext on user gesture
     audioPlayerRef.current = new AudioPlayer();
-
 
     const handleMessage = (event: MessageEvent) => {
       const { type, data, error } = event.data;
@@ -91,25 +83,29 @@ export function AuraGroove() {
       switch(type) {
         case 'initialized':
           isWorkerInitialized.current = true;
-          setLoadingText("");
-          setIsInitializing(false);
-          setIsPlaying(true);
-          audioPlayerRef.current?.start();
-          // After initializing, update settings and request the first chunk
+          setLoadingText("Starting playback...");
+          // Now that worker is ready, we can tell it to start generating audio
           musicWorkerRef.current?.postMessage({
-              command: 'update_settings',
-              data: { instruments, drumSettings }
+              command: 'start',
+              data: { drumSettings, instruments }
           });
-          requestNextChunk();
           break;
+        
+        case 'started':
+             setIsInitializing(false);
+             setLoadingText("");
+             setIsPlaying(true);
+             audioPlayerRef.current?.start();
+             break;
 
         case 'chunk':
           audioPlayerRef.current?.scheduleChunk(data.chunk, data.sampleRate);
-          // Once a chunk is received and scheduled, request the next one to keep the buffer full
-          if (isPlaying) {
-             requestNextChunk();
-          }
           break;
+        
+        case 'stopped':
+            setIsPlaying(false);
+            setLoadingText("");
+            break;
 
         case 'error':
           toast({
@@ -130,11 +126,10 @@ export function AuraGroove() {
       worker.terminate();
       audioPlayerRef.current?.stop();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [toast]); 
+  }, [toast, drumSettings, instruments]); 
   
   const updateWorkerSettings = useCallback(() => {
-    if (isWorkerInitialized.current) {
+    if (musicWorkerRef.current && isWorkerInitialized.current) {
         musicWorkerRef.current?.postMessage({
             command: 'update_settings',
             data: { instruments, drumSettings },
@@ -142,29 +137,26 @@ export function AuraGroove() {
     }
   }, [instruments, drumSettings]);
 
-  // Update worker whenever settings change
   useEffect(() => {
-    if (isPlaying) {
-        updateWorkerSettings();
-    }
-  }, [drumSettings, instruments, isPlaying, updateWorkerSettings]);
+    updateWorkerSettings();
+  }, [drumSettings, instruments, updateWorkerSettings]);
 
 
   const handlePlay = useCallback(async () => {
-    if (Tone.context.state !== 'running') {
-        await Tone.start();
-    }
-      
     setIsInitializing(true);
     setLoadingText("Preparing audio engine...");
 
     try {
-        audioPlayerRef.current?.init();
-        setLoadingText("Initializing worker...");
+        // Initialize AudioContext on user gesture
+        await audioPlayerRef.current?.init();
         
+        setLoadingText("Loading audio samples...");
+        
+        const sampleRate = audioPlayerRef.current?.getSampleRate() || 44100;
+
         musicWorkerRef.current?.postMessage({
             command: 'init',
-            data: { sampleUrls }
+            data: { sampleUrls, sampleRate }
         });
 
     } catch (error) {
@@ -179,6 +171,7 @@ export function AuraGroove() {
   }, [toast]);
 
   const handleStop = useCallback(() => {
+    musicWorkerRef.current?.postMessage({ command: 'stop' });
     audioPlayerRef.current?.stop();
     setIsPlaying(false);
     setIsInitializing(false);
@@ -248,14 +241,14 @@ export function AuraGroove() {
              <Select
               value={instruments.bass}
               onValueChange={(v) => setInstruments(i => ({...i, bass: v as Instruments['bass']}))}
-              disabled={isBusy}
+              disabled={isBusy || isPlaying}
             >
               <SelectTrigger id="bass-instrument" className="col-span-2">
                 <SelectValue placeholder="Select instrument" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">None</SelectItem>
-                <SelectItem value="bass guitar">Bass Guitar</SelectItem>
+                <SelectItem value="bass guitar" disabled>Bass Guitar</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -303,7 +296,7 @@ export function AuraGroove() {
             </div>
         </div>
          
-         {(isBusy || (isPlaying && loadingText)) && (
+         {isBusy && (
             <div className="flex flex-col items-center justify-center text-muted-foreground space-y-2 min-h-[40px]">
                 <Loader2 className="h-6 w-6 animate-spin" />
                 <p>{loadingText || "Loading..."}</p>
@@ -314,7 +307,7 @@ export function AuraGroove() {
               Press play to start the music.
             </p>
         )}
-        {!isBusy && isPlaying && !loadingText && (
+        {!isBusy && isPlaying && (
              <p className="text-muted-foreground text-center min-h-[40px] flex items-center justify-center px-4">
               Playing...
             </p>
