@@ -1,6 +1,7 @@
 
-console.log('OfflineAudioContext is defined:', typeof OfflineAudioContext !== 'undefined');
 importScripts('https://unpkg.com/tone@15.0.4/build/Tone.js');
+
+console.log('OfflineAudioContext is defined:', typeof OfflineAudioContext !== 'undefined');
 
 /**
  * @file AuraGroove Ambient Music Worker
@@ -130,21 +131,20 @@ const SampleBank = {
     isInitialized: false,
 
     async init(samples, sampleRate) {
-        const tempAudioContext = new OfflineAudioContext(1, 1, sampleRate);
         for (const key in samples) {
             if (samples[key].byteLength > 0) {
                 try {
-                    const audioBuffer = await tempAudioContext.decodeAudioData(samples[key].slice(0));
+                    // Use Tone's built-in decoder
+                    const audioBuffer = await Tone.context.decodeAudioData(samples[key].slice(0));
                     this.samples[key] = audioBuffer.getChannelData(0);
                 } catch(e) {
-                    // post error back to main thread
                     self.postMessage({ type: 'error', error: `Failed to decode sample ${key}: ${e instanceof Error ? e.message : String(e)}` });
                 }
             }
         }
         this.isInitialized = true;
-        self.postMessage({ type: 'initialized' });
         console.log("SampleBank Initialized with samples:", Object.keys(this.samples));
+        self.postMessage({ type: 'initialized' });
     },
 
     getSample(name) {
@@ -255,14 +255,6 @@ const Scheduler = {
             finalScore.push(...drumScore);
         }
         
-        // Add other instrument generators here (bass, solo, etc.) in the future
-        // For now, bass is conceptual
-        // if (this.instruments.bass !== 'none') {
-        //     const bassScore = BassGenerator.createScore('E');
-        //     // We would need a synth renderer for this, not a sample renderer
-        // }
-
-
         // 2. Pass the final score to the renderer
         const audioChunk = AudioRenderer.render(finalScore, {
             duration: this.barDuration,
@@ -290,7 +282,12 @@ self.onmessage = async (event) => {
     try {
         switch (command) {
             case 'init':
+                if (typeof Tone === 'undefined') {
+                    self.postMessage({ type: 'error', error: 'Tone.js script failed to load.' });
+                    return;
+                }
                 Scheduler.sampleRate = data.sampleRate;
+                // init is now self-contained and sends its own 'initialized' message
                 await SampleBank.init(data.samples, data.sampleRate);
                 break;
             
@@ -307,12 +304,10 @@ self.onmessage = async (event) => {
                 break;
             
             case 'update_settings':
-                Scheduler.updateSettings(data);
+                 Scheduler.updateSettings(data);
                 break;
         }
     } catch (e) {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
-
-    
