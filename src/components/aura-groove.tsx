@@ -52,7 +52,8 @@ const sampleUrls = {
 
 export function AuraGroove() {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isInitializing, setIsInitializing] = useState(false);
   const [loadingText, setLoadingText] = useState("");
   const [drumSettings, setDrumSettings] = useState<DrumSettings>({
       enabled: true,
@@ -68,12 +69,11 @@ export function AuraGroove() {
 
   const musicWorkerRef = useRef<Worker>();
   const sampleArrayBuffers = useRef<Record<string, ArrayBuffer>>({});
-  const areSamplesLoadedOnMount = useRef(false);
+  const areSamplesLoaded = useRef(false);
 
   // Load samples on component mount
   useEffect(() => {
     setLoadingText("Loading samples...");
-    setIsLoading(true);
     
     const fetchSamples = async () => {
         try {
@@ -91,7 +91,7 @@ export function AuraGroove() {
                 sampleArrayBuffers.current[key] = buffer;
             });
             
-            areSamplesLoadedOnMount.current = true;
+            areSamplesLoaded.current = true;
             setIsLoading(false);
             setLoadingText("");
         } catch (error) {
@@ -106,6 +106,17 @@ export function AuraGroove() {
     };
     fetchSamples();
   }, [toast]);
+  
+  const startWorker = useCallback(() => {
+      setLoadingText("Generating music...");
+      musicWorkerRef.current?.postMessage({
+          command: 'start',
+          data: {
+              instruments,
+              drumSettings
+          }
+      });
+  }, [instruments, drumSettings]);
 
   // Main effect for worker communication
   useEffect(() => {
@@ -118,9 +129,11 @@ export function AuraGroove() {
       if (type === 'chunk') {
         audioPlayer.schedulePart(data.chunk, data.duration);
       } else if (type === 'started') {
-        audioPlayer.start();
-        setIsLoading(false);
+        setIsInitializing(false);
+        setLoadingText("");
         setIsPlaying(true);
+      } else if (type === 'initialized') {
+        startWorker();
       } else if (type === 'error') {
         toast({
           variant: "destructive",
@@ -129,7 +142,8 @@ export function AuraGroove() {
         });
         audioPlayer.stop();
         setIsPlaying(false);
-        setIsLoading(false);
+        setIsInitializing(false);
+        setLoadingText("");
       }
     };
 
@@ -141,7 +155,7 @@ export function AuraGroove() {
         audioPlayer.stop();
       }
     };
-  }, [toast]); 
+  }, [toast, startWorker]); 
   
   const handleInstrumentChange = useCallback((part: keyof Instruments, value: Instruments[keyof Instruments]) => {
     const newInstruments = { ...instruments, [part]: value };
@@ -162,8 +176,8 @@ export function AuraGroove() {
   }, [drumSettings]);
 
 
-  const prepareAndStart = useCallback(async () => {
-    setIsLoading(true);
+  const handlePlay = useCallback(async () => {
+    setIsInitializing(true);
     setLoadingText("Preparing audio engine...");
 
     try {
@@ -184,15 +198,6 @@ export function AuraGroove() {
           samples: sampleArrayBuffers.current,
         }
       }, transferableObjects);
-      
-      setLoadingText("Generating music...");
-      musicWorkerRef.current?.postMessage({
-          command: 'start',
-          data: {
-              instruments,
-              drumSettings
-          }
-      });
 
     } catch (error) {
         console.error("Failed to prepare audio:", error);
@@ -201,15 +206,15 @@ export function AuraGroove() {
             title: "Audio Error",
             description: `Could not prepare audio. ${error instanceof Error ? error.message : ''}`,
         });
-        setIsLoading(false);
+        setIsInitializing(false);
     }
-  }, [toast, instruments, drumSettings]);
+  }, [toast]);
 
   const handleStop = useCallback(() => {
     musicWorkerRef.current?.postMessage({ command: 'stop' });
     audioPlayer.stop();
     setIsPlaying(false);
-    setIsLoading(false);
+    setIsInitializing(false);
     setLoadingText("");
   }, []);
   
@@ -217,16 +222,18 @@ export function AuraGroove() {
     if (isPlaying) {
       handleStop();
     } else {
-       if (!areSamplesLoadedOnMount.current) {
+       if (!areSamplesLoaded.current) {
           toast({
               title: "Samples not loaded",
               description: "Please wait for samples to finish loading.",
           });
           return;
       }
-      prepareAndStart();
+      handlePlay();
     }
-  }, [isPlaying, handleStop, prepareAndStart, toast]);
+  }, [isPlaying, handleStop, handlePlay, toast]);
+  
+  const isBusy = isLoading || isInitializing;
 
   return (
     <Card className="w-full max-w-lg shadow-2xl">
@@ -245,7 +252,7 @@ export function AuraGroove() {
             <Select
               value={instruments.solo}
               onValueChange={(v) => handleInstrumentChange('solo', v as Instruments['solo'])}
-              disabled={isLoading}
+              disabled={isBusy}
             >
               <SelectTrigger id="solo-instrument" className="col-span-2">
                 <SelectValue placeholder="Select instrument" />
@@ -263,7 +270,7 @@ export function AuraGroove() {
              <Select
               value={instruments.accompaniment}
               onValueChange={(v) => handleInstrumentChange('accompaniment', v as Instruments['accompaniment'])}
-              disabled={isLoading}
+              disabled={isBusy}
             >
               <SelectTrigger id="accompaniment-instrument" className="col-span-2">
                 <SelectValue placeholder="Select instrument" />
@@ -281,7 +288,7 @@ export function AuraGroove() {
              <Select
               value={instruments.bass}
               onValueChange={(v) => handleInstrumentChange('bass', v as Instruments['bass'])}
-              disabled={isLoading}
+              disabled={isBusy}
             >
               <SelectTrigger id="bass-instrument" className="col-span-2">
                 <SelectValue placeholder="Select instrument" />
@@ -302,7 +309,7 @@ export function AuraGroove() {
                     id="drums-enabled"
                     checked={drumSettings.enabled}
                     onCheckedChange={(c) => handleDrumsSettingChange('enabled', c)}
-                    disabled={isLoading}
+                    disabled={isBusy}
                 />
             </div>
             <div className="grid grid-cols-3 items-center gap-4">
@@ -310,7 +317,7 @@ export function AuraGroove() {
                 <Select
                     value={drumSettings.pattern}
                     onValueChange={(v) => handleDrumsSettingChange('pattern', v)}
-                    disabled={isLoading || !drumSettings.enabled}
+                    disabled={isBusy || !drumSettings.enabled}
                 >
                     <SelectTrigger id="drum-pattern" className="col-span-2">
                         <SelectValue placeholder="Select pattern" />
@@ -331,23 +338,23 @@ export function AuraGroove() {
                     step={0.05}
                     onValueChange={(v) => handleDrumsSettingChange('volume', v[0])}
                     className="col-span-2"
-                    disabled={isLoading || !drumSettings.enabled}
+                    disabled={isBusy || !drumSettings.enabled}
                 />
             </div>
         </div>
          
-         {(isLoading || (isPlaying && loadingText)) && (
+         {(isBusy || (isPlaying && loadingText)) && (
             <div className="flex flex-col items-center justify-center text-muted-foreground space-y-2 min-h-[40px]">
                 <Loader2 className="h-6 w-6 animate-spin" />
                 <p>{loadingText || "Loading..."}</p>
             </div>
         )}
-         {!isLoading && !isPlaying && (
+         {!isBusy && !isPlaying && (
             <p className="text-muted-foreground text-center min-h-[40px] flex items-center justify-center px-4">
               Press play to start the music.
             </p>
         )}
-        {!isLoading && isPlaying && !loadingText && (
+        {!isBusy && isPlaying && !loadingText && (
              <p className="text-muted-foreground text-center min-h-[40px] flex items-center justify-center px-4">
               Playing...
             </p>
@@ -357,20 +364,19 @@ export function AuraGroove() {
         <Button
           type="button"
           onClick={handleTogglePlay}
-          disabled={isLoading}
+          disabled={isBusy}
           className="w-full text-lg py-6"
         >
-          {isLoading ? (
+          {isBusy ? (
             <Loader2 className="mr-2 h-6 w-6 animate-spin" />
           ) : isPlaying ? (
             <Pause className="mr-2 h-6 w-6" />
           ) : (
             <Music className="mr-2 h-6 w-6" />
           )}
-          {isLoading ? loadingText : isPlaying ? "Stop" : "Play"}
+          {isBusy ? loadingText : isPlaying ? "Stop" : "Play"}
         </Button>
       </CardFooter>
     </Card>
   );
 }
-  

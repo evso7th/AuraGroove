@@ -140,6 +140,7 @@ const SampleBank = {
         }
         this.isInitialized = true;
         console.log("SampleBank Initialized with samples:", Object.keys(this.samples));
+        self.postMessage({ type: 'initialized' });
     },
 
     getSample(name: string) {
