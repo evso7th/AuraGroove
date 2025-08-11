@@ -5,15 +5,6 @@
  * This worker operates on a microservice-style architecture.
  * Each musical component is an isolated entity responsible for a single task.
  */
-// Load Tone.js directly into the worker's scope
-try {
-    importScripts('https://unpkg.com/tone@15.0.4/build/Tone.js');
-} catch (e) {
-    console.error("Failed to load Tone.js", e);
-    // Post an error back to the main thread if Tone.js fails to load
-    self.postMessage({ type: 'error', error: 'Failed to load Tone.js in worker.' });
-}
-
 
 // --- 1. PatternProvider (The Music Sheet Library) ---
 const PatternProvider = {
@@ -64,7 +55,7 @@ const PatternProvider = {
 
 // --- 2. Instrument Generators (The Composers) ---
 class DrumGenerator {
-    static createScore(patternName, barNumber, totalBars, beatsPerBar = 4) {
+    static createScore(patternName, barNumber) {
         const pattern = PatternProvider.getDrumPattern(patternName);
         let score = [...pattern];
 
@@ -79,48 +70,25 @@ class DrumGenerator {
     }
 }
 
-class BassGenerator {
-     static createScore(rootNote = 'E', beatsPerBar = 4) {
-        // Simple bassline: root note on the first beat of the bar
-        const score = [
-            { note: `${rootNote}1`, time: 0, duration: beatsPerBar, velocity: 0.9 }
-        ];
-        return score;
-    }
-}
-
-
 // --- 3. SampleBank (Decoded Audio Storage) ---
 const SampleBank = {
     samples: {}, // { kick: Float32Array, snare: Float32Array, ... }
     isInitialized: false,
 
     async init(samples, sampleRate) {
-        // Use the global OfflineAudioContext available after importing Tone.js
-        console.log("OfflineAudioContext is defined:", typeof OfflineAudioContext !== 'undefined');
-        
+        // Use native OfflineAudioContext for robust decoding in a worker.
+        const tempAudioContext = new OfflineAudioContext(1, 1, sampleRate);
         for (const key in samples) {
-            if (samples[key] && samples[key].byteLength > 0) {
-                 try {
-                    const audioBuffer = await Tone.context.decodeAudioData(samples[key].slice(0));
-
-                    // Add type checking
-                    if (!(audioBuffer instanceof Tone.Buffer)) {
-                        console.error(`Decoded data for sample ${key} is not a Tone.Buffer. Type received:`, typeof audioBuffer, audioBuffer);
-                        throw new Error(`Decoded data for sample ${key} is not a Tone.Buffer.`);
-                    }
-                    
-                    // Use the correct method for Tone.Buffer
-                    this.samples[key] = audioBuffer.get();
-
+            if (samples[key].byteLength > 0) {
+                try {
+                    const audioBuffer = await tempAudioContext.decodeAudioData(samples[key].slice(0));
+                    this.samples[key] = audioBuffer.getChannelData(0);
                 } catch(e) {
-                    console.error(`Detailed decoding error for sample ${key}:`, e); // Detailed error logging
                     self.postMessage({ type: 'error', error: `Failed to decode sample ${key}: ${e instanceof Error ? e.message : String(e)}` });
                 }
             }
         }
         this.isInitialized = true;
-        console.log("SampleBank Initialized with samples:", Object.keys(this.samples));
         self.postMessage({ type: 'initialized' });
     },
 
@@ -146,18 +114,15 @@ const AudioRenderer = {
             
             const startSample = Math.floor(note.time * Scheduler.secondsPerBeat * sampleRate);
 
-            // Ensure we don't write past the end of the chunk buffer
             const endSample = Math.min(startSample + sample.length, totalSamples);
             
             for (let i = 0; i < (endSample - startSample); i++) {
-                // Simple mixing by adding samples
                 if (startSample + i < chunk.length) {
                     chunk[startSample + i] += sample[i] * finalVolume;
                 }
             }
         }
         
-        // Basic clipping prevention
         for (let i = 0; i < totalSamples; i++) {
             chunk[i] = Math.max(-1, Math.min(1, chunk[i]));
         }
@@ -187,14 +152,9 @@ const Scheduler = {
 
     start() {
         if (this.isRunning) return;
-
         this.reset();
         this.isRunning = true;
-        
-        // Generate the first chunk immediately
         this.tick();
-
-        // Then set up the interval for subsequent chunks
         this.intervalId = setInterval(() => this.tick(), this.barDuration * 1000);
         self.postMessage({ type: 'started' });
     },
@@ -214,7 +174,7 @@ const Scheduler = {
     updateSettings(settings) {
         if (settings.instruments) this.instruments = settings.instruments;
         if (settings.drumSettings) this.drumSettings = settings.drumSettings;
-        if(settings.bpm) this.bpm = settings.bpm;
+        if (settings.bpm) this.bpm = settings.bpm;
     },
 
     tick() {
@@ -222,23 +182,19 @@ const Scheduler = {
 
         let finalScore = [];
         
-        // 1. Ask generators for their scores
         if (this.drumSettings.enabled) {
             const drumScore = DrumGenerator.createScore(
                 this.drumSettings.pattern, 
-                this.barCount,
-                -1 // totalBars not needed for this simple generator
+                this.barCount
             );
             finalScore.push(...drumScore);
         }
-        
-        // 2. Pass the final score to the renderer
+
         const audioChunk = AudioRenderer.render(finalScore, {
             duration: this.barDuration,
             volume: this.drumSettings.volume
         }, this.sampleRate);
         
-        // 3. Post the rendered chunk to the main thread
         self.postMessage({
             type: 'chunk',
             data: {
@@ -259,11 +215,7 @@ self.onmessage = async (event) => {
     try {
         switch (command) {
             case 'init':
-                if (typeof Tone === 'undefined') {
-                    throw new Error("Tone.js is not loaded in the worker.");
-                }
                 Scheduler.sampleRate = data.sampleRate;
-                // Don't message 'initialized' from here, let SampleBank do it.
                 await SampleBank.init(data.samples, data.sampleRate);
                 break;
             
@@ -280,12 +232,10 @@ self.onmessage = async (event) => {
                 break;
             
             case 'update_settings':
-                 Scheduler.updateSettings(data);
+                Scheduler.updateSettings(data);
                 break;
         }
     } catch (e) {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
-
-    
