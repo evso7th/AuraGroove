@@ -28,7 +28,7 @@ class BassGenerator {
                 release: 0.8,
             },
         });
-        this.setVolume(0.7); // Default volume
+        this.setVolume(0.7, Tone.now()); // Default volume
     }
 
     createPart(time: Tone.Unit.Time) {
@@ -129,6 +129,7 @@ class DrumGenerator {
 const Conductor = {
     drummer: null as DrumGenerator | null,
     bassist: null as BassGenerator | null,
+    masterBus: null as Tone.Gain | null,
     
     drumSettings: {} as DrumSettings,
     instruments: {} as Instruments,
@@ -144,6 +145,9 @@ const Conductor = {
         let loaded = { drums: false };
         const onPartLoad = () => {
            loaded.drums = true;
+           this.masterBus = new Tone.Gain().toDestination();
+           this.drummer?.connect(this.masterBus);
+           this.bassist?.connect(this.masterBus);
            this.isInitialized = true;
            self.postMessage({ type: 'initialized' });
         }
@@ -169,10 +173,6 @@ const Conductor = {
 
         // The render function that will be executed offline
         const renderFn = (transport: Tone.Transport) => {
-            const masterBus = new Tone.Gain().toDestination();
-            this.drummer?.connect(masterBus);
-            this.bassist?.connect(masterBus);
-
             const now = transport.now();
 
             // Update volumes based on settings
