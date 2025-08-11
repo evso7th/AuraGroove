@@ -131,12 +131,14 @@ const SampleBank = {
     isInitialized: false,
 
     async init(samples, sampleRate) {
+        // Use Tone.js's built-in context for decoding
         for (const key in samples) {
             if (samples[key].byteLength > 0) {
                 try {
-                    // Use Tone's built-in decoder
-                    const audioBuffer = await Tone.context.decodeAudioData(samples[key].slice(0));
-                    this.samples[key] = audioBuffer.getChannelData(0);
+                    // Use the decoding method from Tone.js's context
+                    const audioBuffer = await Tone.context.decodeAudioData(samples[key].slice(0)); 
+                    // A Tone.Buffer is returned, use .get() to access channel data
+                    this.samples[key] = audioBuffer.get(0);
                 } catch(e) {
                     self.postMessage({ type: 'error', error: `Failed to decode sample ${key}: ${e instanceof Error ? e.message : String(e)}` });
                 }
@@ -146,6 +148,7 @@ const SampleBank = {
         console.log("SampleBank Initialized with samples:", Object.keys(this.samples));
         self.postMessage({ type: 'initialized' });
     },
+
 
     getSample(name) {
         return this.samples[name];
@@ -237,7 +240,14 @@ const Scheduler = {
     updateSettings(settings) {
         if (settings.instruments) this.instruments = settings.instruments;
         if (settings.drumSettings) this.drumSettings = settings.drumSettings;
-        if(settings.bpm) this.bpm = settings.bpm;
+        if(settings.bpm) {
+            this.bpm = settings.bpm;
+            // If running, restart the interval with the new timing
+            if(this.isRunning) {
+                clearInterval(this.intervalId);
+                this.intervalId = setInterval(() => this.tick(), this.barDuration * 1000);
+            }
+        }
     },
 
     tick() {
@@ -255,6 +265,14 @@ const Scheduler = {
             finalScore.push(...drumScore);
         }
         
+        // Add other instrument generators here (bass, solo, etc.) in the future
+        // For now, bass is conceptual
+        // if (this.instruments.bass !== 'none') {
+        //     const bassScore = BassGenerator.createScore('E');
+        //     // We would need a synth renderer for this, not a sample renderer
+        // }
+
+
         // 2. Pass the final score to the renderer
         const audioChunk = AudioRenderer.render(finalScore, {
             duration: this.barDuration,
@@ -282,12 +300,8 @@ self.onmessage = async (event) => {
     try {
         switch (command) {
             case 'init':
-                if (typeof Tone === 'undefined') {
-                    self.postMessage({ type: 'error', error: 'Tone.js script failed to load.' });
-                    return;
-                }
                 Scheduler.sampleRate = data.sampleRate;
-                // init is now self-contained and sends its own 'initialized' message
+                // SampleBank now posts 'initialized' itself
                 await SampleBank.init(data.samples, data.sampleRate);
                 break;
             
@@ -304,7 +318,7 @@ self.onmessage = async (event) => {
                 break;
             
             case 'update_settings':
-                 Scheduler.updateSettings(data);
+                Scheduler.updateSettings(data);
                 break;
         }
     } catch (e) {
