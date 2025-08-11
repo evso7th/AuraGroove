@@ -38,6 +38,29 @@ export type DrumSettings = {
     volume: number;
 };
 
+// Helper function to decode audio data in the main thread
+async function decodeSamples(samplePaths: Record<string, string>, audioContext: AudioContext) {
+    const samples = {} as Record<string, Float32Array>;
+    const promises = Object.entries(samplePaths).map(async ([key, path]) => {
+        try {
+            const response = await fetch(path);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch sample: ${key}`);
+            }
+            const arrayBuffer = await response.arrayBuffer();
+            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+            samples[key] = audioBuffer.getChannelData(0);
+        } catch (e) {
+            console.error(`Error decoding sample ${key}:`, e);
+            // In case of an error, provide an empty buffer to avoid crashes downstream
+            samples[key] = new Float32Array(0);
+        }
+    });
+    await Promise.all(promises);
+    return samples;
+}
+
+
 export function AuraGroove() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
@@ -120,7 +143,7 @@ export function AuraGroove() {
       worker.terminate();
       audioPlayerRef.current?.stop();
     };
-  }, []); // Empty dependency array, so it only runs once
+  }, [toast]);
   
   const updateWorkerSettings = useCallback(() => {
     if (musicWorkerRef.current && isPlaying) {
@@ -139,26 +162,24 @@ export function AuraGroove() {
 
 
   const handlePlay = useCallback(async () => {
-    if (!audioPlayerRef.current) return;
+    if (!audioPlayerRef.current || !musicWorkerRef.current) return;
 
     setIsInitializing(true);
-    setLoadingText("Preparing audio engine...");
 
     try {
         if (!audioPlayerRef.current.isInitialized()) {
-          await audioPlayerRef.current.init();
+            setLoadingText("Preparing audio engine...");
+            await audioPlayerRef.current.init();
         }
         
-        const sampleRate = audioPlayerRef.current.getSampleRate();
-        
-        setLoadingText("Loading audio samples...");
-        
-        if (isWorkerInitialized.current && musicWorkerRef.current) {
-             musicWorkerRef.current.postMessage({
+        if (isWorkerInitialized.current) {
+            setLoadingText("Starting playback...");
+            musicWorkerRef.current.postMessage({
                 command: 'start',
                 data: { drumSettings, instruments, bpm }
             });
-        } else if (musicWorkerRef.current) {
+        } else {
+             setLoadingText("Loading audio samples...");
              const samplePaths = {
                 kick: '/assets/drums/kick_drum6.wav',
                 snare: '/assets/drums/snare.wav',
@@ -166,20 +187,23 @@ export function AuraGroove() {
                 crash: '/assets/drums/crash1.wav',
                 ride: '/assets/drums/cymbal1.wav',
             };
-            const samples = {} as Record<string, ArrayBuffer>;
             
-            for(const key in samplePaths) {
-                const response = await fetch(samplePaths[key as keyof typeof samplePaths]);
-                if (!response.ok) {
-                    throw new Error(`Failed to fetch sample: ${key}`);
-                }
-                samples[key] = await response.arrayBuffer();
-            }
+            // We need a live AudioContext to decode samples, which is only available in the main thread.
+            const tempAudioContext = new AudioContext();
+            const decodedSamples = await decodeSamples(samplePaths, tempAudioContext);
+            await tempAudioContext.close(); // Clean up the context after decoding
 
+            const sampleRate = audioPlayerRef.current.getSampleRate();
+
+            const transferableObjects = Object.values(decodedSamples).map(s => s.buffer);
+            
             musicWorkerRef.current.postMessage({
                 command: 'init',
-                data: { sampleRate, samples }
-            }, Object.values(samples));
+                data: { 
+                    sampleRate: sampleRate, 
+                    samples: decodedSamples 
+                }
+            }, transferableObjects);
         }
 
     } catch (error) {
