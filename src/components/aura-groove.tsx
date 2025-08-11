@@ -73,19 +73,10 @@ export function AuraGroove() {
   const audioPlayerRef = useRef<AudioPlayer>();
   const isWorkerInitialized = useRef(false);
 
-  // This function now starts the worker with current settings
-  const startWorker = useCallback(() => {
-      if (!isWorkerInitialized.current) return;
-      setLoadingText("Generating music...");
-      setIsInitializing(true);
-      musicWorkerRef.current?.postMessage({
-          command: 'start',
-          data: {
-              instruments,
-              drumSettings
-          }
-      });
-  }, [instruments, drumSettings]);
+  // Function to request the next audio chunk from the worker
+  const requestNextChunk = useCallback(() => {
+    musicWorkerRef.current?.postMessage({ command: 'render_chunk' });
+  }, []);
 
   // Main effect for worker communication
   useEffect(() => {
@@ -98,23 +89,26 @@ export function AuraGroove() {
       const { type, data, error } = event.data;
       
       switch(type) {
-        case 'started':
-          setIsInitializing(false);
-          setLoadingText("");
-          setIsPlaying(true);
-          audioPlayerRef.current?.start();
-          break;
-
         case 'initialized':
           isWorkerInitialized.current = true;
-          // Now that worker is initialized, we can start it if user already hit play
-          if (isInitializing) {
-            startWorker();
-          }
+          setLoadingText("");
+          setIsInitializing(false);
+          setIsPlaying(true);
+          audioPlayerRef.current?.start();
+          // After initializing, update settings and request the first chunk
+          musicWorkerRef.current?.postMessage({
+              command: 'update_settings',
+              data: { instruments, drumSettings }
+          });
+          requestNextChunk();
           break;
 
         case 'chunk':
           audioPlayerRef.current?.scheduleChunk(data.chunk, data.sampleRate);
+          // Once a chunk is received and scheduled, request the next one to keep the buffer full
+          if (isPlaying) {
+             requestNextChunk();
+          }
           break;
 
         case 'error':
@@ -133,30 +127,27 @@ export function AuraGroove() {
     worker.onmessage = handleMessage;
     
     return () => {
-      worker.postMessage({ command: 'stop' });
       worker.terminate();
       audioPlayerRef.current?.stop();
     };
-  }, [toast, startWorker, isInitializing]); 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toast]); 
   
-  const handleInstrumentChange = useCallback((part: keyof Instruments, value: Instruments[keyof Instruments]) => {
-    const newInstruments = { ...instruments, [part]: value };
-    setInstruments(newInstruments);
-     musicWorkerRef.current?.postMessage({
-        command: 'set_instruments',
-        data: newInstruments,
-      });
-  }, [instruments]);
+  const updateWorkerSettings = useCallback(() => {
+    if (isWorkerInitialized.current) {
+        musicWorkerRef.current?.postMessage({
+            command: 'update_settings',
+            data: { instruments, drumSettings },
+        });
+    }
+  }, [instruments, drumSettings]);
 
- const handleDrumsSettingChange = useCallback((key: keyof DrumSettings, value: any) => {
-    const newDrumSettings = { ...drumSettings, [key]: value };
-    setDrumSettings(newDrumSettings);
-    
-    musicWorkerRef.current?.postMessage({
-        command: 'set_drums',
-        data: newDrumSettings,
-    });
-  }, [drumSettings]);
+  // Update worker whenever settings change
+  useEffect(() => {
+    if (isPlaying) {
+        updateWorkerSettings();
+    }
+  }, [drumSettings, instruments, isPlaying, updateWorkerSettings]);
 
 
   const handlePlay = useCallback(async () => {
@@ -168,14 +159,10 @@ export function AuraGroove() {
         audioPlayerRef.current?.init();
         setLoadingText("Initializing worker...");
         
-        if (isWorkerInitialized.current) {
-            startWorker();
-        } else {
-            musicWorkerRef.current?.postMessage({
-                command: 'init',
-                data: { sampleUrls }
-            });
-        }
+        musicWorkerRef.current?.postMessage({
+            command: 'init',
+            data: { sampleUrls }
+        });
 
     } catch (error) {
         console.error("Failed to prepare audio:", error);
@@ -186,10 +173,9 @@ export function AuraGroove() {
         });
         setIsInitializing(false);
     }
-  }, [toast, startWorker]);
+  }, [toast]);
 
   const handleStop = useCallback(() => {
-    musicWorkerRef.current?.postMessage({ command: 'stop' });
     audioPlayerRef.current?.stop();
     setIsPlaying(false);
     setIsInitializing(false);
@@ -222,7 +208,7 @@ export function AuraGroove() {
             <Label htmlFor="solo-instrument" className="text-right">Solo</Label>
             <Select
               value={instruments.solo}
-              onValueChange={(v) => handleInstrumentChange('solo', v as Instruments['solo'])}
+              onValueChange={(v) => setInstruments(i => ({...i, solo: v as Instruments['solo']}))}
               disabled={isBusy || isPlaying}
             >
               <SelectTrigger id="solo-instrument" className="col-span-2">
@@ -240,7 +226,7 @@ export function AuraGroove() {
             <Label htmlFor="accompaniment-instrument" className="text-right">Accompaniment</Label>
              <Select
               value={instruments.accompaniment}
-              onValueChange={(v) => handleInstrumentChange('accompaniment', v as Instruments['accompaniment'])}
+              onValueChange={(v) => setInstruments(i => ({...i, accompaniment: v as Instruments['accompaniment']}))}
               disabled={isBusy || isPlaying}
             >
               <SelectTrigger id="accompaniment-instrument" className="col-span-2">
@@ -258,8 +244,8 @@ export function AuraGroove() {
             <Label htmlFor="bass-instrument" className="text-right">Bass</Label>
              <Select
               value={instruments.bass}
-              onValueChange={(v) => handleInstrumentChange('bass', v as Instruments['bass'])}
-              disabled={isBusy || isPlaying}
+              onValueChange={(v) => setInstruments(i => ({...i, bass: v as Instruments['bass']}))}
+              disabled={isBusy}
             >
               <SelectTrigger id="bass-instrument" className="col-span-2">
                 <SelectValue placeholder="Select instrument" />
@@ -279,16 +265,16 @@ export function AuraGroove() {
                 <Switch
                     id="drums-enabled"
                     checked={drumSettings.enabled}
-                    onCheckedChange={(c) => handleDrumsSettingChange('enabled', c)}
-                    disabled={isBusy || isPlaying}
+                    onCheckedChange={(c) => setDrumSettings(d => ({ ...d, enabled: c }))}
+                    disabled={isBusy}
                 />
             </div>
             <div className="grid grid-cols-3 items-center gap-4">
                 <Label htmlFor="drum-pattern" className="text-right">Pattern</Label>
                 <Select
                     value={drumSettings.pattern}
-                    onValueChange={(v) => handleDrumsSettingChange('pattern', v as DrumSettings['pattern'])}
-                    disabled={isBusy || isPlaying || !drumSettings.enabled}
+                    onValueChange={(v) => setDrumSettings(d => ({ ...d, pattern: v as DrumSettings['pattern'] }))}
+                    disabled={isBusy || !drumSettings.enabled}
                 >
                     <SelectTrigger id="drum-pattern" className="col-span-2">
                         <SelectValue placeholder="Select pattern" />
@@ -307,9 +293,9 @@ export function AuraGroove() {
                     value={[drumSettings.volume]}
                     max={1}
                     step={0.05}
-                    onValueChange={(v) => handleDrumsSettingChange('volume', v[0])}
+                    onValueChange={(v) => setDrumSettings(d => ({ ...d, volume: v[0] }))}
                     className="col-span-2"
-                    disabled={isBusy || isPlaying}
+                    disabled={isBusy}
                 />
             </div>
         </div>

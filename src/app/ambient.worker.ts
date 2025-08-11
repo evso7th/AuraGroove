@@ -28,11 +28,10 @@ class BassGenerator {
                 release: 0.8,
             },
         });
-        this.setVolume(0.7, Tone.now()); // Default volume
+        this.setVolume(0.7);
     }
 
     createPart(time: Tone.Unit.Time) {
-        // Simple bassline, plays root and fifth on C2/G2. Occasionally drops to C1.
         const score = [
             { time: "0:0", note: Math.random() < 0.2 ? 'C1' : 'C2', duration: '4n' },
             { time: "0:1", note: 'G2', duration: '8n' },
@@ -50,8 +49,8 @@ class BassGenerator {
         this.synth.connect(destination);
     }
 
-    setVolume(gain: number, time: Tone.Unit.Time) {
-        this.synth.volume.linearRampToValueAtTime(Tone.gainToDb(gain), time);
+    setVolume(gain: number) {
+        this.synth.volume.value = Tone.gainToDb(gain);
     }
 }
 
@@ -102,10 +101,8 @@ class DrumGenerator {
         let basePattern = this.patterns[patternName] || this.patterns.basic;
         let partData = [...basePattern];
         
-        // Every 4th bar, add fill and crash
         if (bar > 0 && bar % 4 === 0) {
             const fill = this.fills[Math.floor(bar / 4) % this.fills.length];
-            // Filter out notes from base pattern in the last beat to make room for fill
             const patternWithoutLastBeat = basePattern.filter(note => !note.time.startsWith('0:3'));
             partData = [{ time: "0:0", note: "A1", velocity: 0.8 }, ...patternWithoutLastBeat, ...fill];
         }
@@ -119,8 +116,8 @@ class DrumGenerator {
         this.sampler.connect(destination);
     }
     
-    setVolume(gain: number, time: Tone.Unit.Time) {
-        this.sampler.volume.linearRampToValueAtTime(Tone.gainToDb(gain), time);
+    setVolume(gain: number) {
+       this.sampler.volume.value = Tone.gainToDb(gain);
     }
 }
 
@@ -135,96 +132,67 @@ const Conductor = {
     instruments: {} as Instruments,
     
     isInitialized: false,
-    isRunning: false,
     barCount: 0,
     
     bpm: 100,
     measureDuration: 0,
 
     init(sampleUrls: Record<string, string>) {
-        let loaded = { drums: false };
-        const onPartLoad = () => {
-           loaded.drums = true;
-           this.masterBus = new Tone.Gain().toDestination();
+        if (this.isInitialized) return;
+
+        this.bassist = new BassGenerator();
+        this.drummer = new DrumGenerator(sampleUrls, () => {
+           this.masterBus = new Tone.Gain(1);
            this.drummer?.connect(this.masterBus);
            this.bassist?.connect(this.masterBus);
            this.isInitialized = true;
            self.postMessage({ type: 'initialized' });
-        }
-        this.drummer = new DrumGenerator(sampleUrls, onPartLoad);
-        this.bassist = new BassGenerator();
+        });
     },
+    
+    updateSettings(drumSettings?: DrumSettings, instruments?: Instruments) {
+        if (drumSettings) this.drumSettings = drumSettings;
+        if (instruments) this.instruments = instruments;
+        if(this.drumSettings.enabled) this.drummer?.setVolume(this.drumSettings.volume);
+        else this.drummer?.setVolume(0);
 
-    start(drumSettings: DrumSettings, instruments: Instruments) {
-        if (!this.isInitialized || this.isRunning) return;
-
-        this.isRunning = true;
-        this.barCount = 0;
-        this.updateSettings(drumSettings, instruments);
-
-        this.measureDuration = Tone.Time('1m').toSeconds();
-        
-        this.renderNextChunk(); 
-        self.postMessage({ type: 'started' });
+        if(this.instruments.bass === 'bass guitar') this.bassist?.setVolume(0.7);
+        else this.bassist?.setVolume(0);
     },
 
     async renderNextChunk() {
-        if (!this.isRunning) return;
-
-        // The render function that will be executed offline
-        const renderFn = (transport: Tone.Transport) => {
-            const now = transport.now();
-
-            // Update volumes based on settings
-            this.drummer?.setVolume(this.drumSettings.enabled ? this.drumSettings.volume : 0, now);
-            this.bassist?.setVolume(this.instruments.bass === 'bass guitar' ? 0.7 : 0, now);
-
-
-            // Schedule parts
-            if (this.drumSettings.enabled) {
-                this.drummer?.createPart(this.drumSettings.pattern, this.barCount, now);
-            }
-            if (this.instruments.bass === 'bass guitar') {
-                this.bassist?.createPart(now);
-            }
-        };
+        if (!this.isInitialized) return;
+        
+        this.measureDuration = Tone.Time('1m').toSeconds();
+        Tone.Transport.bpm.value = this.bpm;
 
         try {
-            // Render the audio for one measure
-            const buffer = await Tone.Offline(renderFn, this.measureDuration);
+            const buffer = await Tone.Offline((transport: Tone.Transport) => {
+                const now = transport.now();
+                this.masterBus?.toDestination();
+                
+                if (this.drumSettings.enabled) {
+                    this.drummer?.createPart(this.drumSettings.pattern, this.barCount, now);
+                }
+                if (this.instruments.bass === 'bass guitar') {
+                    this.bassist?.createPart(now);
+                }
+            }, this.measureDuration);
             
-            // Post the rendered chunk back to main thread
             const chunk = buffer.getChannelData(0);
             self.postMessage({
                 type: 'chunk',
                 data: {
                     chunk: chunk,
                     sampleRate: buffer.sampleRate,
-                    duration: this.measureDuration,
                 }
             }, [chunk.buffer]);
 
             this.barCount++;
-            
-            // Immediately schedule the next render
-            if (this.isRunning) {
-               this.renderNextChunk();
-            }
 
         } catch (e) {
             self.postMessage({ type: 'error', error: `Rendering failed: ${e instanceof Error ? e.message : String(e)}` });
-            this.stop();
         }
-    },
-
-    stop() {
-        this.isRunning = false;
-    },
-
-    updateSettings(drumSettings: DrumSettings, instruments: Instruments) {
-        if (drumSettings) this.drumSettings = drumSettings;
-        if (instruments) this.instruments = instruments;
-        Tone.Transport.bpm.value = this.bpm;
     },
 };
 
@@ -238,23 +206,16 @@ self.onmessage = async (event: MessageEvent) => {
                 Conductor.init(data.sampleUrls);
                 break;
             
-            case 'start':
-                 if (!Conductor.isInitialized) {
-                   throw new Error("Worker is not initialized with samples yet. Call 'init' first.");
+            case 'update_settings':
+                 if (Conductor.isInitialized) {
+                    Conductor.updateSettings(data.drumSettings, data.instruments);
+                 }
+                break;
+
+            case 'render_chunk':
+                if (Conductor.isInitialized) {
+                    await Conductor.renderNextChunk();
                 }
-                Conductor.start(data.drumSettings, data.instruments);
-                break;
-
-            case 'stop':
-                Conductor.stop();
-                break;
-            
-            case 'set_instruments':
-                if (Conductor.isInitialized) Conductor.updateSettings(Conductor.drumSettings, data);
-                break;
-
-            case 'set_drums':
-                if (Conductor.isInitialized) Conductor.updateSettings(data, Conductor.instruments);
                 break;
         }
     } catch (e) {
