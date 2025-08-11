@@ -1,54 +1,19 @@
 
-importScripts('https://unpkg.com/tone@15.0.4/build/Tone.js');
-
-console.log('OfflineAudioContext is defined:', typeof OfflineAudioContext !== 'undefined');
-
 /**
  * @file AuraGroove Ambient Music Worker
  *
- * This worker operates on a microservice-style architecture, inspired by the user's feedback.
+ * This worker operates on a microservice-style architecture.
  * Each musical component is an isolated entity responsible for a single task.
- *
- * Core Entities:
- * 1.  MessageBus (self): The "Kafka" of the worker. Handles all communication
- *     between the main thread and the worker's internal systems.
- *
- * 2.  Scheduler: The central "conductor" or "event loop". It wakes up at regular
- *     intervals, determines what musical data is needed, and coordinates the other
- *     entities. It doesn't generate music itself, only directs the flow.
- *
- * 3.  Instrument Generators (e.g., DrumGenerator, BassGenerator): These are the "composers".
- *     They take a time signature and a pattern name and return a "score" - a simple
- *     array of note events (`{ time, sample, velocity }`). They are stateless and
- *     know nothing about audio rendering.
- *
- * 4.  PatternProvider: The "music sheet library". It holds all rhythmic and melodic
- *     patterns. It's a simple data store that the Instrument Generators query.
- *
- * 5.  AudioRenderer: The "audio engine". Its ONLY job is to take a score (from any
- *     generator) and "render" it into a raw audio buffer (Float32Array). It handles
- *     mixing, volume, and sample placement. It is completely decoupled from musical logic.
- *
- * 6.  SampleBank: A repository for decoded audio samples, ensuring they are ready for
- *     the AudioRenderer to use instantly.
- *
- * Data Flow on Start:
- * - Main thread sends 'init' with samples and sampleRate.
- * - Worker decodes samples into SampleBank.
- * - Main thread sends 'start' with instrument/drum settings.
- * - Scheduler starts its loop.
- * - In each loop:
- *   - Scheduler asks the appropriate generators for their scores for the next time slice.
- *   - Generators ask PatternProvider for their patterns.
- *   - Generators create their scores and return them to the scheduler.
- *   - Scheduler passes all scores to the AudioRenderer.
- *   - AudioRenderer creates a blank audio chunk, "paints" the samples from each score onto it, and returns the mixed chunk.
- *   - Scheduler posts the final audio chunk back to the main thread.
- *
- * This architecture ensures that changing a drum pattern CANNOT break the audio renderer,
- * and changing the audio renderer CANNOT break the musical logic. Each part is
- * independent, testable, and replaceable, following the user's core architectural principle.
  */
+// Load Tone.js directly into the worker's scope
+try {
+    importScripts('https://unpkg.com/tone@15.0.4/build/Tone.js');
+} catch (e) {
+    console.error("Failed to load Tone.js", e);
+    // Post an error back to the main thread if Tone.js fails to load
+    self.postMessage({ type: 'error', error: 'Failed to load Tone.js in worker.' });
+}
+
 
 // --- 1. PatternProvider (The Music Sheet Library) ---
 const PatternProvider = {
@@ -131,15 +96,25 @@ const SampleBank = {
     isInitialized: false,
 
     async init(samples, sampleRate) {
-        // Use Tone.js's built-in context for decoding
+        // Use the global OfflineAudioContext available after importing Tone.js
+        console.log("OfflineAudioContext is defined:", typeof OfflineAudioContext !== 'undefined');
+        
         for (const key in samples) {
-            if (samples[key].byteLength > 0) {
-                try {
-                    // Use the decoding method from Tone.js's context
-                    const audioBuffer = await Tone.context.decodeAudioData(samples[key].slice(0)); 
-                    // A Tone.Buffer is returned, use .get() to access channel data
-                    this.samples[key] = audioBuffer.get(0);
+            if (samples[key] && samples[key].byteLength > 0) {
+                 try {
+                    const audioBuffer = await Tone.context.decodeAudioData(samples[key].slice(0));
+
+                    // Add type checking
+                    if (!(audioBuffer instanceof Tone.Buffer)) {
+                        console.error(`Decoded data for sample ${key} is not a Tone.Buffer. Type received:`, typeof audioBuffer, audioBuffer);
+                        throw new Error(`Decoded data for sample ${key} is not a Tone.Buffer.`);
+                    }
+                    
+                    // Use the correct method for Tone.Buffer
+                    this.samples[key] = audioBuffer.get();
+
                 } catch(e) {
+                    console.error(`Detailed decoding error for sample ${key}:`, e); // Detailed error logging
                     self.postMessage({ type: 'error', error: `Failed to decode sample ${key}: ${e instanceof Error ? e.message : String(e)}` });
                 }
             }
@@ -148,7 +123,6 @@ const SampleBank = {
         console.log("SampleBank Initialized with samples:", Object.keys(this.samples));
         self.postMessage({ type: 'initialized' });
     },
-
 
     getSample(name) {
         return this.samples[name];
@@ -240,14 +214,7 @@ const Scheduler = {
     updateSettings(settings) {
         if (settings.instruments) this.instruments = settings.instruments;
         if (settings.drumSettings) this.drumSettings = settings.drumSettings;
-        if(settings.bpm) {
-            this.bpm = settings.bpm;
-            // If running, restart the interval with the new timing
-            if(this.isRunning) {
-                clearInterval(this.intervalId);
-                this.intervalId = setInterval(() => this.tick(), this.barDuration * 1000);
-            }
-        }
+        if(settings.bpm) this.bpm = settings.bpm;
     },
 
     tick() {
@@ -265,14 +232,6 @@ const Scheduler = {
             finalScore.push(...drumScore);
         }
         
-        // Add other instrument generators here (bass, solo, etc.) in the future
-        // For now, bass is conceptual
-        // if (this.instruments.bass !== 'none') {
-        //     const bassScore = BassGenerator.createScore('E');
-        //     // We would need a synth renderer for this, not a sample renderer
-        // }
-
-
         // 2. Pass the final score to the renderer
         const audioChunk = AudioRenderer.render(finalScore, {
             duration: this.barDuration,
@@ -300,8 +259,11 @@ self.onmessage = async (event) => {
     try {
         switch (command) {
             case 'init':
+                if (typeof Tone === 'undefined') {
+                    throw new Error("Tone.js is not loaded in the worker.");
+                }
                 Scheduler.sampleRate = data.sampleRate;
-                // SampleBank now posts 'initialized' itself
+                // Don't message 'initialized' from here, let SampleBank do it.
                 await SampleBank.init(data.samples, data.sampleRate);
                 break;
             
@@ -318,10 +280,12 @@ self.onmessage = async (event) => {
                 break;
             
             case 'update_settings':
-                Scheduler.updateSettings(data);
+                 Scheduler.updateSettings(data);
                 break;
         }
     } catch (e) {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
+
+    
