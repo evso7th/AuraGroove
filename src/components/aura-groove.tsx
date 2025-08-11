@@ -85,7 +85,7 @@ const initialBassParams: BassSynthParams = {
     envelope: {
         attack: 0.05,
         decay: 0.3,
-        sustain: 0.4,
+        sustain: 0,
         release: 1.4,
     },
     filter: {
@@ -132,7 +132,7 @@ export function AuraGroove() {
    useEffect(() => {
     // Make sure to create the worker only once.
     if (!musicWorkerRef.current) {
-        musicWorkerRef.current = new Worker(new URL('../../public/workers/ambient.worker.js', import.meta.url));
+        musicWorkerRef.current = new Worker('/workers/ambient.worker.js');
 
         const handleMessage = (event: MessageEvent) => {
           const { type, data, error } = event.data;
@@ -274,7 +274,10 @@ export function AuraGroove() {
                 oscillator: { type: "amsine", harmonicity: bassParams.oscillator.harmonicity },
                 envelope: bassParams.envelope,
                 filter: { ...bassParams.filter, type: "lowpass", rolloff: -24 },
-                filterEnvelope: bassParams.filterEnvelope
+                filterEnvelope: {
+                  ...bassParams.filterEnvelope,
+                  sustain: 0, // Force sustain to 0 to prevent hum
+                }
             }); // Do NOT connect to destination here
         }
 
@@ -518,5 +521,7 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    
 
     
