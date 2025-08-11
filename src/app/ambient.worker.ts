@@ -49,60 +49,90 @@
 const PatternProvider = {
     drumPatterns: {
         basic: [
-            { sample: 'kick', time: 0 },
+            { sample: 'kick', time: 0, velocity: 0.8 },
             { sample: 'hat', time: 0.5 },
             { sample: 'snare', time: 1 },
             { sample: 'hat', time: 1.5 },
-            { sample: 'kick', time: 2 },
+            { sample: 'kick', time: 2, velocity: 0.8 },
             { sample: 'hat', time: 2.5 },
             { sample: 'snare', time: 3 },
             { sample: 'hat', time: 3.5 },
         ],
         breakbeat: [
-            { sample: 'kick', time: 0 },
+            { sample: 'kick', time: 0, velocity: 0.8 },
             { sample: 'hat', time: 0.5 },
-            { sample: 'kick', time: 0.75 },
+            { sample: 'kick', time: 0.75, velocity: 0.8 },
             { sample: 'snare', time: 1 },
             { sample: 'hat', time: 1.5 },
-            { sample: 'kick', time: 2 },
+            { sample: 'kick', time: 2, velocity: 0.8 },
             { sample: 'snare', time: 2.5 },
             { sample: 'hat', time: 3 },
             { sample: 'snare', time: 3.25 },
             { sample: 'hat', time: 3.5 },
         ],
         slow: [
-            { sample: 'kick', time: 0 },
+            { sample: 'kick', time: 0, velocity: 0.8 },
             { sample: 'hat', time: 1 },
             { sample: 'snare', time: 2 },
             { sample: 'hat', time: 3 },
         ],
         heavy: [
-            { sample: 'kick', time: 0, velocity: 1.0 },
+            { sample: 'kick', time: 0, velocity: 0.8 },
             { sample: 'ride', time: 0.5 },
             { sample: 'snare', time: 1, velocity: 1.0 },
             { sample: 'ride', time: 1.5 },
-            { sample: 'kick', time: 2, velocity: 1.0 },
+            { sample: 'kick', time: 2, velocity: 0.8 },
             { sample: 'ride', time: 2.5 },
             { sample: 'snare', time: 3, velocity: 1.0 },
             { sample: 'ride', time: 3.5 },
         ],
     },
+    drumFills: [
+        [ // Fill 1
+            { sample: 'snare', time: 3.0, velocity: 0.7 },
+            { sample: 'tom1', time: 3.25, velocity: 0.8 },
+            { sample: 'tom2', time: 3.5, velocity: 0.9 },
+            { sample: 'tom3', time: 3.75, velocity: 1.0 },
+        ],
+        [ // Fill 2
+            { sample: 'tom1', time: 3.0, velocity: 0.8 },
+            { sample: 'tom1', time: 3.25, velocity: 0.8 },
+            { sample: 'tom2', time: 3.5, velocity: 0.9 },
+            { sample: 'tom3', time: 3.75, velocity: 1.0 },
+        ],
+        [ // Fill 3
+            { sample: 'snare', time: 3.0, velocity: 0.7 },
+            { sample: 'hat', time: 3.25, velocity: 0.6 },
+            { sample: 'snare', time: 3.5, velocity: 0.8 },
+            { sample: 'hat', time: 3.75, velocity: 0.7 },
+        ]
+    ],
     getDrumPattern(name: string) {
         return this.drumPatterns[name as keyof typeof this.drumPatterns] || this.drumPatterns.basic;
     },
+    getDrumFill(barNumber: number) {
+        // Simple selection logic: cycle through fills
+        return this.drumFills[barNumber % this.drumFills.length];
+    }
 };
 
 // --- 2. Instrument Generators (The Composers) ---
 class DrumGenerator {
     static createScore(patternName: string, barNumber: number, totalBars: number, beatsPerBar = 4) {
-        const pattern = PatternProvider.getDrumPattern(patternName);
-        let score = [...pattern];
+        let score = [...PatternProvider.getDrumPattern(patternName)];
 
-        // Add a crash cymbal on the first beat of every 4th bar
-        if (barNumber % 4 === 0) {
-            // Remove any other drum hit at time 0 to avoid conflict
+        // On the 4th bar, add a crash and a fill
+        if (barNumber > 0 && barNumber % 4 === 0) {
+            // Remove any other drum hit at time 0 to avoid conflict with the crash
             score = score.filter(note => note.time !== 0);
             score.push({ sample: 'crash', time: 0, velocity: 0.8 });
+            
+            // Remove notes from the base pattern in the last beat to make space for the fill
+            score = score.filter(note => note.time < 3.0);
+            
+            // Add the fill
+            const fill = PatternProvider.getDrumFill(Math.floor(barNumber / 4)); // Get a new fill every 4 bars
+            score.push(...fill);
         }
         
         return score;
