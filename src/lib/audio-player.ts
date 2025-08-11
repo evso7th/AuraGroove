@@ -11,6 +11,7 @@ export class AudioPlayer {
     private isRunning: boolean = false;
     private bufferQueue: { chunk: Float32Array; duration: number }[] = [];
     private scheduleTimeout: any = null;
+    private _isInitialized = false;
 
     constructor() {}
 
@@ -23,15 +24,17 @@ export class AudioPlayer {
                 }
                 this.nextStartTime = this.audioContext.currentTime;
                 this.isRunning = false;
+                this._isInitialized = true;
             } catch (e) {
                 console.error("Failed to initialize AudioContext:", e);
+                this._isInitialized = false;
                 throw e; // re-throw to be caught by the caller
             }
         }
     }
     
     public isInitialized(): boolean {
-        return !!this.audioContext;
+        return this._isInitialized;
     }
 
     public getSampleRate(): number | null {
