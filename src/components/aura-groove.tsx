@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Loader2, Music, Pause, Cymbals, Speaker } from "lucide-react";
+import { Loader2, Music, Pause, Drum, Speaker } from "lucide-react";
 
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -295,7 +295,7 @@ export function AuraGroove() {
         </div>
 
         <div className="space-y-4 rounded-lg border p-4">
-             <h3 className="text-lg font-medium text-primary flex items-center gap-2"><Cymbals className="h-5 w-5"/> Drums</h3>
+             <h3 className="text-lg font-medium text-primary flex items-center gap-2"><Drum className="h-5 w-5"/> Drums</h3>
              <div className="flex items-center justify-between pt-2">
                 <Label htmlFor="drums-enabled">Enable Drums</Label>
                 <Switch
