@@ -41,18 +41,27 @@ export type DrumSettings = {
 
 // Helper function to decode audio data in the main thread
 async function decodeSamples(samplePaths: Record<string, string>) {
+    const context = Tone.getContext();
     const promises = Object.entries(samplePaths).map(async ([key, path]) => {
         try {
             const response = await fetch(path);
             if (!response.ok) {
-                throw new Error(`Failed to fetch sample: ${key}`);
+                throw new Error(`Failed to fetch sample: ${key} at ${path}`);
             }
             const arrayBuffer = await response.arrayBuffer();
-            // We use Tone's context to decode. It's reliable.
-            const audioBuffer = await Tone.getContext().decodeAudioData(arrayBuffer);
+             if (context.state === 'suspended') {
+                await context.resume();
+            }
+            const audioBuffer = await context.decodeAudioData(arrayBuffer);
             return { [key]: audioBuffer.getChannelData(0) };
         } catch (e) {
             console.error(`Error decoding sample ${key}:`, e);
+            // Post an error message back to the UI
+             toast({
+                variant: "destructive",
+                title: "Sample Decoding Error",
+                description: `Failed to decode ${key}. Please check the file path and format.`,
+            });
             return { [key]: new Float32Array(0) };
         }
     });
@@ -74,7 +83,7 @@ export function AuraGroove() {
   const [drumSettings, setDrumSettings] = useState<DrumSettings>({
       enabled: true,
       pattern: 'basic',
-      volume: 0.5,
+      volume: 0.7,
   });
   const [instruments, setInstruments] = useState<Instruments>({
     solo: "none",
@@ -143,6 +152,7 @@ export function AuraGroove() {
         case 'stopped':
             setIsPlaying(false);
             setLoadingText("");
+            audioPlayerRef.current?.stop();
             Tone.Transport.stop();
             Tone.Transport.cancel();
             break;
@@ -169,7 +179,7 @@ export function AuraGroove() {
       Tone.Transport.stop();
       Tone.Transport.cancel();
     };
-  }, [toast, drumSettings, instruments, bpm]);
+  }, []); // Keep dependencies empty to avoid re-creating worker
   
   const updateWorkerSettings = useCallback(() => {
     if (musicWorkerRef.current && (isPlaying || isInitializing)) {
@@ -196,10 +206,14 @@ export function AuraGroove() {
         if (!bassSynthRef.current) {
             bassSynthRef.current = new Tone.Synth({
                 oscillator: { type: 'fatsawtooth' },
-                envelope: { attack: 0.05, decay: 0.3, sustain: 0.4, release: 1.2 }
+                envelope: { 
+                    attack: 0.05, // Явная атака ("щипок")
+                    decay: 0.3, 
+                    sustain: 0.4, 
+                    release: 1.2  // Заметное затухание
+                }
             }).toDestination();
         }
-
 
         if (!audioPlayerRef.current.isInitialized()) {
             setLoadingText("Preparing audio engine...");
@@ -211,6 +225,7 @@ export function AuraGroove() {
             throw new Error("AudioContext not initialized or sample rate not available.");
         }
         
+        // This check ensures we only initialize the worker with samples once.
         if (isWorkerInitialized.current) {
             setLoadingText("Starting playback...");
             musicWorkerRef.current.postMessage({
@@ -229,6 +244,7 @@ export function AuraGroove() {
             
             const decodedSamples = await decodeSamples(samplePaths);
             
+            // We need to build a transferable list from the buffers inside the Float32Arrays
             const transferableObjects = Object.values(decodedSamples).map(s => s.buffer);
             
             musicWorkerRef.current.postMessage({
