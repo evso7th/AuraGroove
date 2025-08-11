@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Loader2, Music, Pause, Drum, Speaker } from "lucide-react";
+import { Drum, Loader2, Music, Pause, Speaker } from "lucide-react";
 
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -50,6 +50,29 @@ const sampleUrls = {
     tom3: '/assets/drums/lowtom.wav',
 };
 
+// Use a shared AudioContext for decoding.
+const decodingAudioContext = typeof window !== 'undefined' ? new (window.AudioContext || (window as any).webkitAudioContext)() : null;
+
+async function decodeSamples(buffers: Record<string, ArrayBuffer>): Promise<Record<string, Float32Array>> {
+    if (!decodingAudioContext) {
+        throw new Error("AudioContext is not supported in this browser.");
+    }
+    const decodedSamples: Record<string, Float32Array> = {};
+    const promises = Object.entries(buffers).map(async ([key, buffer]) => {
+        try {
+            const audioBuffer = await decodingAudioContext.decodeAudioData(buffer.slice(0));
+            decodedSamples[key] = audioBuffer.getChannelData(0);
+        } catch (e) {
+            console.error(`Failed to decode sample ${key}:`, e);
+            // Return null or an empty array to indicate failure for this sample
+            decodedSamples[key] = new Float32Array();
+        }
+    });
+    await Promise.all(promises);
+    return decodedSamples;
+}
+
+
 export function AuraGroove() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -68,17 +91,17 @@ export function AuraGroove() {
   const { toast } = useToast();
 
   const musicWorkerRef = useRef<Worker>();
-  const sampleArrayBuffers = useRef<Record<string, ArrayBuffer>>({});
+  const decodedSamplesRef = useRef<Record<string, Float32Array>>({});
   const areSamplesLoaded = useRef(false);
 
-  // Load samples on component mount
+  // Load and decode samples on component mount
   useEffect(() => {
     setLoadingText("Loading samples...");
     
-    const fetchSamples = async () => {
+    const fetchAndDecodeSamples = async () => {
         try {
             const sampleEntries = Object.entries(sampleUrls);
-            const promises = sampleEntries.map(async ([key, url]) => {
+            const bufferPromises = sampleEntries.map(async ([key, url]) => {
                 const response = await fetch(url);
                 if (!response.ok) {
                     throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
@@ -86,25 +109,30 @@ export function AuraGroove() {
                 return { key, buffer: await response.arrayBuffer() };
             });
 
-            const results = await Promise.all(promises);
-            results.forEach(({ key, buffer }) => {
-                sampleArrayBuffers.current[key] = buffer;
+            const bufferResults = await Promise.all(bufferPromises);
+            const arrayBuffers: Record<string, ArrayBuffer> = {};
+            bufferResults.forEach(({ key, buffer }) => {
+                arrayBuffers[key] = buffer;
             });
+
+            setLoadingText("Decoding samples...");
+            decodedSamplesRef.current = await decodeSamples(arrayBuffers);
             
             areSamplesLoaded.current = true;
             setIsLoading(false);
             setLoadingText("");
+
         } catch (error) {
-            console.error("Failed to fetch samples:", error);
+            console.error("Failed to fetch or decode samples:", error);
             toast({
                 variant: "destructive",
                 title: "Sample Error",
-                description: `Could not load drum samples. Please check file paths and network. ${error instanceof Error ? error.message : ''}`,
+                description: `Could not load or decode drum samples. ${error instanceof Error ? error.message : ''}`,
             });
             setIsLoading(false);
         }
     };
-    fetchSamples();
+    fetchAndDecodeSamples();
   }, [toast]);
   
   const startWorker = useCallback(() => {
@@ -192,15 +220,14 @@ export function AuraGroove() {
       
       setLoadingText("Initializing worker...");
       
-      const transferableObjects = Object.values(sampleArrayBuffers.current).map(buffer => buffer.slice(0));
-
+      // Pass the decoded samples to the worker. They are not transferable.
       musicWorkerRef.current?.postMessage({
         command: 'init',
         data: {
           sampleRate: audioContext.sampleRate,
-          samples: sampleArrayBuffers.current,
+          samples: decodedSamplesRef.current,
         }
-      }, transferableObjects);
+      });
 
     } catch (error) {
         console.error("Failed to prepare audio:", error);

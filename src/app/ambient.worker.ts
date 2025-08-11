@@ -125,19 +125,8 @@ const SampleBank = {
     samples: {} as Record<string, Float32Array>, // { kick: Float32Array, snare: Float32Array, ... }
     isInitialized: false,
 
-    async init(samples: Record<string, ArrayBuffer>, sampleRate: number) {
-        const tempAudioContext = new OfflineAudioContext(1, 1, sampleRate);
-        for (const key in samples) {
-            if (samples[key].byteLength > 0) {
-                try {
-                    const audioBuffer = await tempAudioContext.decodeAudioData(samples[key].slice(0));
-                    this.samples[key] = audioBuffer.getChannelData(0);
-                } catch(e) {
-                    // post error back to main thread
-                    self.postMessage({ type: 'error', error: `Failed to decode sample ${key}: ${e instanceof Error ? e.message : String(e)}` });
-                }
-            }
-        }
+    init(decodedSamples: Record<string, Float32Array>) {
+        this.samples = decodedSamples;
         this.isInitialized = true;
         console.log("SampleBank Initialized with samples:", Object.keys(this.samples));
         self.postMessage({ type: 'initialized' });
@@ -286,7 +275,7 @@ self.onmessage = async (event: MessageEvent) => {
         switch (command) {
             case 'init':
                 Scheduler.sampleRate = data.sampleRate;
-                await SampleBank.init(data.samples, data.sampleRate);
+                SampleBank.init(data.samples);
                 break;
             
             case 'start':
