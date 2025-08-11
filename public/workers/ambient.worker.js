@@ -1,4 +1,7 @@
 
+console.log('OfflineAudioContext is defined:', typeof OfflineAudioContext !== 'undefined');
+importScripts('https://unpkg.com/tone@15.0.4/build/Tone.js');
+
 /**
  * @file AuraGroove Ambient Music Worker
  *
@@ -135,11 +138,12 @@ const SampleBank = {
                     this.samples[key] = audioBuffer.getChannelData(0);
                 } catch(e) {
                     // post error back to main thread
-                    self.postMessage({ type: 'error', error: `Failed to decode sample ${key}: ${e.message}` });
+                    self.postMessage({ type: 'error', error: `Failed to decode sample ${key}: ${e instanceof Error ? e.message : String(e)}` });
                 }
             }
         }
         this.isInitialized = true;
+        self.postMessage({ type: 'initialized' });
         console.log("SampleBank Initialized with samples:", Object.keys(this.samples));
     },
 
@@ -163,14 +167,16 @@ const AudioRenderer = {
             const noteVelocity = note.velocity ?? 1.0;
             const finalVolume = volume * noteVelocity;
             
-            const startSample = Math.floor(note.time * sampleRate);
+            const startSample = Math.floor(note.time * Scheduler.secondsPerBeat * sampleRate);
 
             // Ensure we don't write past the end of the chunk buffer
             const endSample = Math.min(startSample + sample.length, totalSamples);
             
             for (let i = 0; i < (endSample - startSample); i++) {
                 // Simple mixing by adding samples
-                chunk[startSample + i] += sample[i] * finalVolume;
+                if (startSample + i < chunk.length) {
+                    chunk[startSample + i] += sample[i] * finalVolume;
+                }
             }
         }
         
@@ -221,6 +227,7 @@ const Scheduler = {
         clearInterval(this.intervalId);
         this.intervalId = null;
         this.isRunning = false;
+        self.postMessage({ type: 'stopped' });
     },
 
     reset() {
@@ -230,6 +237,7 @@ const Scheduler = {
     updateSettings(settings) {
         if (settings.instruments) this.instruments = settings.instruments;
         if (settings.drumSettings) this.drumSettings = settings.drumSettings;
+        if(settings.bpm) this.bpm = settings.bpm;
     },
 
     tick() {
@@ -298,16 +306,12 @@ self.onmessage = async (event) => {
                 Scheduler.stop();
                 break;
             
-            case 'set_instruments':
-                Scheduler.updateSettings({ instruments: data });
-                break;
-
-            case 'set_drums':
-                 Scheduler.updateSettings({ drumSettings: data });
+            case 'update_settings':
+                Scheduler.updateSettings(data);
                 break;
         }
     } catch (e) {
-        self.postMessage({ type: 'error', error: e.message });
+        self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
 

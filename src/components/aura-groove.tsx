@@ -65,7 +65,7 @@ export function AuraGroove() {
   }
 
    useEffect(() => {
-    const worker = new Worker('/ambient.worker.js');
+    const worker = new Worker('/workers/ambient.worker.js');
     musicWorkerRef.current = worker;
 
     const handleMessage = (event: MessageEvent) => {
@@ -369,3 +369,5 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    
