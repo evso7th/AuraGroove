@@ -1,4 +1,3 @@
-
 /**
  * @file AuraGroove Ambient Music Worker
  *
@@ -126,21 +125,26 @@ const SampleBank = {
     samples: {}, // { kick: Float32Array, snare: Float32Array, ... }
     isInitialized: false,
 
-    async init(samples, sampleRate) {
+    async init(sampleUrls, sampleRate) {
         const tempAudioContext = new OfflineAudioContext(1, 1, sampleRate);
-        for (const key in samples) {
-            if (samples[key].byteLength > 0) {
-                try {
-                    const audioBuffer = await tempAudioContext.decodeAudioData(samples[key].slice(0));
-                    this.samples[key] = audioBuffer.getChannelData(0);
-                } catch(e) {
-                    // post error back to main thread
-                    self.postMessage({ type: 'error', error: `Failed to decode sample ${key}: ${e.message}` });
+        const promises = Object.entries(sampleUrls).map(async ([key, url]) => {
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
+                const arrayBuffer = await response.arrayBuffer();
+                const audioBuffer = await tempAudioContext.decodeAudioData(arrayBuffer);
+                this.samples[key] = audioBuffer.getChannelData(0);
+            } catch(e) {
+                self.postMessage({ type: 'error', error: `Failed to load sample ${key} from ${url}: ${e instanceof Error ? e.message : String(e)}` });
             }
-        }
+        });
+        
+        await Promise.all(promises);
+
         this.isInitialized = true;
-        console.log("SampleBank Initialized with samples:", Object.keys(this.samples));
+        self.postMessage({ type: 'initialized' });
     },
 
     getSample(name) {
@@ -163,14 +167,16 @@ const AudioRenderer = {
             const noteVelocity = note.velocity ?? 1.0;
             const finalVolume = volume * noteVelocity;
             
-            const startSample = Math.floor(note.time * sampleRate);
+            const startSample = Math.floor(note.time * (60 / settings.bpm) * sampleRate);
 
             // Ensure we don't write past the end of the chunk buffer
             const endSample = Math.min(startSample + sample.length, totalSamples);
             
             for (let i = 0; i < (endSample - startSample); i++) {
                 // Simple mixing by adding samples
-                chunk[startSample + i] += sample[i] * finalVolume;
+                if (startSample + i < chunk.length) {
+                    chunk[startSample + i] += sample[i] * finalVolume;
+                }
             }
         }
         
@@ -221,6 +227,7 @@ const Scheduler = {
         clearInterval(this.intervalId);
         this.intervalId = null;
         this.isRunning = false;
+        self.postMessage({ type: 'stopped' });
     },
 
     reset() {
@@ -230,6 +237,14 @@ const Scheduler = {
     updateSettings(settings) {
         if (settings.instruments) this.instruments = settings.instruments;
         if (settings.drumSettings) this.drumSettings = settings.drumSettings;
+        if(settings.bpm) {
+            this.bpm = settings.bpm;
+            // If running, restart the interval with the new timing
+            if (this.isRunning) {
+                clearInterval(this.intervalId);
+                this.intervalId = setInterval(() => this.tick(), this.barDuration * 1000);
+            }
+        }
     },
 
     tick() {
@@ -258,16 +273,15 @@ const Scheduler = {
         // 2. Pass the final score to the renderer
         const audioChunk = AudioRenderer.render(finalScore, {
             duration: this.barDuration,
-            volume: this.drumSettings.volume
+            volume: this.drumSettings.volume,
+            bpm: this.bpm,
         }, this.sampleRate);
         
         // 3. Post the rendered chunk to the main thread
         self.postMessage({
             type: 'chunk',
-            data: {
-                chunk: audioChunk,
-                duration: this.barDuration,
-            }
+            chunk: audioChunk,
+            sampleRate: this.sampleRate,
         }, [audioChunk.buffer]);
 
         this.barCount++;
@@ -283,7 +297,8 @@ self.onmessage = async (event) => {
         switch (command) {
             case 'init':
                 Scheduler.sampleRate = data.sampleRate;
-                await SampleBank.init(data.samples, data.sampleRate);
+                // We now load samples in the worker
+                await SampleBank.init(data.sampleUrls, data.sampleRate);
                 break;
             
             case 'start':
@@ -298,15 +313,11 @@ self.onmessage = async (event) => {
                 Scheduler.stop();
                 break;
             
-            case 'set_instruments':
-                Scheduler.updateSettings({ instruments: data });
-                break;
-
-            case 'set_drums':
-                 Scheduler.updateSettings({ drumSettings: data });
+            case 'update_settings':
+                 Scheduler.updateSettings(data);
                 break;
         }
     } catch (e) {
-        self.postMessage({ type: 'error', error: e.message });
+        self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };

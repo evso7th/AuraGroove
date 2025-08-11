@@ -72,13 +72,14 @@ export function AuraGroove() {
   const isWorkerInitialized = useRef(false);
 
   useEffect(() => {
-    const worker = new Worker('/ambient.worker.ts');
+    // Correctly instantiate the worker from the public path
+    const worker = new Worker('/ambient.worker.js');
     musicWorkerRef.current = worker;
     
     audioPlayerRef.current = new AudioPlayer();
 
     const handleMessage = (event: MessageEvent) => {
-      const { type, data, error } = event.data;
+      const { type, chunk, sampleRate, error } = event.data;
       
       switch(type) {
         case 'initialized':
@@ -98,7 +99,7 @@ export function AuraGroove() {
              break;
 
         case 'chunk':
-          audioPlayerRef.current?.scheduleChunk(data.chunk, data.sampleRate);
+          audioPlayerRef.current?.scheduleChunk(chunk, sampleRate);
           break;
         
         case 'stopped':
@@ -137,8 +138,11 @@ export function AuraGroove() {
   }, [instruments, drumSettings, bpm, isPlaying]);
 
   useEffect(() => {
-    updateWorkerSettings();
-  }, [drumSettings, instruments, bpm, updateWorkerSettings]);
+    // Avoid sending updates before the worker is ready or while not playing
+    if (isPlaying && isWorkerInitialized.current) {
+        updateWorkerSettings();
+    }
+  }, [drumSettings, instruments, bpm, updateWorkerSettings, isPlaying]);
 
 
   const handlePlay = useCallback(async () => {
@@ -158,6 +162,7 @@ export function AuraGroove() {
                 data: { drumSettings, instruments, bpm }
             });
         } else {
+            // Worker now loads its own samples
             musicWorkerRef.current?.postMessage({
                 command: 'init',
                 data: { sampleUrls, sampleRate }
@@ -179,11 +184,17 @@ export function AuraGroove() {
     musicWorkerRef.current?.postMessage({ command: 'stop' });
     audioPlayerRef.current?.stop();
     setIsPlaying(false);
-    setIsInitializing(false);
-    setLoadingText("");
+    // Don't reset initializing state here, it's handled by 'stopped' message
   }, []);
   
   const handleTogglePlay = useCallback(() => {
+    // The AudioContext must be resumed (or created) from a user gesture.
+    // This is the ideal place to do it.
+    if (!audioPlayerRef.current?.isInitialized()) {
+        handlePlay();
+        return;
+    }
+    
     if (isPlaying) {
       handleStop();
     } else {
@@ -308,7 +319,7 @@ export function AuraGroove() {
                     step={0.05}
                     onValueChange={(v) => setDrumSettings(d => ({ ...d, volume: v[0] }))}
                     className="col-span-2"
-                    disabled={isBusy}
+                    disabled={isBusy || !drumSettings.enabled}
                 />
             </div>
         </div>
