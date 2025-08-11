@@ -28,7 +28,6 @@ class BassGenerator {
                 release: 0.8,
             },
         });
-        this.setVolume(0.7);
     }
 
     createPart(time: Tone.Unit.Time) {
@@ -144,19 +143,21 @@ const Conductor = {
         this.masterBus = new Tone.Gain(1);
 
         this.drummer = new DrumGenerator(sampleUrls, () => {
-           this.drummer?.connect(this.masterBus!);
-           this.bassist?.connect(this.masterBus!);
+           // Этот колбэк должен только сигнализировать о завершении загрузки семплов
            this.isInitialized = true;
            self.postMessage({ type: 'initialized' });
         });
+
+        // Подключаем инструменты К masterBus сразу после их создания
+        this.drummer.connect(this.masterBus);
+        this.bassist.connect(this.masterBus);
     },
     
     updateSettings(drumSettings?: DrumSettings, instruments?: Instruments) {
+        if (!this.isInitialized) return;
         if (drumSettings) this.drumSettings = drumSettings;
         if (instruments) this.instruments = instruments;
         
-        if (!this.isInitialized) return;
-
         if(this.drumSettings.enabled) this.drummer?.setVolume(this.drumSettings.volume);
         else this.drummer?.setVolume(0);
 
@@ -173,6 +174,7 @@ const Conductor = {
         try {
             const buffer = await Tone.Offline((transport: Tone.Transport) => {
                 const now = transport.now();
+                // Убедимся, что masterBus подключен к выходу в оффлайн-контексте
                 this.masterBus!.connect(transport.destination);
                 
                 if (this.drumSettings.enabled) {
