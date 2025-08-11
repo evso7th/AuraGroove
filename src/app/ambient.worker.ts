@@ -39,9 +39,11 @@ class BassGenerator {
             { time: "0:3:2", note: 'A#1', duration: '8n' }
         ];
 
-        score.forEach(note => {
-            this.synth.triggerAttackRelease(note.note, note.duration, time + Tone.Time(note.time).toSeconds());
-        });
+        // This part is now scheduled on the Transport, not triggered directly
+        const part = new Tone.Part((time, value) => {
+            this.synth.triggerAttackRelease(value.note, value.duration, time);
+        }, score).start(0);
+        part.loop = false;
     }
     
     connect(destination: Tone.OutputNode) {
@@ -63,7 +65,7 @@ class DrumGenerator {
         breakbeat: [
             { time: "0:0", note: "C1", velocity: 0.8 }, { time: "0:0:3", note: "C1", velocity: 0.7 }, { time: "0:2", note: "C1", velocity: 0.8 },
             { time: "0:1", note: "D1" }, { time: "0:2:2", note: "D1" }, { time: "0:3:1", note: "D1" },
-            { time: "0:0", note: "E1" }, { time: "0:1", note: "E1" }, { time: "0:2", note: "E1" }, { time: "0:3", note: "E1" },
+            { time: "0:0", note: "E1" }, { time: "1:0", note: "E1" }, { time: "2:0", note: "E1" }, { time: "3:0", note: "E1" },
         ],
         slow: [
             { time: "0:0", note: "C1", velocity: 0.8 }, { time: "0:2", note: "D1" },
@@ -89,7 +91,7 @@ class DrumGenerator {
                 G1: sampleUrls.tom1, H1: sampleUrls.tom2, I1: sampleUrls.tom3,
             },
             onload: () => {
-                console.log('Samples loaded!'); // <-- For debugging
+                console.log('Samples loaded!'); 
                 onLoad();
             },
             onerror: (error) => {
@@ -99,7 +101,7 @@ class DrumGenerator {
         });
     }
 
-    createPart(patternName: keyof typeof this.patterns, bar: number, time: Tone.Unit.Time) {
+    createPart(patternName: keyof typeof this.patterns, bar: number) {
         let basePattern = this.patterns[patternName] || this.patterns.basic;
         let partData = [...basePattern];
         
@@ -109,9 +111,10 @@ class DrumGenerator {
             partData = [{ time: "0:0", note: "A1", velocity: 0.8 }, ...patternWithoutLastBeat, ...fill];
         }
         
-        partData.forEach(note => {
-            this.sampler.triggerAttackRelease(note.note, "8n", time + Tone.Time(note.time).toSeconds(), note.velocity || 0.7);
-        });
+        const part = new Tone.Part((time, value) => {
+            this.sampler.triggerAttackRelease(value.note, "8n", time, value.velocity || 0.7);
+        }, partData).start(0);
+        part.loop = false;
     }
 
     connect(destination: Tone.OutputNode) {
@@ -139,15 +142,16 @@ const Conductor = {
         if (this.isInitialized) return;
 
         this.bassist = new BassGenerator();
-        this.masterBus = new Tone.Gain(1).connect(Tone.getDestination());
-
+        this.masterBus = new Tone.Gain(1);
+        
         this.drummer = new DrumGenerator(sampleUrls, () => {
            this.isInitialized = true;
+           // Connect instruments to the bus *after* samples are loaded.
+           this.drummer?.connect(this.masterBus!);
+           this.bassist?.connect(this.masterBus!);
+           this.masterBus?.toDestination();
            self.postMessage({ type: 'initialized' });
         });
-        
-        this.drummer.connect(this.masterBus);
-        this.bassist.connect(this.masterBus);
     },
     
     updateSettings(drumSettings?: DrumSettings, instruments?: Instruments) {
@@ -158,7 +162,10 @@ const Conductor = {
     async renderNextChunk() {
         if (!this.isInitialized || !this.masterBus || !this.drummer || !this.bassist) return;
         
-        // Set volumes right before rendering
+        this.measureDuration = Tone.Time('1m').toSeconds();
+        Tone.Transport.bpm.value = this.bpm;
+        
+        // Set volumes right before scheduling
         if (this.drumSettings.enabled) {
             this.drummer.sampler.volume.value = Tone.gainToDb(this.drumSettings.volume);
         } else {
@@ -171,20 +178,17 @@ const Conductor = {
              this.bassist.synth.volume.value = -Infinity; // Mute
         }
 
-        this.measureDuration = Tone.Time('1m').toSeconds();
-        Tone.Transport.bpm.value = this.bpm;
-
         try {
-            const buffer = await Tone.Offline((transport: Tone.Transport) => {
-                this.masterBus!.connect(transport.destination);
-                const now = transport.now();
-                
+            const buffer = await Tone.Offline(async (transport: Tone.Transport) => {
+                // The instruments are already connected to the masterBus, which goes to the destination.
+                // We just need to schedule their parts on the transport.
                 if (this.drumSettings.enabled) {
-                    this.drummer?.createPart(this.drumSettings.pattern, this.barCount, now);
+                    this.drummer?.createPart(this.drumSettings.pattern, this.barCount);
                 }
                 if (this.instruments.bass === 'bass guitar') {
-                    this.bassist?.createPart(now);
+                    this.bassist?.createPart(0);
                 }
+                transport.start();
             }, this.measureDuration);
             
             const chunk = buffer.getChannelData(0);
@@ -197,7 +201,9 @@ const Conductor = {
             }, [chunk.buffer]);
 
             this.barCount++;
-
+            // Clean up transport after each render
+            Tone.Transport.cancel();
+            
         } catch (e) {
             self.postMessage({ type: 'error', error: `Rendering failed: ${e instanceof Error ? e.message : String(e)}` });
         }
@@ -231,3 +237,5 @@ self.onmessage = async (event: MessageEvent) => {
     }
 };
 
+
+    
