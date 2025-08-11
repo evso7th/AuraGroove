@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Drum, Loader2, Music, Pause, Speaker } from "lucide-react";
+import * as Tone from 'tone';
 
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -24,7 +25,6 @@ import {
 import { Label } from "@/components/ui/label";
 import Logo from "@/components/icons";
 import { Switch } from "@/components/ui/switch";
-import { audioPlayer } from "@/lib/audio-player";
 import { Slider } from "@/components/ui/slider";
 
 export type Instruments = {
@@ -37,8 +37,9 @@ export type DrumSettings = {
     enabled: boolean;
     pattern: 'basic' | 'breakbeat' | 'slow' | 'heavy';
     volume: number;
-}
+};
 
+// URLs are now passed to the worker for Tone.Sampler
 const sampleUrls = {
     kick: '/assets/drums/kick_drum6.wav',
     snare: '/assets/drums/snare.wav',
@@ -50,32 +51,9 @@ const sampleUrls = {
     tom3: '/assets/drums/lowtom.wav',
 };
 
-// Use a shared AudioContext for decoding.
-const decodingAudioContext = typeof window !== 'undefined' ? new (window.AudioContext || (window as any).webkitAudioContext)() : null;
-
-async function decodeSamples(buffers: Record<string, ArrayBuffer>): Promise<Record<string, Float32Array>> {
-    if (!decodingAudioContext) {
-        throw new Error("AudioContext is not supported in this browser.");
-    }
-    const decodedSamples: Record<string, Float32Array> = {};
-    const promises = Object.entries(buffers).map(async ([key, buffer]) => {
-        try {
-            const audioBuffer = await decodingAudioContext.decodeAudioData(buffer.slice(0));
-            decodedSamples[key] = audioBuffer.getChannelData(0);
-        } catch (e) {
-            console.error(`Failed to decode sample ${key}:`, e);
-            // Return null or an empty array to indicate failure for this sample
-            decodedSamples[key] = new Float32Array();
-        }
-    });
-    await Promise.all(promises);
-    return decodedSamples;
-}
-
 
 export function AuraGroove() {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const [isInitializing, setIsInitializing] = useState(false);
   const [loadingText, setLoadingText] = useState("");
   const [drumSettings, setDrumSettings] = useState<DrumSettings>({
@@ -86,54 +64,14 @@ export function AuraGroove() {
   const [instruments, setInstruments] = useState<Instruments>({
     solo: "none",
     accompaniment: "none",
-    bass: "bass guitar",
+    bass: "none", // Bass is off by default
   });
   const { toast } = useToast();
 
   const musicWorkerRef = useRef<Worker>();
-  const decodedSamplesRef = useRef<Record<string, Float32Array>>({});
-  const areSamplesLoaded = useRef(false);
+  // We no longer need to decode samples here. Tone.js handles it in the worker.
+  const isWorkerInitialized = useRef(false);
 
-  // Load and decode samples on component mount
-  useEffect(() => {
-    setLoadingText("Loading samples...");
-    
-    const fetchAndDecodeSamples = async () => {
-        try {
-            const sampleEntries = Object.entries(sampleUrls);
-            const bufferPromises = sampleEntries.map(async ([key, url]) => {
-                const response = await fetch(url);
-                if (!response.ok) {
-                    throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
-                }
-                return { key, buffer: await response.arrayBuffer() };
-            });
-
-            const bufferResults = await Promise.all(bufferPromises);
-            const arrayBuffers: Record<string, ArrayBuffer> = {};
-            bufferResults.forEach(({ key, buffer }) => {
-                arrayBuffers[key] = buffer;
-            });
-
-            setLoadingText("Decoding samples...");
-            decodedSamplesRef.current = await decodeSamples(arrayBuffers);
-            
-            areSamplesLoaded.current = true;
-            setIsLoading(false);
-            setLoadingText("");
-
-        } catch (error) {
-            console.error("Failed to fetch or decode samples:", error);
-            toast({
-                variant: "destructive",
-                title: "Sample Error",
-                description: `Could not load or decode drum samples. ${error instanceof Error ? error.message : ''}`,
-            });
-            setIsLoading(false);
-        }
-    };
-    fetchAndDecodeSamples();
-  }, [toast]);
   
   const startWorker = useCallback(() => {
       setLoadingText("Generating music...");
@@ -152,18 +90,16 @@ export function AuraGroove() {
     musicWorkerRef.current = worker;
 
     const handleMessage = (event: MessageEvent) => {
-      const { type, data, error } = event.data;
+      const { type, error } = event.data;
       
-      if (type === 'chunk') {
-        audioPlayer.schedulePart(data.chunk, data.duration);
-        if (!audioPlayer.getIsPlaying()) {
-          audioPlayer.start();
-        }
-      } else if (type === 'started') {
+      // The worker no longer sends audio chunks. It plays directly via Tone.js.
+      // We listen for state changes.
+      if (type === 'started') {
         setIsInitializing(false);
         setLoadingText("");
         setIsPlaying(true);
       } else if (type === 'initialized') {
+        isWorkerInitialized.current = true;
         startWorker();
       } else if (type === 'error') {
         toast({
@@ -171,7 +107,6 @@ export function AuraGroove() {
           title: "Worker Error",
           description: error,
         });
-        audioPlayer.stop();
         setIsPlaying(false);
         setIsInitializing(false);
         setLoadingText("");
@@ -182,8 +117,8 @@ export function AuraGroove() {
     
     return () => {
       worker.terminate();
-      if (audioPlayer.getIsPlaying()) {
-        audioPlayer.stop();
+      if (Tone.Transport.state === "started") {
+        Tone.Transport.stop();
       }
     };
   }, [toast, startWorker]); 
@@ -200,6 +135,8 @@ export function AuraGroove() {
  const handleDrumsSettingChange = useCallback((key: keyof DrumSettings, value: any) => {
     const newDrumSettings = { ...drumSettings, [key]: value };
     setDrumSettings(newDrumSettings);
+    // We adjust the main volume for drums here
+    Tone.Destination.volume.value = Tone.gainToDb(newDrumSettings.volume);
     musicWorkerRef.current?.postMessage({
         command: 'set_drums',
         data: newDrumSettings,
@@ -212,20 +149,17 @@ export function AuraGroove() {
     setLoadingText("Preparing audio engine...");
 
     try {
-      await audioPlayer.initialize();
-      const audioContext = audioPlayer.getAudioContext();
-      if (!audioContext) {
-        throw new Error("Could not initialize AudioContext.");
-      }
+        await Tone.start(); // User gesture to start AudioContext
+        if (Tone.context.state !== 'running') {
+            await Tone.context.resume();
+        }
       
       setLoadingText("Initializing worker...");
       
-      // Pass the decoded samples to the worker. They are not transferable.
       musicWorkerRef.current?.postMessage({
         command: 'init',
         data: {
-          sampleRate: audioContext.sampleRate,
-          samples: decodedSamplesRef.current,
+          sampleUrls: sampleUrls,
         }
       });
 
@@ -242,7 +176,6 @@ export function AuraGroove() {
 
   const handleStop = useCallback(() => {
     musicWorkerRef.current?.postMessage({ command: 'stop' });
-    audioPlayer.stop();
     setIsPlaying(false);
     setIsInitializing(false);
     setLoadingText("");
@@ -252,18 +185,11 @@ export function AuraGroove() {
     if (isPlaying) {
       handleStop();
     } else {
-       if (!areSamplesLoaded.current) {
-          toast({
-              title: "Samples not loaded",
-              description: "Please wait for samples to finish loading.",
-          });
-          return;
-      }
       handlePlay();
     }
-  }, [isPlaying, handleStop, handlePlay, toast]);
+  }, [isPlaying, handleStop, handlePlay]);
   
-  const isBusy = isLoading || isInitializing;
+  const isBusy = isInitializing;
 
   return (
     <Card className="w-full max-w-lg shadow-2xl">
@@ -289,9 +215,9 @@ export function AuraGroove() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">None</SelectItem>
-                <SelectItem value="synthesizer">Synthesizer</SelectItem>
-                <SelectItem value="piano">Piano</SelectItem>
-                <SelectItem value="organ">Organ</SelectItem>
+                <SelectItem value="synthesizer" disabled>Synthesizer</SelectItem>
+                <SelectItem value="piano" disabled>Piano</SelectItem>
+                <SelectItem value="organ" disabled>Organ</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -307,9 +233,9 @@ export function AuraGroove() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">None</SelectItem>
-                <SelectItem value="synthesizer">Synthesizer</SelectItem>
-                <SelectItem value="piano">Piano</SelectItem>
-                <SelectItem value="organ">Organ</SelectItem>
+                <SelectItem value="synthesizer" disabled>Synthesizer</SelectItem>
+                <SelectItem value="piano" disabled>Piano</SelectItem>
+                <SelectItem value="organ" disabled>Organ</SelectItem>
               </SelectContent>
             </Select>
           </div>

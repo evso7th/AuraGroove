@@ -1,334 +1,282 @@
-/**
- * @file AuraGroove Ambient Music Worker
- *
- * This worker operates on a microservice-style architecture, inspired by the user's feedback.
- * Each musical component is an isolated entity responsible for a single task.
- *
- * Core Entities:
- * 1.  MessageBus (self): The "Kafka" of the worker. Handles all communication
- *     between the main thread and the worker's internal systems.
- *
- * 2.  Scheduler: The central "conductor" or "event loop". It wakes up at regular
- *     intervals, determines what musical data is needed, and coordinates the other
- *     entities. It doesn't generate music itself, only directs the flow.
- *
- * 3.  Instrument Generators (e.g., DrumGenerator, BassGenerator): These are the "composers".
- *     They take a time signature and a pattern name and return a "score" - a simple
- *     array of note events (`{ time, sample, velocity }`). They are stateless and
- *     know nothing about audio rendering.
- *
- * 4.  PatternProvider: The "music sheet library". It holds all rhythmic and melodic
- *     patterns. It's a simple data store that the Instrument Generators query.
- *
- * 5.  AudioRenderer: The "audio engine". Its ONLY job is to take a score (from any
- *     generator) and "render" it into a raw audio buffer (Float32Array). It handles
- *     mixing, volume, and sample placement. It is completely decoupled from musical logic.
- *
- * 6.  SampleBank: A repository for decoded audio samples, ensuring they are ready for
- *     the AudioRenderer to use instantly.
- *
- * Data Flow on Start:
- * - Main thread sends 'init' with samples and sampleRate.
- * - Worker decodes samples into SampleBank.
- * - Main thread sends 'start' with instrument/drum settings.
- * - Scheduler starts its loop.
- * - In each loop:
- *   - Scheduler asks the appropriate generators for their scores for the next time slice.
- *   - Generators ask PatternProvider for their patterns.
- *   - Generators create their scores and return them to the scheduler.
- *   - Scheduler passes all scores to the AudioRenderer.
- *   - AudioRenderer creates a blank audio chunk, "paints" the samples from each score onto it, and returns the mixed chunk.
- *   - Scheduler posts the final audio chunk back to the main thread.
- *
- * This architecture ensures that changing a drum pattern CANNOT break the audio renderer,
- * and changing the audio renderer CANNOT break the musical logic. Each part is
- * independent, testable, and replaceable, following the user's core architectural principle.
- */
 
-// --- 1. PatternProvider (The Music Sheet Library) ---
-const PatternProvider = {
-    drumPatterns: {
-        basic: [
-            { sample: 'kick', time: 0, velocity: 0.8 },
-            { sample: 'hat', time: 0.5 },
-            { sample: 'snare', time: 1 },
-            { sample: 'hat', time: 1.5 },
-            { sample: 'kick', time: 2, velocity: 0.8 },
-            { sample: 'hat', time: 2.5 },
-            { sample: 'snare', time: 3 },
-            { sample: 'hat', time: 3.5 },
+import * as Tone from 'tone';
+
+// --- Type Definitions ---
+type DrumSettings = {
+    enabled: boolean;
+    pattern: 'basic' | 'breakbeat' | 'slow' | 'heavy';
+    volume: number;
+};
+
+type Instruments = {
+    solo: 'synthesizer' | 'piano' | 'organ' | 'none';
+    accompaniment: 'synthesizer' | 'piano' | 'organ' | 'none';
+    bass: 'bass guitar' | 'none';
+};
+
+type NoteEvent = {
+    time: string;
+    note: string;
+    duration: string;
+    velocity: number;
+}
+
+// --- Musician: Bassist ---
+class BassGenerator {
+    synth: Tone.PolySynth;
+    part: Tone.Part<NoteEvent> | null = null;
+    
+    constructor() {
+        this.synth = new Tone.PolySynth(Tone.Synth, {
+            oscillator: { type: 'fatsawtooth' },
+            envelope: {
+                attack: 0.01,
+                decay: 0.4,
+                sustain: 0.1,
+                release: 0.8,
+            },
+        }).toDestination();
+        this.synth.volume.value = -6; // Initial volume
+    }
+
+    createPart(patternName: string, beatsPerBar = 4): NoteEvent[] {
+        // Simple bassline, plays root and fifth on C2/G2. Occasionally drops to C1.
+        const score: NoteEvent[] = [];
+        for (let i = 0; i < beatsPerBar; i++) {
+           const note = i % 2 === 0 ? 'C2' : 'G2';
+           // Occasionally drop to 1st octave
+           const finalNote = (i === 0 && Math.random() < 0.25) ? 'C1' : note;
+           score.push({ time: `${i}`, note: finalNote, duration: '4n', velocity: 0.9 });
+        }
+        return score;
+    }
+    
+    start(pattern: string) {
+        if (this.part) {
+            this.part.stop(0);
+            this.part.dispose();
+        }
+        const partData = this.createPart(pattern);
+        this.part = new Tone.Part<NoteEvent>((time, value) => {
+            this.synth.triggerAttackRelease(value.note, value.duration, time, value.velocity);
+        }, partData).start(0);
+        this.part.loop = true;
+        this.part.loopEnd = '1m'; // Loop every measure
+    }
+
+    stop() {
+        this.part?.stop(0);
+    }
+    
+    setVolume(decibels: number) {
+        this.synth.volume.value = decibels;
+    }
+
+    setEnabled(enabled: boolean) {
+        this.setVolume(enabled ? -6 : -Infinity);
+    }
+}
+
+// --- Musician: Drummer ---
+class DrumGenerator {
+    sampler: Tone.Sampler | null = null;
+    part: Tone.Part | null = null;
+    isLoaded = false;
+    
+    private patterns = {
+       basic: [
+            { time: "0:0", note: "C1" }, { time: "0:2", note: "C1" }, // Kick
+            { time: "0:1", note: "D1" }, { time: "0:3", note: "D1" }, // Snare
+            { time: "0:0", note: "E1" }, { time: "0:1", note: "E1" }, { time: "0:2", note: "E1" }, { time: "0:3", note: "E1" } // Hat
         ],
         breakbeat: [
-            { sample: 'kick', time: 0, velocity: 0.8 },
-            { sample: 'hat', time: 0.5 },
-            { sample: 'kick', time: 0.75, velocity: 0.8 },
-            { sample: 'snare', time: 1 },
-            { sample: 'hat', time: 1.5 },
-            { sample: 'kick', time: 2, velocity: 0.8 },
-            { sample: 'snare', time: 2.5 },
-            { sample: 'hat', time: 3 },
-            { sample: 'snare', time: 3.25 },
-            { sample: 'hat', time: 3.5 },
+            { time: "0:0", note: "C1" }, { time: "0:0:3", note: "C1" }, { time: "0:2", note: "C1" }, // Kick
+            { time: "0:1", note: "D1" }, { time: "0:2:2", note: "D1" }, { time: "0:3:1", note: "D1" }, // Snare
+            { time: "0:0", note: "E1" }, { time: "0:1", note: "E1" }, { time: "0:2", note: "E1" }, { time: "0:3", note: "E1" }, // Hat
         ],
         slow: [
-            { sample: 'kick', time: 0, velocity: 0.8 },
-            { sample: 'hat', time: 1 },
-            { sample: 'snare', time: 2 },
-            { sample: 'hat', time: 3 },
+            { time: "0:0", note: "C1" }, { time: "0:2", note: "D1" }, // Kick, Snare
+            { time: "0:0", note: "F1" }, { time: "0:1", note: "F1" }, { time: "0:2", note: "F1" }, { time: "0:3", note: "F1" } // Ride
         ],
         heavy: [
-            { sample: 'kick', time: 0, velocity: 0.8 },
-            { sample: 'ride', time: 0.5 },
-            { sample: 'snare', time: 1, velocity: 1.0 },
-            { sample: 'ride', time: 1.5 },
-            { sample: 'kick', time: 2, velocity: 0.8 },
-            { sample: 'ride', time: 2.5 },
-            { sample: 'snare', time: 3, velocity: 1.0 },
-            { sample: 'ride', time: 3.5 },
+            { time: "0:0", note: "C1" }, { time: "0:2", note: "C1" }, // Kick
+            { time: "0:1", note: "D1" }, { time: "0:3", note: "D1" }, // Snare
+            { time: "0:0", note: "F1" }, { time: "0:1", note: "F1" }, { time: "0:2", note: "F1" }, { time: "0:3", note: "F1" }, // Ride
+            { time: "0:3:2", note: "G1"}, { time: "0:3:3", note: "H1"}, // Toms
         ],
-    },
-    drumFills: [
-        [ // Fill 1
-            { sample: 'snare', time: 3.0, velocity: 0.7 },
-            { sample: 'tom1', time: 3.25, velocity: 0.8 },
-            { sample: 'tom2', time: 3.5, velocity: 0.9 },
-            { sample: 'tom3', time: 3.75, velocity: 1.0 },
-        ],
-        [ // Fill 2
-            { sample: 'tom1', time: 3.0, velocity: 0.8 },
-            { sample: 'tom1', time: 3.25, velocity: 0.8 },
-            { sample: 'tom2', time: 3.5, velocity: 0.9 },
-            { sample: 'tom3', time: 3.75, velocity: 1.0 },
-        ],
-        [ // Fill 3
-            { sample: 'snare', time: 3.0, velocity: 0.7 },
-            { sample: 'hat', time: 3.25, velocity: 0.6 },
-            { sample: 'snare', time: 3.5, velocity: 0.8 },
-            { sample: 'hat', time: 3.75, velocity: 0.7 },
-        ]
-    ],
-    getDrumPattern(name: string) {
-        return this.drumPatterns[name as keyof typeof this.drumPatterns] || this.drumPatterns.basic;
-    },
-    getDrumFill(barNumber: number) {
-        // Simple selection logic: cycle through fills
-        return this.drumFills[barNumber % this.drumFills.length];
-    }
-};
-
-// --- 2. Instrument Generators (The Composers) ---
-class DrumGenerator {
-    static createScore(patternName: string, barNumber: number, totalBars: number, beatsPerBar = 4) {
-        let score = [...PatternProvider.getDrumPattern(patternName)];
-
-        // On the 4th bar, add a crash and a fill
-        if (barNumber > 0 && barNumber % 4 === 0) {
-            // Remove any other drum hit at time 0 to avoid conflict with the crash
-            score = score.filter(note => note.time !== 0);
-            score.push({ sample: 'crash', time: 0, velocity: 0.8 });
-            
-            // Remove notes from the base pattern in the last beat to make space for the fill
-            score = score.filter(note => note.time < 3.0);
-            
-            // Add the fill
-            const fill = PatternProvider.getDrumFill(Math.floor(barNumber / 4)); // Get a new fill every 4 bars
-            score.push(...fill);
-        }
-        
-        return score;
-    }
-}
-
-class BassGenerator {
-     static createScore(rootNote = 'E', beatsPerBar = 4) {
-        // Simple bassline: root note on the first beat of the bar
-        const score = [
-            { note: `${rootNote}1`, time: 0, duration: beatsPerBar, velocity: 0.9 }
-        ];
-        return score;
-    }
-}
-
-
-// --- 3. SampleBank (Decoded Audio Storage) ---
-const SampleBank = {
-    samples: {} as Record<string, Float32Array>, // { kick: Float32Array, snare: Float32Array, ... }
-    isInitialized: false,
-
-    init(decodedSamples: Record<string, Float32Array>) {
-        this.samples = decodedSamples;
-        this.isInitialized = true;
-        console.log("SampleBank Initialized with samples:", Object.keys(this.samples));
-        self.postMessage({ type: 'initialized' });
-    },
-
-    getSample(name: string) {
-        return this.samples[name];
-    }
-};
-
-
-// --- 4. AudioRenderer (The Sound Engine) ---
-const AudioRenderer = {
-    render(score: any[], settings: { duration: number, volume: number }, sampleRate: number) {
-        const { duration, volume } = settings;
-        const totalSamples = Math.floor(duration * sampleRate);
-        const chunk = new Float32Array(totalSamples).fill(0);
-
-        for (const note of score) {
-            const sample = SampleBank.getSample(note.sample);
-            if (!sample) continue;
-
-            const noteVelocity = note.velocity ?? 1.0;
-            const finalVolume = volume * noteVelocity;
-            
-            const startSample = Math.floor(note.time * Scheduler.secondsPerBeat * sampleRate);
-
-            // Ensure we don't write past the end of the chunk buffer
-            const endSample = Math.min(startSample + sample.length, totalSamples);
-            
-            for (let i = 0; i < (endSample - startSample); i++) {
-                // Simple mixing by adding samples
-                if (startSample + i < chunk.length) {
-                    chunk[startSample + i] += sample[i] * finalVolume;
-                }
-            }
-        }
-        
-        // Basic clipping prevention
-        for (let i = 0; i < totalSamples; i++) {
-            chunk[i] = Math.max(-1, Math.min(1, chunk[i]));
-        }
-
-        return chunk;
-    }
-};
-
-
-// --- 5. Scheduler (The Conductor) ---
-const Scheduler = {
-    intervalId: null as any,
-    isRunning: false,
-    barCount: 0,
+    };
     
-    // Settings from main thread
-    sampleRate: 44100,
-    bpm: 120,
-    instruments: {} as any,
-    drumSettings: {} as any,
+    private fills = [
+        [ { time: "0:3:0", note: "D1" }, { time: "0:3:1", note: "G1" }, { time: "0:3:2", note: "H1" }, { time: "0:3:3", note: "I1" }],
+        [ { time: "0:3:0", note: "G1" }, { time: "0:3:1", note: "G1" }, { time: "0:3:2", note: "H1" }, { time: "0:3:3", note: "I1" }],
+    ];
+    
+    private barCount = 0;
 
-    // Calculated properties
-    get beatsPerBar() { return 4; },
-    get secondsPerBeat() { return 60 / this.bpm; },
-    get barDuration() { return this.beatsPerBar * this.secondsPerBeat; },
+    constructor(sampleUrls: Record<string, string>, onLoad: () => void) {
+        this.sampler = new Tone.Sampler({
+            urls: {
+                C1: sampleUrls.kick, D1: sampleUrls.snare, E1: sampleUrls.hat,
+                F1: sampleUrls.ride, A1: sampleUrls.crash,
+                G1: sampleUrls.tom1, H1: sampleUrls.tom2, I1: sampleUrls.tom3,
+            },
+            onload: () => {
+                this.isLoaded = true;
+                onLoad();
+            }
+        }).toDestination();
+    }
 
-
-    start() {
-        if (this.isRunning) return;
-
-        this.reset();
-        this.isRunning = true;
+    createPart(patternName: keyof typeof this.patterns, bar: number) {
+        let basePattern = this.patterns[patternName] || this.patterns.basic;
         
-        // Generate the first chunk immediately
-        this.tick();
+        // Every 4th bar, add fill and crash
+        if (bar > 0 && bar % 4 === 0) {
+            const fill = this.fills[Math.floor(bar / 4) % this.fills.length];
+            // Filter out notes from base pattern in the last beat to make room for fill
+            const patternWithoutLastBeat = basePattern.filter(note => !note.time.startsWith('0:3'));
+            return [{ time: "0:0", note: "A1" }, ...patternWithoutLastBeat, ...fill];
+        }
+        
+        return basePattern;
+    }
 
-        // Then set up the interval for subsequent chunks
-        this.intervalId = setInterval(() => this.tick(), this.barDuration * 1000);
+    start(pattern: keyof typeof this.patterns) {
+        if (!this.sampler || !this.isLoaded) return;
+        
+        if (this.part) {
+            this.part.stop(0);
+            this.part.dispose();
+        }
+
+        // We use a loop to manually schedule parts per bar, allowing for fills.
+        Tone.Transport.scheduleRepeat(time => {
+            const currentPartData = this.createPart(pattern, this.barCount);
+            
+            // Schedule all notes for the current bar
+            currentPartData.forEach(note => {
+                this.sampler?.triggerAttack(note.note, Tone.Transport.toSeconds(note.time) + time);
+            });
+
+            this.barCount++;
+        }, '1m'); // Repeat every measure
+    }
+
+    stop() {
+        this.part?.stop(0);
+        Tone.Transport.cancel(); // Clear all scheduled events
+        this.barCount = 0;
+    }
+
+    setVolume(decibels: number) {
+        if(this.sampler) this.sampler.volume.value = decibels;
+    }
+
+    setEnabled(enabled: boolean) {
+        this.setVolume(enabled ? 0 : -Infinity);
+    }
+}
+
+
+// --- Conductor (Scheduler) ---
+const Conductor = {
+    drummer: null as DrumGenerator | null,
+    bassist: new BassGenerator(),
+    isInitialized: false,
+    
+    init(sampleUrls: Record<string, string>) {
+        this.drummer = new DrumGenerator(sampleUrls, () => {
+            this.isInitialized = true;
+            self.postMessage({ type: 'initialized' });
+        });
+    },
+
+    start(drumSettings: DrumSettings, instruments: Instruments) {
+        if (!this.isInitialized || !this.drummer) return;
+        
+        this.update(drumSettings, instruments);
+        
+        Tone.Transport.start();
         self.postMessage({ type: 'started' });
     },
 
     stop() {
-        if (!this.isRunning) return;
-        clearInterval(this.intervalId);
-        this.intervalId = null;
-        this.isRunning = false;
+        Tone.Transport.stop();
+        Tone.Transport.cancel();
+        this.drummer?.stop();
+        this.bassist.stop();
     },
 
-    reset() {
-        this.barCount = 0;
+    update(drumSettings: DrumSettings, instruments: Instruments) {
+        if (!this.isInitialized || !this.drummer) return;
+
+        Tone.Transport.bpm.value = 100; // Let's fix BPM for now for simplicity
+
+        // Update Drummer
+        this.drummer.setEnabled(drumSettings.enabled);
+        this.drummer.start(drumSettings.pattern);
+
+        // Update Bassist
+        this.bassist.setEnabled(instruments.bass !== 'none');
+        if (instruments.bass !== 'none') {
+             this.bassist.start(drumSettings.pattern);
+        }
     },
     
-    updateSettings(settings: any) {
-        if (settings.instruments) this.instruments = settings.instruments;
-        if (settings.drumSettings) this.drumSettings = settings.drumSettings;
-        if(settings.bpm) this.bpm = settings.bpm;
+    setDrums(drumSettings: DrumSettings) {
+        if (!this.drummer) return;
+        this.drummer.setEnabled(drumSettings.enabled);
+        if (drumSettings.enabled) {
+            this.drummer.start(drumSettings.pattern);
+        } else {
+            this.drummer.stop();
+        }
     },
 
-    tick() {
-        if (!this.isRunning) return;
-
-        let finalScore: any[] = [];
-        
-        // 1. Ask generators for their scores
-        if (this.drumSettings.enabled) {
-            const drumScore = DrumGenerator.createScore(
-                this.drumSettings.pattern, 
-                this.barCount,
-                -1 // totalBars not needed for this simple generator
-            );
-            finalScore.push(...drumScore);
-        }
-        
-        // Add other instrument generators here (bass, solo, etc.) in the future
-        // For now, bass is conceptual
-        // if (this.instruments.bass !== 'none') {
-        //     const bassScore = BassGenerator.createScore('E');
-        //     // We would need a synth renderer for this, not a sample renderer
-        // }
-
-
-        // 2. Pass the final score to the renderer
-        const audioChunk = AudioRenderer.render(finalScore, {
-            duration: this.barDuration,
-            volume: this.drumSettings.volume
-        }, this.sampleRate);
-        
-        // 3. Post the rendered chunk to the main thread
-        self.postMessage({
-            type: 'chunk',
-            data: {
-                chunk: audioChunk,
-                duration: this.barDuration,
-            }
-        }, [audioChunk.buffer]);
-
-        this.barCount++;
+    setInstruments(instruments: Instruments) {
+       this.bassist.setEnabled(instruments.bass !== 'none');
+       if (instruments.bass !== 'none' && Tone.Transport.state === 'started') {
+           this.bassist.start('basic'); // restart with current pattern
+       } else {
+           this.bassist.stop();
+       }
     }
 };
 
-
-// --- MessageBus (The "Kafka" entry point) ---
+// --- MessageBus ---
 self.onmessage = async (event: MessageEvent) => {
     const { command, data } = event.data;
-
+    
     try {
         switch (command) {
             case 'init':
-                Scheduler.sampleRate = data.sampleRate;
-                SampleBank.init(data.samples);
+                await Tone.start(); // AudioContext must be started by user gesture
+                Conductor.init(data.sampleUrls);
                 break;
             
             case 'start':
-                if (!SampleBank.isInitialized) {
+                 if (!Conductor.isInitialized) {
                    throw new Error("Worker is not initialized with samples yet. Call 'init' first.");
                 }
-                Scheduler.updateSettings(data);
-                Scheduler.start();
+                Conductor.start(data.drumSettings, data.instruments);
                 break;
 
             case 'stop':
-                Scheduler.stop();
+                Conductor.stop();
                 break;
             
             case 'set_instruments':
-                Scheduler.updateSettings({ instruments: data });
+                Conductor.setInstruments(data);
                 break;
 
             case 'set_drums':
-                 Scheduler.updateSettings({ drumSettings: data });
+                 Conductor.setDrums(data);
                 break;
         }
     } catch (e) {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
+
+// This worker no longer renders audio itself. Tone.js handles output to destination.
+// The main thread is responsible for connecting Tone's output to the AudioContext destination.
