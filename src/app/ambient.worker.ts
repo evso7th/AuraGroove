@@ -141,10 +141,11 @@ const Conductor = {
         if (this.isInitialized) return;
 
         this.bassist = new BassGenerator();
+        this.masterBus = new Tone.Gain(1);
+
         this.drummer = new DrumGenerator(sampleUrls, () => {
-           this.masterBus = new Tone.Gain(1);
-           this.drummer?.connect(this.masterBus);
-           this.bassist?.connect(this.masterBus);
+           this.drummer?.connect(this.masterBus!);
+           this.bassist?.connect(this.masterBus!);
            this.isInitialized = true;
            self.postMessage({ type: 'initialized' });
         });
@@ -153,6 +154,9 @@ const Conductor = {
     updateSettings(drumSettings?: DrumSettings, instruments?: Instruments) {
         if (drumSettings) this.drumSettings = drumSettings;
         if (instruments) this.instruments = instruments;
+        
+        if (!this.isInitialized) return;
+
         if(this.drumSettings.enabled) this.drummer?.setVolume(this.drumSettings.volume);
         else this.drummer?.setVolume(0);
 
@@ -161,7 +165,7 @@ const Conductor = {
     },
 
     async renderNextChunk() {
-        if (!this.isInitialized) return;
+        if (!this.isInitialized || !this.masterBus) return;
         
         this.measureDuration = Tone.Time('1m').toSeconds();
         Tone.Transport.bpm.value = this.bpm;
@@ -169,7 +173,7 @@ const Conductor = {
         try {
             const buffer = await Tone.Offline((transport: Tone.Transport) => {
                 const now = transport.now();
-                this.masterBus?.toDestination();
+                this.masterBus!.connect(transport.destination);
                 
                 if (this.drumSettings.enabled) {
                     this.drummer?.createPart(this.drumSettings.pattern, this.barCount, now);
