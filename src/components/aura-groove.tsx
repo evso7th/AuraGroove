@@ -72,7 +72,7 @@ export function AuraGroove() {
   const isWorkerInitialized = useRef(false);
 
   useEffect(() => {
-    const worker = new Worker(new URL('../app/ambient.worker.ts', import.meta.url));
+    const worker = new Worker('/ambient.worker.ts');
     musicWorkerRef.current = worker;
     
     audioPlayerRef.current = new AudioPlayer();
