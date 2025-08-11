@@ -46,7 +46,7 @@ class BassGenerator {
            const note = i % 2 === 0 ? 'C2' : 'G2';
            // Occasionally drop to 1st octave
            const finalNote = (i === 0 && Math.random() < 0.25) ? 'C1' : note;
-           score.push({ time: `${i}`, note: finalNote, duration: '4n', velocity: 0.9 });
+           score.push({ time: `0:${i}`, note: finalNote, duration: '4n', velocity: 0.9 });
         }
         return score;
     }
@@ -73,7 +73,15 @@ class BassGenerator {
     }
 
     setEnabled(enabled: boolean) {
-        this.setVolume(enabled ? -6 : -Infinity);
+        if (enabled) {
+            this.synth.volume.value = -6;
+            if(this.part && this.part.state !== 'started') {
+               this.start('basic'); // Or current pattern
+            }
+        } else {
+            this.synth.volume.value = -Infinity;
+            this.stop();
+        }
     }
 }
 
@@ -82,6 +90,7 @@ class DrumGenerator {
     sampler: Tone.Sampler | null = null;
     part: Tone.Part | null = null;
     isLoaded = false;
+    currentPattern: keyof typeof this.patterns = 'basic';
     
     private patterns = {
        basic: [
@@ -99,7 +108,7 @@ class DrumGenerator {
             { time: "0:0", note: "F1" }, { time: "0:1", note: "F1" }, { time: "0:2", note: "F1" }, { time: "0:3", note: "F1" } // Ride
         ],
         heavy: [
-            { time: "0:0", note: "C1" }, { time: "0:2", note: "C1" }, // Kick
+            { time: "0:0", note: "C1", velocity: 0.8 }, { time: "0:2", note: "C1", velocity: 0.8 }, // Kick
             { time: "0:1", note: "D1" }, { time: "0:3", note: "D1" }, // Snare
             { time: "0:0", note: "F1" }, { time: "0:1", note: "F1" }, { time: "0:2", note: "F1" }, { time: "0:3", note: "F1" }, // Ride
             { time: "0:3:2", note: "G1"}, { time: "0:3:3", note: "H1"}, // Toms
@@ -135,36 +144,42 @@ class DrumGenerator {
             const fill = this.fills[Math.floor(bar / 4) % this.fills.length];
             // Filter out notes from base pattern in the last beat to make room for fill
             const patternWithoutLastBeat = basePattern.filter(note => !note.time.startsWith('0:3'));
-            return [{ time: "0:0", note: "A1" }, ...patternWithoutLastBeat, ...fill];
+            return [{ time: "0:0", note: "A1", velocity: 1.0 }, ...patternWithoutLastBeat, ...fill];
         }
         
         return basePattern;
     }
+    
+    restart(pattern: keyof typeof this.patterns) {
+         if (this.part) {
+            this.part.stop(0);
+            this.part.dispose();
+            Tone.Transport.clear(this.part.id);
+        }
+       this.start(pattern);
+    }
 
     start(pattern: keyof typeof this.patterns) {
         if (!this.sampler || !this.isLoaded) return;
+        this.currentPattern = pattern;
         
         if (this.part) {
-            this.part.stop(0);
-            this.part.dispose();
+           this.part.stop(0);
+           this.part.dispose();
         }
+        
+        this.part = new Tone.Loop(time => {
+             const currentPartData = this.createPart(this.currentPattern, this.barCount);
+             currentPartData.forEach(note => {
+                this.sampler?.triggerAttackRelease(note.note, "8n", time + Tone.Transport.toSeconds(note.time), note.velocity || 1.0);
+             });
+             this.barCount++;
+        }, '1m').start(0);
 
-        // We use a loop to manually schedule parts per bar, allowing for fills.
-        Tone.Transport.scheduleRepeat(time => {
-            const currentPartData = this.createPart(pattern, this.barCount);
-            
-            // Schedule all notes for the current bar
-            currentPartData.forEach(note => {
-                this.sampler?.triggerAttack(note.note, Tone.Transport.toSeconds(note.time) + time);
-            });
-
-            this.barCount++;
-        }, '1m'); // Repeat every measure
     }
 
     stop() {
         this.part?.stop(0);
-        Tone.Transport.cancel(); // Clear all scheduled events
         this.barCount = 0;
     }
 
@@ -174,6 +189,13 @@ class DrumGenerator {
 
     setEnabled(enabled: boolean) {
         this.setVolume(enabled ? 0 : -Infinity);
+        if (enabled) {
+            if (this.part?.state !== 'started') {
+               this.start(this.currentPattern);
+            }
+        } else {
+            this.stop();
+        }
     }
 }
 
@@ -202,7 +224,7 @@ const Conductor = {
 
     stop() {
         Tone.Transport.stop();
-        Tone.Transport.cancel();
+        Tone.Transport.position = 0; // Reset transport
         this.drummer?.stop();
         this.bassist.stop();
     },
@@ -214,32 +236,24 @@ const Conductor = {
 
         // Update Drummer
         this.drummer.setEnabled(drumSettings.enabled);
-        this.drummer.start(drumSettings.pattern);
-
+        if (drumSettings.enabled) {
+           this.drummer.restart(drumSettings.pattern);
+        }
+       
         // Update Bassist
         this.bassist.setEnabled(instruments.bass !== 'none');
-        if (instruments.bass !== 'none') {
-             this.bassist.start(drumSettings.pattern);
-        }
     },
     
     setDrums(drumSettings: DrumSettings) {
         if (!this.drummer) return;
         this.drummer.setEnabled(drumSettings.enabled);
-        if (drumSettings.enabled) {
-            this.drummer.start(drumSettings.pattern);
-        } else {
-            this.drummer.stop();
+         if (drumSettings.enabled && Tone.Transport.state === 'started') {
+            this.drummer.restart(drumSettings.pattern);
         }
     },
 
     setInstruments(instruments: Instruments) {
        this.bassist.setEnabled(instruments.bass !== 'none');
-       if (instruments.bass !== 'none' && Tone.Transport.state === 'started') {
-           this.bassist.start('basic'); // restart with current pattern
-       } else {
-           this.bassist.stop();
-       }
     }
 };
 
@@ -250,7 +264,8 @@ self.onmessage = async (event: MessageEvent) => {
     try {
         switch (command) {
             case 'init':
-                await Tone.start(); // AudioContext must be started by user gesture
+                // Tone.start() must be called from the main thread via user gesture.
+                // We assume it has been called before 'init'.
                 Conductor.init(data.sampleUrls);
                 break;
             
@@ -266,11 +281,11 @@ self.onmessage = async (event: MessageEvent) => {
                 break;
             
             case 'set_instruments':
-                Conductor.setInstruments(data);
+                if (Conductor.isInitialized) Conductor.setInstruments(data);
                 break;
 
             case 'set_drums':
-                 Conductor.setDrums(data);
+                if (Conductor.isInitialized) Conductor.setDrums(data);
                 break;
         }
     } catch (e) {
@@ -278,5 +293,4 @@ self.onmessage = async (event: MessageEvent) => {
     }
 };
 
-// This worker no longer renders audio itself. Tone.js handles output to destination.
-// The main thread is responsible for connecting Tone's output to the AudioContext destination.
+    

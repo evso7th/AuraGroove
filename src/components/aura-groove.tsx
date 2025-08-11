@@ -39,7 +39,6 @@ export type DrumSettings = {
     volume: number;
 };
 
-// URLs are now passed to the worker for Tone.Sampler
 const sampleUrls = {
     kick: '/assets/drums/kick_drum6.wav',
     snare: '/assets/drums/snare.wav',
@@ -59,21 +58,21 @@ export function AuraGroove() {
   const [drumSettings, setDrumSettings] = useState<DrumSettings>({
       enabled: true,
       pattern: 'basic',
-      volume: 0.8,
+      volume: 1, // Volume is now 0-1 for the slider
   });
   const [instruments, setInstruments] = useState<Instruments>({
     solo: "none",
     accompaniment: "none",
-    bass: "none", // Bass is off by default
+    bass: "none",
   });
   const { toast } = useToast();
 
   const musicWorkerRef = useRef<Worker>();
-  // We no longer need to decode samples here. Tone.js handles it in the worker.
   const isWorkerInitialized = useRef(false);
 
-  
+  // This function now starts the worker with current settings
   const startWorker = useCallback(() => {
+      if (!isWorkerInitialized.current) return;
       setLoadingText("Generating music...");
       musicWorkerRef.current?.postMessage({
           command: 'start',
@@ -92,14 +91,13 @@ export function AuraGroove() {
     const handleMessage = (event: MessageEvent) => {
       const { type, error } = event.data;
       
-      // The worker no longer sends audio chunks. It plays directly via Tone.js.
-      // We listen for state changes.
       if (type === 'started') {
         setIsInitializing(false);
         setLoadingText("");
         setIsPlaying(true);
       } else if (type === 'initialized') {
         isWorkerInitialized.current = true;
+        // Now that worker is initialized, we can start it
         startWorker();
       } else if (type === 'error') {
         toast({
@@ -116,12 +114,15 @@ export function AuraGroove() {
     worker.onmessage = handleMessage;
     
     return () => {
+      worker.postMessage({ command: 'stop' });
       worker.terminate();
       if (Tone.Transport.state === "started") {
         Tone.Transport.stop();
       }
+       // Ensure Tone.js is cleaned up
+      Tone.context.close();
     };
-  }, [toast, startWorker]); 
+  }, [toast, startWorker]); // startWorker is now a dependency
   
   const handleInstrumentChange = useCallback((part: keyof Instruments, value: Instruments[keyof Instruments]) => {
     const newInstruments = { ...instruments, [part]: value };
@@ -135,8 +136,10 @@ export function AuraGroove() {
  const handleDrumsSettingChange = useCallback((key: keyof DrumSettings, value: any) => {
     const newDrumSettings = { ...drumSettings, [key]: value };
     setDrumSettings(newDrumSettings);
-    // We adjust the main volume for drums here
-    Tone.Destination.volume.value = Tone.gainToDb(newDrumSettings.volume);
+    // Convert slider value (0-1) to decibels for Tone.js
+    const volumeInDb = Tone.gainToDb(newDrumSettings.volume);
+    Tone.Destination.volume.value = volumeInDb;
+    
     musicWorkerRef.current?.postMessage({
         command: 'set_drums',
         data: newDrumSettings,
@@ -149,10 +152,9 @@ export function AuraGroove() {
     setLoadingText("Preparing audio engine...");
 
     try {
-        await Tone.start(); // User gesture to start AudioContext
-        if (Tone.context.state !== 'running') {
-            await Tone.context.resume();
-        }
+      if (Tone.context.state !== 'running') {
+        await Tone.start();
+      }
       
       setLoadingText("Initializing worker...");
       
@@ -162,6 +164,7 @@ export function AuraGroove() {
           sampleUrls: sampleUrls,
         }
       });
+      // The 'initialized' message from worker will trigger startWorker
 
     } catch (error) {
         console.error("Failed to prepare audio:", error);
@@ -272,7 +275,7 @@ export function AuraGroove() {
                 <Label htmlFor="drum-pattern" className="text-right">Pattern</Label>
                 <Select
                     value={drumSettings.pattern}
-                    onValueChange={(v) => handleDrumsSettingChange('pattern', v)}
+                    onValueChange={(v) => handleDrumsSettingChange('pattern', v as DrumSettings['pattern'])}
                     disabled={isBusy || !drumSettings.enabled}
                 >
                     <SelectTrigger id="drum-pattern" className="col-span-2">
@@ -294,7 +297,7 @@ export function AuraGroove() {
                     step={0.05}
                     onValueChange={(v) => handleDrumsSettingChange('volume', v[0])}
                     className="col-span-2"
-                    disabled={isBusy || !drumSettings.enabled}
+                    disabled={isBusy}
                 />
             </div>
         </div>
@@ -336,3 +339,5 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    
