@@ -47,12 +47,12 @@ export class BassSynthManager {
                         type: 'sine',
                     },
                     envelope: {
-                        attack: 0.05,
-                        decay: 0.1,
-                        sustain: 0.8,
-                        release: 0.5,
+                        attack: 0.16,
+                        decay: 0.15,
+                        sustain: 1,
+                        release: 0.8,
                     },
-                    volume: 0,
+                    volume: -6,
                 }).toDestination();
             default:
                 return null;
