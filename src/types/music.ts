@@ -14,8 +14,16 @@ export type SoloNote = {
     duration: Tone.Unit.Time;
 }
 
+export type AccompanimentNote = {
+    notes: string | string[];
+    time: Tone.Unit.Time;
+    duration: Tone.Unit.Time;
+}
+
 export type DrumNote = {
     sample: string;
     time: number; // time in beats from the start of the loop
     velocity?: number;
 }
+
+    

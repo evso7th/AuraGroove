@@ -27,6 +27,7 @@ import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { BassSynthManager } from "@/lib/bass-synth-manager";
 import { SoloSynthManager } from "@/lib/solo-synth-manager";
+import { AccompanimentSynthManager } from "@/lib/accompaniment-synth-manager";
 
 
 export type Instruments = {
@@ -62,6 +63,12 @@ type DrumNote = {
     velocity?: number;
 }
 
+type AccompanimentNote = {
+    notes: string | string[];
+    time: Tone.Unit.Time;
+    duration: Tone.Unit.Time;
+}
+
 const samplePaths: Record<string, string> = {
     kick: '/assets/drums/kick_drum6.wav',
     snare: '/assets/drums/snare.wav',
@@ -93,6 +100,7 @@ export function AuraGroove() {
   const musicWorkerRef = useRef<Worker>();
   const bassSynthManagerRef = useRef<BassSynthManager | null>(null);
   const soloSynthManagerRef = useRef<SoloSynthManager | null>(null);
+  const accompanimentSynthManagerRef = useRef<AccompanimentSynthManager | null>(null);
   const drumPlayersRef = useRef<Tone.Players | null>(null);
   const isWorkerInitialized = useRef(false);
 
@@ -107,6 +115,9 @@ export function AuraGroove() {
     // 2. Initialize Synths
     if (!soloSynthManagerRef.current) {
         soloSynthManagerRef.current = new SoloSynthManager();
+    }
+     if (!accompanimentSynthManagerRef.current) {
+        accompanimentSynthManagerRef.current = new AccompanimentSynthManager();
     }
     if (!bassSynthManagerRef.current) {
         bassSynthManagerRef.current = new BassSynthManager();
@@ -160,6 +171,19 @@ export function AuraGroove() {
                 const now = Tone.now();
                 data.score.forEach((note: SoloNote) => {
                     soloSynthManagerRef.current?.triggerAttackRelease(
+                        note.notes,
+                        note.duration,
+                        now + note.time
+                    );
+                });
+            }
+            break;
+        
+        case 'accompaniment_score':
+            if (accompanimentSynthManagerRef.current && data.score && data.score.length > 0) {
+                const now = Tone.now();
+                data.score.forEach((note: AccompanimentNote) => {
+                    accompanimentSynthManagerRef.current?.triggerAttackRelease(
                         note.notes,
                         note.duration,
                         now + note.time
@@ -249,6 +273,7 @@ export function AuraGroove() {
       }
       bassSynthManagerRef.current?.dispose();
       soloSynthManagerRef.current?.dispose();
+      accompanimentSynthManagerRef.current?.dispose();
       drumPlayersRef.current?.dispose();
       if (Tone.Transport.state !== 'stopped') {
         Tone.Transport.stop();
@@ -291,6 +316,12 @@ export function AuraGroove() {
     }
   }, [instruments.solo]);
 
+  useEffect(() => {
+    if (accompanimentSynthManagerRef.current) {
+        accompanimentSynthManagerRef.current.setInstrument(instruments.accompaniment);
+    }
+  }, [instruments.accompaniment]);
+
 
   const handlePlay = useCallback(async () => {
     try {
@@ -324,6 +355,11 @@ export function AuraGroove() {
             soloSynthManagerRef.current.setInstrument(instruments.solo);
             soloSynthManagerRef.current.startEffects();
         }
+        
+         if (accompanimentSynthManagerRef.current) {
+            accompanimentSynthManagerRef.current.setInstrument(instruments.accompaniment);
+            accompanimentSynthManagerRef.current.startEffects();
+        }
 
     } catch (error) {
         console.error("Failed to prepare audio:", error);
@@ -340,7 +376,9 @@ export function AuraGroove() {
   const handleStop = useCallback(() => {
     soloSynthManagerRef.current?.releaseAll();
     bassSynthManagerRef.current?.releaseAll();
+    accompanimentSynthManagerRef.current?.releaseAll();
     soloSynthManagerRef.current?.stopEffects();
+    accompanimentSynthManagerRef.current?.stopEffects();
     
     if (Tone.Transport.state !== 'stopped') {
         Tone.Transport.stop();
@@ -437,7 +475,7 @@ export function AuraGroove() {
                 <SelectItem value="none">None</SelectItem>
                 <SelectItem value="synthesizer" disabled>Synthesizer</SelectItem>
                 <SelectItem value="piano" disabled>Piano</SelectItem>
-                <SelectItem value="organ" disabled>Organ</SelectItem>
+                <SelectItem value="organ">Organ</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -540,5 +578,7 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    
 
     

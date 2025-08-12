@@ -1,5 +1,5 @@
 
-import type { DrumNote, BassNote, SoloNote } from '@/types/music';
+import type { DrumNote, BassNote, SoloNote, AccompanimentNote } from '@/types/music';
 
 /**
  * "Promenade" - A musical score capturing a moment of generated music.
@@ -9,7 +9,8 @@ import type { DrumNote, BassNote, SoloNote } from '@/types/music';
 export const promenadeScore: {
     drums: DrumNote[],
     bass: BassNote[],
-    solo: SoloNote[]
+    solo: SoloNote[],
+    accompaniment: AccompanimentNote[],
 } = {
     drums: [
         // Bar 1
@@ -68,5 +69,14 @@ export const promenadeScore: {
         { notes: 'E3', duration: '8n', time: 12.5 },
         { notes: 'G3', duration: '8n', time: 13.5 },
         { notes: 'B3', duration: '4n', time: 14.5 },
+    ],
+    accompaniment: [
+        // Chords for the progression
+        { notes: ['E2', 'G2', 'B2'], duration: '1n', time: 0 },
+        { notes: ['C2', 'E2', 'G2'], duration: '1n', time: 4 },
+        { notes: ['G2', 'B2', 'D3'], duration: '1n', time: 8 },
+        { notes: ['D2', 'F#2', 'A2'], duration: '1n', time: 12 },
     ]
 };
+
+    
