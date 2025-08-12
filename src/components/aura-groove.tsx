@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import * as Tone from 'tone';
-import { Drum, Loader2, Music, Pause, Settings, Speaker } from "lucide-react";
+import { Drum, Loader2, Music, Pause, Speaker } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,7 +26,6 @@ import Logo from "@/components/icons";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { AudioPlayer } from "@/lib/audio-player";
-import { BassSynthControls, type BassSynthParams } from "./bass-synth-controls";
 import { SoloSynthManager } from "@/lib/solo-synth-manager";
 
 
@@ -42,7 +41,7 @@ export type DrumSettings = {
     volume: number;
 };
 
-// Helper function to decode audio data in the main thread
+// Helper to decode audio data in the main thread
 async function decodeSamples(samplePaths: Record<string, string>, toast: (options: any) => void) {
     const context = Tone.getContext();
     const promises = Object.entries(samplePaths).map(async ([key, path]) => {
@@ -55,9 +54,8 @@ async function decodeSamples(samplePaths: Record<string, string>, toast: (option
              if (context.state === 'suspended') {
                 await context.resume();
             }
-            // Use Tone.context.decodeAudioData for consistency
             const audioBuffer = await context.decodeAudioData(arrayBuffer);
-            // We only need the raw channel data for the worker
+            // We only need the raw Float32Array for the worker
             return { [key]: audioBuffer.getChannelData(0) };
         } catch (e) {
             console.error(`Error decoding sample ${key}:`, e);
@@ -80,28 +78,12 @@ type BassNote = {
     velocity: number;
 }
 
-const initialBassParams: BassSynthParams = {
-    oscillator: {
-        harmonicity: 1.5,
-    },
-    envelope: {
-        attack: 0.05,
-        decay: 0.3,
-        sustain: 0,
-        release: 1.4,
-    },
-    filter: {
-        Q: 2,
-    },
-    filterEnvelope: {
-        attack: 0.06,
-        decay: 0.2,
-        sustain: 0,
-        release: 1,
-        baseFrequency: 200,
-        octaves: 4,
-    },
-};
+type SoloNote = {
+    notes: string | string[];
+    time: number;
+    duration: Tone.Unit.Time;
+    velocity: number;
+}
 
 
 export function AuraGroove() {
@@ -114,12 +96,11 @@ export function AuraGroove() {
       volume: 0.7,
   });
   const [instruments, setInstruments] = useState<Instruments>({
-    solo: "none",
+    solo: "organ",
     accompaniment: "none",
     bass: "bass synth",
   });
   const [bpm, setBpm] = useState(100);
-   const [bassParams, setBassParams] = useState<BassSynthParams>(initialBassParams);
   const { toast } = useToast();
 
   const musicWorkerRef = useRef<Worker>();
@@ -137,7 +118,6 @@ export function AuraGroove() {
   }
 
    useEffect(() => {
-    // Make sure to create the worker only once.
     if (!musicWorkerRef.current) {
         musicWorkerRef.current = new Worker('/workers/ambient.worker.js');
 
@@ -166,7 +146,6 @@ export function AuraGroove() {
 
             case 'chunk':
               if (data && audioPlayerRef.current && data.chunk && data.duration) {
-                 // The worker now sends the correct sample rate
                  audioPlayerRef.current.scheduleChunk(data.chunk, data.duration);
               }
               break;
@@ -174,29 +153,27 @@ export function AuraGroove() {
             case 'bass_score':
                 if (bassSynthRef.current && data.score && data.score.length > 0) {
                     const now = Tone.now();
-                    const synth = bassSynthRef.current;
-                    // Connect before playing to ensure sound is heard
-                    synth.toDestination();
-
-                    let lastNoteTime = 0;
                     data.score.forEach((note: BassNote) => {
-                        synth.triggerAttackRelease(
+                        bassSynthRef.current?.triggerAttackRelease(
                             note.note,
                             note.duration,
                             now + note.time,
                             note.velocity
                         );
-                        if ((now + note.time + note.duration) > lastNoteTime) {
-                            lastNoteTime = now + note.time + note.duration;
-                        }
                     });
-
-                    // Schedule disconnection after the last note has finished playing
-                    Tone.Transport.scheduleOnce(() => {
-                        if (synth.connected) {
-                            synth.disconnect();
-                        }
-                    }, lastNoteTime + 0.1); // Add a small buffer
+                }
+                break;
+            
+            case 'solo_score':
+                if (soloSynthManagerRef.current && data.score && data.score.length > 0) {
+                    const now = Tone.now();
+                    data.score.forEach((note: SoloNote) => {
+                        soloSynthManagerRef.current?.triggerAttackRelease(
+                            note.notes,
+                            note.duration,
+                            now + note.time
+                        );
+                    });
                 }
                 break;
 
@@ -223,7 +200,6 @@ export function AuraGroove() {
     }
     
     return () => {
-      // Terminate worker on component unmount
       if (musicWorkerRef.current) {
         musicWorkerRef.current.terminate();
         musicWorkerRef.current = undefined;
@@ -234,7 +210,7 @@ export function AuraGroove() {
       Tone.Transport.stop();
       Tone.Transport.cancel();
     };
-  }, []); // Keep dependencies empty to run only once.
+  }, []);
   
   const updateWorkerSettings = useCallback(() => {
     if (musicWorkerRef.current && (isPlaying || isInitializing)) {
@@ -247,26 +223,14 @@ export function AuraGroove() {
 
   useEffect(() => {
     updateWorkerSettings();
-  }, [drumSettings, instruments.bass, bpm, updateWorkerSettings]);
+  }, [drumSettings, instruments, bpm, updateWorkerSettings]);
   
   // This effect updates the synth's parameters whenever they change in the UI
   useEffect(() => {
     if (bassSynthRef.current) {
-        bassSynthRef.current.set({
-            oscillator: {
-                type: "amsine",
-                harmonicity: bassParams.oscillator.harmonicity,
-            },
-            envelope: bassParams.envelope,
-            filter: {
-                ...bassParams.filter,
-                 type: "lowpass", // Keep type fixed
-                 rolloff: -24
-            },
-            filterEnvelope: bassParams.filterEnvelope
-        });
+        // Bass synth params are now fixed in its creation
     }
-  }, [bassParams]);
+  }, []);
 
   // Handle solo instrument changes
   useEffect(() => {
@@ -286,11 +250,11 @@ export function AuraGroove() {
         
         if (!bassSynthRef.current) {
              bassSynthRef.current = new Tone.MonoSynth({
-                oscillator: { type: "amsine", harmonicity: bassParams.oscillator.harmonicity },
-                envelope: { ...bassParams.envelope, sustain: 0 },
-                filter: { ...bassParams.filter, type: "lowpass", rolloff: -24 },
-                filterEnvelope: { ...bassParams.filterEnvelope, sustain: 0 }
-            }); // Do NOT connect to destination here
+                oscillator: { type: "amsine", harmonicity: 1.5 },
+                envelope: { attack: 0.05, decay: 0.3, sustain: 0, release: 1.4 },
+                filter: { Q: 2, type: "lowpass", rolloff: -24 },
+                filterEnvelope: { attack: 0.06, decay: 0.2, sustain: 0, release: 1, baseFrequency: 200, octaves: 4 }
+            }).toDestination();
         }
         
         if (soloSynthManagerRef.current) {
@@ -307,7 +271,6 @@ export function AuraGroove() {
             throw new Error("AudioContext not initialized or sample rate not available.");
         }
         
-        // This check ensures we only initialize the worker with samples once.
         if (isWorkerInitialized.current) {
             setLoadingText("Starting playback...");
             musicWorkerRef.current.postMessage({
@@ -325,8 +288,7 @@ export function AuraGroove() {
             };
             
             const decodedSamples = await decodeSamples(samplePaths, toast);
-            
-            const transferableObjects = Object.values(decodedSamples).map(s => (s as Float32Array).buffer);
+            const transferableObjects = Object.values(decodedSamples).map(s => s.buffer);
             
             musicWorkerRef.current.postMessage({
                 command: 'init',
@@ -347,18 +309,12 @@ export function AuraGroove() {
         setIsInitializing(false);
         setLoadingText("");
     }
-  }, [drumSettings, instruments, bpm, toast, bassParams]);
+  }, [drumSettings, instruments, bpm, toast]);
 
   const handleStop = useCallback(() => {
-    // Immediately disconnect the synth to cut all sound, including hum.
-    if (bassSynthRef.current?.connected) {
-        bassSynthRef.current.disconnect();
-    }
     soloSynthManagerRef.current?.releaseAll();
-    // Stop the transport and cancel all scheduled events.
     Tone.Transport.stop();
     Tone.Transport.cancel();
-    // Use the worker to manage its own state.
     musicWorkerRef.current?.postMessage({ command: 'stop' });
   }, []);
   
@@ -438,11 +394,6 @@ export function AuraGroove() {
                         <SelectItem value="bass synth">Bass Synth</SelectItem>
                     </SelectContent>
                 </Select>
-                <BassSynthControls 
-                    params={bassParams}
-                    setParams={setBassParams}
-                    disabled={isBusy || instruments.bass === 'none'}
-                />
              </div>
           </div>
         </div>
