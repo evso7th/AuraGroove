@@ -1,31 +1,48 @@
 /**
  * @file AuraGroove Ambient Music Worker
  *
- * This worker operates on a microservice-style architecture. Each musical
- * component is an isolated entity responsible for a single task.
+ * This worker operates on a microservice-style architecture, inspired by the user's feedback.
+ * Each musical component is an isolated entity responsible for a single task.
  *
  * Core Entities:
- * 1.  Scheduler: The central "conductor" or "event loop". It wakes up at regular
+ * 1.  MessageBus (self): The "Kafka" of the worker. Handles all communication
+ *     between the main thread and the worker's internal systems.
+ *
+ * 2.  Scheduler: The central "conductor" or "event loop". It wakes up at regular
  *     intervals, determines what musical data is needed, and coordinates the other
  *     entities. It doesn't generate music itself, only directs the flow.
  *
- * 2.  Instrument Generators (e.g., DrumGenerator, BassGenerator): These are the "composers".
- *     They take musical settings and return a "score" - an array of note events.
- *     They are stateless and know nothing about audio rendering.
+ * 3.  Instrument Generators (e.g., DrumGenerator, BassGenerator): These are the "composers".
+ *     They take a time signature and a pattern name and return a "score" - a simple
+ *     array of note events (`{ time, sample, velocity }`). They are stateless and
+ *     know nothing about audio rendering.
  *
- * 3.  PatternProvider: The "music sheet library". It holds all rhythmic and melodic
+ * 4.  PatternProvider: The "music sheet library". It holds all rhythmic and melodic
  *     patterns. It's a simple data store that the Instrument Generators query.
  *
- * Data Flow on Tick:
- * - Scheduler's timer fires.
- * - Scheduler asks the appropriate generators for their scores for the next time slice.
- * - Generators may ask PatternProvider for their patterns.
- * - Generators create their scores (e.g., `{ note: 'C4', time: 0, duration: 1 }`).
- * - Scheduler posts the scores back to the main thread.
+ * 5.  AudioRenderer: The "audio engine". Its ONLY job is to take a score (from any
+ *     generator) and "render" it into a raw audio buffer (Float32Array). It handles
+ *     mixing, volume, and sample placement. It is completely decoupled from musical logic.
  *
- * This architecture ensures that changing a drum pattern CANNOT break the bass logic,
- * and changing a generator CANNOT break the audio rendering on the main thread.
- * Each part is independent, testable, and replaceable.
+ * 6.  SampleBank: A repository for decoded audio samples, ensuring they are ready for
+ *     the AudioRenderer to use instantly.
+ *
+ * Data Flow on Start:
+ * - Main thread sends 'init' with samples and sampleRate.
+ * - Worker decodes samples into SampleBank.
+ * - Main thread sends 'start' with instrument/drum settings.
+ * - Scheduler starts its loop.
+ * - In each loop:
+ *   - Scheduler asks the appropriate generators for their scores for the next time slice.
+ *   - Generators ask PatternProvider for their patterns.
+ *   - Generators create their scores and return them to the scheduler.
+ *   - Scheduler passes all scores to the AudioRenderer.
+ *   - AudioRenderer creates a blank audio chunk, "paints" the samples from each score onto it, and returns the mixed chunk.
+ *   - Scheduler posts the final audio chunk back to the main thread.
+ *
+ * This architecture ensures that changing a drum pattern CANNOT break the audio renderer,
+ * and changing the audio renderer CANNOT break the musical logic. Each part is
+ * independent, testable, and replaceable, following the user's core architectural principle.
  */
 
 // --- 1. PatternProvider (The Music Sheet Library) ---
@@ -70,23 +87,14 @@ const PatternProvider = {
             { sample: 'ride', time: 3.5 },
         ],
     },
-    soloScales: {
-        C_MAJOR: ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4', 'C5'],
-        A_MINOR: ['A3', 'B3', 'C4', 'D4', 'E4', 'F4', 'G4', 'A4'],
-    },
-
     getDrumPattern(name) {
         return this.drumPatterns[name] || this.drumPatterns.basic;
     },
-    getSoloScale() {
-        // For now, just return one scale. This could be expanded.
-        return this.soloScales.A_MINOR;
-    }
 };
 
 // --- 2. Instrument Generators (The Composers) ---
 class DrumGenerator {
-    static createScore(patternName, barNumber) {
+    static createScore(patternName, barNumber, totalBars, beatsPerBar = 4) {
         const pattern = PatternProvider.getDrumPattern(patternName);
         let score = [...pattern];
 
@@ -94,7 +102,7 @@ class DrumGenerator {
         if (barNumber % 4 === 0) {
             // Remove any other drum hit at time 0 to avoid conflict
             score = score.filter(note => note.time !== 0);
-            score.unshift({ sample: 'crash', time: 0, velocity: 0.8 });
+            score.push({ sample: 'crash', time: 0, velocity: 0.8 });
         }
         
         return score;
@@ -103,47 +111,79 @@ class DrumGenerator {
 
 class BassGenerator {
      static createScore(rootNote = 'E', beatsPerBar = 4) {
-        // Simple bassline: root note on the first beat of the bar
+        const octave = Math.random() > 0.4 ? '1' : '2';
         const score = [
-            { note: `${rootNote}1`, time: 0, duration: beatsPerBar, velocity: 0.9 }
+            { note: `${rootNote}${octave}`, time: 0, duration: beatsPerBar, velocity: 0.9 }
         ];
         return score;
     }
 }
 
 class SoloGenerator {
-    static lastNoteIndex = -1;
-    
-    static createScore(scale, beatsPerBar = 4, barNumber) {
+    static getChord(root, quality) {
+        // Simple triad logic for now
+        const major = [0, 4, 7];
+        const minor = [0, 3, 7];
+        const qualities = {
+            'maj': major,
+            'min': minor
+        };
+        const intervals = qualities[quality] || major;
+        // Using Tonal.js or a similar library would be better for real applications
+        const C4 = 60; // MIDI for C4
+        const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+        const rootMidi = noteNames.indexOf(root);
+        
+        if (rootMidi === -1) return [`${root}4`]; // fallback
+
+        return intervals.map(i => {
+            const noteIndex = (rootMidi + i) % 12;
+            return `${noteNames[noteIndex]}4`;
+        });
+    }
+
+    static createScore(rootNote = 'E', barNumber, beatsPerBar = 4) {
         const score = [];
         
-        // Let's play a note only once every 2 bars to keep it sparse
-        if (barNumber % 2 !== 0) {
-            return score;
+        const possibleNotes = ['E4', 'G4', 'A4', 'B4', 'D5'];
+        const longNoteChance = 0.3;
+
+        if (barNumber % 8 === 0) {
+            // Play a long, held root note for the whole bar
+             score.push({
+                notes: `${rootNote}4`,
+                time: 0,
+                duration: beatsPerBar,
+                velocity: 0.5
+            });
+        } else if (barNumber % 4 === 0) {
+             // Play a chord
+            const chord = this.getChord(rootNote, 'min');
+             score.push({
+                notes: chord,
+                time: 0,
+                duration: beatsPerBar / 2,
+                velocity: 0.4
+            });
         }
-
-        // Simple algorithm: pick a random note from the scale, but not the same one as last time
-        let noteIndex;
-        do {
-            noteIndex = Math.floor(Math.random() * scale.length);
-        } while (scale.length > 1 && noteIndex === this.lastNoteIndex);
-        this.lastNoteIndex = noteIndex;
-
-        const note = scale[noteIndex];
-        const time = Math.random() > 0.5 ? 0 : beatsPerBar / 2; // Place on 1st or 3rd beat
-        const duration = beatsPerBar / 2; // half the bar
+        else {
+            // Arpeggiate or play single notes
+            for(let i=0; i < beatsPerBar; i++) {
+                if(Math.random() > 0.6) { // add some silence
+                    const note = possibleNotes[Math.floor(Math.random() * possibleNotes.length)];
+                    score.push({
+                        notes: note,
+                        time: i,
+                        duration: Math.random() > longNoteChance ? 0.5 : 1.0,
+                        velocity: 0.3 + Math.random() * 0.3
+                    });
+                }
+            }
+        }
         
-        score.push({
-            notes: note,
-            time: time,
-            duration: duration,
-            velocity: 0.7
-        });
-
         return score;
     }
 }
-
 
 // --- 3. Scheduler (The Conductor) ---
 const Scheduler = {
@@ -164,10 +204,14 @@ const Scheduler = {
 
     start() {
         if (this.isRunning) return;
+
         this.reset();
         this.isRunning = true;
         
-        this.tick(); // Generate the first chunk immediately
+        // Generate the first chunk immediately
+        this.tick();
+
+        // Then set up the interval for subsequent chunks
         this.intervalId = setInterval(() => this.tick(), this.barDuration * 1000);
         self.postMessage({ type: 'started' });
     },
@@ -187,33 +231,39 @@ const Scheduler = {
     updateSettings(settings) {
         if (settings.instruments) this.instruments = settings.instruments;
         if (settings.drumSettings) this.drumSettings = settings.drumSettings;
-        if (settings.bpm) this.bpm = settings.bpm;
+        if(settings.bpm) this.bpm = settings.bpm;
     },
 
     tick() {
         if (!this.isRunning) return;
-
-        // 1. Generate drum score
+        
+        // 1. Ask generators for their scores
         if (this.drumSettings.enabled) {
             const drumScore = DrumGenerator.createScore(
                 this.drumSettings.pattern, 
-                this.barCount
+                this.barCount,
+                -1 // totalBars not needed for this simple generator
             );
-            // Post score back to the main thread
-            self.postMessage({ type: 'drum_score', data: { score: drumScore }});
+             self.postMessage({
+                type: 'drum_score',
+                data: { score: drumScore }
+            });
         }
         
-        // 2. Generate bass score
         if (this.instruments.bass !== 'none') {
             const bassScore = BassGenerator.createScore('E', this.beatsPerBar);
-            self.postMessage({ type: 'bass_score', data: { score: bassScore }});
+            self.postMessage({
+                type: 'bass_score',
+                data: { score: bassScore }
+            });
         }
         
-        // 3. Generate solo score
-        if (this.instruments.solo !== 'none') {
-            const soloScale = PatternProvider.getSoloScale();
-            const soloScore = SoloGenerator.createScore(soloScale, this.beatsPerBar, this.barCount);
-            self.postMessage({ type: 'solo_score', data: { score: soloScore }});
+         if (this.instruments.solo !== 'none') {
+            const soloScore = SoloGenerator.createScore('E', this.barCount, this.beatsPerBar);
+             self.postMessage({
+                type: 'solo_score',
+                data: { score: soloScore }
+            });
         }
 
         this.barCount++;
@@ -221,8 +271,8 @@ const Scheduler = {
 };
 
 
-// --- MessageBus (The entry point) ---
-self.onmessage = (event) => {
+// --- MessageBus (The "Kafka" entry point) ---
+self.onmessage = async (event) => {
     const { command, data } = event.data;
 
     try {
@@ -244,3 +294,4 @@ self.onmessage = (event) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
+
