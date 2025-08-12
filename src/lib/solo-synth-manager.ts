@@ -23,7 +23,7 @@ export class SoloSynthManager {
      * @param name The name of the instrument to activate ('organ', 'none', etc.).
      */
     public setInstrument(name: InstrumentName) {
-        if (name === this.currentInstrument) {
+        if (name === this.currentInstrument && this.currentSynth) {
             return;
         }
 
@@ -114,5 +114,6 @@ export class SoloSynthManager {
             this.tremolo.dispose();
             this.tremolo = null;
         }
+        this.currentInstrument = 'none';
     }
 }

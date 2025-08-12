@@ -21,6 +21,10 @@ export class BassSynthManager {
      * @param name The name of the instrument to activate.
      */
     public setInstrument(name: InstrumentName) {
+        if (name === this.currentInstrument && this.currentSynth) {
+            return;
+        }
+        
         this.dispose(); 
         this.currentInstrument = name;
 
@@ -29,9 +33,6 @@ export class BassSynthManager {
         }
 
         this.currentSynth = this.createSynth(name);
-        if (this.currentSynth) {
-            this.currentSynth.toDestination();
-        }
     }
 
     /**
@@ -79,9 +80,9 @@ export class BassSynthManager {
      */
     public dispose() {
         if (this.currentSynth) {
-            this.currentSynth.disconnect();
             this.currentSynth.dispose();
             this.currentSynth = null;
         }
+        this.currentInstrument = null;
     }
 }
