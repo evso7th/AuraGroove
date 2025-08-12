@@ -139,11 +139,11 @@ export function AuraGroove() {
             break;
 
         case 'bass_score':
-            console.log('Main Thread: Received bass score from worker', data.score); // Добавьте эту строку
+            console.log('Main Thread: Received bass score from worker', data.score); 
             if (bassSynthManagerRef.current && data.score && data.score.length > 0) {
                 const now = Tone.now();
                 data.score.forEach((note: BassNote) => {
-                    console.log('Main Thread: Triggering bass note', note); // Добавьте эту строку
+                    console.log('Main Thread: Triggering bass note', note); 
                     bassSynthManagerRef.current?.triggerAttackRelease(
                         note.note,
                         note.duration,
@@ -152,7 +152,7 @@ export function AuraGroove() {
                     );
                 });
             } else {
-                 console.log('Main Thread: Received empty or invalid bass score', data.score); // Добавьте эту строку
+                 console.log('Main Thread: Received empty or invalid bass score', data.score); 
             }
             break;
         
@@ -463,7 +463,7 @@ export function AuraGroove() {
                     min={60}
                     max={160}
                     step={5}
-                    onValue-change={(v) => setBpm(v[0])}
+                    onValueChange={(v) => setBpm(v[0])}
                     className="col-span-2"
                     disabled={isBusy || isPlaying}
                 />
@@ -518,6 +518,8 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    
 
     
 
