@@ -50,8 +50,7 @@ type BassNote = {
 
 type SoloNote = {
     notes: string | string[];
-    time: number;
-    duration: Tone.Unit.Time;
+    time: Tone.Unit.Time;
     velocity: number;
 }
 
@@ -104,8 +103,6 @@ export function AuraGroove() {
 
    useEffect(() => {
     setLoadingText("Loading...");
-    // We create a new worker, which will be responsible for all music generation logic.
-    // This keeps the main thread free for UI updates.
     if (!musicWorkerRef.current) {
         musicWorkerRef.current = new Worker('/workers/ambient.worker.js');
 
@@ -128,7 +125,6 @@ export function AuraGroove() {
                  setIsInitializing(false);
                  setLoadingText("");
                  setIsPlaying(true);
-                 // Tone.Transport is now started in handlePlay
                  break;
 
             case 'drum_score':
@@ -191,18 +187,15 @@ export function AuraGroove() {
         musicWorkerRef.current.onmessage = handleMessage;
     }
     
-    // Pre-load drum samples. This is a "best practice" to avoid delays on play.
     if (!drumPlayersRef.current) {
         setLoadingText("Loading samples...");
         drumPlayersRef.current = new Tone.Players(samplePaths, () => {
-            // This callback fires when all samples are loaded.
             setIsReady(true);
             setLoadingText("");
         }).toDestination();
         drumPlayersRef.current.volume.value = Tone.gainToDb(drumSettings.volume);
     }
 
-    // Cleanup function to terminate the worker when the component unmounts.
     return () => {
       if (musicWorkerRef.current) {
         musicWorkerRef.current.terminate();
@@ -214,10 +207,8 @@ export function AuraGroove() {
       Tone.Transport.stop();
       Tone.Transport.cancel();
     };
-  }, []); // Empty dependency array ensures this effect runs only once.
+  }, []); 
   
-  // This effect listens for changes in any of the music settings (instruments, drums, BPM)
-  // and sends them to the worker if playback is active.
   const updateWorkerSettings = useCallback(() => {
     if (musicWorkerRef.current && (isPlaying || isInitializing)) {
         musicWorkerRef.current?.postMessage({
@@ -237,14 +228,12 @@ export function AuraGroove() {
     }
   }, [drumSettings.volume]);
 
-  // This effect updates the synth's parameters whenever they change in the UI
   useEffect(() => {
     if (bassSynthManagerRef.current) {
         bassSynthManagerRef.current.setInstrument(instruments.bass);
     }
   }, [instruments.bass]);
 
-  // Handle solo instrument changes
   useEffect(() => {
     if (soloSynthManagerRef.current) {
         soloSynthManagerRef.current.setInstrument(instruments.solo);
@@ -259,12 +248,10 @@ export function AuraGroove() {
     setLoadingText("Starting audio engine...");
 
     try {
-        // Tone.start() must be called after a user interaction.
         await Tone.start();
         
         setLoadingText("Starting playback...");
         
-        // Start the transport after a short delay to ensure the audio context is ready.
         setTimeout(() => {
           Tone.Transport.start();
         }, 100);
