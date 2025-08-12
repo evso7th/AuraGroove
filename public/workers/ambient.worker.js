@@ -3,61 +3,32 @@
  *
  * This worker operates on a microservice-style architecture.
  * Each musical component is an isolated entity responsible for a single task.
- *
- * Core Entities:
- * 1.  MessageBus (self): Handles all communication with the main thread.
- *
- * 2.  Scheduler: The central "conductor". It wakes up at regular intervals, determines
- *     what musical data is needed based on a chosen chord progression, and coordinates the other
- *     entities. It directs the flow of music.
- *
- * 3.  MusicTheory: A static library containing chord progressions and scale information. It
- *     provides the harmonic foundation for the generators.
- *
- * 4.  Instrument Generators (DrumGenerator, BassGenerator, SoloGenerator): These are the "composers".
- *     They receive the current chord and other parameters from the Scheduler and return a "score" -
- *     a simple array of note events. They are stateless.
- *
- * 5.  PatternProvider: The "music sheet library" for rhythmic patterns, used by generators.
- *
- * Data Flow on Start:
- * - Main thread sends 'start' with instrument/drum settings.
- * - Scheduler selects a chord progression from MusicTheory.
- * - Scheduler starts its loop (tick).
- * - In each loop:
- *   - Scheduler determines the current chord based on the bar number.
- *   - Scheduler asks the appropriate generators for their scores, passing them the current chord.
- *   - Generators create their scores (e.g., bassline on the root, solo using chord tones).
- *   - Scheduler posts the generated scores for each instrument back to the main thread.
- *   - The main thread uses Tone.js to schedule and play these notes.
- *
- * This architecture ensures that all instruments play in harmony, following a structured
- * progression, while still allowing for variation and improvisation within that structure.
  */
 
-// --- 1. MusicTheory (The Harmonic Foundation) ---
+// --- 1. MusicTheory (The Harmony Rulebook) ---
 const MusicTheory = {
-    progressions: [
-        { name: 'Classic Ambient', chords: ['Em', 'C', 'G', 'D'] },
-        { name: 'Spacey', chords: ['Am', 'F', 'C', 'G'] },
-        { name: 'Lofi', chords: ['Cmaj7', 'Fmaj7', 'Am7', 'G7'] },
-    ],
+    progressions: {
+        // Standard ambient/cinematic progressions
+        'Am-G-C-F': ['Am', 'G', 'C', 'F'],
+        'C-G-Am-F': ['C', 'G', 'Am', 'F'],
+        'Em-C-G-D': ['Em', 'C', 'G', 'D'],
+        'Bm-G-D-A': ['Bm', 'G', 'D', 'A'],
+    },
     chords: {
-        // Major
-        'C': ['C', 'E', 'G'], 'D': ['D', 'F#', 'A'], 'G': ['G', 'B', 'D'], 'F': ['F', 'A', 'C'],
-        // Minor
-        'Em': ['E', 'G', 'B'], 'Am': ['A', 'C', 'E'],
-        // 7ths
-        'Cmaj7': ['C', 'E', 'G', 'B'], 'Fmaj7': ['F', 'A', 'C', 'E'],
-        'Am7': ['A', 'C', 'E', 'G'], 'G7': ['G', 'B', 'D', 'F'],
+        // Major Chords (Root, Major Third, Perfect Fifth)
+        'C': ['C', 'E', 'G'],
+        'F': ['F', 'A', 'C'],
+        'G': ['G', 'B', 'D'],
+        'D': ['D', 'F#', 'A'],
+        'A': ['A', 'C#', 'E'],
+        // Minor Chords (Root, Minor Third, Perfect Fifth)
+        'Am': ['A', 'C', 'E'],
+        'Em': ['E', 'G', 'B'],
+        'Bm': ['B', 'D', 'F#'],
     },
-    getRandomProgression() {
-        return this.progressions[Math.floor(Math.random() * this.progressions.length)];
+    getNotesInChord(chordName) {
+        return this.chords[chordName] || [];
     },
-    getChordNotes(chordName, octave) {
-        const notes = this.chords[chordName as keyof typeof this.chords] || [];
-        return notes.map(note => `${note}${octave}`);
-    }
 };
 
 
@@ -65,31 +36,67 @@ const MusicTheory = {
 const PatternProvider = {
     drumPatterns: {
         basic: [
-            { sample: 'kick', time: 0 }, { sample: 'hat', time: 0.5 },
-            { sample: 'snare', time: 1 }, { sample: 'hat', time: 1.5 },
-            { sample: 'kick', time: 2 }, { sample: 'hat', time: 2.5 },
-            { sample: 'snare', time: 3 }, { sample: 'hat', time: 3.5 },
+            { sample: 'kick', time: 0 },
+            { sample: 'hat', time: 0.5 },
+            { sample: 'snare', time: 1 },
+            { sample: 'hat', time: 1.5 },
+            { sample: 'kick', time: 2 },
+            { sample: 'hat', time: 2.5 },
+            { sample: 'snare', time: 3 },
+            { sample: 'hat', time: 3.5 },
         ],
         breakbeat: [
-            { sample: 'kick', time: 0 }, { sample: 'hat', time: 0.5 }, { sample: 'kick', time: 0.75 },
-            { sample: 'snare', time: 1 }, { sample: 'hat', time: 1.5 }, { sample: 'kick', time: 2 },
-            { sample: 'snare', time: 2.5 }, { sample: 'hat', time: 3 }, { sample: 'snare', time: 3.25 },
+            { sample: 'kick', time: 0 },
+            { sample: 'hat', time: 0.5 },
+            { sample: 'kick', time: 0.75 },
+            { sample: 'snare', time: 1 },
+            { sample: 'hat', time: 1.5 },
+            { sample: 'kick', time: 2 },
+            { sample: 'snare', time: 2.5 },
+            { sample: 'hat', time: 3 },
+            { sample: 'snare', time: 3.25 },
             { sample: 'hat', time: 3.5 },
         ],
         slow: [
-            { sample: 'kick', time: 0 }, { sample: 'hat', time: 1 },
-            { sample: 'snare', time: 2 }, { sample: 'hat', time: 3 },
+            { sample: 'kick', time: 0 },
+            { sample: 'hat', time: 1 },
+            { sample: 'snare', time: 2 },
+            { sample: 'hat', time: 3 },
         ],
         heavy: [
-            { sample: 'kick', time: 0, velocity: 1.0 }, { sample: 'ride', time: 0.5 },
-            { sample: 'snare', time: 1, velocity: 1.0 }, { sample: 'ride', time: 1.5 },
-            { sample: 'kick', time: 2, velocity: 1.0 }, { sample: 'ride', time: 2.5 },
-            { sample: 'snare', time: 3, velocity: 1.0 }, { sample: 'ride', time: 3.5 },
+            { sample: 'kick', time: 0, velocity: 1.0 },
+            { sample: 'ride', time: 0.5 },
+            { sample: 'snare', time: 1, velocity: 1.0 },
+            { sample: 'ride', time: 1.5 },
+            { sample: 'kick', time: 2, velocity: 1.0 },
+            { sample: 'ride', time: 2.5 },
+            { sample: 'snare', time: 3, velocity: 1.0 },
+            { sample: 'ride', time: 3.5 },
         ],
+    },
+    bassPatterns: {
+       root_note: [
+            { time: 0, duration: 2, offset: 0 }, // Play root note for half the bar
+            { time: 2, duration: 2, offset: 0 }, // Play root note for the other half
+       ],
+       root_fifth: [
+           { time: 0, duration: 2, offset: 0 }, // Root
+           { time: 2, duration: 1, offset: 7 }, // Fifth (7 semitones)
+       ],
+       arp_up: [
+           { time: 0, duration: 1, offset: 0 }, // Root
+           { time: 1, duration: 1, offset: 4 }, // Third (or minor third)
+           { time: 2, duration: 1, offset: 7 }, // Fifth
+       ]
     },
     getDrumPattern(name) {
         return this.drumPatterns[name] || this.drumPatterns.basic;
     },
+    getRandomBassPattern() {
+        const patternNames = Object.keys(this.bassPatterns);
+        const randomName = patternNames[Math.floor(Math.random() * patternNames.length)];
+        return this.bassPatterns[randomName];
+    }
 };
 
 // --- 3. Instrument Generators (The Composers) ---
@@ -102,52 +109,53 @@ class DrumGenerator {
             score = score.filter(note => note.time !== 0);
             score.push({ sample: 'crash', time: 0, velocity: 0.8 });
         }
+        
         return score;
     }
 }
 
 class BassGenerator {
-    static createScore(currentChord) {
-        const rootNote = MusicTheory.chords[currentChord][0];
+     static createScore(currentChord) {
+        const rootNote = MusicTheory.getNotesInChord(currentChord)[0];
+        if (!rootNote) return [];
+
+        const pattern = PatternProvider.getRandomBassPattern();
         
-        // Prefer the 2nd octave, but sometimes drop to the 1st for variety.
-        const octave = Math.random() < 0.3 ? 1 : 2; 
+        // Make the bass play primarily in the 2nd octave, occasionally dipping to the 1st
+        const octave = Math.random() < 0.3 ? '1' : '2';
 
-        // Simple pattern: Root note on the first beat of the bar.
-        const score = [
-            { note: `${rootNote}${octave}`, time: 0, duration: '1n', velocity: 0.9 }
-        ];
-
-        // Occasionally add a passing note from the chord on the 3rd beat.
-        if (Math.random() < 0.4) {
-             const passingNote = MusicTheory.chords[currentChord][1] || MusicTheory.chords[currentChord][0];
-             score.push({ note: `${passingNote}${octave}`, time: 2, duration: '4n', velocity: 0.7 });
-        }
-
+        const score = pattern.map(noteInfo => ({
+            note: rootNote + octave, // Bass synth handles semitone offsets internally
+            time: noteInfo.time,
+            duration: noteInfo.duration,
+            velocity: 0.8
+        }));
+        
         return score;
     }
 }
 
 class SoloGenerator {
-     static createScore(currentChord) {
+    static createScore(currentChord) {
+        const chordNotes = MusicTheory.getNotesInChord(currentChord);
+        if (!chordNotes || chordNotes.length === 0) return [];
+        
         const score = [];
-        const chordNotes = MusicTheory.getChordNotes(currentChord, 4); // Play in the 4th octave
-        if (chordNotes.length === 0) return [];
+        const octave = '4'; // Let's keep the solo in a higher register
 
-        // Create a simple, sparse melody based on the chord notes
-        const numberOfNotes = Math.floor(Math.random() * 3) + 1; // 1 to 3 notes per bar
-        for (let i = 0; i < numberOfNotes; i++) {
-            const note = chordNotes[Math.floor(Math.random() * chordNotes.length)];
-            const time = (i * (4 / numberOfNotes)) + (Math.random() * 0.5 - 0.25); // Stagger timing a bit
-            const duration = Math.random() > 0.5 ? '4n' : '8n';
-            const velocity = Math.random() * 0.3 + 0.6; // Velocity between 0.6 and 0.9
-            
-            if (time >= 0 && time < 4) {
-                 score.push({ notes: note, duration, time, velocity });
-            }
+        // Simple logic: play one or two notes from the chord
+        const noteCount = Math.random() > 0.6 ? 2 : 1;
+        for (let i = 0; i < noteCount; i++) {
+             score.push({
+                notes: [chordNotes[Math.floor(Math.random() * chordNotes.length)] + octave],
+                time: i * 2, // Stagger the notes
+                duration: 1.5,
+                velocity: 0.5 + Math.random() * 0.2, // Add some velocity variation
+            });
         }
+       
         return score;
-     }
+    }
 }
 
 
@@ -161,24 +169,24 @@ const Scheduler = {
     bpm: 120,
     instruments: {},
     drumSettings: {},
-    
+
     // Harmonic context
-    progression: MusicTheory.getRandomProgression(),
+    progression: [],
+    progressionIndex: 0,
 
     get beatsPerBar() { return 4; },
     get secondsPerBeat() { return 60 / this.bpm; },
     get barDuration() { return this.beatsPerBar * this.secondsPerBeat; },
-    
+
     start() {
         if (this.isRunning) return;
         this.reset();
         this.isRunning = true;
         
-        // Pre-schedule the first tick to make startup feel faster
-        setTimeout(() => this.tick(), 10);
-        
+        this.tick();
+
         this.intervalId = setInterval(() => this.tick(), this.barDuration * 1000);
-        self.postMessage({ type: 'started' });
+        self.postMessage({ type: 'started' }); // Corrected postMessage
     },
 
     stop() {
@@ -191,49 +199,58 @@ const Scheduler = {
 
     reset() {
         this.barCount = 0;
-        this.progression = MusicTheory.getRandomProgression(); // New progression each time
+        this.progressionIndex = 0;
+        // Select a new chord progression on reset
+        const progressionNames = Object.keys(MusicTheory.progressions);
+        const randomProgressionName = progressionNames[Math.floor(Math.random() * progressionNames.length)];
+        this.progression = MusicTheory.progressions[randomProgressionName];
     },
     
     updateSettings(settings) {
-        this.instruments = settings.instruments ?? this.instruments;
-        this.drumSettings = settings.drumSettings ?? this.drumSettings;
-        this.bpm = settings.bpm ?? this.bpm;
-        
-        // If BPM changes, we need to restart the interval to get the new timing.
-        if (this.isRunning) {
-            clearInterval(this.intervalId);
-            this.intervalId = setInterval(() => this.tick(), this.barDuration * 1000);
+        if (settings.instruments) this.instruments = settings.instruments;
+        if (settings.drumSettings) this.drumSettings = settings.drumSettings;
+        if(settings.bpm) {
+            this.bpm = settings.bpm;
+            // If running, restart the interval with the new BPM
+            if (this.isRunning) {
+                clearInterval(this.intervalId);
+                this.intervalId = setInterval(() => this.tick(), this.barDuration * 1000);
+            }
         }
     },
 
     tick() {
         if (!this.isRunning) return;
-        
-        const currentChordIndex = this.barCount % this.progression.chords.length;
-        const currentChord = this.progression.chords[currentChordIndex];
+
+        // Determine current chord
+        const currentChord = this.progression[this.progressionIndex];
 
         // 1. Generate scores based on the current chord
         if (this.drumSettings.enabled) {
             const drumScore = DrumGenerator.createScore(this.drumSettings.pattern, this.barCount);
-            self.postMessage({ type: 'drum_score', data: { score: drumScore } });
+            self.postMessage({ type: 'drum_score', data: { score: drumScore }});
         }
         
         if (this.instruments.bass !== 'none') {
             const bassScore = BassGenerator.createScore(currentChord);
-            self.postMessage({ type: 'bass_score', data: { score: bassScore } });
+            self.postMessage({ type: 'bass_score', data: { score: bassScore }});
         }
         
         if (this.instruments.solo !== 'none') {
             const soloScore = SoloGenerator.createScore(currentChord);
-            self.postMessage({ type: 'solo_score', data: { score: soloScore }});
+             if (soloScore && soloScore.length > 0) { // Check if solo score was generated
+                self.postMessage({ type: 'solo_score', data: { score: soloScore }});
+            }
         }
 
+        // 2. Advance musical time
         this.barCount++;
+        this.progressionIndex = (this.progressionIndex + 1) % this.progression.length;
     }
 };
 
 
-// --- 5. MessageBus (The Entry Point) ---
+// --- MessageBus (The "Kafka" entry point) ---
 self.onmessage = async (event) => {
     const { command, data } = event.data;
 
@@ -249,11 +266,10 @@ self.onmessage = async (event) => {
                 break;
             
             case 'update_settings':
-                Scheduler.updateSettings(data);
+                 Scheduler.updateSettings(data);
                 break;
         }
     } catch (e) {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
-
