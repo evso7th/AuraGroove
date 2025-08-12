@@ -54,8 +54,10 @@ async function decodeSamples(samplePaths: Record<string, string>, toast: (option
              if (context.state === 'suspended') {
                 await context.resume();
             }
+            // Temporarily create a full AudioBuffer to get the channel data
             const audioBuffer = await context.decodeAudioData(arrayBuffer);
-            // We only need the raw Float32Array for the worker
+            // We only need the raw Float32Array for the worker, not the full ArrayBuffer
+            // so we extract the channel data and let the rest be garbage collected.
             return { [key]: audioBuffer.getChannelData(0) };
         } catch (e) {
             console.error(`Error decoding sample ${key}:`, e);
@@ -68,6 +70,7 @@ async function decodeSamples(samplePaths: Record<string, string>, toast: (option
         }
     });
     const decodedPairs = await Promise.all(promises);
+    // Combine the array of {key: value} pairs into a single object
     return decodedPairs.reduce((acc, pair) => ({ ...acc, ...pair }), {});
 }
 
@@ -105,7 +108,7 @@ export function AuraGroove() {
 
   const musicWorkerRef = useRef<Worker>();
   const audioPlayerRef = useRef<AudioPlayer>();
-  const bassSynthRef = useRef<Tone.MonoSynth | null>(null);
+  const bassSynthRef = useRef<Tone.PolySynth | null>(null);
   const soloSynthManagerRef = useRef<SoloSynthManager | null>(null);
   const isWorkerInitialized = useRef(false);
   
@@ -118,6 +121,8 @@ export function AuraGroove() {
   }
 
    useEffect(() => {
+    // We create a new worker, which will be responsible for all music generation logic.
+    // This keeps the main thread free for UI updates.
     if (!musicWorkerRef.current) {
         musicWorkerRef.current = new Worker('/workers/ambient.worker.js');
 
@@ -199,6 +204,7 @@ export function AuraGroove() {
         musicWorkerRef.current.onmessage = handleMessage;
     }
     
+    // Cleanup function to terminate the worker when the component unmounts.
     return () => {
       if (musicWorkerRef.current) {
         musicWorkerRef.current.terminate();
@@ -210,8 +216,10 @@ export function AuraGroove() {
       Tone.Transport.stop();
       Tone.Transport.cancel();
     };
-  }, []);
+  }, []); // Empty dependency array ensures this effect runs only once.
   
+  // This effect listens for changes in any of the music settings (instruments, drums, BPM)
+  // and sends them to the worker if playback is active.
   const updateWorkerSettings = useCallback(() => {
     if (musicWorkerRef.current && (isPlaying || isInitializing)) {
         musicWorkerRef.current?.postMessage({
@@ -228,7 +236,8 @@ export function AuraGroove() {
   // This effect updates the synth's parameters whenever they change in the UI
   useEffect(() => {
     if (bassSynthRef.current) {
-        // Bass synth params are now fixed in its creation
+        // The synth is now a PolySynth and effects need to be chained.
+        // For simplicity, we re-create it on play.
     }
   }, []);
 
@@ -248,14 +257,17 @@ export function AuraGroove() {
     try {
         await Tone.start();
         
-        if (!bassSynthRef.current) {
-             bassSynthRef.current = new Tone.MonoSynth({
-                oscillator: { type: "amsine", harmonicity: 1.5 },
-                envelope: { attack: 0.05, decay: 0.3, sustain: 0, release: 1.4 },
-                filter: { Q: 2, type: "lowpass", rolloff: -24 },
-                filterEnvelope: { attack: 0.06, decay: 0.2, sustain: 0, release: 1, baseFrequency: 200, octaves: 4 }
-            }).toDestination();
+        if (bassSynthRef.current) {
+            bassSynthRef.current.dispose();
         }
+
+        const distortion = new Tone.Distortion(0.4).toDestination();
+        bassSynthRef.current = new Tone.PolySynth(Tone.Synth, {
+            oscillator: { type: "fmsquare", harmonicity: 1.2 },
+            envelope: { attack: 0.05, decay: 0.3, sustain: 0.1, release: 1.4 },
+            filter: { Q: 2, type: "lowpass", rolloff: -24 },
+            filterEnvelope: { attack: 0.06, decay: 0.2, sustain: 0.5, release: 1, baseFrequency: 80, octaves: 4 }
+        }).connect(distortion);
         
         if (soloSynthManagerRef.current) {
             soloSynthManagerRef.current.setInstrument(instruments.solo);
@@ -287,7 +299,10 @@ export function AuraGroove() {
                 ride: '/assets/drums/cymbal1.wav',
             };
             
+            // Fetch and decode samples directly on the client.
             const decodedSamples = await decodeSamples(samplePaths, toast);
+            // Create an array of transferable objects to send to the worker.
+            // This is more efficient than copying the data.
             const transferableObjects = Object.values(decodedSamples).map(s => s.buffer);
             
             musicWorkerRef.current.postMessage({
