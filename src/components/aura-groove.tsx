@@ -103,6 +103,7 @@ export function AuraGroove() {
   }
 
    useEffect(() => {
+    setLoadingText("Loading...");
     // We create a new worker, which will be responsible for all music generation logic.
     // This keeps the main thread free for UI updates.
     if (!musicWorkerRef.current) {
@@ -479,5 +480,3 @@ export function AuraGroove() {
     </Card>
   );
 }
-
-    
