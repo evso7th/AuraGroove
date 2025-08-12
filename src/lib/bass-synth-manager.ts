@@ -21,16 +21,21 @@ export class BassSynthManager {
      * @param name The name of the instrument to activate.
      */
     public setInstrument(name: InstrumentName) {
+        console.log('BassSynthManager: setInstrument called with', name); // Добавьте эту строку
         this.dispose(); // Clean up the previous synth
         this.currentInstrument = name;
 
         if (name === 'none') {
+            console.log('BassSynthManager: Instrument set to none, disposing.'); // Добавьте эту строку
             return;
         }
 
         this.currentSynth = this.createSynth(name);
         if (this.currentSynth) {
+            console.log('BassSynthManager: Synth created and connected to destination.'); // Добавьте эту строку
             this.currentSynth.toDestination();
+        } else {
+             console.log('BassSynthManager: Failed to create synth for', name); // Добавьте эту строку
         }
     }
 
@@ -42,16 +47,15 @@ export class BassSynthManager {
     private createSynth(name: InstrumentName): Tone.PolySynth | null {
         switch (name) {
             case 'bass synth':
-                // A very simple, clean synth configuration for debugging.
                 return new Tone.PolySynth(Tone.Synth, {
                     oscillator: {
-                        type: 'sine', // The cleanest possible waveform.
+                        type: 'sine',
                     },
                     envelope: {
-                        attack: 0.01,
-                        decay: 0.1,
-                        sustain: 0.9,
-                        release: 0.2,
+                        attack: 0.16,
+                        decay: 0.15,
+                        sustain: 1,
+                        release: 0.8,
                     },
                     volume: -6,
                 });
@@ -61,8 +65,11 @@ export class BassSynthManager {
     }
     
     public triggerAttackRelease(notes: string | string[], duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
+        console.log('BassSynthManager: triggerAttackRelease called with', notes, duration, time, velocity); // Добавьте эту строку
         if (this.currentSynth) {
             this.currentSynth.triggerAttackRelease(notes, duration, time, velocity);
+        } else {
+             console.log('BassSynthManager: triggerAttackRelease called but currentSynth is null.'); // Добавьте эту строку
         }
     }
 
@@ -85,3 +92,5 @@ export class BassSynthManager {
         }
     }
 }
+
+    

@@ -2,8 +2,48 @@
 /**
  * @file AuraGroove Ambient Music Worker
  *
- * This worker operates on a microservice-style architecture.
+ * This worker operates on a microservice-style architecture, inspired by the user's feedback.
  * Each musical component is an isolated entity responsible for a single task.
+ *
+ * Core Entities:
+ * 1.  MessageBus (self): The "Kafka" of the worker. Handles all communication
+ *     between the main thread and the worker's internal systems.
+ *
+ * 2.  Scheduler: The central "conductor" or "event loop". It wakes up at regular
+ *     intervals, determines what musical data is needed, and coordinates the other
+ *     entities. It doesn't generate music itself, only directs the flow.
+ *
+ * 3.  Instrument Generators (e.g., DrumGenerator, BassGenerator): These are the "composers".
+ *     They take a time signature and a pattern name and return a "score" - a simple
+ *     array of note events (`{ time, sample, velocity }`). They are stateless and
+ *     know nothing about audio rendering.
+ *
+ * 4.  PatternProvider: The "music sheet library". It holds all rhythmic and melodic
+ *     patterns. It's a simple data store that the Instrument Generators query.
+ *
+ * 5.  AudioRenderer: The "audio engine". Its ONLY job is to take a score (from any
+ *     generator) and "render" it into a raw audio buffer (Float32Array). It handles
+ *     mixing, volume, and sample placement. It is completely decoupled from musical logic.
+ *
+ * 6.  SampleBank: A repository for decoded audio samples, ensuring they are ready for
+ *     the AudioRenderer to use instantly.
+ *
+ * Data Flow on Start:
+ * - Main thread sends 'init' with samples and sampleRate.
+ * - Worker decodes samples into SampleBank.
+ * - Main thread sends 'start' with instrument/drum settings.
+ * - Scheduler starts its loop.
+ * - In each loop:
+ *   - Scheduler asks the appropriate generators for their scores for the next time slice.
+ *   - Generators ask PatternProvider for their patterns.
+ *   - Generators create their scores and return them to the scheduler.
+ *   - Scheduler passes all scores to the AudioRenderer.
+ *   - AudioRenderer creates a blank audio chunk, "paints" the samples from each score onto it, and returns the mixed chunk.
+ *   - Scheduler posts the final audio chunk back to the main thread.
+ *
+ * This architecture ensures that changing a drum pattern CANNOT break the audio renderer,
+ * and changing the audio renderer CANNOT break the musical logic. Each part is
+ * independent, testable, and replaceable, following the user's core architectural principle.
  */
 
 // --- 1. PatternProvider (The Music Sheet Library) ---
@@ -55,34 +95,30 @@ const PatternProvider = {
 
 // --- 2. Instrument Generators (The Composers) ---
 class DrumGenerator {
-    static createScore(patternName, barNumber) {
+    static createScore(patternName, barNumber, totalBars, beatsPerBar = 4) {
         const pattern = PatternProvider.getDrumPattern(patternName);
-        const score = [...pattern];
+        let score = [...pattern];
 
         // Add a crash cymbal on the first beat of every 4th bar
-        if (barNumber > 0 && barNumber % 4 === 0) {
-             const existingNote = score.findIndex(note => note.time === 0);
-             if (existingNote !== -1) {
-                score.splice(existingNote, 1);
-             }
-             score.unshift({ sample: 'crash', time: 0, velocity: 0.8 });
+        if (barNumber % 4 === 0) {
+            // Remove any other drum hit at time 0 to avoid conflict
+            score = score.filter(note => note.time !== 0);
+            score.push({ sample: 'crash', time: 0, velocity: 0.8 });
         }
         
-        return score.map(note => ({
-            ...note,
-            time: note.time * Scheduler.secondsPerBeat
-        }));
+        return score;
     }
 }
 
 class BassGenerator {
     static getNextNote(barCount, scale) {
-        // Simple predictable pattern based on the bar count
-        const noteIndex = (barCount % 8) < 4 ? 0 : 2; // E for 4 bars, G for 4 bars
-        return scale[noteIndex];
+        // Simple procedural generation: cycle through the scale
+        const index = barCount % scale.length;
+        return scale[index];
     }
-
+    
     static createScore(barCount) {
+        console.log('BassGenerator: createScore called with barCount', barCount); // Добавьте эту строку
         const rootNote = 'E'; // E Aeolian scale (E, F#, G, A, B, C, D)
         const scale = ['E2', 'F#2', 'G2', 'A2', 'B2', 'C3', 'D3'];
         const score = [];
@@ -90,51 +126,57 @@ class BassGenerator {
 
         // Create a bass note on the first and third beat
         const note1 = this.getNextNote(barCount, scale);
-        score.push({ note: note1, time: 0, duration: Scheduler.secondsPerBeat * 2, velocity: 0.7 });
-        
+        score.push({ note: note1, time: 0, duration: beatsPerBar/2, velocity: 0.7 });
+
         const note2 = this.getNextNote(barCount + 1, scale); // Look ahead for variation
-        score.push({ note: note2, time: Scheduler.secondsPerBeat * 2, duration: Scheduler.secondsPerBeat * 2, velocity: 0.7 });
-        
+        score.push({ note: note2, time: beatsPerBar/2, duration: beatsPerBar/2, velocity: 0.7 });
+
+        console.log('BassGenerator: Returning score', score); // Добавьте эту строку
         return score;
     }
 }
 
-class SoloGenerator {
-    static getNextNotes(barCount, scale) {
-         // More complex pattern for solo
-        const phraseLength = 8; // A full melodic idea spans 8 bars
-        const currentPositionInPhrase = barCount % phraseLength;
 
-        // Simple arpeggio-like patterns
-        if (currentPositionInPhrase < 2) { // Bar 0, 1
-            return [scale[0], scale[2], scale[4]]; // E, G, B
-        } else if (currentPositionInPhrase < 4) { // Bar 2, 3
-            return [scale[1], scale[3], scale[5]]; // F#, A, C
-        } else if (currentPositionInPhrase < 6) { // Bar 4, 5
-            return [scale[2], scale[4], scale[6]]; // G, B, D
-        } else { // Bar 6, 7
-            return [scale[3], scale[5], scale[0]]; // A, C, E (next octave)
+// --- 3. SampleBank (Decoded Audio Storage) ---
+const SampleBank = {
+    samples: {}, // { kick: Float32Array, snare: Float32Array, ... }
+    isInitialized: false,
+
+    async init(samples, sampleRate) {
+        const tempAudioContext = new OfflineAudioContext(1, 1, sampleRate);
+        for (const key in samples) {
+            if (samples[key].byteLength > 0) {
+                try {
+                    const audioBuffer = await tempAudioContext.decodeAudioData(samples[key].slice(0));
+                    this.samples[key] = audioBuffer.getChannelData(0);
+                } catch(e) {
+                    // post error back to main thread
+                    self.postMessage({ type: 'error', error: `Failed to decode sample ${key}: ${e instanceof Error ? e.message : String(e)}` });
+                }
+            }
         }
+        this.isInitialized = true;
+        console.log("SampleBank Initialized with samples:", Object.keys(this.samples));
+        self.postMessage({ type: 'initialized' });
+    },
+
+    getSample(name) {
+        return this.samples[name];
     }
-    
-    static createScore(barCount) {
-        const rootNote = 'E'; // E Aeolian scale (E, F#, G, A, B, C, D)
-        const scale = ['E4', 'F#4', 'G4', 'A4', 'B4', 'C5', 'D5'];
-        const score = [];
-        
-        const phrase = this.getNextNotes(barCount, scale);
+};
 
-        // Add a few notes per bar
-        score.push({ notes: phrase[0], time: 0, duration: '8n' });
-        score.push({ notes: phrase[1], time: Scheduler.secondsPerBeat * 1.5, duration: '8n' });
-        score.push({ notes: phrase[2], time: Scheduler.secondsPerBeat * 3, duration: '8n' });
-        
-        return score;
+
+// --- 4. AudioRenderer (The Sound Engine) ---
+// This is not used in the current version as we send scores to the main thread.
+// Kept for future reference or different architectures.
+const AudioRenderer = {
+    render(score, settings, sampleRate) {
+        // ... implementation would go here
     }
-}
+};
 
 
-// --- 3. Scheduler (The Conductor) ---
+// --- 5. Scheduler (The Conductor) ---
 const Scheduler = {
     intervalId: null,
     isRunning: false,
@@ -142,15 +184,14 @@ const Scheduler = {
     
     // Settings from main thread
     sampleRate: 44100,
-    bpm: 100,
-    instruments: { solo: 'none', accompaniment: 'none', bass: 'none' },
-    drumSettings: { enabled: false, pattern: 'basic', volume: 0.8 },
+    bpm: 120,
+    instruments: {},
+    drumSettings: {},
 
     // Calculated properties
     get beatsPerBar() { return 4; },
     get secondsPerBeat() { return 60 / this.bpm; },
     get barDuration() { return this.beatsPerBar * this.secondsPerBeat; },
-    get lookahead() { return this.barDuration * 2; }, // Schedule 2 bars ahead
 
 
     start() {
@@ -159,8 +200,12 @@ const Scheduler = {
         this.reset();
         this.isRunning = true;
         
-        this.tick(); // Generate first event immediately
+        // Generate the first chunk immediately
+        this.tick();
+
+        // Then set up the interval for subsequent chunks
         this.intervalId = setInterval(() => this.tick(), this.barDuration * 1000);
+        self.postMessage({ type: 'started' });
     },
 
     stop() {
@@ -178,36 +223,36 @@ const Scheduler = {
     updateSettings(settings) {
         if (settings.instruments) this.instruments = settings.instruments;
         if (settings.drumSettings) this.drumSettings = settings.drumSettings;
-        if (settings.bpm) this.bpm = settings.bpm;
-        
-        // If BPM changes, we need to restart the interval to match the new timing
-        if (this.isRunning) {
-            clearInterval(this.intervalId);
-            this.intervalId = setInterval(() => this.tick(), this.barDuration * 1000);
-        }
+        if(settings.bpm) this.bpm = settings.bpm;
     },
 
     tick() {
         if (!this.isRunning) return;
+        console.log('Worker: tick'); // Добавьте эту строку
 
         // 1. Generate Drum Score
         if (this.drumSettings.enabled) {
-            const drumScore = DrumGenerator.createScore(this.drumSettings.pattern, this.barCount);
-            self.postMessage({ type: 'drum_score', data: { score: drumScore } });
+            const drumScore = DrumGenerator.createScore(
+                this.drumSettings.pattern, 
+                this.barCount,
+                -1 // totalBars not needed for this simple generator
+            );
+            self.postMessage({ type: 'drum_score', data: { score: drumScore }});
         }
         
-        // 2. Generate Bass Score
+       // 2. Generate Bass Score
         if (this.instruments.bass !== 'none') {
             const bassScore = BassGenerator.createScore(this.barCount);
+            console.log('Worker: Generated bass score', bassScore); // Добавьте эту строку
             self.postMessage({ type: 'bass_score', data: { score: bassScore }});
         }
 
-        // 3. Generate Solo Score
+        // 3. Generate Solo Score (conceptual)
         if (this.instruments.solo !== 'none') {
-            const soloScore = SoloGenerator.createScore(this.barCount);
-            self.postMessage({ type: 'solo_score', data: { score: soloScore }});
+            // In a real scenario, you'd have a SoloGenerator
+            // For now, this is just a placeholder
         }
-        
+
         this.barCount++;
     }
 };
@@ -220,17 +265,15 @@ self.onmessage = async (event) => {
     try {
         switch (command) {
             case 'init':
-                // The 'init' signal now just confirms the worker is alive.
-                // Sample loading is handled by the main thread.
-                // We receive the sample rate to ensure timing is correct.
-                Scheduler.sampleRate = data.sampleRate;
-                self.postMessage({ type: 'initialized' });
+                await SampleBank.init(data.samples, data.sampleRate);
                 break;
             
             case 'start':
+                if (!SampleBank.isInitialized) {
+                   throw new Error("Worker is not initialized with samples yet. Call 'init' first.");
+                }
                 Scheduler.updateSettings(data);
                 Scheduler.start();
-                self.postMessage({ type: 'started' });
                 break;
 
             case 'stop':
@@ -238,7 +281,7 @@ self.onmessage = async (event) => {
                 break;
             
             case 'update_settings':
-                 Scheduler.updateSettings(data);
+                Scheduler.updateSettings(data);
                 break;
         }
     } catch (e) {
