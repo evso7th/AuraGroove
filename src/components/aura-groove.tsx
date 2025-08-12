@@ -27,6 +27,7 @@ import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { AudioPlayer } from "@/lib/audio-player";
 import { SoloSynthManager } from "@/lib/solo-synth-manager";
+import { BassSynthManager } from "@/lib/bass-synth-manager";
 
 
 export type Instruments = {
@@ -99,7 +100,7 @@ export function AuraGroove() {
 
   const musicWorkerRef = useRef<Worker>();
   const audioPlayerRef = useRef<AudioPlayer>();
-  const bassSynthRef = useRef<Tone.PolySynth | null>(null);
+  const bassSynthManagerRef = useRef<BassSynthManager | null>(null);
   const soloSynthManagerRef = useRef<SoloSynthManager | null>(null);
   const isWorkerInitialized = useRef(false);
   
@@ -109,6 +110,10 @@ export function AuraGroove() {
   
    if (!soloSynthManagerRef.current) {
     soloSynthManagerRef.current = new SoloSynthManager();
+  }
+  
+  if (!bassSynthManagerRef.current) {
+    bassSynthManagerRef.current = new BassSynthManager();
   }
 
    useEffect(() => {
@@ -147,10 +152,10 @@ export function AuraGroove() {
               break;
             
             case 'bass_score':
-                if (bassSynthRef.current && data.score && data.score.length > 0) {
+                if (bassSynthManagerRef.current && data.score && data.score.length > 0) {
                     const now = Tone.now();
                     data.score.forEach((note: BassNote) => {
-                        bassSynthRef.current?.triggerAttackRelease(
+                        bassSynthManagerRef.current?.triggerAttackRelease(
                             note.note,
                             note.duration,
                             now + note.time,
@@ -202,7 +207,7 @@ export function AuraGroove() {
         musicWorkerRef.current = undefined;
       }
       audioPlayerRef.current?.stop();
-      bassSynthRef.current?.dispose();
+      bassSynthManagerRef.current?.dispose();
       soloSynthManagerRef.current?.dispose();
       Tone.Transport.stop();
       Tone.Transport.cancel();
@@ -226,11 +231,10 @@ export function AuraGroove() {
   
   // This effect updates the synth's parameters whenever they change in the UI
   useEffect(() => {
-    if (bassSynthRef.current) {
-        // The synth is now a PolySynth and effects need to be chained.
-        // For simplicity, we re-create it on play.
+    if (bassSynthManagerRef.current) {
+        bassSynthManagerRef.current.setInstrument(instruments.bass);
     }
-  }, []);
+  }, [instruments.bass]);
 
   // Handle solo instrument changes
   useEffect(() => {
@@ -248,25 +252,9 @@ export function AuraGroove() {
     try {
         await Tone.start();
         
-        if (bassSynthRef.current) {
-            bassSynthRef.current.dispose();
+        if (bassSynthManagerRef.current) {
+            bassSynthManagerRef.current.setInstrument(instruments.bass);
         }
-
-        bassSynthRef.current = new Tone.PolySynth(Tone.Synth, {
-            oscillator: {
-                type: 'fmsquare',
-                modulationType: 'sine',
-                harmonicity: 0.5,
-                modulationIndex: 3.5,
-            },
-            envelope: {
-                attack: 0.01,
-                decay: 0.1,
-                sustain: 0.9,
-                release: 0.1,
-            },
-             volume: -12,
-        }).toDestination();
         
         if (soloSynthManagerRef.current) {
             soloSynthManagerRef.current.setInstrument(instruments.solo);
@@ -327,6 +315,7 @@ export function AuraGroove() {
 
   const handleStop = useCallback(() => {
     soloSynthManagerRef.current?.releaseAll();
+    bassSynthManagerRef.current?.releaseAll();
     Tone.Transport.stop();
     Tone.Transport.cancel();
     musicWorkerRef.current?.postMessage({ command: 'stop' });
