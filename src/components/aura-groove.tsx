@@ -127,7 +127,7 @@ export function AuraGroove() {
                  setIsInitializing(false);
                  setLoadingText("");
                  setIsPlaying(true);
-                 Tone.Transport.start();
+                 // Tone.Transport is now started in handlePlay
                  break;
 
             case 'drum_score':
@@ -192,9 +192,11 @@ export function AuraGroove() {
     
     // Pre-load drum samples. This is a "best practice" to avoid delays on play.
     if (!drumPlayersRef.current) {
+        setLoadingText("Loading samples...");
         drumPlayersRef.current = new Tone.Players(samplePaths, () => {
             // This callback fires when all samples are loaded.
             setIsReady(true);
+            setLoadingText("");
         }).toDestination();
         drumPlayersRef.current.volume.value = Tone.gainToDb(drumSettings.volume);
     }
@@ -261,6 +263,9 @@ export function AuraGroove() {
         
         setLoadingText("Starting playback...");
         
+        // Start the transport immediately for instant feedback
+        Tone.Transport.start();
+        
         musicWorkerRef.current.postMessage({
             command: 'start',
             data: { drumSettings, instruments, bpm }
@@ -306,7 +311,7 @@ export function AuraGroove() {
     return (
         <div className="flex flex-col items-center justify-center text-muted-foreground space-y-2 min-h-[40px]">
             <Loader2 className="h-8 w-8 animate-spin" />
-            <p className="text-lg">Loading...</p>
+            <p className="text-lg">{loadingText || "Initializing..."}</p>
         </div>
     );
   }
@@ -472,5 +477,3 @@ export function AuraGroove() {
     </Card>
   );
 }
-
-    
