@@ -49,8 +49,8 @@ export class BassSynthManager {
                     envelope: {
                         attack: 0.16,
                         decay: 0.15,
-                        sustain: 1,
-                        release: 0.8,
+                        sustain: 0.9,
+                        release: 0.5,
                     },
                     volume: -12,
                 }).toDestination();
