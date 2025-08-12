@@ -49,17 +49,18 @@ export class BassSynthManager {
                 // A synth definition that mimics a bass guitar
                 return new Tone.PolySynth(Tone.Synth, {
                     oscillator: {
-                        type: 'fatsawtooth',
-                        count: 2,
-                        spread: 20
+                        type: 'fmsquare',
+                        modulationType: 'sine',
+                        harmonicity: 0.5,
+                        modulationIndex: 3.5,
                     },
                     envelope: {
                         attack: 0.01,
-                        decay: 0.4,
-                        sustain: 0.01,
-                        release: 0.2,
+                        decay: 0.1,
+                        sustain: 0.9,
+                        release: 0.1,
                     },
-                     volume: -8, // Adjusted volume for more presence
+                     volume: -12,
                 });
             default:
                 return null;
