@@ -58,22 +58,18 @@ export class SoloSynthManager {
     private createSynth(name: InstrumentName): Tone.PolySynth | null {
         switch (name) {
             case 'organ':
-                this.distortion = new Tone.Distortion(0.4);
-                // Create the tremolo but do not start it immediately.
-                this.tremolo = new Tone.Tremolo(4, 0.8);
+                this.distortion = new Tone.Distortion(0.05);
+                this.tremolo = new Tone.Tremolo(2, 0.2);
                 
                 const organ = new Tone.PolySynth(Tone.Synth, {
                      oscillator: {
-                        type: 'fmsquare',
-                        modulationType: 'sine',
-                        harmonicity: 0.5,
-                        modulationIndex: 3.5,
+                        type: 'sawtooth',
                     },
                     envelope: {
-                        attack: 0.01,
+                        attack: 0.16,
                         decay: 0.15,
-                        sustain: 1,
-                        release: 0.2,
+                        sustain: 0.9,
+                        release: 0.4,
                     },
                      volume: -15,
                 });
@@ -120,5 +116,3 @@ export class SoloSynthManager {
         }
     }
 }
-
-    
