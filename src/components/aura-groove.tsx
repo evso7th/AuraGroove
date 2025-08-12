@@ -102,100 +102,107 @@ export function AuraGroove() {
   }
 
    useEffect(() => {
-    setLoadingText("Loading...");
-    if (!musicWorkerRef.current) {
-        musicWorkerRef.current = new Worker('/workers/ambient.worker.js');
+    setLoadingText("Initializing...");
+    musicWorkerRef.current = new Worker('/workers/ambient.worker.js');
 
-        const handleMessage = (event: MessageEvent) => {
-          const { type, data, error } = event.data;
-          
-          switch(type) {
-            case 'initialized':
-              isWorkerInitialized.current = true;
-              setLoadingText("Starting playback...");
-               if (musicWorkerRef.current) {
-                    musicWorkerRef.current.postMessage({
-                        command: 'start',
-                        data: { drumSettings, instruments, bpm }
-                    });
-                }
-              break;
-            
-            case 'started':
-                 setIsInitializing(false);
-                 setLoadingText("");
-                 setIsPlaying(true);
-                 break;
+    const handleMessage = (event: MessageEvent) => {
+      const { type, data, error } = event.data;
+      
+      switch(type) {
+        case 'initialized':
+          isWorkerInitialized.current = true;
+           setLoadingText("");
+           setIsReady(true);
+           if (isInitializing) {
+               handlePlay();
+           }
+          break;
+        
+        case 'started':
+             setIsInitializing(false);
+             setLoadingText("");
+             setIsPlaying(true);
+             break;
 
-            case 'drum_score':
-                if (drumPlayersRef.current && data.score && data.score.length > 0) {
-                     const now = Tone.now();
-                     data.score.forEach((note: DrumNote) => {
-                        const player = drumPlayersRef.current?.player(note.sample);
-                        if (player) {
-                            player.start(now + note.time, 0, undefined, note.velocity ? drumSettings.volume * note.velocity : drumSettings.volume);
-                        }
-                    });
-                }
-                break;
+        case 'drum_score':
+            if (drumPlayersRef.current && data.score && data.score.length > 0) {
+                 const now = Tone.now();
+                 data.score.forEach((note: DrumNote) => {
+                    const player = drumPlayersRef.current?.player(note.sample);
+                    if (player && player.loaded) {
+                        player.start(now + note.time, 0, undefined, note.velocity ? drumSettings.volume * note.velocity : drumSettings.volume);
+                    }
+                });
+            }
+            break;
 
-            case 'bass_score':
-                if (bassSynthManagerRef.current && data.score && data.score.length > 0) {
-                    const now = Tone.now();
-                    data.score.forEach((note: BassNote) => {
-                        bassSynthManagerRef.current?.triggerAttackRelease(
-                            note.note,
-                            note.duration,
-                            now + note.time,
-                            note.velocity
-                        );
-                    });
-                }
-                break;
-            
-            case 'solo_score':
-                if (soloSynthManagerRef.current && data.score && data.score.length > 0) {
-                    const now = Tone.now();
-                    data.score.forEach((note: SoloNote) => {
-                        soloSynthManagerRef.current?.triggerAttackRelease(
-                            note.notes,
-                            note.duration,
-                            now + note.time
-                        );
-                    });
-                }
-                break;
+        case 'bass_score':
+            if (bassSynthManagerRef.current && data.score && data.score.length > 0) {
+                const now = Tone.now();
+                data.score.forEach((note: BassNote) => {
+                    bassSynthManagerRef.current?.triggerAttackRelease(
+                        note.note,
+                        note.duration,
+                        now + note.time,
+                        note.velocity
+                    );
+                });
+            }
+            break;
+        
+        case 'solo_score':
+            if (soloSynthManagerRef.current && data.score && data.score.length > 0) {
+                const now = Tone.now();
+                data.score.forEach((note: SoloNote) => {
+                    soloSynthManagerRef.current?.triggerAttackRelease(
+                        note.notes,
+                        note.duration,
+                        now + note.time
+                    );
+                });
+            }
+            break;
 
-            case 'stopped':
-                setIsPlaying(false);
-                setLoadingText("");
-                break;
-
-            case 'error':
-              toast({
-                variant: "destructive",
-                title: "Worker Error",
-                description: error,
-              });
-              setIsPlaying(false);
-              setIsInitializing(false);
-              setLoadingText("");
-              break;
-          }
-        };
-
-        musicWorkerRef.current.onmessage = handleMessage;
-    }
-    
-    if (!drumPlayersRef.current) {
-        setLoadingText("Loading samples...");
-        drumPlayersRef.current = new Tone.Players(samplePaths, () => {
-            setIsReady(true);
+        case 'stopped':
+            setIsPlaying(false);
             setLoadingText("");
-        }).toDestination();
-        drumPlayersRef.current.volume.value = Tone.gainToDb(drumSettings.volume);
-    }
+            break;
 
+        case 'error':
+          toast({
+            variant: "destructive",
+            title: "Worker Error",
+            description: error,
+          });
+          setIsPlaying(false);
+          setIsInitializing(false);
+          setLoadingText("");
+          break;
+      }
+    };
+
+    musicWorkerRef.current.onmessage = handleMessage;
+
+    setLoadingText("Loading samples...");
+    const players = new Tone.Players(samplePaths, () => {
+        const sampleBuffers: Record<string, ArrayBuffer> = {};
+        for (const key in samplePaths) {
+            const player = players.player(key);
+            if(player.loaded) {
+                const buffer = player.buffer.get();
+                if (buffer) {
+                    // Clone the ArrayBuffer to transfer it to the worker
+                    sampleBuffers[key] = buffer.slice(0);
+                }
+            }
+        }
+        musicWorkerRef.current?.postMessage({
+            command: 'init',
+            data: { samples: sampleBuffers, sampleRate: Tone.context.sampleRate }
+        }, Object.values(sampleBuffers));
+    }).toDestination();
+    drumPlayersRef.current = players;
+    
     return () => {
       if (musicWorkerRef.current) {
         musicWorkerRef.current.terminate();
@@ -245,6 +252,12 @@ export function AuraGroove() {
     if (!musicWorkerRef.current) return;
 
     setIsInitializing(true);
+
+    if (!isWorkerInitialized.current) {
+        setLoadingText("Waiting for worker...");
+        return; 
+    }
+    
     setLoadingText("Starting audio engine...");
 
     try {
@@ -279,7 +292,7 @@ export function AuraGroove() {
         setIsInitializing(false);
         setLoadingText("");
     }
-  }, [drumSettings, instruments, bpm, toast]);
+  }, [drumSettings, instruments, bpm, toast, isInitializing]);
 
   const handleStop = useCallback(() => {
     soloSynthManagerRef.current?.releaseAll();
