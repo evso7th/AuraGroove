@@ -305,8 +305,13 @@ export function AuraGroove() {
     setIsInitializing(true);
     setLoadingText("Starting audio engine...");
 
+    console.log('Tone.context.state BEFORE start:', Tone.context.state);
+
     try {
         await Tone.start();
+        
+        console.log('Tone.context.state AFTER start:', Tone.context.state);
+        console.log('Tone.context.currentTime AFTER start:', Tone.context.currentTime);
         
         setLoadingText("Starting playback...");
         
@@ -518,9 +523,5 @@ export function AuraGroove() {
     </Card>
   );
 }
-
-    
-
-    
 
     
