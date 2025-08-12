@@ -49,15 +49,15 @@ export class BassSynthManager {
             case 'bass synth':
                 return new Tone.PolySynth(Tone.Synth, {
                     oscillator: {
-                        type: 'sine', // Changed back to 'sine' for a clean bass tone
+                        type: 'sine',
                     },
                     envelope: {
-                        attack: 0.01,
-                        decay: 0.1,
-                        sustain: 0.9,
-                        release: 0.4, // Slightly longer release for smoother decay
+                        attack: 0.16,
+                        decay: 0.15,
+                        sustain: 1,
+                        release: 0.8,
                     },
-                    volume: 0, // Adjusted volume to prevent clipping
+                    volume: 0,
                 });
             default:
                 return null;
