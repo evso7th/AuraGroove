@@ -21,10 +21,6 @@ export class BassSynthManager {
      * @param name The name of the instrument to activate.
      */
     public setInstrument(name: InstrumentName) {
-        if (name === this.currentInstrument && this.currentSynth) {
-            return;
-        }
-
         this.dispose(); 
         this.currentInstrument = name;
 
@@ -51,10 +47,10 @@ export class BassSynthManager {
                         type: 'sine',
                     },
                     envelope: {
-                        attack: 0.01,
+                        attack: 0.05,
                         decay: 0.1,
-                        sustain: 0.5,
-                        release: 1,
+                        sustain: 0.8,
+                        release: 0.5,
                     },
                     volume: 0,
                 }).toDestination();
