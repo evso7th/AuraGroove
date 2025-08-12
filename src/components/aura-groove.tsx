@@ -90,7 +90,7 @@ export function AuraGroove() {
   });
   const [instruments, setInstruments] = useState<Instruments>({
     solo: "organ",
-    accompaniment: "none",
+    accompaniment: "organ",
     bass: "bass synth",
   });
   const [bpm, setBpm] = useState(100);
@@ -578,7 +578,3 @@ export function AuraGroove() {
     </Card>
   );
 }
-
-    
-
-    
