@@ -155,19 +155,19 @@ export function AuraGroove() {
               }
               break;
             
-            case 'bass_score':
-                if (bassSynthRef.current && data.score && data.score.length > 0) {
-                    const now = Tone.now();
-                    data.score.forEach((note: BassNote) => {
-                        bassSynthRef.current?.triggerAttackRelease(
-                            note.note,
-                            note.duration,
-                            now + note.time,
-                            note.velocity
-                        );
-                    });
-                }
-                break;
+            // case 'bass_score':
+            //     if (bassSynthRef.current && data.score && data.score.length > 0) {
+            //         const now = Tone.now();
+            //         data.score.forEach((note: BassNote) => {
+            //             bassSynthRef.current?.triggerAttackRelease(
+            //                 note.note,
+            //                 note.duration,
+            //                 now + note.time,
+            //                 note.velocity
+            //             );
+            //         });
+            //     }
+            //     break;
             
             case 'solo_score':
                 if (soloSynthManagerRef.current && data.score && data.score.length > 0) {
@@ -211,7 +211,7 @@ export function AuraGroove() {
         musicWorkerRef.current = undefined;
       }
       audioPlayerRef.current?.stop();
-      bassSynthRef.current?.dispose();
+      // bassSynthRef.current?.dispose();
       soloSynthManagerRef.current?.dispose();
       Tone.Transport.stop();
       Tone.Transport.cancel();
@@ -257,17 +257,17 @@ export function AuraGroove() {
     try {
         await Tone.start();
         
-        if (bassSynthRef.current) {
-            bassSynthRef.current.dispose();
-        }
+        // if (bassSynthRef.current) {
+        //     bassSynthRef.current.dispose();
+        // }
 
-        const distortion = new Tone.Distortion(0.4).toDestination();
-        bassSynthRef.current = new Tone.PolySynth(Tone.Synth, {
-            oscillator: { type: "fmsquare", harmonicity: 1.2 },
-            envelope: { attack: 0.05, decay: 0.3, sustain: 0.1, release: 1.4 },
-            filter: { Q: 2, type: "lowpass", rolloff: -24 },
-            filterEnvelope: { attack: 0.06, decay: 0.2, sustain: 0.5, release: 1, baseFrequency: 80, octaves: 4 }
-        }).connect(distortion);
+        // const distortion = new Tone.Distortion(0.4).toDestination();
+        // bassSynthRef.current = new Tone.PolySynth(Tone.Synth, {
+        //     oscillator: { type: "fmsquare", harmonicity: 1.2 },
+        //     envelope: { attack: 0.05, decay: 0.3, sustain: 0.1, release: 1.4 },
+        //     filter: { Q: 2, type: "lowpass", rolloff: -24 },
+        //     filterEnvelope: { attack: 0.06, decay: 0.2, sustain: 0.5, release: 1, baseFrequency: 80, octaves: 4 }
+        // }).connect(distortion);
         
         if (soloSynthManagerRef.current) {
             soloSynthManagerRef.current.setInstrument(instruments.solo);
@@ -504,3 +504,5 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    
