@@ -12,6 +12,7 @@ type InstrumentName = Instruments['solo'];
 export class SoloSynthManager {
     private currentSynth: Tone.PolySynth | null = null;
     private currentInstrument: InstrumentName = 'none';
+    private distortion: Tone.Distortion | null = null;
 
     constructor() {}
 
@@ -33,9 +34,6 @@ export class SoloSynthManager {
         }
 
         this.currentSynth = this.createSynth(name);
-        if (this.currentSynth) {
-            this.currentSynth.toDestination();
-        }
     }
 
     /**
@@ -46,21 +44,24 @@ export class SoloSynthManager {
     private createSynth(name: InstrumentName): Tone.PolySynth | null {
         switch (name) {
             case 'organ':
-                return new Tone.PolySynth(Tone.Synth, {
-                    oscillator: {
-                        type: 'fmsquare',
+                this.distortion = new Tone.Distortion(0.4).toDestination();
+                const organ = new Tone.PolySynth(Tone.Synth, {
+                     oscillator: {
+                        type: 'fmsawtooth',
                         modulationType: 'sine',
                         harmonicity: 0.5,
                         modulationIndex: 3.5,
                     },
                     envelope: {
-                        attack: 0.01,
-                        decay: 0.1,
+                        attack: 0.16,
+                        decay: 0.15,
                         sustain: 0.9,
-                        release: 0.1,
+                        release: 0.4,
                     },
-                     volume: -15, // Organs can be loud, reduce volume
+                     volume: -15,
                 });
+                organ.connect(this.distortion);
+                return organ;
             // Future instruments can be added here
             // case 'piano':
             //     return new Tone.PolySynth(...);
@@ -91,6 +92,10 @@ export class SoloSynthManager {
         if (this.currentSynth) {
             this.currentSynth.dispose();
             this.currentSynth = null;
+        }
+        if (this.distortion) {
+            this.distortion.dispose();
+            this.distortion = null;
         }
     }
 }
