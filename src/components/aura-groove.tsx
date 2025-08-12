@@ -60,7 +60,7 @@ type DrumNote = {
     velocity?: number;
 }
 
-const samplePaths = {
+const samplePaths: Record<string, string> = {
     kick: '/assets/drums/kick_drum6.wav',
     snare: '/assets/drums/snare.wav',
     hat: '/assets/drums/closed_hi_hat_accented.wav',
@@ -97,6 +97,9 @@ export function AuraGroove() {
     // This effect runs only once on the client side
     setLoadingText("Initializing...");
 
+    const worker = new Worker('/workers/ambient.worker.js');
+    musicWorkerRef.current = worker;
+
     // 1. Initialize Synths
     if (!soloSynthManagerRef.current) {
         soloSynthManagerRef.current = new SoloSynthManager();
@@ -104,9 +107,6 @@ export function AuraGroove() {
     if (!bassSynthManagerRef.current) {
         bassSynthManagerRef.current = new BassSynthManager();
     }
-
-    // 2. Initialize Worker
-    musicWorkerRef.current = new Worker('/workers/ambient.worker.js');
 
     const handleMessage = (event: MessageEvent) => {
       const { type, data, error } = event.data;
@@ -117,6 +117,7 @@ export function AuraGroove() {
            setLoadingText("");
            setIsReady(true);
            if (isInitializing) {
+               // If play was clicked while worker was initializing, start it now
                handlePlay();
            }
           break;
@@ -184,27 +185,58 @@ export function AuraGroove() {
       }
     };
 
-    musicWorkerRef.current.onmessage = handleMessage;
+    worker.onmessage = handleMessage;
 
     // 3. Load Samples and Initialize Worker with them
-    setLoadingText("Loading samples...");
-    const players = new Tone.Players(samplePaths, () => {
-        const sampleBuffers: Record<string, ArrayBuffer> = {};
-        for (const key in samplePaths) {
-            const player = players.player(key);
-            if(player.loaded) {
-                const buffer = player.buffer.get();
-                if (buffer) {
-                    sampleBuffers[key] = buffer.slice(0);
-                }
-            }
+    const loadSamples = async () => {
+        setLoadingText("Loading samples...");
+        try {
+            // Fetch all audio files as raw ArrayBuffers
+            const fetchedSamples = await Promise.all(
+                Object.entries(samplePaths).map(async ([name, url]) => {
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        throw new Error(`Failed to fetch sample: ${name}`);
+                    }
+                    const buffer = await response.arrayBuffer();
+                    return { name, buffer };
+                })
+            );
+
+            const workerSamples: Record<string, ArrayBuffer> = {};
+            const mainThreadSamples: Record<string, AudioBuffer> = {};
+            
+            // Create independent copies for the worker and the main thread
+            await Promise.all(fetchedSamples.map(async ({ name, buffer }) => {
+                // Copy for worker (will be transferred)
+                workerSamples[name] = buffer.slice(0); 
+                // Copy for main thread's Tone.Players
+                const mainBuffer = await Tone.context.decodeAudioData(buffer.slice(0));
+                mainThreadSamples[name] = mainBuffer;
+            }));
+
+
+            // Initialize Tone.Players on the main thread
+            drumPlayersRef.current = new Tone.Players(mainThreadSamples).toDestination();
+
+            // Initialize worker with its own set of buffers
+            worker.postMessage({
+                command: 'init',
+                data: { samples: workerSamples, sampleRate: Tone.context.sampleRate }
+            }, Object.values(workerSamples));
+
+        } catch (error) {
+            console.error("Sample loading failed:", error);
+            toast({
+                variant: "destructive",
+                title: "Failed to load audio samples",
+                description: error instanceof Error ? error.message : "An unknown error occurred.",
+            });
+            setLoadingText("Error loading samples.");
         }
-        musicWorkerRef.current?.postMessage({
-            command: 'init',
-            data: { samples: sampleBuffers, sampleRate: Tone.context.sampleRate }
-        }, Object.values(sampleBuffers));
-    }).toDestination();
-    drumPlayersRef.current = players;
+    };
+    
+    loadSamples();
     
     // 4. Cleanup
     return () => {
@@ -489,5 +521,3 @@ export function AuraGroove() {
     </Card>
   );
 }
-
-    
