@@ -263,8 +263,10 @@ export function AuraGroove() {
         
         setLoadingText("Starting playback...");
         
-        // Start the transport immediately for instant feedback
-        Tone.Transport.start();
+        // Start the transport after a short delay to ensure the audio context is ready.
+        setTimeout(() => {
+          Tone.Transport.start();
+        }, 100);
         
         musicWorkerRef.current.postMessage({
             command: 'start',
@@ -311,7 +313,7 @@ export function AuraGroove() {
     return (
         <div className="flex flex-col items-center justify-center text-muted-foreground space-y-2 min-h-[40px]">
             <Loader2 className="h-8 w-8 animate-spin" />
-            <p className="text-lg">{loadingText || "Initializing..."}</p>
+            <p className="text-lg">{loadingText || "Loading..."}</p>
         </div>
     );
   }
@@ -477,3 +479,5 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    
