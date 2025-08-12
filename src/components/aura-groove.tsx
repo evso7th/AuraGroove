@@ -139,11 +139,9 @@ export function AuraGroove() {
             break;
 
         case 'bass_score':
-            console.log('Main Thread: Received bass score from worker', data.score);
             if (bassSynthManagerRef.current && data.score && data.score.length > 0) {
                 const now = Tone.now();
                 data.score.forEach((note: BassNote) => {
-                    console.log('Main Thread: Triggering bass note', note);
                     bassSynthManagerRef.current?.triggerAttackRelease(
                         note.note,
                         note.duration,
@@ -151,8 +149,6 @@ export function AuraGroove() {
                         note.velocity
                     );
                 });
-            } else {
-                 console.log('Main Thread: Received empty or invalid bass score', data.score);
             }
             break;
         
@@ -294,23 +290,18 @@ export function AuraGroove() {
 
 
   const handlePlay = useCallback(async () => {
-    if (!musicWorkerRef.current || !isWorkerInitialized.current) {
-        // If play is clicked before worker is ready, show loading and wait
-        setIsInitializing(true);
-        setLoadingText("Waiting for audio engine...");
-        // The `initialized` message from the worker will eventually trigger the play state
-        return; 
-    }
-    
-    setIsInitializing(true);
-    setLoadingText("Starting audio engine...");
-    console.log('Tone.context.state BEFORE start:', Tone.context.state);
-
     try {
-        await Tone.start();
-        console.log('Tone.context.state AFTER start:', Tone.context.state);
-        console.log('Tone.context.currentTime AFTER start:', Tone.context.currentTime);
-        
+        if (Tone.context.state !== 'running') {
+            await Tone.start();
+        }
+
+        if (!musicWorkerRef.current || !isWorkerInitialized.current) {
+            setIsInitializing(true);
+            setLoadingText("Waiting for audio engine...");
+            return;
+        }
+
+        setIsInitializing(true);
         setLoadingText("Starting playback...");
         
         if (Tone.Transport.state !== 'started') {

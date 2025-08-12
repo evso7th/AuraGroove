@@ -21,11 +21,11 @@ export class BassSynthManager {
      * @param name The name of the instrument to activate.
      */
     public setInstrument(name: InstrumentName) {
-        if (name === this.currentInstrument) {
+        if (name === this.currentInstrument && this.currentSynth) {
             return;
         }
 
-        this.dispose(); // Clean up the previous synth
+        this.dispose(); 
         this.currentInstrument = name;
 
         if (name === 'none') {
@@ -46,7 +46,6 @@ export class BassSynthManager {
     private createSynth(name: InstrumentName): Tone.PolySynth | null {
         switch (name) {
             case 'bass synth':
-                // Reset to the most basic synth to get a clean note
                 return new Tone.PolySynth(Tone.Synth, {
                     oscillator: {
                         type: 'sine',
