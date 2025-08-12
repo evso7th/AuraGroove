@@ -46,21 +46,17 @@ export class BassSynthManager {
     private createSynth(name: InstrumentName): Tone.PolySynth | null {
         switch (name) {
             case 'bass synth':
-                // A synth definition that mimics a bass guitar
+                // A very simple, clean synth configuration for debugging.
                 return new Tone.PolySynth(Tone.Synth, {
                     oscillator: {
-                        type: 'fmsquare',
-                        modulationType: 'sine',
-                        harmonicity: 0.5,
-                        modulationIndex: 3.5,
+                        type: 'sine', // The cleanest possible waveform.
                     },
                     envelope: {
                         attack: 0.01,
                         decay: 0.1,
                         sustain: 0.9,
-                        release: 0.1,
+                        release: 0.2,
                     },
-                     volume: -12,
                 });
             default:
                 return null;
