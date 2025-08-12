@@ -13,6 +13,7 @@ export class SoloSynthManager {
     private currentSynth: Tone.PolySynth | null = null;
     private currentInstrument: InstrumentName = 'none';
     private distortion: Tone.Distortion | null = null;
+    private tremolo: Tone.Tremolo | null = null;
 
     constructor() {}
 
@@ -44,23 +45,25 @@ export class SoloSynthManager {
     private createSynth(name: InstrumentName): Tone.PolySynth | null {
         switch (name) {
             case 'organ':
-                this.distortion = new Tone.Distortion(0.4).toDestination();
+                this.distortion = new Tone.Distortion(0.4);
+                this.tremolo = new Tone.Tremolo(4, 0.8).start();
+                
                 const organ = new Tone.PolySynth(Tone.Synth, {
                      oscillator: {
-                        type: 'fmsawtooth',
+                        type: 'fmsquare',
                         modulationType: 'sine',
                         harmonicity: 0.5,
                         modulationIndex: 3.5,
                     },
                     envelope: {
-                        attack: 0.16,
+                        attack: 0.01,
                         decay: 0.15,
-                        sustain: 0.9,
-                        release: 0.4,
+                        sustain: 1,
+                        release: 0.2,
                     },
                      volume: -15,
                 });
-                organ.connect(this.distortion);
+                organ.chain(this.distortion, this.tremolo, Tone.Destination);
                 return organ;
             // Future instruments can be added here
             // case 'piano':
@@ -96,6 +99,10 @@ export class SoloSynthManager {
         if (this.distortion) {
             this.distortion.dispose();
             this.distortion = null;
+        }
+        if (this.tremolo) {
+            this.tremolo.dispose();
+            this.tremolo = null;
         }
     }
 }
