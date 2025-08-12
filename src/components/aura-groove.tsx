@@ -319,6 +319,7 @@ export function AuraGroove() {
         
         if (soloSynthManagerRef.current) {
             soloSynthManagerRef.current.setInstrument(instruments.solo);
+            soloSynthManagerRef.current.startEffects();
         }
 
     } catch (error) {
@@ -336,6 +337,8 @@ export function AuraGroove() {
   const handleStop = useCallback(() => {
     soloSynthManagerRef.current?.releaseAll();
     bassSynthManagerRef.current?.releaseAll();
+    soloSynthManagerRef.current?.stopEffects();
+    
     if (Tone.Transport.state !== 'stopped') {
         Tone.Transport.stop();
         Tone.Transport.cancel();

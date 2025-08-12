@@ -36,6 +36,19 @@ export class SoloSynthManager {
 
         this.currentSynth = this.createSynth(name);
     }
+    
+    public startEffects() {
+        if (this.tremolo && this.tremolo.state !== 'started') {
+            this.tremolo.start();
+        }
+    }
+    
+    public stopEffects() {
+        if (this.tremolo && this.tremolo.state !== 'stopped') {
+            this.tremolo.stop();
+        }
+    }
+
 
     /**
      * Creates a synth instance based on the instrument name.
@@ -46,7 +59,8 @@ export class SoloSynthManager {
         switch (name) {
             case 'organ':
                 this.distortion = new Tone.Distortion(0.4);
-                this.tremolo = new Tone.Tremolo(4, 0.8).start();
+                // Create the tremolo but do not start it immediately.
+                this.tremolo = new Tone.Tremolo(4, 0.8);
                 
                 const organ = new Tone.PolySynth(Tone.Synth, {
                      oscillator: {
