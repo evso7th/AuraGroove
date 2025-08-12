@@ -72,8 +72,8 @@ const samplePaths: Record<string, string> = {
 export function AuraGroove() {
   const [isReady, setIsReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isInitializing, setIsInitializing] = useState(false);
-  const [loadingText, setLoadingText] = useState("");
+  const [isInitializing, setIsInitializing] = useState(true); // Start in initializing state
+  const [loadingText, setLoadingText] = useState("Initializing...");
   const [drumSettings, setDrumSettings] = useState<DrumSettings>({
       enabled: true,
       pattern: 'basic',
@@ -96,11 +96,12 @@ export function AuraGroove() {
    useEffect(() => {
     // This effect runs only once on the client side
     setLoadingText("Initializing...");
-
+    
+    // 1. Initialize Worker
     const worker = new Worker('/workers/ambient.worker.js');
     musicWorkerRef.current = worker;
 
-    // 1. Initialize Synths
+    // 2. Initialize Synths
     if (!soloSynthManagerRef.current) {
         soloSynthManagerRef.current = new SoloSynthManager();
     }
@@ -116,10 +117,7 @@ export function AuraGroove() {
           isWorkerInitialized.current = true;
            setLoadingText("");
            setIsReady(true);
-           if (isInitializing) {
-               // If play was clicked while worker was initializing, start it now
-               handlePlay();
-           }
+           setIsInitializing(false);
           break;
         
         case 'started':
@@ -188,7 +186,7 @@ export function AuraGroove() {
     worker.onmessage = handleMessage;
 
     // 3. Load Samples and Initialize Worker with them
-    const loadSamples = async () => {
+    const loadSamplesAndInit = async () => {
         setLoadingText("Loading samples...");
         try {
             // Fetch all audio files as raw ArrayBuffers
@@ -204,20 +202,20 @@ export function AuraGroove() {
             );
 
             const workerSamples: Record<string, ArrayBuffer> = {};
-            const mainThreadSamples: Record<string, AudioBuffer> = {};
+            const mainThreadSampleMap: Record<string, AudioBuffer> = {};
             
             // Create independent copies for the worker and the main thread
             await Promise.all(fetchedSamples.map(async ({ name, buffer }) => {
                 // Copy for worker (will be transferred)
                 workerSamples[name] = buffer.slice(0); 
-                // Copy for main thread's Tone.Players
+                // Decode another copy for main thread's Tone.Players
                 const mainBuffer = await Tone.context.decodeAudioData(buffer.slice(0));
-                mainThreadSamples[name] = mainBuffer;
+                mainThreadSampleMap[name] = mainBuffer;
             }));
 
 
             // Initialize Tone.Players on the main thread
-            drumPlayersRef.current = new Tone.Players(mainThreadSamples).toDestination();
+            drumPlayersRef.current = new Tone.Players(mainThreadSampleMap).toDestination();
 
             // Initialize worker with its own set of buffers
             worker.postMessage({
@@ -233,10 +231,12 @@ export function AuraGroove() {
                 description: error instanceof Error ? error.message : "An unknown error occurred.",
             });
             setLoadingText("Error loading samples.");
+            setIsInitializing(false);
         }
     };
     
-    loadSamples();
+    // This will run only on the client
+    loadSamplesAndInit();
     
     // 4. Cleanup
     return () => {
@@ -265,8 +265,10 @@ export function AuraGroove() {
   }, [instruments, drumSettings, bpm, isPlaying, isInitializing]);
 
   useEffect(() => {
-    updateWorkerSettings();
-  }, [drumSettings, instruments, bpm, updateWorkerSettings]);
+    if (isReady) { // Only update worker if it's ready
+      updateWorkerSettings();
+    }
+  }, [drumSettings, instruments, bpm, isReady, updateWorkerSettings]);
   
   useEffect(() => {
     if (drumPlayersRef.current) {
@@ -288,15 +290,15 @@ export function AuraGroove() {
 
 
   const handlePlay = useCallback(async () => {
-    if (!musicWorkerRef.current) return;
-
-    setIsInitializing(true);
-
-    if (!isWorkerInitialized.current) {
-        setLoadingText("Waiting for worker...");
+    if (!musicWorkerRef.current || !isWorkerInitialized.current) {
+        // If play is clicked before worker is ready, show loading and wait
+        setIsInitializing(true);
+        setLoadingText("Waiting for audio engine...");
+        // The `initialized` message from the worker will eventually trigger the play state
         return; 
     }
     
+    setIsInitializing(true);
     setLoadingText("Starting audio engine...");
 
     try {
@@ -351,16 +353,7 @@ export function AuraGroove() {
     }
   }, [isPlaying, handleStop, handlePlay]);
   
-  if (!isReady) {
-    return (
-        <div className="flex flex-col items-center justify-center text-muted-foreground space-y-2 min-h-[40px]">
-            <Loader2 className="h-8 w-8 animate-spin" />
-            <p className="text-lg">{loadingText || "Loading..."}</p>
-        </div>
-    );
-  }
-
-  const isBusy = isInitializing;
+  const isBusy = isInitializing || !isReady;
 
   return (
     <Card className="w-full max-w-lg shadow-2xl">
@@ -379,7 +372,7 @@ export function AuraGroove() {
             <Select
               value={instruments.solo}
               onValueChange={(v) => setInstruments(i => ({...i, solo: v as Instruments['solo']}))}
-              disabled={isBusy}
+              disabled={isBusy || isPlaying}
             >
               <SelectTrigger id="solo-instrument" className="col-span-2">
                 <SelectValue placeholder="Select instrument" />
@@ -397,7 +390,7 @@ export function AuraGroove() {
              <Select
               value={instruments.accompaniment}
               onValueChange={(v) => setInstruments(i => ({...i, accompaniment: v as Instruments['accompaniment']}))}
-              disabled={isBusy}
+              disabled={isBusy || isPlaying}
             >
               <SelectTrigger id="accompaniment-instrument" className="col-span-2">
                 <SelectValue placeholder="Select instrument" />
@@ -416,7 +409,7 @@ export function AuraGroove() {
                 <Select
                     value={instruments.bass}
                     onValueChange={(v) => setInstruments(i => ({...i, bass: v as Instruments['bass']}))}
-                    disabled={isBusy}
+                    disabled={isBusy || isPlaying}
                     >
                     <SelectTrigger id="bass-instrument" className="w-full">
                         <SelectValue placeholder="Select instrument" />
@@ -438,7 +431,7 @@ export function AuraGroove() {
                     id="drums-enabled"
                     checked={drumSettings.enabled}
                     onCheckedChange={(c) => setDrumSettings(d => ({ ...d, enabled: c }))}
-                    disabled={isBusy}
+                    disabled={isBusy || isPlaying}
                 />
             </div>
             <div className="grid grid-cols-3 items-center gap-4">
@@ -446,7 +439,7 @@ export function AuraGroove() {
                 <Select
                     value={drumSettings.pattern}
                     onValueChange={(v) => setDrumSettings(d => ({ ...d, pattern: v as DrumSettings['pattern'] }))}
-                    disabled={isBusy || !drumSettings.enabled}
+                    disabled={isBusy || isPlaying || !drumSettings.enabled}
                 >
                     <SelectTrigger id="drum-pattern" className="col-span-2">
                         <SelectValue placeholder="Select pattern" />
@@ -468,7 +461,7 @@ export function AuraGroove() {
                     step={5}
                     onValue-change={(v) => setBpm(v[0])}
                     className="col-span-2"
-                    disabled={isBusy}
+                    disabled={isBusy || isPlaying}
                 />
             </div>
             <div className="grid grid-cols-3 items-center gap-4">
@@ -479,7 +472,7 @@ export function AuraGroove() {
                     step={0.05}
                     onValueChange={(v) => setDrumSettings(d => ({ ...d, volume: v[0] }))}
                     className="col-span-2"
-                    disabled={isBusy || !drumSettings.enabled}
+                    disabled={isBusy || isPlaying || !drumSettings.enabled}
                 />
             </div>
         </div>
@@ -521,3 +514,5 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    
