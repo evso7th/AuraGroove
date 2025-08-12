@@ -92,17 +92,20 @@ export function AuraGroove() {
   const soloSynthManagerRef = useRef<SoloSynthManager | null>(null);
   const drumPlayersRef = useRef<Tone.Players | null>(null);
   const isWorkerInitialized = useRef(false);
-  
-   if (!soloSynthManagerRef.current) {
-    soloSynthManagerRef.current = new SoloSynthManager();
-  }
-  
-  if (!bassSynthManagerRef.current) {
-    bassSynthManagerRef.current = new BassSynthManager();
-  }
 
    useEffect(() => {
+    // This effect runs only once on the client side
     setLoadingText("Initializing...");
+
+    // 1. Initialize Synths
+    if (!soloSynthManagerRef.current) {
+        soloSynthManagerRef.current = new SoloSynthManager();
+    }
+    if (!bassSynthManagerRef.current) {
+        bassSynthManagerRef.current = new BassSynthManager();
+    }
+
+    // 2. Initialize Worker
     musicWorkerRef.current = new Worker('/workers/ambient.worker.js');
 
     const handleMessage = (event: MessageEvent) => {
@@ -183,6 +186,7 @@ export function AuraGroove() {
 
     musicWorkerRef.current.onmessage = handleMessage;
 
+    // 3. Load Samples and Initialize Worker with them
     setLoadingText("Loading samples...");
     const players = new Tone.Players(samplePaths, () => {
         const sampleBuffers: Record<string, ArrayBuffer> = {};
@@ -191,7 +195,6 @@ export function AuraGroove() {
             if(player.loaded) {
                 const buffer = player.buffer.get();
                 if (buffer) {
-                    // Clone the ArrayBuffer to transfer it to the worker
                     sampleBuffers[key] = buffer.slice(0);
                 }
             }
@@ -203,6 +206,7 @@ export function AuraGroove() {
     }).toDestination();
     drumPlayersRef.current = players;
     
+    // 4. Cleanup
     return () => {
       if (musicWorkerRef.current) {
         musicWorkerRef.current.terminate();
@@ -211,9 +215,12 @@ export function AuraGroove() {
       bassSynthManagerRef.current?.dispose();
       soloSynthManagerRef.current?.dispose();
       drumPlayersRef.current?.dispose();
-      Tone.Transport.stop();
-      Tone.Transport.cancel();
+      if (Tone.Transport.state !== 'stopped') {
+        Tone.Transport.stop();
+        Tone.Transport.cancel();
+      }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); 
   
   const updateWorkerSettings = useCallback(() => {
@@ -265,9 +272,9 @@ export function AuraGroove() {
         
         setLoadingText("Starting playback...");
         
-        setTimeout(() => {
-          Tone.Transport.start();
-        }, 100);
+        if (Tone.Transport.state !== 'started') {
+            Tone.Transport.start();
+        }
         
         musicWorkerRef.current.postMessage({
             command: 'start',
@@ -292,13 +299,15 @@ export function AuraGroove() {
         setIsInitializing(false);
         setLoadingText("");
     }
-  }, [drumSettings, instruments, bpm, toast, isInitializing]);
+  }, [drumSettings, instruments, bpm, toast]);
 
   const handleStop = useCallback(() => {
     soloSynthManagerRef.current?.releaseAll();
     bassSynthManagerRef.current?.releaseAll();
-    Tone.Transport.stop();
-    Tone.Transport.cancel();
+    if (Tone.Transport.state !== 'stopped') {
+        Tone.Transport.stop();
+        Tone.Transport.cancel();
+    }
     musicWorkerRef.current?.postMessage({ command: 'stop' });
   }, []);
   
