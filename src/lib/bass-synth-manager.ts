@@ -11,7 +11,7 @@ type InstrumentName = Instruments['bass'];
  */
 export class BassSynthManager {
     private currentSynth: Tone.PolySynth | null = null;
-    private currentInstrument: InstrumentName | null = null; // Изменено для лучшего сброса
+    private currentInstrument: InstrumentName | null = null;
 
     constructor() {}
 
@@ -21,21 +21,21 @@ export class BassSynthManager {
      * @param name The name of the instrument to activate.
      */
     public setInstrument(name: InstrumentName) {
-        console.log('BassSynthManager: setInstrument called with', name); // Добавьте эту строку
+        console.log('BassSynthManager: setInstrument called with', name);
         this.dispose(); // Clean up the previous synth
         this.currentInstrument = name;
 
         if (name === 'none') {
-            console.log('BassSynthManager: Instrument set to none, disposing.'); // Добавьте эту строку
+            console.log('BassSynthManager: Instrument set to none, disposing.');
             return;
         }
 
         this.currentSynth = this.createSynth(name);
         if (this.currentSynth) {
-            console.log('BassSynthManager: Synth created and connected to destination.'); // Добавьте эту строку
+            console.log('BassSynthManager: Synth created and connected to destination.');
             this.currentSynth.toDestination();
         } else {
-             console.log('BassSynthManager: Failed to create synth for', name); // Добавьте эту строку
+             console.log('BassSynthManager: Failed to create synth for', name);
         }
     }
 
@@ -49,15 +49,15 @@ export class BassSynthManager {
             case 'bass synth':
                 return new Tone.PolySynth(Tone.Synth, {
                     oscillator: {
-                        type: 'sawtooth', // Попробуйте 'sawtooth' или 'square'
+                        type: 'sine', // Changed back to 'sine' for a clean bass tone
                     },
                     envelope: {
                         attack: 0.01,
                         decay: 0.1,
                         sustain: 0.9,
-                        release: 0.2,
+                        release: 0.4, // Slightly longer release for smoother decay
                     },
-                    volume: 3, // Увеличьте громкость для теста
+                    volume: 0, // Adjusted volume to prevent clipping
                 });
             default:
                 return null;
@@ -65,11 +65,11 @@ export class BassSynthManager {
     }
     
     public triggerAttackRelease(notes: string | string[], duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
-        console.log('BassSynthManager: triggerAttackRelease called with', notes, duration, time, velocity); // Добавьте эту строку
+        console.log('BassSynthManager: triggerAttackRelease called with', notes, duration, time, velocity);
         if (this.currentSynth) {
             this.currentSynth.triggerAttackRelease(notes, duration, time, velocity);
         } else {
-             console.log('BassSynthManager: triggerAttackRelease called but currentSynth is null.'); // Добавьте эту строку
+             console.log('BassSynthManager: triggerAttackRelease called but currentSynth is null.');
         }
     }
 
