@@ -59,7 +59,7 @@ export class SoloSynthManager {
                         sustain: 0.9,
                         release: 0.1,
                     },
-                     volume: -9, // Organs can be loud, reduce volume
+                     volume: -15, // Organs can be loud, reduce volume
                 });
             // Future instruments can be added here
             // case 'piano':
