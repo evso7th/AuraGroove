@@ -93,6 +93,7 @@ export function AuraGroove() {
   const drumPlayersRef = useRef<Tone.Players | null>(null);
   const isWorkerInitialized = useRef(false);
   const isToneReady = useRef(false);
+  const areSamplesLoaded = useRef(false);
   
    if (!soloSynthManagerRef.current) {
     soloSynthManagerRef.current = new SoloSynthManager();
@@ -190,6 +191,14 @@ export function AuraGroove() {
         musicWorkerRef.current.onmessage = handleMessage;
     }
     
+    // Pre-load drum samples
+    if (!drumPlayersRef.current) {
+        drumPlayersRef.current = new Tone.Players(samplePaths, () => {
+            areSamplesLoaded.current = true;
+        }).toDestination();
+        drumPlayersRef.current.volume.value = Tone.gainToDb(drumSettings.volume);
+    }
+
     // Cleanup function to terminate the worker when the component unmounts.
     return () => {
       if (musicWorkerRef.current) {
@@ -244,29 +253,35 @@ export function AuraGroove() {
     if (!musicWorkerRef.current) return;
 
     setIsInitializing(true);
+    setLoadingText("Starting audio engine...");
 
     try {
         if (!isToneReady.current) {
-            setLoadingText("Preparing audio engine...");
             await Tone.start();
-            
-            setLoadingText("Loading audio samples...");
-            drumPlayersRef.current = new Tone.Players(samplePaths, () => {
-                isToneReady.current = true;
-                setLoadingText("Starting playback...");
-                musicWorkerRef.current?.postMessage({
-                    command: 'start',
-                    data: { drumSettings, instruments, bpm }
-                });
-            }).toDestination();
-            drumPlayersRef.current.volume.value = Tone.gainToDb(drumSettings.volume);
-        } else {
-             setLoadingText("Starting playback...");
-             musicWorkerRef.current.postMessage({
-                command: 'start',
-                data: { drumSettings, instruments, bpm }
-            });
+            isToneReady.current = true;
         }
+
+        // Check if samples are loaded. If not, wait a bit.
+        if (!areSamplesLoaded.current) {
+             setLoadingText("Loading audio samples...");
+             // This is a simple polling mechanism. In a real app, you might use a more robust
+             // event-based system, but this is fine for now.
+             await new Promise<void>(resolve => {
+                const interval = setInterval(() => {
+                    if (areSamplesLoaded.current) {
+                        clearInterval(interval);
+                        resolve();
+                    }
+                }, 100);
+             });
+        }
+        
+        setLoadingText("Starting playback...");
+        
+        musicWorkerRef.current.postMessage({
+            command: 'start',
+            data: { drumSettings, instruments, bpm }
+        });
         
         if (bassSynthManagerRef.current) {
             bassSynthManagerRef.current.setInstrument(instruments.bass);
@@ -465,6 +480,5 @@ export function AuraGroove() {
     </Card>
   );
 }
-
 
     
