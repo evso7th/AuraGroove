@@ -11,7 +11,7 @@ type InstrumentName = Instruments['bass'];
  */
 export class BassSynthManager {
     private currentSynth: Tone.PolySynth | null = null;
-    private currentInstrument: InstrumentName = 'none';
+    private currentInstrument: InstrumentName | null = null; // Изменено для лучшего сброса
 
     constructor() {}
 
@@ -21,10 +21,6 @@ export class BassSynthManager {
      * @param name The name of the instrument to activate.
      */
     public setInstrument(name: InstrumentName) {
-        if (name === this.currentInstrument) {
-            return;
-        }
-
         this.dispose(); // Clean up the previous synth
         this.currentInstrument = name;
 
