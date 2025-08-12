@@ -51,7 +51,7 @@ type BassNote = {
 type SoloNote = {
     notes: string | string[];
     time: Tone.Unit.Time;
-    velocity: number;
+    duration: Tone.Unit.Time;
 }
 
 type DrumNote = {
@@ -77,7 +77,7 @@ export function AuraGroove() {
   const [drumSettings, setDrumSettings] = useState<DrumSettings>({
       enabled: true,
       pattern: 'basic',
-      volume: 0.7,
+      volume: 0.85,
   });
   const [instruments, setInstruments] = useState<Instruments>({
     solo: "organ",
@@ -412,7 +412,7 @@ export function AuraGroove() {
                     min={60}
                     max={160}
                     step={5}
-                    onValueChange={(v) => setBpm(v[0])}
+                    onValue-change={(v) => setBpm(v[0])}
                     className="col-span-2"
                     disabled={isBusy}
                 />
