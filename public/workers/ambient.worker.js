@@ -2,15 +2,30 @@
  * @file AuraGroove Ambient Music Worker
  *
  * This worker operates on a microservice-style architecture.
- * Each musical component is an isolated entity responsible for a single task.
+ * Its only job is to act as a precise "metronome" and musical score generator.
+ * It does NOT handle audio rendering, which is now managed by Tone.js in the main thread.
  *
  * Core Entities:
- * 1.  MessageBus (self): Handles all communication.
- * 2.  Scheduler: The central "conductor" or "event loop".
- * 3.  Instrument Generators: The "composers" (e.g., DrumGenerator, BassGenerator).
- * 4.  PatternProvider: The "music sheet library".
- * 5.  AudioRenderer: The "audio engine" for sample-based instruments.
- * 6.  SampleBank: Storage for decoded audio samples.
+ * 1.  MessageBus (self): Handles communication with the main thread.
+ *
+ * 2.  Scheduler: The central "conductor". It wakes up at regular intervals (one bar),
+ *     requests scores from the generators, and posts them to the main thread.
+ *
+ * 3.  Instrument Generators (e.g., DrumGenerator, BassGenerator): "Composers" that create
+ *     musical patterns (scores) based on the current settings.
+ *
+ * 4.  PatternProvider: The "music sheet library" holding all rhythmic and melodic patterns.
+ *
+ * Data Flow:
+ * - Main thread sends 'start' with instrument/drum settings.
+ * - Scheduler starts its loop.
+ * - In each loop tick (every bar):
+ *   - Scheduler asks the appropriate generators for their scores for the current bar.
+ *   - Generators query PatternProvider for the base patterns.
+ *   - Generators create their scores and return them to the scheduler.
+ *   - Scheduler posts a message to the main thread for each active instrument,
+ *     containing the generated score (e.g., { type: 'drum_score', data: { score: [...] } }).
+ * - The main thread, using Tone.js, receives these scores and schedules the audio playback.
  */
 
 // --- 1. PatternProvider (The Music Sheet Library) ---
@@ -65,112 +80,71 @@ class DrumGenerator {
     static createScore(patternName, barNumber) {
         const pattern = PatternProvider.getDrumPattern(patternName);
         let score = [...pattern];
+
+        // Add a crash cymbal on the first beat of every 4th bar
         if (barNumber % 4 === 0) {
+            // Remove any other drum hit at time 0 to avoid conflict
             score = score.filter(note => note.time !== 0);
             score.push({ sample: 'crash', time: 0, velocity: 0.8 });
         }
-        return score;
+        
+        return score.map(note => ({
+            ...note,
+            time: (note.time * (60 / Scheduler.bpm))
+        }));
     }
 }
 
 class BassGenerator {
-     static createScore(rootNote = 'E') {
+     static createScore(rootNote = 'E', beatsPerBar = 4) {
+        const barDuration = beatsPerBar * (60/ Scheduler.bpm);
         const score = [
-            { note: `${rootNote}1`, time: 0, duration: '2n', velocity: 0.9 },
-            { note: `${rootNote}1`, time: 2, duration: '2n', velocity: 0.9 },
+            { note: `${rootNote}1`, time: 0, duration: barDuration, velocity: 0.9 }
         ];
         return score;
     }
 }
 
 class SoloGenerator {
-    static createScore(barNumber) {
-        // Simple rotating chord progression: Em -> C -> G -> D
-        const chords = [
-            ['E3', 'G3', 'B3'], // Em
-            ['C3', 'E3', 'G3'], // C
-            ['G3', 'B3', 'D4'], // G
-            ['D3', 'F#3', 'A3']  // D
-        ];
-        const currentChord = chords[barNumber % chords.length];
-        
-        const score = [
-            // Play the chord as a whole note
-            { notes: currentChord, time: 0, duration: '1n', velocity: 0.6 }
-        ];
+    static createScore(barNumber, beatsPerBar = 4) {
+        const barDuration = beatsPerBar * (60/ Scheduler.bpm);
+        const notes = [ "C4", "E4", "G4", "B4" ];
+        const score = [];
+
+        // Simple arpeggio for demonstration
+        for (let i = 0; i < beatsPerBar; i++) {
+            score.push({
+                notes: notes[i % notes.length],
+                time: i * (barDuration / beatsPerBar),
+                duration: "8n",
+                velocity: 0.7
+            });
+        }
         return score;
     }
 }
 
 
-// --- 3. SampleBank (Decoded Audio Storage) ---
-const SampleBank = {
-    samples: {},
-    isInitialized: false,
-
-    init(samples) {
-        // Samples are now decoded on the main thread and sent here as Float32Arrays
-        this.samples = samples;
-        this.isInitialized = true;
-        console.log("SampleBank Initialized with pre-decoded samples:", Object.keys(this.samples));
-        // IMPORTANT: Signal back to main thread that initialization is complete
-        self.postMessage({ type: 'initialized' });
-    },
-
-    getSample(name) {
-        return this.samples[name];
-    }
-};
-
-
-// --- 4. AudioRenderer (The Sound Engine) ---
-const AudioRenderer = {
-    render(score, settings, sampleRate) {
-        const { duration, volume } = settings;
-        const totalSamples = Math.floor(duration * sampleRate);
-        const chunk = new Float32Array(totalSamples).fill(0);
-
-        for (const note of score) {
-            const sample = SampleBank.getSample(note.sample);
-            if (!sample) continue;
-
-            const noteVelocity = note.velocity ?? 1.0;
-            const finalVolume = volume * noteVelocity;
-            
-            const startSample = Math.floor(note.time * Scheduler.secondsPerBeat * sampleRate);
-            const endSample = Math.min(startSample + sample.length, totalSamples);
-            
-            for (let i = 0; i < (endSample - startSample); i++) {
-                if (startSample + i < chunk.length) {
-                    chunk[startSample + i] += sample[i] * finalVolume;
-                }
-            }
-        }
-        
-        for (let i = 0; i < totalSamples; i++) {
-            chunk[i] = Math.max(-1, Math.min(1, chunk[i]));
-        }
-
-        return chunk;
-    }
-};
-
-
-// --- 5. Scheduler (The Conductor) ---
+// --- 3. Scheduler (The Conductor) ---
 const Scheduler = {
     intervalId: null,
     isRunning: false,
     barCount: 0,
     
-    sampleRate: 44100,
-    bpm: 120,
-    instruments: {},
-    drumSettings: {},
+    // Settings from main thread
+    bpm: 100,
+    instruments: {
+        solo: 'none',
+        bass: 'none',
+    },
+    drumSettings: {
+        enabled: true,
+        pattern: 'basic'
+    },
 
+    // Calculated properties
     get beatsPerBar() { return 4; },
-    get secondsPerBeat() { return 60 / this.bpm; },
-    get barDuration() { return this.beatsPerBar * this.secondsPerBeat; },
-
+    get barDuration() { return this.beatsPerBar * (60 / this.bpm); },
 
     start() {
         if (this.isRunning) return;
@@ -178,8 +152,10 @@ const Scheduler = {
         this.reset();
         this.isRunning = true;
         
+        // Generate the first chunk immediately
         this.tick();
 
+        // Then set up the interval for subsequent chunks
         this.intervalId = setInterval(() => this.tick(), this.barDuration * 1000);
         self.postMessage({ type: 'started' });
     },
@@ -200,78 +176,40 @@ const Scheduler = {
         if (settings.instruments) this.instruments = settings.instruments;
         if (settings.drumSettings) this.drumSettings = settings.drumSettings;
         if (settings.bpm) {
-            const wasRunning = this.isRunning;
-            if (wasRunning) this.stop();
             this.bpm = settings.bpm;
-            if (wasRunning) this.start();
+            // If running, restart the interval with the new BPM
+            if (this.isRunning) {
+                clearInterval(this.intervalId);
+                this.intervalId = setInterval(() => this.tick(), this.barDuration * 1000);
+            }
         }
     },
 
     tick() {
         if (!this.isRunning) return;
-
-        let drumScore = [];
         
+        // 1. Generate drum score
         if (this.drumSettings.enabled) {
-            drumScore = DrumGenerator.createScore(
+            const drumScore = DrumGenerator.createScore(
                 this.drumSettings.pattern, 
                 this.barCount
             );
+            self.postMessage({ type: 'drum_score', data: { score: drumScore } });
         }
-
-        if (this.instruments.bass === 'bass synth') {
-            const bassScore = BassGenerator.createScore('E');
-            self.postMessage({ type: 'bass_score', data: { score: bassScore } });
-        }
-
-        if (this.instruments.solo !== 'none') {
-            const soloScore = SoloGenerator.createScore(this.barCount);
-            self.postMessage({ type: 'solo_score', data: { score: soloScore } });
-        }
-
-        const audioChunk = this.render(drumScore, {
-            duration: this.barDuration,
-            volume: this.drumSettings.volume || 0.7
-        });
         
-        self.postMessage({
-            type: 'chunk',
-            data: {
-                chunk: audioChunk,
-                duration: this.barDuration,
-            }
-        }, [audioChunk.buffer]);
+        // 2. Generate bass score
+        if (this.instruments.bass !== 'none') {
+            const bassScore = BassGenerator.createScore('E', this.beatsPerBar);
+            self.postMessage({ type: 'bass_score', data: { score: bassScore }});
+        }
+
+        // 3. Generate solo score
+        if (this.instruments.solo !== 'none') {
+             const soloScore = SoloGenerator.createScore(this.barCount, this.beatsPerBar);
+             self.postMessage({ type: 'solo_score', data: { score: soloScore }});
+        }
 
         this.barCount++;
-    },
-
-    render(score, settings) {
-        const { duration, volume } = settings;
-        const totalSamples = Math.floor(duration * this.sampleRate);
-        const chunk = new Float32Array(totalSamples).fill(0);
-
-        for (const note of score) {
-            const sample = SampleBank.getSample(note.sample);
-            if (!sample) continue;
-
-            const noteVelocity = note.velocity ?? 1.0;
-            const finalVolume = volume * noteVelocity;
-            
-            const startSample = Math.floor(note.time * this.secondsPerBeat * this.sampleRate);
-            const endSample = Math.min(startSample + sample.length, totalSamples);
-            
-            for (let i = 0; i < (endSample - startSample); i++) {
-                if (startSample + i < chunk.length) {
-                    chunk[startSample + i] += sample[i] * finalVolume;
-                }
-            }
-        }
-        
-        for (let i = 0; i < totalSamples; i++) {
-            chunk[i] = Math.max(-1, Math.min(1, chunk[i]));
-        }
-
-        return chunk;
     }
 };
 
@@ -282,16 +220,8 @@ self.onmessage = async (event) => {
 
     try {
         switch (command) {
-            case 'init':
-                Scheduler.sampleRate = data.sampleRate;
-                // No decoding needed in worker anymore
-                SampleBank.init(data.samples);
-                break;
-            
+            // 'init' is no longer needed as audio is handled by main thread
             case 'start':
-                if (!SampleBank.isInitialized) {
-                   throw new Error("Worker is not initialized with samples yet. Call 'init' first.");
-                }
                 Scheduler.updateSettings(data);
                 Scheduler.start();
                 break;
@@ -299,12 +229,13 @@ self.onmessage = async (event) => {
             case 'stop':
                 Scheduler.stop();
                 break;
-
+            
             case 'update_settings':
-                 Scheduler.updateSettings(data);
+                Scheduler.updateSettings(data);
                 break;
         }
     } catch (e) {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
+    

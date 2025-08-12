@@ -25,9 +25,8 @@ import { Label } from "@/components/ui/label";
 import Logo from "@/components/icons";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
-import { AudioPlayer } from "@/lib/audio-player";
-import { SoloSynthManager } from "@/lib/solo-synth-manager";
 import { BassSynthManager } from "@/lib/bass-synth-manager";
+import { SoloSynthManager } from "@/lib/solo-synth-manager";
 
 
 export type Instruments = {
@@ -42,30 +41,6 @@ export type DrumSettings = {
     volume: number;
 };
 
-// Helper to decode audio data in the main thread
-async function decodeSamples(samplePaths: Record<string, string>, toast: (options: any) => void) {
-    const promises = Object.entries(samplePaths).map(async ([key, path]) => {
-        try {
-            const response = await fetch(path);
-            if (!response.ok) {
-                 throw new Error('Failed to fetch samples from server.');
-            }
-            const arrayBuffer = await response.arrayBuffer();
-            return { [key]: arrayBuffer };
-        } catch (e) {
-            console.error(`Error fetching sample ${key}:`, e);
-            toast({
-                variant: "destructive",
-                title: "Sample Fetching Error",
-                description: `Failed to fetch ${key}. Please check the file path and server status.`,
-            });
-            return { [key]: new ArrayBuffer(0) };
-        }
-    });
-    const fetchedPairs = await Promise.all(promises);
-    return fetchedPairs.reduce((acc, pair) => ({ ...acc, ...pair }), {});
-}
-
 type BassNote = {
     note: string;
     time: number;
@@ -79,6 +54,20 @@ type SoloNote = {
     duration: Tone.Unit.Time;
     velocity: number;
 }
+
+type DrumNote = {
+    sample: string;
+    time: number;
+    velocity?: number;
+}
+
+const samplePaths = {
+    kick: '/assets/drums/kick_drum6.wav',
+    snare: '/assets/drums/snare.wav',
+    hat: '/assets/drums/closed_hi_hat_accented.wav',
+    crash: '/assets/drums/crash1.wav',
+    ride: '/assets/drums/cymbal1.wav',
+};
 
 
 export function AuraGroove() {
@@ -99,14 +88,11 @@ export function AuraGroove() {
   const { toast } = useToast();
 
   const musicWorkerRef = useRef<Worker>();
-  const audioPlayerRef = useRef<AudioPlayer>();
   const bassSynthManagerRef = useRef<BassSynthManager | null>(null);
   const soloSynthManagerRef = useRef<SoloSynthManager | null>(null);
+  const drumPlayersRef = useRef<Tone.Players | null>(null);
   const isWorkerInitialized = useRef(false);
-  
-  if (!audioPlayerRef.current) {
-    audioPlayerRef.current = new AudioPlayer();
-  }
+  const isToneReady = useRef(false);
   
    if (!soloSynthManagerRef.current) {
     soloSynthManagerRef.current = new SoloSynthManager();
@@ -141,16 +127,21 @@ export function AuraGroove() {
                  setIsInitializing(false);
                  setLoadingText("");
                  setIsPlaying(true);
-                 audioPlayerRef.current?.start();
                  Tone.Transport.start();
                  break;
 
-            case 'chunk':
-              if (data && audioPlayerRef.current && data.chunk && data.duration) {
-                 audioPlayerRef.current.scheduleChunk(data.chunk, data.duration);
-              }
-              break;
-            
+            case 'drum_score':
+                if (drumPlayersRef.current && data.score && data.score.length > 0) {
+                     const now = Tone.now();
+                     data.score.forEach((note: DrumNote) => {
+                        const player = drumPlayersRef.current?.player(note.sample);
+                        if (player) {
+                            player.start(now + note.time, 0, undefined, note.velocity ? drumSettings.volume * note.velocity : drumSettings.volume);
+                        }
+                    });
+                }
+                break;
+
             case 'bass_score':
                 if (bassSynthManagerRef.current && data.score && data.score.length > 0) {
                     const now = Tone.now();
@@ -181,7 +172,6 @@ export function AuraGroove() {
             case 'stopped':
                 setIsPlaying(false);
                 setLoadingText("");
-                audioPlayerRef.current?.stop();
                 break;
 
             case 'error':
@@ -206,9 +196,9 @@ export function AuraGroove() {
         musicWorkerRef.current.terminate();
         musicWorkerRef.current = undefined;
       }
-      audioPlayerRef.current?.stop();
       bassSynthManagerRef.current?.dispose();
       soloSynthManagerRef.current?.dispose();
+      drumPlayersRef.current?.dispose();
       Tone.Transport.stop();
       Tone.Transport.cancel();
     };
@@ -229,6 +219,12 @@ export function AuraGroove() {
     updateWorkerSettings();
   }, [drumSettings, instruments, bpm, updateWorkerSettings]);
   
+  useEffect(() => {
+    if (drumPlayersRef.current) {
+        drumPlayersRef.current.volume.value = Tone.gainToDb(drumSettings.volume);
+    }
+  }, [drumSettings.volume]);
+
   // This effect updates the synth's parameters whenever they change in the UI
   useEffect(() => {
     if (bassSynthManagerRef.current) {
@@ -245,12 +241,32 @@ export function AuraGroove() {
 
 
   const handlePlay = useCallback(async () => {
-    if (!audioPlayerRef.current || !musicWorkerRef.current) return;
+    if (!musicWorkerRef.current) return;
 
     setIsInitializing(true);
 
     try {
-        await Tone.start();
+        if (!isToneReady.current) {
+            setLoadingText("Preparing audio engine...");
+            await Tone.start();
+            
+            setLoadingText("Loading audio samples...");
+            drumPlayersRef.current = new Tone.Players(samplePaths, () => {
+                isToneReady.current = true;
+                setLoadingText("Starting playback...");
+                musicWorkerRef.current?.postMessage({
+                    command: 'start',
+                    data: { drumSettings, instruments, bpm }
+                });
+            }).toDestination();
+            drumPlayersRef.current.volume.value = Tone.gainToDb(drumSettings.volume);
+        } else {
+             setLoadingText("Starting playback...");
+             musicWorkerRef.current.postMessage({
+                command: 'start',
+                data: { drumSettings, instruments, bpm }
+            });
+        }
         
         if (bassSynthManagerRef.current) {
             bassSynthManagerRef.current.setInstrument(instruments.bass);
@@ -258,47 +274,6 @@ export function AuraGroove() {
         
         if (soloSynthManagerRef.current) {
             soloSynthManagerRef.current.setInstrument(instruments.solo);
-        }
-
-        if (!audioPlayerRef.current.isInitialized()) {
-            setLoadingText("Preparing audio engine...");
-            await audioPlayerRef.current.init();
-        }
-        
-        const sampleRate = audioPlayerRef.current.getSampleRate();
-        if (!sampleRate) {
-            throw new Error("AudioContext not initialized or sample rate not available.");
-        }
-        
-        if (isWorkerInitialized.current) {
-            setLoadingText("Starting playback...");
-            musicWorkerRef.current.postMessage({
-                command: 'start',
-                data: { drumSettings, instruments, bpm }
-            });
-        } else {
-             setLoadingText("Loading audio samples...");
-             const samplePaths = {
-                kick: '/assets/drums/kick_drum6.wav',
-                snare: '/assets/drums/snare.wav',
-                hat: '/assets/drums/closed_hi_hat_accented.wav',
-                crash: '/assets/drums/crash1.wav',
-                ride: '/assets/drums/cymbal1.wav',
-            };
-            
-            // Fetch raw audio data as array buffers
-            const fetchedSamples = await decodeSamples(samplePaths, toast);
-
-            // Create an array of transferable objects to send to the worker.
-            const transferableObjects = Object.values(fetchedSamples).map(s => s.slice(0));
-            
-            musicWorkerRef.current.postMessage({
-                command: 'init',
-                data: { 
-                    sampleRate: sampleRate, 
-                    samples: fetchedSamples 
-                }
-            }, transferableObjects);
         }
 
     } catch (error) {
@@ -322,8 +297,6 @@ export function AuraGroove() {
   }, []);
   
   const handleTogglePlay = useCallback(() => {
-    if (!audioPlayerRef.current) return;
-    
     if (isPlaying) {
       handleStop();
     } else {
@@ -492,3 +465,6 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+
+    
