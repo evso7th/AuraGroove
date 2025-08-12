@@ -1,0 +1,755 @@
+WELSH'S
+SYNTHESIZER
+COOKBOOK
+FRED WELSH
+WELSH’S
+SYNTHESIZER
+COOKBOOK
+By Fred Welsh
+3d Edition 
+Welsh’s Synthesizer Cookbook
+Copyright © 2006 Fred Welsh
+All rights reserved
+No part of this publication may be reproduced or transmitted in any form or by any
+means, electronic or mechanical, including photocopy recording or any information
+storage and retrieval systems, without permission in writing from the writer, except by a
+reviewer who may quote brief passages in a review. 
+Dedication
+This book is dedicated to my lovely wife Danielle for all her support and for putting up
+with all my late nights on the keyboards.
+Many thanks to MDSP at Smartelectronix for giving permission to use Fre(a)koskope to
+produce the harmonic diagrams in the book. 
+CONTENTS
+OSCILLATORS 1 SYNTHESIS THROUGH
+ HARMONIC ANALYSIS AND
+Harmonics & waveforms 1 REVERSE ENGINEERING 29
+
+ Pulse width 7 Reverse engineering a
+a patch from another
+Syncing 9 synth 30
+
+Noise 12 Reverse engineering a
+ sound from a song 34
+Keyboard tracking 13
+ Emulating an acoustic
+Polyphony 14 instrument’s harmonics
+ and envelope: clarinet 39
+Portamento 14
+
+Unison 14 COOKBOOK PATCHES 47
+
+Ring modulation 15 Instructions 47
+
+FILTERS 16 String patches 57
+
+Filter types 16 Woodwinds 67
+
+Cutoff frequency 18 Brass 73
+
+Filter slope 18 Keyboards 77
+
+Resonance 20 Vocals 81
+ENVELOPES 22 Tuned percussion 85
+LFOs 24 Untuned percussion 89
+
+Pulse-width modulation 25 Leads 95
+
+Beat effects 26 Bass 99
+Sample & hold 27 Pads 103
+Sync sweeping 27 Sound Effects 109
+KEYBOARD EXPRESSION 27 CALIBRATION 115
+Velocity sensitivity 27 Using the CD 115
+
+Aftertouch 27 Using sound editors, meters 119
+ and by ear
+ 
+PATCHES
+STRINGS
+Banjo 57
+Cello 57
+Double Bass 58
+Dulcimer 58
+Guitar, Acoustic 59
+Guitar, Electric 59
+Harp 60
+Hurdy Gurdy 60
+Kora 61
+Lute 61
+Mandocello 62
+Mandolin 62
+Riti 63
+Sitar 63
+Standup Bass 64
+Viola 64
+Violin 65
+WOODWINDS
+Bagpipes 67
+Bass Clarinet 67
+Bassoon 68
+Clarinet 68
+Conch Shell 69
+Contrabassoon 69
+Didgeridoo 70
+English Horn 70
+Flute 71
+Oboe 71
+Piccolo 72
+BRASS
+French Horn 73
+Harmonica 73
+Penny Whistle 74
+Saxophone 74
+Trombone 75
+Trumpet 75
+Tuba 76
+KEYBOARDS
+Accordion 77
+Celeste 77
+Clavichord 78
+Electric Piano 78
+Harpsichord 79
+Organ 79
+Piano 80
+VOICE
+Angels 81
+Choir 81
+Vocal, female 82
+Vocal, male 82
+Whistling 83
+PERCUSSION, TUNED
+Bell 85
+Bongos 85
+Conga 86
+Glockenspiel 86
+Marimba 87
+Timpani 87
+Xylophone 88
+PERCUSSION, UNTUNED
+Bass Drum 89
+Castanets 89
+Clap 90
+Claves 90
+Cowbell 91
+Cowbell, analog 91
+Cymbal 92
+Side Stick 92
+Snare Drum 93
+Tambourine 93
+Wheels of Steel 94
+LEADS
+Brass Section 95
+Mellow 70s Lead 95
+Mono Solo 96
+New Age Lead 96
+R&B Slide 97
+Screaming Sync 97
+Strings PWM 98
+Trance 5th 98
+BASS
+Acid Bass 99
+Bass of the Time Lords 99
+Detroit Bass 100
+Deutsche Bass 100
+Digital Bass 101
+Funk Bass 101
+Growling Bass 102
+Rez Bass 102
+PADS
+Android Dreams 103
+Aurora 103
+Celestial Wash 104
+Dark City 104
+Galactic Cathedral 105
+Galactic Chapel 105
+Portus 106
+Post-Apocalyptic
+ Sync Sweep 106
+Terra Enceladus 107
+SOUND EFFECTS
+Cat 109
+Digital Alarm Clock 109
+Journey to the Core 110
+Kazoo 110
+Laser 111
+Motor 111
+Nerd-O-Tron 2000 112
+Ocean Waves
+ (with fog horn) 112
+Positronic Rhythm 113
+Space Attack! 113
+Toad 114
+Wind 114
+OSCILLATORS
+1
+OSCILLATORS
+Harmonics and oscillator waveforms
+The most fundamental sound is the sine wave. Every sound whether it is natural or
+synthetic is made up of sine waves.
+Figure 1. All sounds, natural and
+synthetic, are made up of sine waves
+The sound of a sine wave could be described as extremely mellow and not particularly
+interesting, but when numerous sine waves of different pitches and amplitudes are mixed
+together the sonic possibilities become endless.
+
+It is possible to create any waveform using nothing but sine waves. Let’s begin by
+creating a sawtooth wave. Each sine wave is going to have a different pitch and as they
+go higher in pitch they will decrease in amplitude. The first one will have the lowest
+pitch and it will in fact determine the overall pitch of the sawtooth. This is called the
+fundamental frequency. For the case of this example we will give it a pitch of 440 Hz
+corresponding to the A4 key.
+440 Hz Sine
+Figure 2. A 440 Hz sine wave and a graph representing its frequency and amplitude 
+OSCILLATORS
+2
+The bottom portion of the figure is what is called a harmonic diagram. The horizontal
+axis is frequency/pitch and the vertical axis is amplitude. The spike represents the
+frequency and amplitude of the 440 sine wave. Let’s add a second sine wave with a
+frequency of 880 Hz (440Hz x 2).
+
+
+ + =
+
+ 440 Hz 880 Hz
+Figure 3. A 440 Hz sine wave added to a 880 Hz sine wave create a new waveform
+Notice there is a second spike in the diagram representing the 880 Hz sine wave. Now
+add a third sine wave at a frequency of 1320 Hz (440 Hz x 3)
+
+ + + =
+ 440 Hz 880 Hz 1320 Hz
+Figure 4. Three sine waves of frequency 440 Hz, 880 Hz, and 1320 Hz added
+together create a waveform that begins to look like a sawtooth wave. 
+OSCILLATORS
+3
+Already the new waveform is beginning to lean to one like a sawtooth wave. Keep
+adding sine waves that are frequency multiples of 440 Hz and eventually a sawtooth
+wave is produced.
+Figure 5. A sawtooth wave and its harmonic diagram
+Each one of the harmonics(spikes) in the diagrams above are called partials. The first
+partial at the far left, as stated earlier, is known as the fundamental and it determines the
+pitch of the waveform. The other partials are all frequency intervals of the fundamental
+and they are known as overtones. Also notice that the fundamental is the loudest sine
+wave of all the harmonics and that as the overtones get higher in pitch their amplitudes
+decrease. There is of course nothing preventing us from mixing sine waves that all have
+the same amplitude it’s just that in this particular case it is a requirement of creating a
+sawtooth that the amplitudes diminish with higher frequency. Just as a point of interest if
+we were to mix these harmonics all at the same amplitude it would produce something
+that as successively higher-pitched sine waves are added would at first look like a
+sawtooth wave with a bad complexion and as more harmonics are added would look
+nothing like a sawtooth at all. Harmonic amplitudes are important!
+Figure 6. Waveform produced by setting
+the first 16 harmonics to equal amplitudes.
+A square wave can be created using the same process. The difference is that a square
+wave is only made up of odd-numbered partials. 
+OSCILLATORS
+4
+Figure 7. A square wave has only odd partials. This square wave was produced by an actual
+oscillator. Notice the slight imperfections in the waveform. No oscillator produces perfect
+waveforms nor do any two oscillators produce identical waveforms.
+Triangle waves are also made up of odd-numbered partials but the higher harmonics are
+weaker than in a square wave.
+Figure 8. A triangle wave has odd harmonics that are weaker than those of a square wave.
+The process of adding sine waves together to create sounds is known as additive
+synthesis. This method is used on a few digital synthesizers and soft synths and has also
+been used by pipe organs for hundreds of years. In a pipe organ each pipe produces a
+sine wave of a different pitch and by controlling the amount of air to each pipe it is
+possible to control the individual amplitudes of each sine wave which in turn makes it
+possible to produce sounds that are harmonically similar to other instruments. It could be
+said that pipe organs were the first synthesizers.
+
+Analog synthesizers use a process called subtractive synthesis which is simply additive
+synthesis in reverse. Here’s some synth terminonlogy for you: Sounds created by
+synthesizers are referred to as patches. This goes back to the early days of modular
+synthesizers when patch cables were used to route signals from module to module to 
+SYNTHESIS THROUGH HARMONIC ANALYSIS
+29
+essing
+ of us. Fortunately home computers
+are now powerful enough to perform the analysis in real-time while using only a small
+percentage of the computer’s processor. The second reason is that it is generally
+perceived as difficult to use. There is quite a bit of mathematical theory that goes into
+computing the Fast-Fourier Transforms (FFT) on which harmonic analysis is based but as
+far as using harmonic analysis as a tool for synthesis it’s rather straightforward. The
+third reason, somewhat as a result of the first two, is that it simply hasn’t become part of
+convention.
+This is super powerful stuff and it has the potential to change the way you program
+sound. Even though this section is centered on analyzing harmonics and reverse
+engineering musical content it should be noted that it will also improve your ability to
+create original patches as well. After you use it for a while and you come to understand
+the spectral makeup of different sounds you will rely less and less on having to look at
+harmonic diagrams. They’ll be in your head. This book is about analog synth
+programming but it should be mentioned that harmonic analysis also makes FM synth
+programming infinitely easier to understand. Don’t even bother programming FM
+without it! I digress…
+
+Before proceeding I recommend that you first get a hold of software that can perform
+harmonic analysis/FFT in realtime and play around with it for a bit. Most of the more
+sophisticated sound editors provide the ability to display harmonic diagrams of sound
+files albeit usually not in real-time. For real-time analysis I highly recommend the
+Fre(a)koscope VST plug-in. This plugin was used to create all of the harmonic diagrams
+in this book. It has an excellent interface, is easy to use, and it’s free! If you don’t have a
+host that supports VST plugins be sure to visit kvraudio.com where you can find a
+number of hosts available for free. If you have any questions please email me at
+synthcookbook@yahoo.com
+The analysis/synthesis process can be broken down into three stages for each sound.
+1. The most important step. Obtain a harmonic diagram of the sound that is to
+be emulated or recreated. Pick the best oscillator waveforms, pitches, and
+amplitudes to match the diagram.
+2. High frequency harmonics are generally the last to rise in amplitude and are
+the first to die back out. While comparing with the harmonic diagram of the
+original source use the synth’s filter envelope to match this behavior.
+3. Using a sound editor, match the synth’s envelopes to the original source.
+Step one is essential while steps 2 and 3 are not always possible or required. Envelopes
+may not require any visual analysis since they can be duplicated by ear with good results
+more easily than harmonics. Note: The lowest-pitched harmonics are the most important.
+As a general rule of thumb try to get the first 5-10 harmonics as close to their
+corresponding levels in the original source.
+Synthesis Through Harmonic Analysis and Reverse Engineering
+The use of harmonic analysis in synthesis is nothing new, yet it has not been used much
+outside of academic research and professional patch programming. There are a few
+reasons for this. The first is that harmonic analysis requires a fair amount of proc
+power that until recently was too expensive for most
+REVERSE ENGINEERING A PATCH
+30
+Reverse engineering a patch from another synth:
+ell a
+The easiest sounds to recreate are those from other analog synths. Because analogs have
+very similar feature sets it makes for higher accuracy. About ten years ago I had to s
+Sequential Circuits Six-Trak but I made sure to record samples of some of my favorite
+patches that I’d programmed for it. My favorite was a lead with thick unison and we’ll
+begin by reverse engineering this patch. The sample of this patch can be found on the
+CD.
+Playing the sample through Fre(a)koscope produces the following harmonic diagram,
+
+Figure 37. Harmoni
+Circuits Six-Trak
+cs of a patch originally programmed on a Sequential
+t’s
+etail.
+Here Fre(a)koscope has been set to a linear display and a maximum window size with a
+frequency range of 20 Hz – 20 kHz. The lower harmonics are the most important so le
+decrease the maximum frequency of the display so that we can see these in greater d
+Lower the maximum range down to about 6 kHz.
+Figure 38. Six-Trak patch zoomed in to show finer detail in the lower-frequency
+harmonics. The pitch of the sampled note is at C3 on the keyboard
+In Fre(a)koscope it is possible to get decibel value, frequency, and equivalent key number
+by clicking on a section of the graph. In the graph above the fundamental has been
+selected and from the inset box at the upper right we see that the sample is tun
+C3 key. We need to know this so that we kn
+ed to the
+ow what key to play on the synth that is 
+REVERSE ENGINEERING A PATCH
+31
+ls in the above graph that give us a
+lue as to where we should start. Notice that both even and odd harmonics are present.
+w spikes that we would expect with pure sawtooths or pulses. This indicates that
+ere could be some pulse-width modulation taking place or the oscillators have been set
+e harmonic amplitudes do not decrease evenly from left to right. A sawtooth that has
+been synced can produce harmonics that look like this but so can a pulse with variable
+width. Let’s take a look at the synced sawtooth option first. Set your synth up with the
+slave oscillator synced to the master oscillator and have the slave produce a sawtooth
+wave while at the same time the master’s output is turned all the way down. Increase the
+pitch of the slave while keeping an eye on the synth’s harmonic analysis. The closest that
+we can get to the original harmonics this way is when the slave oscillator is tuned about 8
+semitones above the master.
+being programmed. There are many important detai
+c
+This rules out using a single triangle wave or square wave since they have only odd
+harmonics.
+The two remaining options are sawtooths and pulses since they possess both even and
+odd harmonics. Also notice that the higher harmonics become broad and are not the
+narro
+th
+to unison. We will get back to the broad harmonics in a bit but for now look at the way
+th
+Figure 39. A synced sawtooth oscillator tuned 8 semitones above the master
+produces results similar to the original patch but not close enough
+
+What are the notable differences between this graph and that of the original Six-Trak
+sample? Of course the harmonics are all narrow and again we will get to that in a
+moment but for now we only need to compare their amplitudes to the original patch. The
+higher harmonics in our patch are slightly louder than those in the original. Notice that
+they are higher on the graph. This can be remedied by applying some low-pass filtering
+but there is a bigger discrepancy than this. Notice that the harmonics of our patch do not
+undulate up and down in quite the same fashion as the original patch. It would however
+be a good e
+original p o would
+onetheless sound very similar but we are going to try to do better. Remember this was
+ guess that if we find out what is broadening the higher harmonics of th
+atch and we apply it to our patch as it is right now that the tw
+n
+originally produced by another synthesizer so we should be able to get really close and
+we can probably even nail it. 
+REVERSE ENGINEERING A PATCH
+32
+how odd harmonics. Now very slowly begin decreasing the pulse width.
+efore the width has been decreased much at all you should get harmonics that are
+h
+Let’s see what we can come up with using a pulse instead of a sawtooth. Again only use
+one oscillator but this time do not sync it to the other. Set it up to produce a pulse. Begin
+by setting the pulse width to produce a square wave. Remember that a square wave
+should only s
+B
+identical in amplitude to those of the original patch. This happens to be at a pulse widt
+of about 44%, something not much narrower than a square wave but harmonically
+different. Now we haven’t yet applied any filtering so the harmonics will not diminish
+quite as rapidly as those in the original patch but the levels of each harmonic relative to
+their neighbors follows the same pattern as those in the original.
+Figure 40. A pulse width of 44% produces harmonics that are very similar
+to the original patch
+
+Next experiment with some low-pass filtering until the level of the higher harmonics
+matches those of the original. A 24 dB filter set to a cutoff frequency of 2.5 kHz
+produces the following graph.
+Figure 41. Apply some low-pass filtering to match the harmonic amplitudes
+to those in the Six-Trak patch
+There are some differences between this and the original but the amplitudes are
+darn close. While two synths can produce practically the same results they cannot
+produce exactly the same results.
+pretty
+he one last thing that we need to take care of is determining what is causing the higher
+harmonics to broaden. This could either be due to pulse-width modulation or oscillator
+T
+47
+HOW TO PROGRAM THE COOKBOOK PATCHES
+scillators
+Wave : Waveform choices include sawtooth, square, triangle, and pulse width
+(PW). Pulse width values are given as a percentage of the waveform period. For
+instance a pulse width of 50% is a square wave and a pulse width of 25% is a
+pulse with a width that is half that of a square and sounds more “brassy.” Pulse
+widths greater than 50% are not included as they are just inverted versions of
+those between 0% and 50% and therefore sound the same. You will need to know
+if your synth’s pulse-width setting goes from 0%-50% or, more commonly, 0%-
+100%. If you have a synthesizer such as the ImpOscar which uses values of 50%-
+10 t the value
+you need to use. If the synthesizer lacks the ability to set the pulse width of the
+triangle wave then use a square wave in it’s place when called for along with
+slightly more low-pass filtering. Triangle and square waves sound similar
+because they are both composed of odd harmonics but the higher harmonics of the
+triangle are less audible.
+Tune: Values are listed in octaves, itones, and cents. This is the value by
+which one oscillator should be detune the other oscillator. For patches
+where both oscillators have a tuning value listed it is the amount by which each
+oscillator is to be detuned from a common pitch. If the tracking for oscillator 2 is
+turned off this field will list the specific pitch for which oscillator 2 is to be tuned.
+Mix: This is the amplitude of the oscillator. Values are given in decibels where
+the maximum amplitude is 0 dB and quieter amplitudes are given as negative
+values. Some synthesizers display amplitudes where the maximum amplitude is
+not 0 dB. It may for instance be some positive value. In these cases just subtract
+the value listed in this book from the maximum value displayed by the
+synthesizer. For example if the synthesizer displays a maximum value of 13 dB
+O
+0% simply subtract the pulse width values in the book from 100 to ge
+square wave then substitute pulse-width values 0%-30% with a sawtooth wave
+and values from 30% - 50% with a square wave. If the synthesizer lacks a
+sem
+d from
+HOW TO PROGRAM THE COOKBOOK PATCHES
+48
+then the oscillator should be set to a value of 6 dB. It’s not that big of a
+deal just as long as you make sure the oscillators are separated by the same
+e
+ is
+ to
+yncs
+oise
+LFO
+h,
+d are sine,
+ for the volume of one of the oscillators and the setting called for in this book is -
+7 dB
+amount. The percentage to the right of the decibel value is the percentage of the
+maximum setting of the oscillator amplitude. This can be used for synthesizers
+that do not display values in decibels. Since oscillators on different synths hav
+amplitude adjusters with different responses this percentage is a ballpark
+approximation and may require some adjustment by ear. For more accuracy it
+best to calibrate the synths mix settings as explained in the last section of this
+book.
+Oscillator 2 tracking: This is either on or off. When on the pitch of oscillator 2
+will track the keyboard. When off oscillator 2 will play the same pitch on all
+keys.
+Oscillator 2 sync: When on it syncs oscillator 2 to oscillator 1. You may need
+check your synthesizer’s documentation to be sure which of its oscillators s
+to the other when syncing is turned on.
+N
+Noise: White noise source set to either on or off.
+Mix: Amplitude of the noise source given in decibels. The statements made
+above in the section on oscillator mix apply here as well.
+Routing: Sets the destination of the LFO. Destinations include amplitude, pitc
+filter cutoff, and pulse width.
+Wave: Waveform used by the LFO as a modulation source. Waves use
+triangle, and square. 
+HOW TO PROGRAM THE COOKBOOK PATCHES
+49
+ This
+f
+lide time. The amount of time that it takes for the pitch to change from
+er
+lators that are used. Usually 4 to 6 oscillators sound good.
+ow-Pass Filter
+Cutoff: Values are given for 24 dB filters and 12 dB filters. Values are given in
+ If your synthesizer uses
+2 dB filters. Generally,
+the smaller the amount of attenuation (the decibel number) the lower the cutoff
+frequency should be. With a greater amount of attenuation set the cutoff to a
+equency. For example, if the listing for a 12 dB filter calls for a cutoff of
+requency higher than what is listed for the 24 dB
+utoff frequency is listed the percentage of the full dial
+Frequency: Sets the rate of the LFO. Values are given in Hertz (Hz).
+Qualitative suggestions are given in italics.
+Depth: Sets the amount by which the destination is modulated by the LFO.
+is given as a percent of the settings range when modulating amplitude, filter
+cutoff, and pulse width. The knob/slider that controls depth would be turned hal
+way for a depth of 50%. When pitch is set as the destination the depth is given in
+terms of the amount of pitch that a played note will vary.
+Glide: Also known as portamento. Set to either on or off
+Time: G
+one struck note to the next.
+Unison: Set to on or off. Your synthesizer may allow you to control the numb
+of oscil
+Voices: The polyphony of the patch. Either set to a specific number, mono, or
+multi. Multi means there is no restriction on the amount of polyphony.
+L
+hertz and kilohertz and go from 20 Hz to 20 KHz.
+something other than a 24 dB or 12 dB filter you can figure out the required
+setting by extrapolating from the given values for 24 and 1
+higher fr
+200 Hz then a 6 dB filter would be set to a frequency less than 200 Hz. A 36 dB
+filter would be set to a cutoff f
+filter value, etc.
+To the right of each c
+HOW TO PROGRAM THE COOKBOOK PATCHES
+50
+t
+ rough estimate. It is based on the
+ you
+ngels patch on pg 33.
+If it sounds more like a brass instrument than a vocal then the listed percentages
+r each patch below the
+. Set the cutoff for each patch above the listed
+percentage value. To achieve higher accuracy on synthesizers that do not display
+al is HIGHLY
+recommended! If you only calibrate one parameter it should be the filter cutoff.
+ven as a
+ercentage where 0% applies no resonance and 100% applies the maximum
+s the
+Amplif
+ime with values in seconds. Sustain is given as a percentage of
+s maximum amount.
+position. Of course each synthesizer’s filter cutoff will follow a differen
+response curve so this value is provided as a
+average taken from ten different synthesizers. Actual values can vary drastically.
+Following these percentages will require at least some adjustment by ear. If
+patch a sound and it doesn’t sound right then most likely it is due to a discrepancy
+between the filter-cutoff setting percentages and the actual filter cutoff of the
+synth. As a simple test I would recommend patching the A
+are higher than what your synth produces. Set the cutoff fo
+listed percentage value. If the angels sound like they are being smothered then the
+listed percentages are too low
+cutoff in hertz it is recommended to follow the calibration instructions at the end
+of the book. This calibration procedure for the filter while not critic
+Resonance: The amount of resonance applied to the filter. Values are gi
+p
+amount.
+
+Envelope: Sets the amount by which the filter envelope controls the amount of
+filtering. On some synths this is called the Initial Level setting. Again 0% i
+minimum value and 100% is the maximum.
+ADSR: Attack, Decay, and Release are given in terms of time with values in
+seconds. Sustain is given as a percentage of its maximum amount.
+ier
+ADSR: The same as the envelope for the filter. Attack, Decay, and Release are
+given in terms of t
+it
+HOW TO PROGRAM THE COOKBOOK PATCHES
+51
+Altern
+Note ab
+millisec
+move th
+So for e
+1350 m
+ate Patch Settings
+Some of the patches in the book have alternate patch settings which are intended
+to be used if the synth does not have the feature listed in the primary patch. For
+instance let’s say that you are programming the cello patch which calls for
+oscillator 1 to use a pulse with a width of 10% but your synth doesn’t have the
+ability to produce a pulse. Use the alternate setting which calls for a sawtooth
+wave instead.
+out times: Some synthesizers list times in seconds (s) and others list times in
+onds (ms). This book uses seconds but the conversion is straightforward. Simply
+e decimal three places. The relation is:
+1 s = 1000 ms
+0.1 s= 100 ms
+0.01 s = 10ms
+0.001 s = 1 ms
+xample 0.08 s is the same thing as 80 ms, 0.28 s is also 280 ms, and 1.35 s is
+s, etc.
+57
+STRINGS
+Banjo
+Oscillator 1 LFO Low-pass filter
+Wave: PW = 20% Routing: Amplitude 24db 12db
+Tune: - Wave: Triangle Cutoff: 2.9khz 72% 1.5khz 63%
+ Frequency: 10hz fast Resonance: 0%
+Mix: -13.9db 60% Depth: 10% Envelope: 75%
+Oscillator 2 Glide: - A D S R
+Wave: PW = 10% time: - 0s 0.19s 0% 0.19s
+Tune: +5 semi Unison: off Amplifier
+ Voices: 5 A D S R
+Mix: -21.5db 45% 0s 0.67s 0% 0.67s
+Osc 2 Track: on
+Osc 2 Sync: on
+Noise: off
+Mix: -
+Cello
+Oscillator 1 LFO Low-pass filter
+Wave: PW = 10% Routing: Amplitude 24db 12db
+Tune: - Wave: Sine Cutoff: 40hz 10% 40hz 10%
+ Frequency: 7.5hz moderate Resonance: 0%
+Mix: 0db 100% Depth: 5% Envelope: 90%
+Oscillator 2 Glide: off A D S R
+Wave: Square time: - 0s 3.29s 78% max
+Tune: - Unison: off Amplifier
+ Voices: multi A D S R
+Mix: 0db 100% 0.06s max 100% 0.30s
+Osc 2 Track: on
+Osc 2 Sync: off
+Noise: off
+Alternate: Osc 1: sawtooth
+Mix: - 
+73
+ BRASS
+
+Oscilla LFO Low-pass filter
+French Horn
+tor 1
+Wave = 10% : PW Routing: - 24db 12db
+Tune: - Wave: - Cutoff: 40hz 10% 40hz 10%
+ Frequency: - Reso nce: 20% na
+Mix: 0db 100% Depth: - Envelope: 45%
+Oscillator 2 Glide: off A D S R
+Wave: - time: - 0.05s 5.76s 94% 0.39s
+Tune: - Unison: ff o Amplifier
+ Voices: ulti m A D S R
+Mix: - 0s 3.9s 96% 0.93s
+Osc 2 Track: -
+Osc 2 Sync: -
+Noise: off
+lternate: Osc : sawtooth, Osc 2: gle, +2 octaves, Fiter: envelope 55%
+
+ A 1 trian
+Mix: -
+Harmonica
+Oscillator 1 LFO Low-pass filter
+Wave: PW=2% Routing: PW osc 1 24db 12db
+Tune: - Wave: Triangle Cutoff: 1.9khz 66% 1.2khz 59%
+ Frequency: 1.6hz slow Resonance: 0%
+Mix: -29db 30% Depth: 85% deep Envelope: 65%
+Oscillator 2 Glide: off A D S R
+Wave: PW=15% time: - 0.16s max 100% 0.16s
+Tune: +8 semi Unison: off Amplifier
+ +7 cents Voices: multi A D S R
+Mix: -18db 55% 0.13s 0.33s 50% 0.14s
+Osc 2 Track: on
+Osc 2 Sync: on
+Noise: off
+Mix: - 
+115
+CALIBRATION
+his section is tended for th se synthesizers that do not give the values of
+i z, or se rs
+g uch more a l ing the suggest e ngs
+g i is adv t alibra at ix and fi er cutoff
+en y. There are two par i ction. The first pa
+rt explains how to using a sound editor and
+othe tering devices. Using the CD is probably the quickest way to get ted while ing the
+d o econ part will produce slightly more ac esults.
+he most optim l way to use ese two section D to calibrate the
+ff frequenc and if you ca record your synth into a sound editor then use Part B to
+etermine oscillator mix levels, LFO frequency and ADSR values. If you would like more
+larification on any part of this section please feel free to email me at fred_v_welsh@yahoo.com
+art A - Using the CD
+Using the sounds files on the CD is quite simple. In a nutshell you are basically just
+omparing the output of your synth to each file and figuring out values such as decibels, Hz, and
+onds from the filename of the sound that most closely matches what you hear from your
+th.
+tor Mix:
+Get a piece d
+. Go into the Osci lder on the CD. Al ugh the filt sn’t being
+calibrated at this point it is still important to use samples that correspond to the
+synth’s filter ty n older that correspo s to the filter type used by your
+synth. If bo h filter type are available then you can just pick one but of course make
+sure the synth is set to th t filter.
+Now you should see two folders. We are going to use the Dual Sawtooth Waveforms
+Dual Sawtooth Waveforms folder contains samples where both
+oscillators are set to sawtooth and one is raised two octaves. Set your synthesizer up
+T in o their settings
+in dec bels, hert conds. By fi t calibrating such a synthesizer the patches in this book can
+be pro rammed m ccurate y than us ed perc ntage setti that are
+iven n italics. It isable to at he very least c te the oscill or m lt
+frequ c ts to th s se rt explains how to calibrate a synth
+using the sound files on the CD and the second pa
+r me star us
+irecti ns in the s d curate r
+T a th s is probably to use the C
+filter’s cuto y n
+d
+c
+P
+c
+sec
+syn
+Oscilla
+A. of paper an a pencil or pen.
+B llator Mix fo tho er i
+pe. Ope the f nd
+t s
+a
+C.
+folder. The 
+
+CALIBRATION
+oscillators set to sawtooth, one raised two octaves. The
+116
+with both purpose of this is
+so that the amplitude of one oscillator can be compared to the other
+D.
+the
+e sure to write neatly
+r
+ile.
+G. Continue to do the same thing for each of the remaining sound files
+The
+ay.
+ilter
+ilter Type
+2 dB or 24 dB variety then you can skip
+A. ere
+re also two files where the filter is completely open
+er that is
+In each one of these samples the high-pitch oscillator is left at its maximum setting.
+This maximum setting corresponds to 0 dB. The name of each file indicates the
+amplitude of the low-pitch oscillator. On your synth, turn the amplitude of both
+sawtooths all the way up. It should now produce the same tonal characteristics as
+0 dB file when you play middle C on the keyboard. Also make sure your filter is
+completely open and that amplitude velocity sensitivity is off.
+E. Write down the number, dial position, or whatever your synth uses that corresponds
+to the maximum setting and next to it write down “0 dB.” Mak
+because you are going to be using these values to patch the sounds in this book.
+F. Listen to the tonal characteristics of the -5 dB file. Now lower the amplitude of you
+low-pitch oscillator until it produces the same tonal characteristics as the -5 dB f
+Write down the position followed by “-5 dB.”
+ “Single Sawtooth Waveform” folder contains samples of a single sawtooth oscillator
+which just like in the instructions above is lowered in 5 dB increments. This is just an
+alternative to the Dual Sawtooth instructions above and is carried out in the exact same w
+F
+Determining F
+If you already know whether your filter is of the 1
+this section and proceed to the Determining Filter Cutoff section.
+Open the “Filter” folder and then open the “Determine Filter Type” folder. Th
+are four files in here. For each set (12 dB or 24 dB) there is a file where the filter
+resonance is set to a pitch of 440 Hz and after about ten seconds the resonance is
+turned all the way down. There a
+at 20,000 Hz and resonance is set to zero. Play both of these files and you’ll notice
+that the 12 dB filter produces a slightly brighter sound. That’s because a filt
+“open” isn’t completely open! It will still have some effect on the tone. 
