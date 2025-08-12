@@ -71,6 +71,7 @@ const samplePaths = {
 
 
 export function AuraGroove() {
+  const [isReady, setIsReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const [loadingText, setLoadingText] = useState("");
@@ -92,8 +93,6 @@ export function AuraGroove() {
   const soloSynthManagerRef = useRef<SoloSynthManager | null>(null);
   const drumPlayersRef = useRef<Tone.Players | null>(null);
   const isWorkerInitialized = useRef(false);
-  const isToneReady = useRef(false);
-  const areSamplesLoaded = useRef(false);
   
    if (!soloSynthManagerRef.current) {
     soloSynthManagerRef.current = new SoloSynthManager();
@@ -194,7 +193,8 @@ export function AuraGroove() {
     // Pre-load drum samples. This is a "best practice" to avoid delays on play.
     if (!drumPlayersRef.current) {
         drumPlayersRef.current = new Tone.Players(samplePaths, () => {
-            areSamplesLoaded.current = true;
+            // This callback fires when all samples are loaded.
+            setIsReady(true);
         }).toDestination();
         drumPlayersRef.current.volume.value = Tone.gainToDb(drumSettings.volume);
     }
@@ -256,25 +256,8 @@ export function AuraGroove() {
     setLoadingText("Starting audio engine...");
 
     try {
-        if (!isToneReady.current) {
-            await Tone.start();
-            isToneReady.current = true;
-        }
-
-        // Check if samples are loaded. If not, wait a bit.
-        if (!areSamplesLoaded.current) {
-             setLoadingText("Loading audio samples...");
-             // This is a simple polling mechanism. In a real app, you might use a more robust
-             // event-based system, but this is fine for now.
-             await new Promise<void>(resolve => {
-                const interval = setInterval(() => {
-                    if (areSamplesLoaded.current) {
-                        clearInterval(interval);
-                        resolve();
-                    }
-                }, 100);
-             });
-        }
+        // Tone.start() must be called after a user interaction.
+        await Tone.start();
         
         setLoadingText("Starting playback...");
         
@@ -319,6 +302,15 @@ export function AuraGroove() {
     }
   }, [isPlaying, handleStop, handlePlay]);
   
+  if (!isReady) {
+    return (
+        <div className="flex flex-col items-center justify-center text-muted-foreground space-y-2 min-h-[40px]">
+            <Loader2 className="h-8 w-8 animate-spin" />
+            <p className="text-lg">Loading...</p>
+        </div>
+    );
+  }
+
   const isBusy = isInitializing;
 
   return (
