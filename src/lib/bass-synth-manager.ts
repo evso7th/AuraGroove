@@ -50,7 +50,7 @@ export class BassSynthManager {
                     envelope: {
                         attack: 0.01,
                         decay: 0.4,
-                        sustain: 0.3,
+                        sustain: 0.1,
                         release: 0.4,
                     },
                     volume: -18,
