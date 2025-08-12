@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import * as Tone from 'tone';
-import { Drum, Loader2, Music, Pause, Speaker } from "lucide-react";
+import { Drum, Loader2, Music, Pause, Speaker, FileMusic } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,6 +40,8 @@ export type DrumSettings = {
     pattern: 'basic' | 'breakbeat' | 'slow' | 'heavy';
     volume: number;
 };
+
+export type ScoreName = 'generative' | 'promenade';
 
 type BassNote = {
     note: string;
@@ -85,6 +87,7 @@ export function AuraGroove() {
     bass: "bass synth",
   });
   const [bpm, setBpm] = useState(100);
+  const [score, setScore] = useState<ScoreName>('generative');
   const { toast } = useToast();
 
   const musicWorkerRef = useRef<Worker>();
@@ -259,16 +262,16 @@ export function AuraGroove() {
     if (musicWorkerRef.current && (isPlaying || isInitializing)) {
         musicWorkerRef.current?.postMessage({
             command: 'update_settings',
-            data: { instruments, drumSettings, bpm },
+            data: { instruments, drumSettings, bpm, score },
         });
     }
-  }, [instruments, drumSettings, bpm, isPlaying, isInitializing]);
+  }, [instruments, drumSettings, bpm, score, isPlaying, isInitializing]);
 
   useEffect(() => {
     if (isReady) { // Only update worker if it's ready
       updateWorkerSettings();
     }
-  }, [drumSettings, instruments, bpm, isReady, updateWorkerSettings]);
+  }, [drumSettings, instruments, bpm, score, isReady, updateWorkerSettings]);
   
   useEffect(() => {
     if (drumPlayersRef.current) {
@@ -310,7 +313,7 @@ export function AuraGroove() {
         
         musicWorkerRef.current.postMessage({
             command: 'start',
-            data: { drumSettings, instruments, bpm }
+            data: { drumSettings, instruments, bpm, score }
         });
         
         if (bassSynthManagerRef.current) {
@@ -332,7 +335,7 @@ export function AuraGroove() {
         setIsInitializing(false);
         setLoadingText("");
     }
-  }, [drumSettings, instruments, bpm, toast]);
+  }, [drumSettings, instruments, bpm, score, toast]);
 
   const handleStop = useCallback(() => {
     soloSynthManagerRef.current?.releaseAll();
@@ -355,6 +358,7 @@ export function AuraGroove() {
   }, [isPlaying, handleStop, handlePlay]);
   
   const isBusy = isInitializing || !isReady;
+  const isGenerative = score === 'generative';
 
   return (
     <Card className="w-full max-w-lg shadow-2xl">
@@ -366,6 +370,39 @@ export function AuraGroove() {
         <CardDescription>AI-powered ambient music generator</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+
+        <div className="space-y-4 rounded-lg border p-4">
+            <h3 className="text-lg font-medium text-primary flex items-center gap-2"><FileMusic className="h-5 w-5"/> Composition</h3>
+            <div className="grid grid-cols-3 items-center gap-4">
+                 <Label htmlFor="score-selector" className="text-right">Score</Label>
+                 <Select
+                    value={score}
+                    onValueChange={(v) => setScore(v as ScoreName)}
+                    disabled={isBusy || isPlaying}
+                    >
+                    <SelectTrigger id="score-selector" className="col-span-2">
+                        <SelectValue placeholder="Select score" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="generative">Procedural Generation</SelectItem>
+                        <SelectItem value="promenade">Promenade</SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
+            <div className="grid grid-cols-3 items-center gap-4">
+                <Label className="text-right flex items-center gap-1.5"><Music className="h-4 w-4"/> BPM</Label>
+                <Slider
+                    value={[bpm]}
+                    min={60}
+                    max={160}
+                    step={5}
+                    onValueChange={(v) => setBpm(v[0])}
+                    className="col-span-2"
+                    disabled={isBusy || isPlaying}
+                />
+            </div>
+        </div>
+
         <div className="space-y-4 rounded-lg border p-4">
            <h3 className="text-lg font-medium text-primary">Instruments</h3>
            <div className="grid grid-cols-3 items-center gap-4">
@@ -440,7 +477,7 @@ export function AuraGroove() {
                 <Select
                     value={drumSettings.pattern}
                     onValueChange={(v) => setDrumSettings(d => ({ ...d, pattern: v as DrumSettings['pattern'] }))}
-                    disabled={isBusy || isPlaying || !drumSettings.enabled}
+                    disabled={isBusy || isPlaying || !drumSettings.enabled || !isGenerative}
                 >
                     <SelectTrigger id="drum-pattern" className="col-span-2">
                         <SelectValue placeholder="Select pattern" />
@@ -452,18 +489,6 @@ export function AuraGroove() {
                         <SelectItem value="heavy">Heavy</SelectItem>
                     </SelectContent>
                 </Select>
-            </div>
-            <div className="grid grid-cols-3 items-center gap-4">
-                <Label className="text-right flex items-center gap-1.5"><Music className="h-4 w-4"/> BPM</Label>
-                <Slider
-                    value={[bpm]}
-                    min={60}
-                    max={160}
-                    step={5}
-                    onValueChange={(v) => setBpm(v[0])}
-                    className="col-span-2"
-                    disabled={isBusy || isPlaying}
-                />
             </div>
             <div className="grid grid-cols-3 items-center gap-4">
                 <Label className="text-right flex items-center gap-1.5"><Speaker className="h-4 w-4"/> Volume</Label>
