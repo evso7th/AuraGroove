@@ -139,9 +139,11 @@ export function AuraGroove() {
             break;
 
         case 'bass_score':
+            console.log('Main Thread: Received bass score from worker', data.score);
             if (bassSynthManagerRef.current && data.score && data.score.length > 0) {
                 const now = Tone.now();
                 data.score.forEach((note: BassNote) => {
+                    console.log('Main Thread: Triggering bass note', note);
                     bassSynthManagerRef.current?.triggerAttackRelease(
                         note.note,
                         note.duration,
@@ -149,6 +151,8 @@ export function AuraGroove() {
                         note.velocity
                     );
                 });
+            } else {
+                 console.log('Main Thread: Received empty or invalid bass score', data.score);
             }
             break;
         
@@ -300,9 +304,12 @@ export function AuraGroove() {
     
     setIsInitializing(true);
     setLoadingText("Starting audio engine...");
+    console.log('Tone.context.state BEFORE start:', Tone.context.state);
 
     try {
         await Tone.start();
+        console.log('Tone.context.state AFTER start:', Tone.context.state);
+        console.log('Tone.context.currentTime AFTER start:', Tone.context.currentTime);
         
         setLoadingText("Starting playback...");
         
@@ -514,6 +521,8 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    
 
     
 
