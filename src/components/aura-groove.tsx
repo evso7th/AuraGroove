@@ -191,7 +191,7 @@ export function AuraGroove() {
         musicWorkerRef.current.onmessage = handleMessage;
     }
     
-    // Pre-load drum samples
+    // Pre-load drum samples. This is a "best practice" to avoid delays on play.
     if (!drumPlayersRef.current) {
         drumPlayersRef.current = new Tone.Players(samplePaths, () => {
             areSamplesLoaded.current = true;
