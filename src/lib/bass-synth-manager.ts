@@ -50,10 +50,10 @@ export class BassSynthManager {
                     envelope: {
                         attack: 0.01,
                         decay: 0.4,
-                        sustain: 0.1,
-                        release: 0.4,
+                        sustain: 0.8,
+                        release: 1.0,
                     },
-                    volume: -8,
+                    volume: -2,
                 }).toDestination();
             default:
                 return null;
