@@ -40,8 +40,8 @@ export class AccompanimentSynthManager {
     public startEffects() {
         if (this.currentInstrument === 'organ' && this.currentSynth && !this.distortion) {
             this.distortion = new Tone.Distortion(0.05);
-            this.tremolo = new Tone.Tremolo(2, 0.2).toDestination();
-            this.currentSynth.chain(this.distortion, this.tremolo);
+            this.tremolo = new Tone.Tremolo(2, 0.2);
+            this.currentSynth.chain(this.distortion, this.tremolo, Tone.Destination);
             this.tremolo.start();
         }
     }
@@ -110,6 +110,7 @@ export class AccompanimentSynthManager {
     public dispose() {
         this.stopEffects();
         if (this.currentSynth) {
+            this.currentSynth.disconnect();
             this.currentSynth.dispose();
             this.currentSynth = null;
         }
