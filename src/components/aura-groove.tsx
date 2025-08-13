@@ -276,7 +276,7 @@ export function AuraGroove() {
         soloSynthManagerRef.current.setInstrument(instruments.solo);
         accompanimentSynthManagerRef.current.setInstrument(instruments.accompaniment);
         bassSynthManagerRef.current.setInstrument(instruments.bass);
-        
+
         soloSynthManagerRef.current.startEffects();
         accompanimentSynthManagerRef.current.startEffects();
 

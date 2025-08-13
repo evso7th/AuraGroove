@@ -75,8 +75,24 @@ class BassGenerator {
 }
 
 class SoloGenerator {
-    static createScore(bar: number): SoloNote[] {
-        return []; // Placeholder for generative logic
+     static createScore(bar: number): SoloNote[] {
+        const phrase = [
+            { notes: 'B3', duration: '8n', time: 0.5 },
+            { notes: 'G3', duration: '8n', time: 1.5 },
+            { notes: 'A3', duration: '4n', time: 2.5 },
+            { notes: 'G3', duration: '8n', time: 4.5 },
+            { notes: 'E3', duration: '8n', time: 5.5 },
+            { notes: 'C3', duration: '4n', time: 6.5 },
+            { notes: 'D3', duration: '2n', time: 8.5 },
+            { notes: 'E3', duration: '8n', time: 12.5 },
+            { notes: 'G3', duration: '8n', time: 13.5 },
+            { notes: 'B3', duration: '4n', time: 14.5 },
+        ];
+        // Play only on certain bars to not be too repetitive
+        if (bar % 8 < 4) {
+            return phrase.filter(n => n.time < 16);
+        }
+        return [];
     }
 }
 class AccompanimentGenerator {
