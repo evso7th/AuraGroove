@@ -1,3 +1,4 @@
+
 /// <reference lib="webworker" />
 
 import { promenadeScore } from '@/lib/scores/promenade';
@@ -53,21 +54,21 @@ const PatternProvider = {
 // --- "Smoke on the Water" Riff Definition ---
 const smokeOnTheWaterRiff = [
     // Bar 1
-    { time: 0, duration: '4n', notes: { bass: 'G2', solo: 'G3', accompaniment: ['G2', 'C3'] }},
-    { time: 1, duration: '4n', notes: { bass: 'A#2', solo: 'A#3', accompaniment: ['A#2', 'D#3'] }},
-    { time: 2, duration: '2n', notes: { bass: 'C3', solo: 'C4', accompaniment: ['C3', 'F3'] }},
+    { time: 0, duration: '4n', notes: { bass: 'G2', solo: 'G3', accompaniment: ['G2', 'D3', 'G3'] }},
+    { time: 1, duration: '4n', notes: { bass: 'A#2', solo: 'A#3', accompaniment: ['A#2', 'F3', 'A#3'] }},
+    { time: 2, duration: '2n', notes: { bass: 'C3', solo: 'C4', accompaniment: ['C3', 'G3', 'C4'] }},
     // Bar 2
-    { time: 4, duration: '4n', notes: { bass: 'G2', solo: 'G3', accompaniment: ['G2', 'C3'] }},
-    { time: 5, duration: '4n', notes: { bass: 'A#2', solo: 'A#3', accompaniment: ['A#2', 'D#3'] }},
-    { time: 6, duration: '4n', notes: { bass: 'C#3', solo: 'C#4', accompaniment: ['C#3', 'F#3'] }},
-    { time: 7, duration: '4n', notes: { bass: 'C3', solo: 'C4', accompaniment: ['C3', 'F3'] }},
+    { time: 4, duration: '4n', notes: { bass: 'G2', solo: 'G3', accompaniment: ['G2', 'D3', 'G3'] }},
+    { time: 5, duration: '4n', notes: { bass: 'A#2', solo: 'A#3', accompaniment: ['A#2', 'F3', 'A#3'] }},
+    { time: 6, duration: '4n', notes: { bass: 'C#3', solo: 'C#4', accompaniment: ['C#3', 'G#3', 'C#4'] }},
+    { time: 7, duration: '4n', notes: { bass: 'C3', solo: 'C4', accompaniment: ['C3', 'G3', 'C4'] }},
     // Bar 3
-    { time: 8, duration: '4n', notes: { bass: 'G2', solo: 'G3', accompaniment: ['G2', 'C3'] }},
-    { time: 9, duration: '4n', notes: { bass: 'A#2', solo: 'A#3', accompaniment: ['A#2', 'D#3'] }},
-    { time: 10, duration: '2n', notes: { bass: 'C3', solo: 'C4', accompaniment: ['C3', 'F3'] }},
+    { time: 8, duration: '4n', notes: { bass: 'G2', solo: 'G3', accompaniment: ['G2', 'D3', 'G3'] }},
+    { time: 9, duration: '4n', notes: { bass: 'A#2', solo: 'A#3', accompaniment: ['A#2', 'F3', 'A#3'] }},
+    { time: 10, duration: '2n', notes: { bass: 'C3', solo: 'C4', accompaniment: ['C3', 'G3', 'C4'] }},
     // Bar 4
-    { time: 12, duration: '4n', notes: { bass: 'A#2', solo: 'A#3', accompaniment: ['A#2', 'D#3'] }},
-    { time: 13, duration: '2n', notes: { bass: 'G2', solo: 'G3', accompaniment: ['G2', 'C3'] }},
+    { time: 12, duration: '4n', notes: { bass: 'A#2', solo: 'A#3', accompaniment: ['A#2', 'F3', 'A#3'] }},
+    { time: 13, duration: '2n', notes: { bass: 'G2', solo: 'G3', accompaniment: ['G2', 'D3', 'G3'] }},
 ];
 
 
@@ -284,3 +285,5 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
+
+    

@@ -72,8 +72,11 @@ export class BassSynthManager {
      */
     public releaseAll() {
         if (this.currentSynth) {
-            // For MonoSynth, this is one way to ensure it stops.
-            this.currentSynth.triggerRelease();
+            try {
+                this.currentSynth.triggerRelease();
+            } catch (e) {
+                 // Ignore errors if the context is already closed
+            }
         }
     }
 
@@ -89,3 +92,5 @@ export class BassSynthManager {
         this.currentInstrument = null;
     }
 }
+
+    

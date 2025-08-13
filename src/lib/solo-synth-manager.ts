@@ -38,13 +38,13 @@ export class SoloSynthManager {
     }
     
     public startEffects() {
-       if (this.currentInstrument === 'organ' && this.tremolo) {
+       if (this.currentInstrument === 'organ' && this.tremolo && this.tremolo.state === 'stopped') {
             this.tremolo.start();
         }
     }
     
     public stopEffects() {
-        if (this.tremolo) {
+        if (this.tremolo && this.tremolo.state === 'started') {
             this.tremolo.stop();
         }
     }
@@ -58,7 +58,7 @@ export class SoloSynthManager {
     private createSynth(name: InstrumentName) {
         switch (name) {
             case 'organ':
-                 this.distortion = new Tone.Distortion(0.05);
+                 this.distortion = new Tone.Distortion(0.05).toDestination();
                  this.tremolo = new Tone.Tremolo(2, 0.2);
                  this.currentSynth = new Tone.PolySynth(Tone.Synth, {
                      oscillator: {
@@ -71,7 +71,7 @@ export class SoloSynthManager {
                         release: 0.4,
                     },
                      volume: -15,
-                 }).chain(this.distortion, this.tremolo, Tone.Destination);
+                 }).chain(this.tremolo, this.distortion);
                  break;
             default:
                 this.currentSynth = null;
@@ -98,7 +98,11 @@ export class SoloSynthManager {
      */
     public fadeOut(duration: number) {
         if (this.currentSynth) {
-            this.currentSynth.volume.rampTo(-Infinity, duration);
+            try {
+                 this.currentSynth.volume.rampTo(-Infinity, duration);
+            } catch(e) {
+                // Ignore error if context is already closed
+            }
         }
     }
 
@@ -108,6 +112,10 @@ export class SoloSynthManager {
      */
     public dispose() {
         this.stopEffects();
+        if (this.currentSynth) {
+            this.currentSynth.dispose();
+            this.currentSynth = null;
+        }
         if (this.tremolo) {
             this.tremolo.dispose();
             this.tremolo = null;
@@ -116,11 +124,8 @@ export class SoloSynthManager {
             this.distortion.dispose();
             this.distortion = null;
         }
-        if (this.currentSynth) {
-            this.currentSynth.disconnect();
-            this.currentSynth.dispose();
-            this.currentSynth = null;
-        }
         this.currentInstrument = 'none';
     }
 }
+
+    
