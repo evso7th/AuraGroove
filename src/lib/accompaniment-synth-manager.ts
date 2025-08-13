@@ -57,6 +57,7 @@ export class AccompanimentSynthManager {
      * @returns A Tone.PolySynth instance or null if the name is not recognized.
      */
     private createSynth(name: InstrumentName) {
+        console.log(`ACCOMPANIMENT-MANAGER: createSynth called for: ${name}`);
         switch (name) {
             case 'organ':
                 this.distortion = new Tone.Distortion(0.05);
@@ -74,7 +75,6 @@ export class AccompanimentSynthManager {
                     },
                      volume: -15,
                 }).chain(this.distortion, this.tremolo, Tone.Destination);
-                console.log('ACCOMPANIMENT-MANAGER: Organ synth created and chained to effects.');
                 break;
             default:
                 this.currentSynth = null;

@@ -259,22 +259,22 @@ export function AuraGroove() {
   }, [drumSettings.volume]);
 
   useEffect(() => {
-    if (bassSynthManagerRef.current) {
+    if (bassSynthManagerRef.current && isPlaying) {
         bassSynthManagerRef.current.setInstrument(instruments.bass);
     }
-  }, [instruments.bass]);
+  }, [instruments.bass, isPlaying]);
 
   useEffect(() => {
-    if (soloSynthManagerRef.current) {
+    if (soloSynthManagerRef.current && isPlaying) {
         soloSynthManagerRef.current.setInstrument(instruments.solo);
     }
-  }, [instruments.solo]);
+  }, [instruments.solo, isPlaying]);
 
   useEffect(() => {
-    if (accompanimentSynthManagerRef.current) {
+    if (accompanimentSynthManagerRef.current && isPlaying) {
         accompanimentSynthManagerRef.current.setInstrument(instruments.accompaniment);
     }
-  }, [instruments.accompaniment]);
+  }, [instruments.accompaniment, isPlaying]);
 
 
   const handlePlay = useCallback(async () => {
