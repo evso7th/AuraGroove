@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import * as Tone from 'tone';
-import { Drum, Loader2, Music, Pause, Speaker, FileMusic } from "lucide-react";
+import { Drum, Loader2, Music, Pause, Speaker, FileMusic, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -118,7 +118,7 @@ export function AuraGroove() {
             break;
 
         case 'bass_score':
-            if (bassSynthManagerRef.current && data.score && data.score.length > 0) {
+             if (bassSynthManagerRef.current && data.score && data.score.length > 0) {
                 const now = Tone.now();
                 data.score.forEach((note: BassNote) => {
                     bassSynthManagerRef.current?.triggerAttackRelease(
@@ -176,9 +176,54 @@ export function AuraGroove() {
     };
 
     worker.onmessage = handleMessage;
-    setIsInitializing(false);
-    setIsReady(true);
-    setLoadingText("");
+    
+    // Fetch all audio files as raw ArrayBuffers
+    const fetchSamples = async () => {
+        try {
+            const fetchedSamples = await Promise.all(
+                Object.entries(samplePaths).map(async ([name, url]) => {
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        throw new Error(`Failed to fetch sample: ${name}`);
+                    }
+                    const buffer = await response.arrayBuffer();
+                    return { name, buffer };
+                })
+            );
+
+            const workerSamples: Record<string, ArrayBuffer> = {};
+            const mainThreadSampleMap: Record<string, AudioBuffer> = {};
+            
+             if (!Tone.context) {
+                await Tone.start();
+            }
+            
+            await Promise.all(fetchedSamples.map(async ({ name, buffer }) => {
+                workerSamples[name] = buffer.slice(0); 
+                const mainBuffer = await Tone.context.decodeAudioData(buffer.slice(0));
+                mainThreadSampleMap[name] = mainBuffer;
+            }));
+
+            drumPlayersRef.current = new Tone.Players(mainThreadSampleMap).toDestination();
+
+            musicWorkerRef.current?.postMessage({
+                command: 'init',
+                data: { samples: workerSamples, sampleRate: Tone.context.sampleRate }
+            }, Object.values(workerSamples));
+
+        } catch (error) {
+            console.error("Sample loading failed:", error);
+            toast({
+                variant: "destructive",
+                title: "Failed to load audio samples",
+                description: error instanceof Error ? error.message : "An unknown error occurred.",
+            });
+            setLoadingText("Error loading samples.");
+            setIsInitializing(false);
+        }
+    };
+    
+    fetchSamples();
 
     
     // 4. Cleanup
@@ -245,7 +290,7 @@ export function AuraGroove() {
             await Tone.start();
         }
 
-        if (!musicWorkerRef.current) {
+        if (!musicWorkerRef.current || !isWorkerInitialized.current) {
             setIsInitializing(true);
             setLoadingText("Waiting for audio engine...");
             return;
@@ -261,56 +306,8 @@ export function AuraGroove() {
             bassSynthManagerRef.current = new BassSynthManager();
         }
 
-
-        // Initialize and load samples only when play is pressed for the first time
-        if (!isWorkerInitialized.current) {
-            setIsInitializing(true);
-            setLoadingText("Loading samples...");
-            try {
-                // Fetch all audio files as raw ArrayBuffers
-                const fetchedSamples = await Promise.all(
-                    Object.entries(samplePaths).map(async ([name, url]) => {
-                        const response = await fetch(url);
-                        if (!response.ok) {
-                            throw new Error(`Failed to fetch sample: ${name}`);
-                        }
-                        const buffer = await response.arrayBuffer();
-                        return { name, buffer };
-                    })
-                );
-
-                const workerSamples: Record<string, ArrayBuffer> = {};
-                const mainThreadSampleMap: Record<string, AudioBuffer> = {};
-                
-                await Promise.all(fetchedSamples.map(async ({ name, buffer }) => {
-                    workerSamples[name] = buffer.slice(0); 
-                    const mainBuffer = await Tone.context.decodeAudioData(buffer.slice(0));
-                    mainThreadSampleMap[name] = mainBuffer;
-                }));
-
-
-                drumPlayersRef.current = new Tone.Players(mainThreadSampleMap).toDestination();
-
-                musicWorkerRef.current.postMessage({
-                    command: 'init',
-                    data: { samples: workerSamples, sampleRate: Tone.context.sampleRate }
-                }, Object.values(workerSamples));
-
-            } catch (error) {
-                console.error("Sample loading failed:", error);
-                toast({
-                    variant: "destructive",
-                    title: "Failed to load audio samples",
-                    description: error instanceof Error ? error.message : "An unknown error occurred.",
-                });
-                setLoadingText("Error loading samples.");
-                setIsInitializing(false);
-                return;
-            }
-        } else {
-             setIsInitializing(true);
-             setLoadingText("Starting playback...");
-        }
+        setIsInitializing(true);
+        setLoadingText("Starting playback...");
         
         if (Tone.Transport.state !== 'started') {
             Tone.Transport.start();

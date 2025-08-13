@@ -1,50 +1,21 @@
 
 /**
  * @file AuraGroove Ambient Music Worker
+ * This worker generates musical scores for various instruments and sends them
+ * to the main thread for playback. It operates on a fixed-tick loop synchronized
+ * to a specific BPM.
  *
- * This worker operates on a microservice-style architecture.
- * Each musical component is an isolated entity responsible for a single task.
+ * Architecture:
+ * 1.  MessageBus (self.onmessage): Entry point for commands from the main thread.
+ * 2.  Scheduler: The central "conductor" that triggers score generation every bar.
+ * 3.  Instrument Generators (e.g., DrumGenerator, BassGenerator): Stateless composers
+ *     that create musical data for a single bar.
+ * 4.  PatternProvider: A library of musical patterns used by the generators.
+ * 5.  SampleBank: Manages decoded audio samples for use by generators (though rendering
+ *     happens on the main thread).
  */
 
-// --- Type Definitions ---
-/**
- * @typedef {Object} DrumNote
- * @property {string} sample
- * @property {number} time
- * @property {number} [velocity]
- */
-
-/**
- * @typedef {Object} BassNote
- * @property {string} note
- * @property {Tone.Unit.Time} duration
- * @property {number} time
- * @property {number} velocity
- */
-
-/**
- * @typedef {Object} SoloNote
- * @property {string|string[]} notes
- * @property {Tone.Unit.Time} duration
- * @property {Tone.Unit.Time} time
- */
- 
-/**
- * @typedef {Object} AccompanimentNote
- * @property {string|string[]} notes
- * @property {Tone.Unit.Time} duration
- * @property {Tone.Unit.Time} time
- */
- 
-/**
- * @typedef {Object} EffectNote
- * @property {string} note
- * @property {Tone.Unit.Time} duration
- * @property {number} time
- */
- 
-// --- 1. Pattern & Score Providers ---
-
+// --- 1. PatternProvider (The Music Sheet Library) ---
 const PatternProvider = {
     drumPatterns: {
         basic: [
@@ -86,64 +57,29 @@ const PatternProvider = {
             { sample: 'ride', time: 3.5 },
         ],
     },
+    chordProgressions: {
+        // Basic I-V-vi-IV in C major
+        major_pop: [ 'C4', 'G4', 'A4', 'F4' ],
+        // A common minor progression
+        minor_moody: [ 'Am', 'G', 'C', 'F' ],
+        // More ambient/jazzy progression
+        ambient_jazz: [ 'Cmaj7', 'Fmaj7', 'Dm7', 'G7' ],
+    },
+    melodies: {
+        simple_pentatonic: [
+            { note: 'C4', duration: '8n' }, { note: 'D4', duration: '8n' },
+            { note: 'E4', duration: '4n' }, { note: 'G4', duration: '4n' },
+            { note: 'A4', duration: '2n' },
+        ],
+    },
+
     getDrumPattern(name) {
         return this.drumPatterns[name] || this.drumPatterns.basic;
     },
-    harmony: {
-        // Simple E-minor progression
-        chords: ['Em', 'C', 'G', 'D'],
-        durations: [4, 4, 4, 4], // beats per chord
-        totalBeats: 16,
-    },
-    getCurrentChord(beats) {
-        const progressionTime = beats % this.totalBeats;
-        let cumulativeDuration = 0;
-        for (let i = 0; i < this.chords.length; i++) {
-            cumulativeDuration += this.durations[i];
-            if (progressionTime < cumulativeDuration) {
-                return this.chords[i];
-            }
-        }
-        return this.chords[0];
-    },
-    getChordNotes(chordName, octave) {
-        const root = chordName.replace('m', '');
-        const quality = chordName.endsWith('m') ? 'minor' : 'major';
-        const notes = Tonal.Chord.get(chordName).notes;
-        return notes.map(n => `${n}${octave}`);
-    }
 };
-
-const promenadeScore = {
-    drums: [
-        { sample: 'kick', time: 0 },{ sample: 'hat', time: 0.5 },{ sample: 'snare', time: 1 },{ sample: 'hat', time: 1.5 },{ sample: 'kick', time: 2 },{ sample: 'hat', time: 2.5 },{ sample: 'snare', time: 3 },{ sample: 'hat', time: 3.5 },
-        { sample: 'kick', time: 4 },{ sample: 'hat', time: 4.5 },{ sample: 'snare', time: 5 },{ sample: 'hat', time: 5.5 },{ sample: 'kick', time: 6 },{ sample: 'hat', time: 6.5 },{ sample: 'snare', time: 7 },{ sample: 'hat', time: 7.5 },
-        { sample: 'kick', time: 8 },{ sample: 'hat', time: 8.5 },{ sample: 'snare', time: 9 },{ sample: 'hat', time: 9.5 },{ sample: 'kick', time: 10 },{ sample: 'hat', time: 10.5 },{ sample: 'snare', time: 11 },{ sample: 'hat', time: 11.5 },
-        { sample: 'crash', time: 12, velocity: 0.8 },{ sample: 'hat', time: 12.5 },{ sample: 'snare', time: 13 },{ sample: 'hat', time: 13.5 },{ sample: 'kick', time: 14 },{ sample: 'hat', time: 14.5 },{ sample: 'snare', time: 15 },{ sample: 'hat', time: 15.5 },
-    ],
-    bass: [
-        { note: 'E2', time: 0, duration: '1n', velocity: 0.9 },
-        { note: 'C2', time: 4, duration: '1n', velocity: 0.85 },
-        { note: 'G2', time: 8, duration: '1n', velocity: 0.88 },
-        { note: 'D2', time: 12, duration: '1n', velocity: 0.86 },
-    ],
-    solo: [
-        { notes: 'B3', duration: '8n', time: 0.5 },{ notes: 'G3', duration: '8n', time: 1.5 },{ notes: 'A3', duration: '4n', time: 2.5 },
-        { notes: 'G3', duration: '8n', time: 4.5 },{ notes: 'E3', duration: '8n', time: 5.5 },{ notes: 'C3', duration: '4n', time: 6.5 },
-        { notes: 'D3', duration: '2n', time: 8.5 },
-        { notes: 'E3', duration: '8n', time: 12.5 },{ notes: 'G3', duration: '8n', time: 13.5 },{ notes: 'B3', duration: '4n', time: 14.5 },
-    ],
-    accompaniment: [
-        { notes: ['E2', 'G2', 'B2'], duration: '1n', time: 0 },
-        { notes: ['C2', 'E2', 'G2'], duration: '1n', time: 4 },
-        { notes: ['G2', 'B2', 'D3'], duration: '1n', time: 8 },
-        { notes: ['D2', 'F#2', 'A2'], duration: '1n', time: 12 },
-    ],
-    effects: [],
-};
-
 
 // --- 2. Instrument Generators (The Composers) ---
+
 class DrumGenerator {
     static createScore(patternName, barNumber) {
         const pattern = PatternProvider.getDrumPattern(patternName);
@@ -160,9 +96,15 @@ class DrumGenerator {
 }
 
 class BassGenerator {
-    static createScore(beats) {
-        const chord = PatternProvider.getCurrentChord(beats);
-        const rootNote = Tonal.Chord.get(chord).tonic;
+    static getRootNote(chord) {
+        if (typeof chord !== 'string') return 'C';
+        return chord.replace(/maj7|m7|7/,'').slice(0, -1); // 'Cmaj7' -> 'C', 'Am' -> 'A'
+    }
+
+     static createScore(barNumber, chordProgression) {
+        const chord = chordProgression[barNumber % chordProgression.length];
+        const rootNote = this.getRootNote(chord);
+
         const score = [
             { note: `${rootNote}2`, time: 0, duration: '1n', velocity: 0.9 }
         ];
@@ -171,109 +113,35 @@ class BassGenerator {
 }
 
 class SoloGenerator {
-    static createScore(beats) {
-        const score = [];
-        const chord = PatternProvider.getCurrentChord(beats);
-        const scale = Tonal.Chord.get(chord).notes.map(n => `${n}3`);
-
-        // Simple algorithm: play a random note from the scale on the off-beats
-        for (let i = 0; i < 4; i++) {
-            if (Math.random() > 0.6) {
-                const note = scale[Math.floor(Math.random() * scale.length)];
-                score.push({
-                    notes: note,
-                    duration: '8n',
-                    time: i + 0.5,
-                });
-            }
-        }
-        return score;
+    static createScore(barNumber, melody, chord) {
+        // A very simple generator: plays one note from the melody per bar
+        const note = melody[barNumber % melody.length];
+        return [
+            { notes: note.note, duration: note.duration, time: 1.5 }
+        ];
     }
 }
 
 class AccompanimentGenerator {
-    static createScore(beats) {
-        const chordName = PatternProvider.getCurrentChord(beats);
-        const baseNotes = Tonal.Chord.get(chordName).notes;
-
-        const getChordNotesWithOctaves = (octaves) => {
-            const chordWithOctaves = [];
-            let currentNoteIndex = 0;
-            for (const octave of octaves) {
-                chordWithOctaves.push(`${baseNotes[currentNoteIndex]}${octave}`);
-                currentNoteIndex = (currentNoteIndex + 1) % baseNotes.length;
-            }
-            return chordWithOctaves;
-        };
-
-        const mode = Math.random();
-        if (mode < 0.4) { // Full chord
-            const notes = getChordNotesWithOctaves([3, 3, 4, 4]);
-            return [{ notes: notes, duration: '1n', time: 0 }];
-        } else if (mode < 0.7) { // Arpeggio up
-            const notes = getChordNotesWithOctaves([3, 3, 4, 4]);
-            return notes.map((note, i) => ({
-                notes: note,
-                duration: '8n',
-                time: i * 0.5,
-            }));
-        } else { // Arpeggio down
-            const notes = getChordNotesWithOctaves([4, 4, 3, 3]).reverse();
-            return notes.map((note, i) => ({
-                notes: note,
-                duration: '8n',
-                time: i * 0.5,
-            }));
-        }
+     static createScore(barNumber, chordProgression) {
+        const chord = chordProgression[barNumber % chordProgression.length];
+        return [
+            { notes: chord, duration: '1n', time: 0 }
+        ];
     }
 }
-
-
-class EffectsGenerator {
-    static createScore(beats) {
-        const score = [];
-        // Add a random bell sound occasionally on the last beat
-        if (Math.random() < 0.25) {
-             score.push({
-                note: 'C5',
-                duration: '16n',
-                time: 3.75, // very end of the bar
-             });
-        }
-        return score;
-    }
-}
-
 
 // --- 3. SampleBank (Decoded Audio Storage) ---
 const SampleBank = {
-    samples: {},
+    samples: {}, // { kick: Float32Array, ... }
     isInitialized: false,
 
-    async init(samples, sampleRate) {
-        const tempAudioContext = new OfflineAudioContext(1, 1, sampleRate);
-        
-        const decodingPromises = Object.entries(samples).map(async ([key, arrayBuffer]) => {
-            if (arrayBuffer.byteLength > 0) {
-                try {
-                    const audioBuffer = await tempAudioContext.decodeAudioData(arrayBuffer.slice(0));
-                    this.samples[key] = audioBuffer.getChannelData(0);
-                } catch (e) {
-                     // Can't use console.error in worker, post message instead
-                    self.postMessage({ type: 'error', error: `Failed to decode sample ${key}: ${e instanceof Error ? e.message : String(e)}` });
-                }
-            }
-        });
-
-        await Promise.all(decodingPromises);
+    async init(rawSamples, sampleRate) {
+        // This is a placeholder for any logic that might need the decoded samples
+        // inside the worker in the future. Currently, decoding is handled on the main thread.
         this.isInitialized = true;
     },
-
-    getSample(name) {
-        return this.samples[name];
-    }
 };
-
 
 // --- 4. Scheduler (The Conductor) ---
 const Scheduler = {
@@ -283,11 +151,10 @@ const Scheduler = {
     
     // Settings from main thread
     sampleRate: 44100,
-    bpm: 100,
-    instruments: {},
-    drumSettings: {},
-    effectsSettings: {},
-    scoreName: 'generative',
+    bpm: 120,
+    instruments: { solo: 'none', accompaniment: 'none', bass: 'none' },
+    drumSettings: { enabled: false, pattern: 'basic', volume: 0.8 },
+    score: 'generative',
 
 
     // Calculated properties
@@ -301,6 +168,7 @@ const Scheduler = {
         this.reset();
         this.isRunning = true;
         
+        // Generate the first chunk immediately and schedule subsequent ticks
         this.tick();
         this.intervalId = setInterval(() => this.tick(), this.barDuration * 1000);
         self.postMessage({ type: 'started' });
@@ -322,35 +190,46 @@ const Scheduler = {
         if (settings.instruments) this.instruments = settings.instruments;
         if (settings.drumSettings) this.drumSettings = settings.drumSettings;
         if (settings.bpm) this.bpm = settings.bpm;
-        if (settings.score) this.scoreName = settings.score;
-        if (settings.effectsSettings) this.effectsSettings = settings.effectsSettings;
+        if (settings.score) this.score = settings.score;
     },
 
     tick() {
         if (!this.isRunning) return;
         
-        const currentBeats = this.barCount * this.beatsPerBar;
-        const totalLoopBeats = this.scoreName === 'promenade' ? 16 : PatternProvider.totalBeats;
-        const loopPosition = currentBeats % totalLoopBeats;
+        if (this.score === 'promenade') {
+            // For promenade, we don't generate, we just trigger it once
+            // This logic would be handled differently in a real scenario
+            // (e.g., sending the whole score at once)
+            // For now, we'll just stop to prevent looping.
+             this.stop();
+             return;
+        }
 
-        if (this.scoreName === 'promenade') {
-            const getNotesForCurrentBar = (notes) => notes.filter(note => note.time >= loopPosition && note.time < loopPosition + this.beatsPerBar)
-                                                          .map(note => ({ ...note, time: note.time - loopPosition }));
-                                                          
-            if (this.drumSettings.enabled) self.postMessage({ type: 'drum_score', data: { score: getNotesForCurrentBar(promenadeScore.drums) }});
-            if (this.instruments.bass !== 'none') self.postMessage({ type: 'bass_score', data: { score: getNotesForCurrentBar(promenadeScore.bass) }});
-            if (this.instruments.solo !== 'none') self.postMessage({ type: 'solo_score', data: { score: getNotesForCurrentBar(promenadeScore.solo) }});
-            if (this.instruments.accompaniment !== 'none') self.postMessage({ type: 'accompaniment_score', data: { score: getNotesForCurrentBar(promenadeScore.accompaniment) }});
-            if (this.effectsSettings.enabled) self.postMessage({ type: 'effects_score', data: { score: getNotesForCurrentBar(promenadeScore.effects) }});
+        // --- Score Generation ---
+        const chordProgression = PatternProvider.chordProgressions.minor_moody;
 
-        } else { // Generative
-            if (this.drumSettings.enabled) self.postMessage({ type: 'drum_score', data: { score: DrumGenerator.createScore(this.drumSettings.pattern, this.barCount) } });
-            if (this.instruments.bass !== 'none') self.postMessage({ type: 'bass_score', data: { score: BassGenerator.createScore(currentBeats) }});
-            if (this.instruments.solo !== 'none') self.postMessage({ type: 'solo_score', data: { score: SoloGenerator.createScore(currentBeats) }});
-            if (this.instruments.accompaniment !== 'none') self.postMessage({ type: 'accompaniment_score', data: { score: AccompanimentGenerator.createScore(currentBeats) }});
-            if (this.effectsSettings.enabled) self.postMessage({ type: 'effects_score', data: { score: EffectsGenerator.createScore(currentBeats) }});
+        if (this.drumSettings.enabled) {
+            const drumScore = DrumGenerator.createScore(this.drumSettings.pattern, this.barCount);
+            self.postMessage({ type: 'drum_score', data: { score: drumScore } });
         }
         
+        if (this.instruments.bass !== 'none') {
+            const bassScore = BassGenerator.createScore(this.barCount, chordProgression);
+            self.postMessage({ type: 'bass_score', data: { score: bassScore } });
+        }
+
+        if (this.instruments.accompaniment !== 'none') {
+            const accompanimentScore = AccompanimentGenerator.createScore(this.barCount, chordProgression);
+            self.postMessage({ type: 'accompaniment_score', data: { score: accompanimentScore } });
+        }
+        
+        if (this.instruments.solo !== 'none') {
+            const melody = PatternProvider.melodies.simple_pentatonic;
+            const currentChord = chordProgression[this.barCount % chordProgression.length];
+            const soloScore = SoloGenerator.createScore(this.barCount, melody, currentChord);
+            self.postMessage({ type: 'solo_score', data: { score: soloScore } });
+        }
+
         this.barCount++;
     }
 };
@@ -363,11 +242,6 @@ self.onmessage = async (event) => {
     try {
         switch (command) {
             case 'init':
-                // Dynamically import Tonal
-                if (typeof Tonal === 'undefined') {
-                    self.importScripts("https://unpkg.com/tonal@4.10.0/browser/tonal.min.js");
-                }
-                Scheduler.sampleRate = data.sampleRate;
                 await SampleBank.init(data.samples, data.sampleRate);
                 self.postMessage({ type: 'initialized' });
                 break;
@@ -392,5 +266,3 @@ self.onmessage = async (event) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
-
-    

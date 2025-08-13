@@ -4,7 +4,7 @@ import type * as Tone from 'tone';
 export type BassNote = {
     note: string;
     time: number;
-    duration: number;
+    duration: Tone.Unit.Time;
     velocity: number;
 }
 
@@ -25,5 +25,3 @@ export type DrumNote = {
     time: number; // time in beats from the start of the loop
     velocity?: number;
 }
-
-    

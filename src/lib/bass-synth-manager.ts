@@ -71,7 +71,10 @@ export class BassSynthManager {
      * Essential for stopping sound immediately.
      */
     public releaseAll() {
-        this.currentSynth?.releaseAll();
+        if (this.currentSynth) {
+            // For MonoSynth, this is one way to ensure it stops.
+            this.currentSynth.triggerRelease();
+        }
     }
 
     /**
