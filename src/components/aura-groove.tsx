@@ -187,59 +187,10 @@ export function AuraGroove() {
     };
 
     worker.onmessage = handleMessage;
+    setIsInitializing(false);
+    setIsReady(true);
+    setLoadingText("");
 
-    // 3. Load Samples and Initialize Worker with them
-    const loadSamplesAndInit = async () => {
-        setLoadingText("Loading samples...");
-        try {
-            // Fetch all audio files as raw ArrayBuffers
-            const fetchedSamples = await Promise.all(
-                Object.entries(samplePaths).map(async ([name, url]) => {
-                    const response = await fetch(url);
-                    if (!response.ok) {
-                        throw new Error(`Failed to fetch sample: ${name}`);
-                    }
-                    const buffer = await response.arrayBuffer();
-                    return { name, buffer };
-                })
-            );
-
-            const workerSamples: Record<string, ArrayBuffer> = {};
-            const mainThreadSampleMap: Record<string, AudioBuffer> = {};
-            
-            // Create independent copies for the worker and the main thread
-            await Promise.all(fetchedSamples.map(async ({ name, buffer }) => {
-                // Copy for worker (will be transferred)
-                workerSamples[name] = buffer.slice(0); 
-                // Decode another copy for main thread's Tone.Players
-                const mainBuffer = await Tone.context.decodeAudioData(buffer.slice(0));
-                mainThreadSampleMap[name] = mainBuffer;
-            }));
-
-
-            // Initialize Tone.Players on the main thread
-            drumPlayersRef.current = new Tone.Players(mainThreadSampleMap).toDestination();
-
-            // Initialize worker with its own set of buffers
-            worker.postMessage({
-                command: 'init',
-                data: { samples: workerSamples, sampleRate: Tone.context.sampleRate }
-            }, Object.values(workerSamples));
-
-        } catch (error) {
-            console.error("Sample loading failed:", error);
-            toast({
-                variant: "destructive",
-                title: "Failed to load audio samples",
-                description: error instanceof Error ? error.message : "An unknown error occurred.",
-            });
-            setLoadingText("Error loading samples.");
-            setIsInitializing(false);
-        }
-    };
-    
-    // This will run only on the client
-    loadSamplesAndInit();
     
     // 4. Cleanup
     return () => {
@@ -305,14 +256,61 @@ export function AuraGroove() {
             await Tone.start();
         }
 
-        if (!musicWorkerRef.current || !isWorkerInitialized.current) {
+        if (!musicWorkerRef.current) {
             setIsInitializing(true);
             setLoadingText("Waiting for audio engine...");
             return;
         }
 
-        setIsInitializing(true);
-        setLoadingText("Starting playback...");
+        // Initialize and load samples only when play is pressed for the first time
+        if (!isWorkerInitialized.current) {
+            setIsInitializing(true);
+            setLoadingText("Loading samples...");
+            try {
+                // Fetch all audio files as raw ArrayBuffers
+                const fetchedSamples = await Promise.all(
+                    Object.entries(samplePaths).map(async ([name, url]) => {
+                        const response = await fetch(url);
+                        if (!response.ok) {
+                            throw new Error(`Failed to fetch sample: ${name}`);
+                        }
+                        const buffer = await response.arrayBuffer();
+                        return { name, buffer };
+                    })
+                );
+
+                const workerSamples: Record<string, ArrayBuffer> = {};
+                const mainThreadSampleMap: Record<string, AudioBuffer> = {};
+                
+                await Promise.all(fetchedSamples.map(async ({ name, buffer }) => {
+                    workerSamples[name] = buffer.slice(0); 
+                    const mainBuffer = await Tone.context.decodeAudioData(buffer.slice(0));
+                    mainThreadSampleMap[name] = mainBuffer;
+                }));
+
+
+                drumPlayersRef.current = new Tone.Players(mainThreadSampleMap).toDestination();
+
+                musicWorkerRef.current.postMessage({
+                    command: 'init',
+                    data: { samples: workerSamples, sampleRate: Tone.context.sampleRate }
+                }, Object.values(workerSamples));
+
+            } catch (error) {
+                console.error("Sample loading failed:", error);
+                toast({
+                    variant: "destructive",
+                    title: "Failed to load audio samples",
+                    description: error instanceof Error ? error.message : "An unknown error occurred.",
+                });
+                setLoadingText("Error loading samples.");
+                setIsInitializing(false);
+                return;
+            }
+        } else {
+             setIsInitializing(true);
+             setLoadingText("Starting playback...");
+        }
         
         if (Tone.Transport.state !== 'started') {
             Tone.Transport.start();
@@ -554,5 +552,3 @@ export function AuraGroove() {
     </Card>
   );
 }
-
-    
