@@ -10,7 +10,7 @@ type InstrumentName = Instruments['bass'];
  * preventing memory leaks and audio glitches.
  */
 export class BassSynthManager {
-    private currentSynth: Tone.PolySynth | null = null;
+    private currentSynth: Tone.MonoSynth | null = null;
     private currentInstrument: InstrumentName | null = null;
 
     constructor() {}
@@ -38,31 +38,31 @@ export class BassSynthManager {
     /**
      * Creates a synth instance based on the instrument name.
      * @param name The name of the instrument.
-     * @returns A Tone.PolySynth instance or null if the name is not recognized.
+     * @returns A Tone.MonoSynth instance or null if the name is not recognized.
      */
-    private createSynth(name: InstrumentName): Tone.PolySynth | null {
+    private createSynth(name: InstrumentName): Tone.MonoSynth | null {
         switch (name) {
             case 'bass synth':
-                return new Tone.PolySynth(Tone.Synth, {
+                return new Tone.MonoSynth({
                     oscillator: {
-                        type: 'sine',
+                        type: 'sine'
                     },
                     envelope: {
-                        attack: 0.01,
-                        decay: 0.4,
-                        sustain: 0.8,
-                        release: 1.0,
+                        attack: 0.1,
+                        decay: 0.3,
+                        sustain: 0.4,
+                        release: 1.5,
                     },
-                    volume: -2,
+                    volume: -8,
                 }).toDestination();
             default:
                 return null;
         }
     }
     
-    public triggerAttackRelease(notes: string | string[], duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
+    public triggerAttackRelease(note: string, duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
         if (this.currentSynth) {
-            this.currentSynth.triggerAttackRelease(notes, duration, time, velocity);
+            this.currentSynth.triggerAttackRelease(note, duration, time, velocity);
         }
     }
 
