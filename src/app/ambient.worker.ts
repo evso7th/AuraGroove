@@ -50,6 +50,27 @@ const PatternProvider = {
     },
 };
 
+// --- "Smoke on the Water" Riff Definition ---
+const smokeOnTheWaterRiff = [
+    // Bar 1
+    { time: 0, duration: '4n', notes: { bass: 'G2', solo: 'G3', accompaniment: ['G2', 'C3'] }},
+    { time: 1, duration: '4n', notes: { bass: 'A#2', solo: 'A#3', accompaniment: ['A#2', 'D#3'] }},
+    { time: 2, duration: '2n', notes: { bass: 'C3', solo: 'C4', accompaniment: ['C3', 'F3'] }},
+    // Bar 2
+    { time: 4, duration: '4n', notes: { bass: 'G2', solo: 'G3', accompaniment: ['G2', 'C3'] }},
+    { time: 5, duration: '4n', notes: { bass: 'A#2', solo: 'A#3', accompaniment: ['A#2', 'D#3'] }},
+    { time: 6, duration: '4n', notes: { bass: 'C#3', solo: 'C#4', accompaniment: ['C#3', 'F#3'] }},
+    { time: 7, duration: '4n', notes: { bass: 'C3', solo: 'C4', accompaniment: ['C3', 'F3'] }},
+    // Bar 3
+    { time: 8, duration: '4n', notes: { bass: 'G2', solo: 'G3', accompaniment: ['G2', 'C3'] }},
+    { time: 9, duration: '4n', notes: { bass: 'A#2', solo: 'A#3', accompaniment: ['A#2', 'D#3'] }},
+    { time: 10, duration: '2n', notes: { bass: 'C3', solo: 'C4', accompaniment: ['C3', 'F3'] }},
+    // Bar 4
+    { time: 12, duration: '4n', notes: { bass: 'A#2', solo: 'A#3', accompaniment: ['A#2', 'D#3'] }},
+    { time: 13, duration: '2n', notes: { bass: 'G2', solo: 'G3', accompaniment: ['G2', 'C3'] }},
+];
+
+
 // --- 2. Instrument Generators (The Composers) ---
 class DrumGenerator {
     static createScore(patternName: string, barNumber: number, totalBars: number, beatsPerBar = 4): DrumNote[] {
@@ -66,79 +87,47 @@ class DrumGenerator {
 }
 
 class BassGenerator {
-     static createScore(rootNote = 'E', beatsPerBar = 4): BassNote[] {
-       const riff = [
-            { note: 'G2', time: 0, duration: '8n' },
-            { note: 'A#2', time: 0.75, duration: '8n' },
-            { note: 'C3', time: 1.5, duration: '4n' },
-            
-            { note: 'G2', time: 2.5, duration: '8n' },
-            { note: 'A#2', time: 3.25, duration: '8n' },
-            { note: 'C#3', time: 4, duration: '8n' },
-            { note: 'C3', time: 4.75, duration: '4n' },
+     static createScore(bar: number, beatsPerBar = 4): BassNote[] {
+        const barStartBeat = (bar % 4) * beatsPerBar;
+        const barEndBeat = barStartBeat + beatsPerBar;
 
-            { note: 'G2', time: 6, duration: '8n' },
-            { note: 'A#2', time: 6.75, duration: '8n' },
-            { note: 'C3', time: 7.5, duration: '4n' },
-
-            { note: 'A#2', time: 9, duration: '8n' },
-            { note: 'G2', time: 9.75, duration: '4n' },
-        ];
-        return riff;
+        return smokeOnTheWaterRiff
+            .filter(note => note.time >= barStartBeat && note.time < barEndBeat)
+            .map(note => ({
+                note: note.notes.bass,
+                time: note.time - barStartBeat,
+                duration: note.duration,
+                velocity: 0.9
+            }));
     }
 }
 
 class SoloGenerator {
-     static createScore(bar: number): SoloNote[] {
-       const riff = [
-            { notes: 'G3', duration: '8n', time: 0 },
-            { notes: 'A#3', duration: '8n', time: 0.75 },
-            { notes: 'C4', duration: '4n', time: 1.5 },
-            
-            { notes: 'G3', duration: '8n', time: 2.5 },
-            { notes: 'A#3', duration: '8n', time: 3.25 },
-            { notes: 'C#4', duration: '8n', time: 4 },
-            { notes: 'C4', duration: '4n', time: 4.75 },
-
-            { notes: 'G3', duration: '8n', time: 6 },
-            { notes: 'A#3', duration: '8n', time: 6.75 },
-            { notes: 'C4', duration: '4n', time: 7.5 },
-
-            { notes: 'A#3', duration: '8n', time: 9 },
-            { notes: 'G3', duration: '4n', time: 9.75 },
-        ];
-
-        // Play the riff every 4 bars
-        if (bar % 4 === 0) {
-            return riff;
-        }
-        return [];
+     static createScore(bar: number, beatsPerBar = 4): SoloNote[] {
+        const barStartBeat = (bar % 4) * beatsPerBar;
+        const barEndBeat = barStartBeat + beatsPerBar;
+       
+        return smokeOnTheWaterRiff
+            .filter(note => note.time >= barStartBeat && note.time < barEndBeat)
+            .map(note => ({
+                notes: note.notes.solo,
+                time: note.time - barStartBeat,
+                duration: note.duration,
+            }));
     }
 }
 class AccompanimentGenerator {
-   static createScore(bar: number): AccompanimentNote[] {
-        const riff = [
-            { notes: ['G2', 'D3'], duration: '8n', time: 0 },
-            { notes: ['A#2', 'F3'], duration: '8n', time: 0.75 },
-            { notes: ['C3', 'G3'], duration: '4n', time: 1.5 },
-            
-            { notes: ['G2', 'D3'], duration: '8n', time: 2.5 },
-            { notes: ['A#2', 'F3'], duration: '8n', time: 3.25 },
-            { notes: ['C#3', 'G#3'], duration: '8n', time: 4 },
-            { notes: ['C3', 'G3'], duration: '4n', time: 4.75 },
-
-            { notes: ['G2', 'D3'], duration: '8n', time: 6 },
-            { notes: ['A#2', 'F3'], duration: '8n', time: 6.75 },
-            { notes: ['C3', 'G3'], duration: '4n', time: 7.5 },
-
-            { notes: ['A#2', 'F3'], duration: '8n', time: 9 },
-            { notes: ['G2', 'D3'], duration: '4n', time: 9.75 },
-        ];
-        
-        if (bar % 4 === 0) {
-            return riff;
-        }
-        return [];
+   static createScore(bar: number, beatsPerBar = 4): AccompanimentNote[] {
+        const barStartBeat = (bar % 4) * beatsPerBar;
+        const barEndBeat = barStartBeat + beatsPerBar;
+       
+        return smokeOnTheWaterRiff
+            .filter(note => note.time >= barStartBeat && note.time < barEndBeat)
+            .map(note => ({
+                notes: note.notes.accompaniment,
+                time: note.time - barStartBeat,
+                duration: note.duration,
+            }));
     }
 }
 
@@ -246,17 +235,17 @@ const Scheduler = {
             }
 
             if (this.instruments.bass !== 'none') {
-                const bassScore = BassGenerator.createScore('E')
+                const bassScore = BassGenerator.createScore(this.barCount, this.beatsPerBar)
                     .map(note => ({...note, time: (note.time as number) * this.secondsPerBeat, duration: note.duration as Tone.Unit.Time, velocity: 0.9 }));
-                self.postMessage({ type: 'bass_score', data: { score: bassScore } });
+                if (bassScore.length > 0) self.postMessage({ type: 'bass_score', data: { score: bassScore } });
             }
             if (this.instruments.solo !== 'none') {
-                 const soloScore = SoloGenerator.createScore(this.barCount)
+                 const soloScore = SoloGenerator.createScore(this.barCount, this.beatsPerBar)
                      .map(note => ({...note, time: (note.time as number) * this.secondsPerBeat}));
                  if (soloScore.length > 0) self.postMessage({ type: 'solo_score', data: { score: soloScore } });
             }
             if (this.instruments.accompaniment !== 'none') {
-                const accompanimentScore = AccompanimentGenerator.createScore(this.barCount)
+                const accompanimentScore = AccompanimentGenerator.createScore(this.barCount, this.beatsPerBar)
                     .map(note => ({...note, time: (note.time as number) * this.secondsPerBeat}));
                 if(accompanimentScore.length > 0) self.postMessage({ type: 'accompaniment_score', data: { score: accompanimentScore } });
             }
