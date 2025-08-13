@@ -61,7 +61,7 @@ export class AccompanimentSynthManager {
                 this.distortion = new Tone.Distortion(0.05);
                 this.tremolo = new Tone.Tremolo(2, 0.2);
                 
-                const organ = new Tone.PolySynth(Tone.Synth, {
+                const organ = new Tone.PolySynth(4, Tone.Synth, {
                      oscillator: {
                         type: 'sawtooth',
                     },
