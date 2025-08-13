@@ -73,17 +73,12 @@ export function AuraGroove() {
   const { toast } = useToast();
 
   const musicWorkerRef = useRef<Worker>();
-  const bassSynthManagerRef = useRef<BassSynthManager>();
-  const soloSynthManagerRef = useRef<SoloSynthManager>();
-  const accompanimentSynthManagerRef = useRef<AccompanimentSynthManager>();
+  const bassSynthManagerRef = useRef<BassSynthManager>(new BassSynthManager());
+  const soloSynthManagerRef = useRef<SoloSynthManager>(new SoloSynthManager());
+  const accompanimentSynthManagerRef = useRef<AccompanimentSynthManager>(new AccompanimentSynthManager());
   const drumPlayersRef = useRef<Tone.Players | null>(null);
 
    useEffect(() => {
-    // Initialize synth managers once and store them in refs
-    bassSynthManagerRef.current = new BassSynthManager();
-    soloSynthManagerRef.current = new SoloSynthManager();
-    accompanimentSynthManagerRef.current = new AccompanimentSynthManager();
-
     setLoadingText("Initializing Worker...");
     
     const worker = new Worker(new URL('../app/ambient.worker.ts', import.meta.url));
@@ -294,6 +289,7 @@ export function AuraGroove() {
   }, [drumSettings, instruments, bpm, score, toast]);
 
   const handleStop = useCallback(() => {
+    // Graceful stop: fade out synths and release bass notes
     soloSynthManagerRef.current?.fadeOut(1);
     accompanimentSynthManagerRef.current?.fadeOut(1);
     bassSynthManagerRef.current?.releaseAll();
@@ -301,11 +297,18 @@ export function AuraGroove() {
     soloSynthManagerRef.current?.stopEffects();
     accompanimentSynthManagerRef.current?.stopEffects();
     
+    // Stop the transport and worker
     if (Tone.Transport.state !== 'stopped') {
         Tone.Transport.stop();
         Tone.Transport.cancel();
     }
     musicWorkerRef.current?.postMessage({ command: 'stop' });
+    
+    // Dispose all synths to prepare for next run
+    soloSynthManagerRef.current?.dispose();
+    accompanimentSynthManagerRef.current?.dispose();
+    bassSynthManagerRef.current?.dispose();
+
   }, []);
   
   const handleTogglePlay = useCallback(() => {
