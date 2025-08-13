@@ -23,7 +23,9 @@ export class SoloSynthManager {
      * @param name The name of the instrument to activate ('organ', 'none', etc.).
      */
     public setInstrument(name: InstrumentName) {
+        console.log('SOLO-MANAGER: setInstrument called with:', name);
         if (name === this.currentInstrument && this.currentSynth) {
+            console.log('SOLO-MANAGER: Instrument already set, skipping creation.');
             return;
         }
 
@@ -56,6 +58,7 @@ export class SoloSynthManager {
      * @returns A Tone.PolySynth instance or null if the name is not recognized.
      */
     private createSynth(name: InstrumentName) {
+        console.log('SOLO-MANAGER: createSynth called for:', name);
         switch (name) {
             case 'organ':
                  this.distortion = new Tone.Distortion(0.05).toDestination();
@@ -79,6 +82,7 @@ export class SoloSynthManager {
     }
     
     public triggerAttackRelease(notes: string | string[], duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
+        console.log('SOLO-MANAGER: triggerAttackRelease called with notes:', notes);
         if (this.currentSynth) {
             this.currentSynth.triggerAttackRelease(notes, duration, time, velocity);
         }
@@ -111,6 +115,7 @@ export class SoloSynthManager {
      * This is crucial for preventing memory leaks when switching instruments or stopping playback.
      */
     public dispose() {
+        console.log('SOLO-MANAGER: dispose called for', this.currentInstrument);
         this.stopEffects();
         if (this.currentSynth) {
             this.currentSynth.dispose();
@@ -127,5 +132,3 @@ export class SoloSynthManager {
         this.currentInstrument = 'none';
     }
 }
-
-    

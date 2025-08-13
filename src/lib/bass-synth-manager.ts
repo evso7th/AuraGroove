@@ -22,7 +22,9 @@ export class BassSynthManager {
      * @param name The name of the instrument to activate.
      */
     public setInstrument(name: InstrumentName) {
+        console.log('BASS-MANAGER: setInstrument called with:', name);
         if (name === this.currentInstrument && this.isSynthCreated) {
+            console.log('BASS-MANAGER: Instrument already set, skipping creation.');
             return;
         }
         
@@ -43,6 +45,7 @@ export class BassSynthManager {
      * @returns A Tone.MonoSynth instance or null if the name is not recognized.
      */
     private createSynth(name: InstrumentName): Tone.MonoSynth | null {
+        console.log('BASS-MANAGER: createSynth called for:', name);
         switch (name) {
             case 'bass synth':
                 return new Tone.MonoSynth({
@@ -55,7 +58,7 @@ export class BassSynthManager {
                         sustain: 0.4,
                         release: 1.5,
                     },
-                    volume: 4,
+                    volume: -8,
                 }).toDestination();
             default:
                 return null;
@@ -63,6 +66,7 @@ export class BassSynthManager {
     }
     
     public triggerAttackRelease(note: string, duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
+        console.log('BASS-MANAGER: triggerAttackRelease called with note:', note);
         if (this.currentSynth) {
             this.currentSynth.triggerAttackRelease(note, duration, time, velocity);
         }
@@ -73,6 +77,7 @@ export class BassSynthManager {
      * Essential for stopping sound immediately.
      */
     public releaseAll() {
+        console.log('BASS-MANAGER: releaseAll called');
         if (this.currentSynth) {
             try {
                 this.currentSynth.triggerRelease();
@@ -87,6 +92,7 @@ export class BassSynthManager {
      * This is crucial for preventing memory leaks when switching instruments or stopping playback.
      */
     public dispose() {
+        console.log('BASS-MANAGER: dispose called for', this.currentInstrument);
         if (this.currentSynth) {
             this.currentSynth.dispose();
             this.currentSynth = null;
@@ -95,5 +101,3 @@ export class BassSynthManager {
         // Do not reset currentInstrument
     }
 }
-
-    

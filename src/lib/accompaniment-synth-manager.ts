@@ -24,7 +24,9 @@ export class AccompanimentSynthManager {
      * @param name The name of the instrument to activate ('organ', 'none', etc.).
      */
     public setInstrument(name: InstrumentName) {
+        console.log('ACCOMPANIMENT-MANAGER: setInstrument called with:', name);
         if (name === this.currentInstrument && this.isSynthCreated) {
+            console.log('ACCOMPANIMENT-MANAGER: Instrument already set, skipping creation.');
             return;
         }
 
@@ -58,6 +60,7 @@ export class AccompanimentSynthManager {
      * @returns A Tone.PolySynth instance or null if the name is not recognized.
      */
     private createSynth(name: InstrumentName) {
+        console.log('ACCOMPANIMENT-MANAGER: createSynth called for:', name);
         switch (name) {
             case 'organ':
                 this.distortion = new Tone.Distortion(0.05);
@@ -82,6 +85,7 @@ export class AccompanimentSynthManager {
     }
     
     public triggerAttackRelease(notes: string | string[], duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
+        console.log('ACCOMPANIMENT-MANAGER: triggerAttackRelease called with notes:', notes);
         if (this.currentSynth) {
             this.currentSynth.triggerAttackRelease(notes, duration, time, velocity);
         }
@@ -114,6 +118,7 @@ export class AccompanimentSynthManager {
      * This is crucial for preventing memory leaks when switching instruments or stopping playback.
      */
     public dispose() {
+        console.log('ACCOMPANIMENT-MANAGER: dispose called for', this.currentInstrument);
         this.stopEffects();
         
         if (this.currentSynth) {
@@ -132,5 +137,3 @@ export class AccompanimentSynthManager {
         // Do not reset currentInstrument, so we know what to recreate if needed
     }
 }
-
-    

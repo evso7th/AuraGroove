@@ -77,7 +77,6 @@ export function AuraGroove() {
   const soloSynthManagerRef = useRef<SoloSynthManager>();
   const accompanimentSynthManagerRef = useRef<AccompanimentSynthManager>();
   const drumPlayersRef = useRef<Tone.Players | null>(null);
-  const isWorkerInitialized = useRef(false);
 
    useEffect(() => {
     // Initialize synth managers once and store them in refs
@@ -95,7 +94,6 @@ export function AuraGroove() {
       
       switch(type) {
         case 'initialized':
-          isWorkerInitialized.current = true;
            setLoadingText("Loading Samples...");
            loadSamples();
           break;
@@ -257,7 +255,7 @@ export function AuraGroove() {
             await Tone.start();
         }
 
-        if (!musicWorkerRef.current || !isWorkerInitialized.current) {
+        if (!musicWorkerRef.current) {
             setIsInitializing(true);
             setLoadingText("Waiting for audio engine...");
             return;
@@ -501,5 +499,3 @@ export function AuraGroove() {
     </Card>
   );
 }
-
-    
