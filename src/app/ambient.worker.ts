@@ -80,8 +80,24 @@ class SoloGenerator {
     }
 }
 class AccompanimentGenerator {
+    static chordProgression = [
+        ['E2', 'G2', 'B2'],   // E minor
+        ['C2', 'E2', 'G2'],   // C major
+        ['G2', 'B2', 'D3'],   // G major
+        ['D2', 'F#2', 'A2']   // D major
+    ];
+
     static createScore(bar: number): AccompanimentNote[] {
-         return []; // Placeholder for generative logic
+         const chord = this.chordProgression[Math.floor(bar / 4) % this.chordProgression.length];
+         // Play the chord on the first beat of every 4th bar
+         if (bar % 4 === 0) {
+            return [{
+                notes: chord,
+                time: 0,
+                duration: '1n'
+            }];
+         }
+         return [];
     }
 }
 

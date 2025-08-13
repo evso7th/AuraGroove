@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -144,7 +143,6 @@ export function AuraGroove() {
             break;
         
         case 'accompaniment_score':
-            console.log('AURA-GROOVE: Received accompaniment_score from worker', data.score);
             if (accompanimentSynthManagerRef.current && data.score && data.score.length > 0) {
                 const now = Tone.now();
                 data.score.forEach((note: AccompanimentNote) => {
@@ -252,30 +250,6 @@ export function AuraGroove() {
     }
   }, [drumSettings, instruments, bpm, score, isReady, isPlaying, updateWorkerSettings]);
   
-  useEffect(() => {
-    if (drumPlayersRef.current) {
-        drumPlayersRef.current.volume.value = Tone.gainToDb(drumSettings.volume);
-    }
-  }, [drumSettings.volume]);
-
-  useEffect(() => {
-    if (bassSynthManagerRef.current && isPlaying) {
-        bassSynthManagerRef.current.setInstrument(instruments.bass);
-    }
-  }, [instruments.bass, isPlaying]);
-
-  useEffect(() => {
-    if (soloSynthManagerRef.current && isPlaying) {
-        soloSynthManagerRef.current.setInstrument(instruments.solo);
-    }
-  }, [instruments.solo, isPlaying]);
-
-  useEffect(() => {
-    if (accompanimentSynthManagerRef.current && isPlaying) {
-        accompanimentSynthManagerRef.current.setInstrument(instruments.accompaniment);
-    }
-  }, [instruments.accompaniment, isPlaying]);
-
 
   const handlePlay = useCallback(async () => {
     try {
