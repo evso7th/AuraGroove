@@ -53,7 +53,7 @@ export class BassSynthManager {
                         sustain: 0.1,
                         release: 0.4,
                     },
-                    volume: -18,
+                    volume: -8,
                 }).toDestination();
             default:
                 return null;

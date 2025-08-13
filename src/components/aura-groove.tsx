@@ -88,17 +88,6 @@ export function AuraGroove() {
     const worker = new Worker('/workers/ambient.worker.js');
     musicWorkerRef.current = worker;
 
-    // 2. Initialize Synths
-    if (!soloSynthManagerRef.current) {
-        soloSynthManagerRef.current = new SoloSynthManager();
-    }
-     if (!accompanimentSynthManagerRef.current) {
-        accompanimentSynthManagerRef.current = new AccompanimentSynthManager();
-    }
-    if (!bassSynthManagerRef.current) {
-        bassSynthManagerRef.current = new BassSynthManager();
-    }
-
     const handleMessage = (event: MessageEvent) => {
       const { type, data, error } = event.data;
       
@@ -220,10 +209,10 @@ export function AuraGroove() {
   }, [instruments, drumSettings, bpm, score, isPlaying, isInitializing]);
 
   useEffect(() => {
-    if (isReady) { // Only update worker if it's ready
+    if (isReady && isPlaying) { 
       updateWorkerSettings();
     }
-  }, [drumSettings, instruments, bpm, score, isReady, updateWorkerSettings]);
+  }, [drumSettings, instruments, bpm, score, isReady, isPlaying, updateWorkerSettings]);
   
   useEffect(() => {
     if (drumPlayersRef.current) {
@@ -261,6 +250,17 @@ export function AuraGroove() {
             setLoadingText("Waiting for audio engine...");
             return;
         }
+
+        if (!soloSynthManagerRef.current) {
+            soloSynthManagerRef.current = new SoloSynthManager();
+        }
+        if (!accompanimentSynthManagerRef.current) {
+            accompanimentSynthManagerRef.current = new AccompanimentSynthManager();
+        }
+        if (!bassSynthManagerRef.current) {
+            bassSynthManagerRef.current = new BassSynthManager();
+        }
+
 
         // Initialize and load samples only when play is pressed for the first time
         if (!isWorkerInitialized.current) {
