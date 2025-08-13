@@ -92,6 +92,16 @@ export class AccompanimentSynthManager {
     public releaseAll() {
         this.currentSynth?.releaseAll();
     }
+    
+    /**
+     * Smoothly fades out the volume of the synth over the given duration.
+     * @param duration The fade-out time in seconds.
+     */
+    public fadeOut(duration: number) {
+        if (this.currentSynth) {
+            this.currentSynth.volume.rampTo(-Infinity, duration);
+        }
+    }
 
     /**
      * Disposes of the current synth to free up resources.

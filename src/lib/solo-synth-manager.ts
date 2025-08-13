@@ -58,7 +58,9 @@ export class SoloSynthManager {
     private createSynth(name: InstrumentName) {
         switch (name) {
             case 'organ':
-                this.currentSynth = new Tone.PolySynth(Tone.Synth, {
+                 this.distortion = new Tone.Distortion(0.05);
+                 this.tremolo = new Tone.Tremolo(2, 0.2);
+                 this.currentSynth = new Tone.PolySynth(Tone.Synth, {
                      oscillator: {
                         type: 'sawtooth',
                     },
@@ -69,11 +71,8 @@ export class SoloSynthManager {
                         release: 0.4,
                     },
                      volume: -15,
-                });
-                this.distortion = new Tone.Distortion(0.05);
-                this.tremolo = new Tone.Tremolo(2, 0.2);
-                this.currentSynth.chain(this.distortion, this.tremolo, Tone.Destination);
-                break;
+                 }).chain(this.distortion, this.tremolo, Tone.Destination);
+                 break;
             default:
                 this.currentSynth = null;
         }
@@ -91,6 +90,16 @@ export class SoloSynthManager {
      */
     public releaseAll() {
         this.currentSynth?.releaseAll();
+    }
+
+    /**
+     * Smoothly fades out the volume of the synth over the given duration.
+     * @param duration The fade-out time in seconds.
+     */
+    public fadeOut(duration: number) {
+        if (this.currentSynth) {
+            this.currentSynth.volume.rampTo(-Infinity, duration);
+        }
     }
 
     /**

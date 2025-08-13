@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -305,9 +306,9 @@ export function AuraGroove() {
   }, [drumSettings, instruments, bpm, score, toast]);
 
   const handleStop = useCallback(() => {
-    soloSynthManagerRef.current?.releaseAll();
+    soloSynthManagerRef.current?.fadeOut(1);
     bassSynthManagerRef.current?.releaseAll();
-    accompanimentSynthManagerRef.current?.releaseAll();
+    accompanimentSynthManagerRef.current?.fadeOut(1);
     
     soloSynthManagerRef.current?.stopEffects();
     accompanimentSynthManagerRef.current?.stopEffects();
