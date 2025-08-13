@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import * as Tone from 'tone';
-import { Drum, Loader2, Music, Pause, Speaker, FileMusic, Sparkles } from "lucide-react";
+import { Drum, Loader2, Music, Pause, Speaker, FileMusic } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -194,7 +194,7 @@ export function AuraGroove() {
             const workerSamples: Record<string, ArrayBuffer> = {};
             const mainThreadSampleMap: Record<string, AudioBuffer> = {};
             
-             if (!Tone.context) {
+             if (!Tone.context || Tone.context.state !== 'running') {
                 await Tone.start();
             }
             
@@ -298,12 +298,15 @@ export function AuraGroove() {
 
         if (!soloSynthManagerRef.current) {
             soloSynthManagerRef.current = new SoloSynthManager();
+            soloSynthManagerRef.current.setInstrument(instruments.solo);
         }
         if (!accompanimentSynthManagerRef.current) {
             accompanimentSynthManagerRef.current = new AccompanimentSynthManager();
+            accompanimentSynthManagerRef.current.setInstrument(instruments.accompaniment);
         }
         if (!bassSynthManagerRef.current) {
             bassSynthManagerRef.current = new BassSynthManager();
+            bassSynthManagerRef.current.setInstrument(instruments.bass);
         }
 
         setIsInitializing(true);
@@ -318,19 +321,8 @@ export function AuraGroove() {
             data: { drumSettings, instruments, bpm, score }
         });
         
-        if (bassSynthManagerRef.current) {
-            bassSynthManagerRef.current.setInstrument(instruments.bass);
-        }
-        
-        if (soloSynthManagerRef.current) {
-            soloSynthManagerRef.current.setInstrument(instruments.solo);
-            soloSynthManagerRef.current.startEffects();
-        }
-        
-         if (accompanimentSynthManagerRef.current) {
-            accompanimentSynthManagerRef.current.setInstrument(instruments.accompaniment);
-            accompanimentSynthManagerRef.current.startEffects();
-        }
+        soloSynthManagerRef.current.startEffects();
+        accompanimentSynthManagerRef.current.startEffects();
 
     } catch (error) {
         console.error("Failed to prepare audio:", error);
