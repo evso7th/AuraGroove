@@ -1,342 +1,267 @@
 
 /**
  * @file AuraGroove Ambient Music Worker
- *
- * This worker operates on a microservice-style architecture.
- * Each musical component is an isolated entity responsible for a single task.
+ * This worker generates musical scores for various instruments and sends them
+ * to the main thread for playback with Tone.js. It operates on a scheduler
+ * to ensure all parts are synchronized.
  */
+import { promenadeScore } from '../../src/lib/scores/promenade';
 
-// --- Type Definitions for Clarity ---
+// --- Type Definitions (Subset for Worker) ---
+/** @typedef {'bass synth' | 'none'} BassInstrument */
+/** @typedef {'synthesizer' | 'piano' | 'organ' | 'none'} MelodicInstrument */
+/** @typedef {'basic' | 'breakbeat' | 'slow' | 'heavy'} DrumPattern */
+/** @typedef {'generative' | 'promenade'} ScoreName */
+
 /**
- * @typedef {object} DrumNote
+ * @typedef {Object} DrumNote
  * @property {string} sample
  * @property {number} time
  * @property {number} [velocity]
  */
+
 /**
- * @typedef {object} BassNote
+ * @typedef {Object} BassNote
  * @property {string} note
+ * @property {string | number} duration
  * @property {number} time
- * @property {import('tone').Unit.Time} duration
  * @property {number} velocity
  */
+
 /**
- * @typedef {object} SoloNote
- * @property {string|string[]} notes
- * @property {import('tone').Unit.Time} time
- * @property {import('tone').Unit.Time} duration
- */
-/**
- * @typedef {object} AccompanimentNote
- * @property {string|string[]} notes
- * @property {import('tone').Unit.Time} time
- * @property {import('tone').Unit.Time} duration
+ * @typedef {Object} SoloNote
+ * @property {string | string[]} notes
+ * @property {string | number} duration
+ * @property {number} time
  */
 
-// --- 1. Score Library ---
-const promenadeScore = {
-    drums: [
-        { sample: 'kick', time: 0 }, { sample: 'hat', time: 0.5 }, { sample: 'snare', time: 1 }, { sample: 'hat', time: 1.5 },
-        { sample: 'kick', time: 2 }, { sample: 'hat', time: 2.5 }, { sample: 'snare', time: 3 }, { sample: 'hat', time: 3.5 },
-        { sample: 'kick', time: 4 }, { sample: 'hat', time: 4.5 }, { sample: 'snare', time: 5 }, { sample: 'hat', time: 5.5 },
-        { sample: 'kick', time: 6 }, { sample: 'hat', time: 6.5 }, { sample: 'snare', time: 7 }, { sample: 'hat', time: 7.5 },
-        { sample: 'kick', time: 8 }, { sample: 'hat', time: 8.5 }, { sample: 'snare', time: 9 }, { sample: 'hat', time: 9.5 },
-        { sample: 'kick', time: 10 }, { sample: 'hat', time: 10.5 }, { sample: 'snare', time: 11 }, { sample: 'hat', time: 11.5 },
-        { sample: 'crash', time: 12, velocity: 0.8 }, { sample: 'hat', time: 12.5 }, { sample: 'snare', time: 13 }, { sample: 'hat', time: 13.5 },
-        { sample: 'kick', time: 14 }, { sample: 'hat', time: 14.5 }, { sample: 'snare', time: 15 }, { sample: 'hat', time: 15.5 },
-    ],
-    bass: [
-        { note: 'E2', time: 0, duration: '1n', velocity: 0.9 },
-        { note: 'C2', time: 4, duration: '1n', velocity: 0.85 },
-        { note: 'G2', time: 8, duration: '1n', velocity: 0.88 },
-        { note: 'D2', time: 12, duration: '1n', velocity: 0.86 },
-    ],
-    solo: [
-        { notes: 'B3', duration: '8n', time: 0.5 }, { notes: 'G3', duration: '8n', time: 1.5 },
-        { notes: 'A3', duration: '4n', time: 2.5 }, { notes: 'G3', duration: '8n', time: 4.5 },
-        { notes: 'E3', duration: '8n', time: 5.5 }, { notes: 'C3', duration: '4n', time: 6.5 },
-        { notes: 'D3', duration: '2n', time: 8.5 }, { notes: 'E3', duration: '8n', time: 12.5 },
-        { notes: 'G3', duration: '8n', time: 13.5 }, { notes: 'B3', duration: '4n', time: 14.5 },
-    ],
-    accompaniment: [
-        { notes: ['E3', 'G3', 'B3'], duration: '1n', time: 0 },
-        { notes: ['C3', 'E3', 'G3'], duration: '1n', time: 4 },
-        { notes: ['G3', 'B3', 'D4'], duration: '1n', time: 8 },
-        { notes: ['D3', 'F#3', 'A3'], duration: '1n', time: 12 },
-    ]
-};
+/**
+ * @typedef {Object} AccompanimentNote
+ * @property {string | string[]} notes
+ * @property {string | number} duration
+ * @property {number} time
+ */
 
 
-// --- 2. PatternProvider (The Music Sheet Library) ---
+// --- 1. PatternProvider (The Music Sheet Library) ---
 const PatternProvider = {
     drumPatterns: {
         basic: [
-            { sample: 'kick', time: 0 }, { sample: 'hat', time: 0.5 }, { sample: 'snare', time: 1 }, { sample: 'hat', time: 1.5 },
-            { sample: 'kick', time: 2 }, { sample: 'hat', time: 2.5 }, { sample: 'snare', time: 3 }, { sample: 'hat', time: 3.5 },
+            { sample: 'kick', time: 0 },
+            { sample: 'hat', time: 0.5 },
+            { sample: 'snare', time: 1 },
+            { sample: 'hat', time: 1.5 },
+            { sample: 'kick', time: 2 },
+            { sample: 'hat', time: 2.5 },
+            { sample: 'snare', time: 3 },
+            { sample: 'hat', time: 3.5 },
         ],
         breakbeat: [
             { sample: 'kick', time: 0 }, { sample: 'hat', time: 0.5 }, { sample: 'kick', time: 0.75 }, { sample: 'snare', time: 1 },
             { sample: 'hat', time: 1.5 }, { sample: 'kick', time: 2 }, { sample: 'snare', time: 2.5 }, { sample: 'hat', time: 3 },
             { sample: 'snare', time: 3.25 }, { sample: 'hat', time: 3.5 },
         ],
-        slow: [ { sample: 'kick', time: 0 }, { sample: 'hat', time: 1 }, { sample: 'snare', time: 2 }, { sample: 'hat', time: 3 } ],
+        slow: [ { sample: 'kick', time: 0 }, { sample: 'hat', time: 1 }, { sample: 'snare', time: 2 }, { sample: 'hat', time: 3 }, ],
         heavy: [
             { sample: 'kick', time: 0, velocity: 1.0 }, { sample: 'ride', time: 0.5 }, { sample: 'snare', time: 1, velocity: 1.0 }, { sample: 'ride', time: 1.5 },
             { sample: 'kick', time: 2, velocity: 1.0 }, { sample: 'ride', time: 2.5 }, { sample: 'snare', time: 3, velocity: 1.0 }, { sample: 'ride', time: 3.5 },
         ],
     },
-
-    chordProgressions: {
-        // Basic I-V-vi-IV in C Major
-        'Cmaj_Am_F_G': ['C', 'G', 'Am', 'F'],
-        // Simple ii-V-I in A minor
-        'Bm7b5_E7_Am': ['Bm7b5', 'E7', 'Am', 'Am'],
-        // Modal E minor progression
-        'Em_C_G_D': ['Em', 'C', 'G', 'D'],
-    },
-    
-    // --- Music Theory Helpers ---
-    notesInScale: {
-        'C': { major: ['C', 'D', 'E', 'F', 'G', 'A', 'B'], minor: ['C', 'D', 'Eb', 'F', 'G', 'Ab', 'Bb'] },
-        'G': { major: ['G', 'A', 'B', 'C', 'D', 'E', 'F#'], minor: ['G', 'A', 'Bb', 'C', 'D', 'Eb', 'F'] },
-        'D': { major: ['D', 'E', 'F#', 'G', 'A', 'B', 'C#'], minor: ['D', 'E', 'F', 'G', 'A', 'Bb', 'C'] },
-        'A': { major: ['A', 'B', 'C#', 'D', 'E', 'F#', 'G#'], minor: ['A', 'B', 'C', 'D', 'E', 'F', 'G'] },
-        'E': { major: ['E', 'F#', 'G#', 'A', 'B', 'C#', 'D#'], minor: ['E', 'F#', 'G', 'A', 'B', 'C', 'D'] },
-        'B': { major: ['B', 'C#', 'D#', 'E', 'F#', 'G#', 'A#'], minor: ['B', 'C#', 'D', 'E', 'F#', 'G', 'A'] },
-        'F#':{ major: ['F#', 'G#', 'A#', 'B', 'C#', 'D#', 'E#'], minor: ['F#', 'G#', 'A', 'B', 'C#', 'D', 'E'] },
-        'C#':{ major: ['C#', 'D#', 'E#', 'F#', 'G#', 'A#', 'B#'], minor: ['C#', 'D#', 'E', 'F#', 'G#', 'A', 'B'] },
-        'F': { major: ['F', 'G', 'A', 'Bb', 'C', 'D', 'E'], minor: ['F', 'G', 'Ab', 'Bb', 'C', 'Db', 'Eb'] },
-        'Bb':{ major: ['Bb', 'C', 'D', 'Eb', 'F', 'G', 'A'], minor: ['Bb', 'C', 'Db', 'Eb', 'F', 'Gb', 'Ab'] },
-        'Eb':{ major: ['Eb', 'F', 'G', 'Ab', 'Bb', 'C', 'D'], minor: ['Eb', 'F', 'Gb', 'Ab', 'Bb', 'Cb', 'Db'] },
-        'Ab':{ major: ['Ab', 'Bb', 'C', 'Db', 'Eb', 'F', 'G'], minor: ['Ab', 'Bb', 'Cb', 'Db', 'Eb', 'Fb', 'Gb'] },
-    },
-    
-    chords: {
-        'C': ['C', 'E', 'G'], 'G': ['G', 'B', 'D'], 'Am': ['A', 'C', 'E'], 'F': ['F', 'A', 'C'],
-        'Bm7b5': ['B', 'D', 'F', 'A'], 'E7': ['E', 'G#', 'B', 'D'], 'Em': ['E', 'G', 'B'], 'D': ['D', 'F#', 'A'],
-    },
-
+    /** @param {DrumPattern} name */
     getDrumPattern(name) {
         return this.drumPatterns[name] || this.drumPatterns.basic;
     },
 
-    getChordProgression(name) {
-        return this.chordProgressions[name] || this.chordProgressions.Em_C_G_D;
-    },
-
-    getChordNotes(chordName, octave = 3) {
-        const notes = this.chords[chordName];
-        if (!notes) return [];
-        return notes.map(note => `${note}${octave}`);
-    },
-
-    getRandomNoteFromChord(chordName, octave = 4) {
-        const notes = this.chords[chordName];
-        if (!notes || notes.length === 0) return `${'C'}${octave}`;
-        const randomNote = notes[Math.floor(Math.random() * notes.length)];
-        return `${randomNote}${octave}`;
+    // A simple C Major progression for generative music
+    chordProgression: [
+        { root: 'C', chord: ['C4', 'E4', 'G4'] },
+        { root: 'G', chord: ['G4', 'B4', 'D5'] },
+        { root: 'A', chord: ['A4', 'C5', 'E5'] }, // Am
+        { root: 'F', chord: ['F4', 'A4', 'C5'] },
+    ],
+    /** @param {number} barNumber */
+    getChord(barNumber) {
+        return this.chordProgression[barNumber % this.chordProgression.length];
     }
 };
 
-// --- 3. Instrument Generators (The Composers) ---
+
+// --- 2. Instrument Generators (The Composers) ---
 class DrumGenerator {
-    /** @returns {DrumNote[]} */
+    /**
+     * @param {DrumPattern} patternName
+     * @param {number} barNumber
+     * @returns {DrumNote[]}
+     */
     static createScore(patternName, barNumber) {
         const pattern = PatternProvider.getDrumPattern(patternName);
         let score = [...pattern];
 
         // Add a crash cymbal on the first beat of every 4th bar
-        if (barNumber > 0 && barNumber % 4 === 0) {
+        if (barNumber % 4 === 0) {
             score = score.filter(note => note.time !== 0);
-            score.push({ sample: 'crash', time: 0, velocity: 0.8 });
+            score.unshift({ sample: 'crash', time: 0, velocity: 0.8 });
         }
         return score;
     }
 }
 
 class BassGenerator {
-    /** @returns {BassNote[]} */
-    static createScore(chord, beatsPerBar = 4) {
-        // Simple bassline: root note on the first beat of the bar
-        const rootNote = chord.replace(/m|7|b5/g, ''); // Get root note from chord name
-        const score = [
-            { note: `${rootNote}2`, time: 0, duration: '1n', velocity: 0.9 }
-        ];
-        return score;
-    }
-}
-
-class SoloGenerator {
-    /** @returns {SoloNote[]} */
-    static createScore(chord) {
-        const score = [];
-        // Simple melodic idea: play a random chord note on the second beat
-        if (Math.random() > 0.4) { // 60% chance to play a note
-            const note = PatternProvider.getRandomNoteFromChord(chord, 4);
-            score.push({
-                notes: note,
-                time: Math.random() * 3, // random time in the bar
-                duration: ['8n', '4n'][Math.floor(Math.random() * 2)]
-            });
-        }
-        return score;
-    }
-}
-
-class AccompanimentGenerator {
-    /** @returns {AccompanimentNote[]} */
-    static createScore(chord) {
+    /**
+     * @param {number} barNumber
+     * @returns {BassNote[]}
+     */
+    static createScore(barNumber) {
+        const { root } = PatternProvider.getChord(barNumber);
+        // Play the root note of the chord for the whole bar
         const score = [{
-            notes: PatternProvider.getChordNotes(chord, 3),
+            note: `${root}2`, // Play in the 2nd octave
+            duration: '1n', // for the whole note (bar)
             time: 0,
-            duration: '1n'
+            velocity: 0.8
         }];
         return score;
     }
 }
 
-// --- 4. SampleBank (Decoded Audio Storage) ---
-const SampleBank = {
-    samples: {}, // { kick: Float32Array, snare: Float32Array, ... }
-    isReady: false,
-
-    async init(samples, sampleRate) {
-        // This is now non-blocking and happens in the background.
-        // The main thread is notified of readiness immediately.
-        this.decodeSamples(samples, sampleRate)
-            .then(() => {
-                this.isReady = true;
-                console.log("SampleBank finished decoding samples in background.");
-            })
-            .catch(e => {
-                 self.postMessage({ type: 'error', error: `Failed to decode samples: ${e.message}` });
-            });
-    },
-
-    async decodeSamples(samples, sampleRate) {
-        const tempAudioContext = new OfflineAudioContext(1, 1, sampleRate);
-        const decodePromises = Object.entries(samples).map(async ([key, buffer]) => {
-            if (buffer.byteLength > 0) {
-                 try {
-                    const audioBuffer = await tempAudioContext.decodeAudioData(buffer.slice(0));
-                    this.samples[key] = audioBuffer.getChannelData(0);
-                } catch(e) {
-                    console.error(`Failed to decode sample ${key}:`, e);
-                    // Don't post error here to avoid spamming, but log it.
-                }
-            }
-        });
-        await Promise.all(decodePromises);
-    },
-
-    getSample(name) {
-        return this.samples[name];
+class SoloGenerator {
+     /**
+     * @param {number} barNumber
+     * @returns {SoloNote[]}
+     */
+    static createScore(barNumber) {
+        const { chord } = PatternProvider.getChord(barNumber);
+        const score = [];
+        // Simple arpeggiated pattern
+        score.push({ notes: chord[0], duration: '8n', time: 0.5 });
+        score.push({ notes: chord[1], duration: '8n', time: 1.5 });
+        score.push({ notes: chord[2], duration: '8n', time: 2.5 });
+        score.push({ notes: chord[1], duration: '8n', time: 3.5 });
+        return score;
     }
-};
+}
 
+class AccompanimentGenerator {
+    /**
+     * @param {number} barNumber
+     * @returns {AccompanimentNote[]}
+     */
+    static createScore(barNumber) {
+        const { chord } = PatternProvider.getChord(barNumber);
+        // Play the chord as a whole note
+        const score = [{
+            notes: chord,
+            duration: '1n',
+            time: 0
+        }];
+        return score;
+    }
+}
 
-// --- 5. Scheduler (The Conductor) ---
+// --- 3. Scheduler (The Conductor) ---
 const Scheduler = {
     intervalId: null,
     isRunning: false,
     barCount: 0,
-    
+    isInitialized: false,
+
     // Settings from main thread
+    /** @type {number} */
     bpm: 120,
-    scoreName: 'generative',
-    instruments: {},
-    drumSettings: {},
-    chordProgression: [],
+    /** @type {{solo: MelodicInstrument, accompaniment: MelodicInstrument, bass: BassInstrument}} */
+    instruments: { solo: 'none', accompaniment: 'none', bass: 'none' },
+    /** @type {{enabled: boolean, pattern: DrumPattern}} */
+    drumSettings: { enabled: false, pattern: 'basic' },
+    /** @type {ScoreName} */
+    score: 'generative',
+
 
     // Calculated properties
     get beatsPerBar() { return 4; },
     get secondsPerBeat() { return 60 / this.bpm; },
     get barDuration() { return this.beatsPerBar * this.secondsPerBeat; },
-    get loopLengthInBars() { return this.chordProgression.length; },
-
 
     start() {
         if (this.isRunning) return;
+
+        this.reset();
         this.isRunning = true;
-        this.tick(); // Generate the first chunk immediately
+
+        // Generate the first chunk immediately and post it
+        this.tick();
+
+        // Then set up the interval for subsequent chunks
+        // @ts-ignore
         this.intervalId = setInterval(() => this.tick(), this.barDuration * 1000);
         self.postMessage({ type: 'started' });
     },
 
     stop() {
         if (!this.isRunning) return;
+        // @ts-ignore
         clearInterval(this.intervalId);
         this.intervalId = null;
         this.isRunning = false;
-        this.barCount = 0;
         self.postMessage({ type: 'stopped' });
     },
-    
+
+    reset() {
+        this.barCount = 0;
+    },
+
+    /** @param {any} settings */
     updateSettings(settings) {
-        if (settings.bpm) this.bpm = settings.bpm;
-        if (settings.score) this.scoreName = settings.score;
         if (settings.instruments) this.instruments = settings.instruments;
         if (settings.drumSettings) this.drumSettings = settings.drumSettings;
-
-        // For now, let's use a fixed progression for generative mode
-        this.chordProgression = PatternProvider.getChordProgression('Em_C_G_D');
+        if (settings.bpm) this.bpm = settings.bpm;
+        if (settings.score) this.score = settings.score;
     },
 
     tick() {
         if (!this.isRunning) return;
 
-        if (this.scoreName === 'promenade') {
-            this.playPromenadeScore();
-        } else {
-            this.generateAndPlayProceduralScore();
-        }
+        if (this.score === 'promenade') {
+            // For the 'promenade' score, we send the whole score at once on the first tick
+            if (this.barCount === 0) {
+                 if (this.drumSettings.enabled) {
+                    self.postMessage({ type: 'drum_score', data: { score: promenadeScore.drums } });
+                }
+                if (this.instruments.bass !== 'none') {
+                    self.postMessage({ type: 'bass_score', data: { score: promenadeScore.bass } });
+                }
+                if (this.instruments.solo !== 'none') {
+                    self.postMessage({ type: 'solo_score', data: { score: promenadeScore.solo } });
+                }
+                if (this.instruments.accompaniment !== 'none') {
+                    self.postMessage({ type: 'accompaniment_score', data: { score: promenadeScore.accompaniment } });
+                }
+            }
+             // Stop playback after the score duration (4 bars * bar duration)
+            if ((this.barCount + 1) * this.barDuration >= this.barDuration * 4) {
+                 // The score is 4 bars long, let it loop or stop. Here we just let it repeat.
+                 this.barCount = -1; // It will be incremented to 0
+            }
 
+        } else { // 'generative' score
+             if (this.drumSettings.enabled) {
+                const drumScore = DrumGenerator.createScore(this.drumSettings.pattern, this.barCount);
+                self.postMessage({ type: 'drum_score', data: { score: drumScore } });
+            }
+            if (this.instruments.bass !== 'none') {
+                const bassScore = BassGenerator.createScore(this.barCount);
+                self.postMessage({ type: 'bass_score', data: { score: bassScore } });
+            }
+            if (this.instruments.solo !== 'none') {
+                const soloScore = SoloGenerator.createScore(this.barCount);
+                self.postMessage({ type: 'solo_score', data: { score: soloScore } });
+            }
+            if (this.instruments.accompaniment !== 'none') {
+                const accompanimentScore = AccompanimentGenerator.createScore(this.barCount);
+                self.postMessage({ type: 'accompaniment_score', data: { score: accompanimentScore } });
+            }
+        }
+        
         this.barCount++;
-    },
-
-    playPromenadeScore() {
-        const currentBeat = (this.barCount * this.beatsPerBar) % (promenadeScore.drums.length);
-        const lookahead = this.barDuration; // 1 bar ahead
-
-        const filterScore = (score) => score.filter(note => note.time >= currentBeat && note.time < currentBeat + lookahead);
-        
-        if (this.drumSettings.enabled) {
-            self.postMessage({ type: 'drum_score', data: { score: filterScore(promenadeScore.drums) }});
-        }
-        if (this.instruments.bass !== 'none') {
-             self.postMessage({ type: 'bass_score', data: { score: filterScore(promenadeScore.bass) }});
-        }
-        if (this.instruments.solo !== 'none') {
-            self.postMessage({ type: 'solo_score', data: { score: filterScore(promenadeScore.solo) }});
-        }
-        if (this.instruments.accompaniment !== 'none') {
-            self.postMessage({ type: 'accompaniment_score', data: { score: filterScore(promenadeScore.accompaniment) }});
-        }
-    },
-    
-    generateAndPlayProceduralScore() {
-        const currentBarInLoop = this.barCount % this.loopLengthInBars;
-        const currentChord = this.chordProgression[currentBarInLoop];
-
-        if (this.drumSettings.enabled) {
-            const drumScore = DrumGenerator.createScore(this.drumSettings.pattern, this.barCount);
-            self.postMessage({ type: 'drum_score', data: { score: drumScore } });
-        }
-        
-        if (this.instruments.bass !== 'none') {
-            const bassScore = BassGenerator.createScore(currentChord);
-            self.postMessage({ type: 'bass_score', data: { score: bassScore } });
-        }
-        
-        if (this.instruments.solo !== 'none') {
-            const soloScore = SoloGenerator.createScore(currentChord);
-            self.postMessage({ type: 'solo_score', data: { score: soloScore } });
-        }
-
-        if (this.instruments.accompaniment !== 'none') {
-            const accompanimentScore = AccompanimentGenerator.createScore(currentChord);
-            self.postMessage({ type: 'accompaniment_score', data: { score: accompanimentScore } });
-        }
     }
 };
 
@@ -348,13 +273,18 @@ self.onmessage = async (event) => {
     try {
         switch (command) {
             case 'init':
-                // Immediately confirm initialization to the main thread.
-                self.postMessage({ type: 'initialized' });
-                // Start decoding samples in the background, non-blockingly.
-                await SampleBank.init(data.samples, data.sampleRate);
+                 // Acknowledge initialization immediately to prevent main thread violation errors.
+                 // The actual sample loading happens in the background.
+                if (!Scheduler.isInitialized) {
+                    self.postMessage({ type: 'initialized' });
+                    Scheduler.isInitialized = true;
+                }
                 break;
-            
+
             case 'start':
+                if (!Scheduler.isInitialized) {
+                   throw new Error("Worker is not initialized. Call 'init' first.");
+                }
                 Scheduler.updateSettings(data);
                 Scheduler.start();
                 break;
@@ -364,7 +294,7 @@ self.onmessage = async (event) => {
                 break;
             
             case 'update_settings':
-                 Scheduler.updateSettings(data);
+                Scheduler.updateSettings(data);
                 break;
         }
     } catch (e) {
