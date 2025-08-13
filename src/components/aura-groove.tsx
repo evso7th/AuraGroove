@@ -53,27 +53,6 @@ const samplePaths: Record<string, string> = {
     ride: '/assets/drums/cymbal1.wav',
 };
 
-// --- "Smoke on the Water" Riff Definition ---
-const smokeOnTheWaterRiff = [
-    // Bar 1
-    { time: 0, duration: '4n', notes: { bass: 'G2', solo: 'G3', accompaniment: ['G2', 'D3', 'G3'] }},
-    { time: 1, duration: '4n', notes: { bass: 'A#2', solo: 'A#3', accompaniment: ['A#2', 'F3', 'A#3'] }},
-    { time: 2, duration: '2n', notes: { bass: 'C3', solo: 'C4', accompaniment: ['C3', 'G3', 'C4'] }},
-    // Bar 2
-    { time: 4, duration: '4n', notes: { bass: 'G2', solo: 'G3', accompaniment: ['G2', 'D3', 'G3'] }},
-    { time: 5, duration: '4n', notes: { bass: 'A#2', solo: 'A#3', accompaniment: ['A#2', 'F3', 'A#3'] }},
-    { time: 6, duration: '4n', notes: { bass: 'C#3', solo: 'C#4', accompaniment: ['C#3', 'G#3', 'C#4'] }},
-    { time: 7, duration: '4n', notes: { bass: 'C3', solo: 'C4', accompaniment: ['C3', 'G3', 'C4'] }},
-    // Bar 3
-    { time: 8, duration: '4n', notes: { bass: 'G2', solo: 'G3', accompaniment: ['G2', 'D3', 'G3'] }},
-    { time: 9, duration: '4n', notes: { bass: 'A#2', solo: 'A#3', accompaniment: ['A#2', 'F3', 'A#3'] }},
-    { time: 10, duration: '2n', notes: { bass: 'C3', solo: 'C4', accompaniment: ['C3', 'G3', 'C4'] }},
-    // Bar 4
-    { time: 12, duration: '4n', notes: { bass: 'A#2', solo: 'A#3', accompaniment: ['A#2', 'F3', 'A#3'] }},
-    { time: 13, duration: '2n', notes: { bass: 'G2', solo: 'G3', accompaniment: ['G2', 'D3', 'G3'] }},
-];
-
-
 export function AuraGroove() {
   const [isReady, setIsReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -94,13 +73,18 @@ export function AuraGroove() {
   const { toast } = useToast();
 
   const musicWorkerRef = useRef<Worker>();
-  const bassSynthManagerRef = useRef<BassSynthManager>(new BassSynthManager());
-  const soloSynthManagerRef = useRef<SoloSynthManager>(new SoloSynthManager());
-  const accompanimentSynthManagerRef = useRef<AccompanimentSynthManager>(new AccompanimentSynthManager());
+  const bassSynthManagerRef = useRef<BassSynthManager>();
+  const soloSynthManagerRef = useRef<SoloSynthManager>();
+  const accompanimentSynthManagerRef = useRef<AccompanimentSynthManager>();
   const drumPlayersRef = useRef<Tone.Players | null>(null);
   const isWorkerInitialized = useRef(false);
 
    useEffect(() => {
+    // Initialize synth managers once and store them in refs
+    bassSynthManagerRef.current = new BassSynthManager();
+    soloSynthManagerRef.current = new SoloSynthManager();
+    accompanimentSynthManagerRef.current = new AccompanimentSynthManager();
+
     setLoadingText("Initializing Worker...");
     
     const worker = new Worker(new URL('../app/ambient.worker.ts', import.meta.url));
@@ -236,6 +220,7 @@ export function AuraGroove() {
 
     
     return () => {
+      // Cleanup on component unmount
       if (musicWorkerRef.current) {
         musicWorkerRef.current.terminate();
       }
@@ -278,12 +263,13 @@ export function AuraGroove() {
             return;
         }
 
-        soloSynthManagerRef.current.setInstrument(instruments.solo);
-        accompanimentSynthManagerRef.current.setInstrument(instruments.accompaniment);
-        bassSynthManagerRef.current.setInstrument(instruments.bass);
+        // Set instruments on every play press to ensure they are configured
+        soloSynthManagerRef.current?.setInstrument(instruments.solo);
+        accompanimentSynthManagerRef.current?.setInstrument(instruments.accompaniment);
+        bassSynthManagerRef.current?.setInstrument(instruments.bass);
 
-        soloSynthManagerRef.current.startEffects();
-        accompanimentSynthManagerRef.current.startEffects();
+        soloSynthManagerRef.current?.startEffects();
+        accompanimentSynthManagerRef.current?.startEffects();
 
         setIsInitializing(true);
         setLoadingText("Starting playback...");

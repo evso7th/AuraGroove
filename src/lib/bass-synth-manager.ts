@@ -12,6 +12,7 @@ type InstrumentName = Instruments['bass'];
 export class BassSynthManager {
     private currentSynth: Tone.MonoSynth | null = null;
     private currentInstrument: InstrumentName | null = null;
+    private isSynthCreated = false;
 
     constructor() {}
 
@@ -21,7 +22,7 @@ export class BassSynthManager {
      * @param name The name of the instrument to activate.
      */
     public setInstrument(name: InstrumentName) {
-        if (name === this.currentInstrument && this.currentSynth) {
+        if (name === this.currentInstrument && this.isSynthCreated) {
             return;
         }
         
@@ -33,6 +34,7 @@ export class BassSynthManager {
         }
 
         this.currentSynth = this.createSynth(name);
+        this.isSynthCreated = true;
     }
 
     /**
@@ -89,7 +91,8 @@ export class BassSynthManager {
             this.currentSynth.dispose();
             this.currentSynth = null;
         }
-        this.currentInstrument = null;
+        this.isSynthCreated = false;
+        // Do not reset currentInstrument
     }
 }
 

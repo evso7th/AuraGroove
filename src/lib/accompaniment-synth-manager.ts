@@ -14,6 +14,7 @@ export class AccompanimentSynthManager {
     private currentInstrument: InstrumentName = 'none';
     private distortion: Tone.Distortion | null = null;
     private tremolo: Tone.Tremolo | null = null;
+    private isSynthCreated = false;
 
     constructor() {}
 
@@ -23,11 +24,11 @@ export class AccompanimentSynthManager {
      * @param name The name of the instrument to activate ('organ', 'none', etc.).
      */
     public setInstrument(name: InstrumentName) {
-        if (name === this.currentInstrument && this.currentSynth) {
+        if (name === this.currentInstrument && this.isSynthCreated) {
             return;
         }
 
-        this.dispose(); // Clean up the previous synth
+        this.dispose(); 
         this.currentInstrument = name;
 
         if (name === 'none') {
@@ -35,10 +36,11 @@ export class AccompanimentSynthManager {
         }
 
         this.createSynth(name);
+        this.isSynthCreated = true;
     }
     
     public startEffects() {
-        if (this.currentInstrument === 'organ' && this.tremolo && this.tremolo.state === 'stopped') {
+        if (this.tremolo && this.tremolo.state === 'stopped') {
             this.tremolo.start();
         }
     }
@@ -58,8 +60,8 @@ export class AccompanimentSynthManager {
     private createSynth(name: InstrumentName) {
         switch (name) {
             case 'organ':
-                this.distortion = new Tone.Distortion(0.05).toDestination();
-                this.tremolo = new Tone.Tremolo(2, 0.2); // Don't connect to destination yet
+                this.distortion = new Tone.Distortion(0.05);
+                this.tremolo = new Tone.Tremolo(2, 0.2);
                 this.currentSynth = new Tone.PolySynth(Tone.Synth, {
                      polyphony: 4,
                      oscillator: {
@@ -72,7 +74,7 @@ export class AccompanimentSynthManager {
                         release: 0.4,
                     },
                      volume: -15,
-                }).chain(this.tremolo, this.distortion);
+                }).chain(this.distortion, this.tremolo, Tone.Destination);
                 break;
             default:
                 this.currentSynth = null;
@@ -126,7 +128,8 @@ export class AccompanimentSynthManager {
             this.distortion.dispose();
             this.distortion = null;
         }
-        this.currentInstrument = 'none';
+        this.isSynthCreated = false;
+        // Do not reset currentInstrument, so we know what to recreate if needed
     }
 }
 
