@@ -67,53 +67,78 @@ class DrumGenerator {
 
 class BassGenerator {
      static createScore(rootNote = 'E', beatsPerBar = 4): BassNote[] {
-        const score: BassNote[] = [
-            { note: `${rootNote}2`, time: 0, duration: '1n', velocity: 0.9 }
+       const riff = [
+            { note: 'G2', time: 0, duration: '8n' },
+            { note: 'A#2', time: 0.75, duration: '8n' },
+            { note: 'C3', time: 1.5, duration: '4n' },
+            
+            { note: 'G2', time: 2.5, duration: '8n' },
+            { note: 'A#2', time: 3.25, duration: '8n' },
+            { note: 'C#3', time: 4, duration: '8n' },
+            { note: 'C3', time: 4.75, duration: '4n' },
+
+            { note: 'G2', time: 6, duration: '8n' },
+            { note: 'A#2', time: 6.75, duration: '8n' },
+            { note: 'C3', time: 7.5, duration: '4n' },
+
+            { note: 'A#2', time: 9, duration: '8n' },
+            { note: 'G2', time: 9.75, duration: '4n' },
         ];
-        return score;
+        return riff;
     }
 }
 
 class SoloGenerator {
      static createScore(bar: number): SoloNote[] {
-        const phrase = [
-            { notes: 'B3', duration: '8n', time: 0.5 },
-            { notes: 'G3', duration: '8n', time: 1.5 },
-            { notes: 'A3', duration: '4n', time: 2.5 },
-            { notes: 'G3', duration: '8n', time: 4.5 },
-            { notes: 'E3', duration: '8n', time: 5.5 },
-            { notes: 'C3', duration: '4n', time: 6.5 },
-            { notes: 'D3', duration: '2n', time: 8.5 },
-            { notes: 'E3', duration: '8n', time: 12.5 },
-            { notes: 'G3', duration: '8n', time: 13.5 },
-            { notes: 'B3', duration: '4n', time: 14.5 },
+       const riff = [
+            { notes: 'G3', duration: '8n', time: 0 },
+            { notes: 'A#3', duration: '8n', time: 0.75 },
+            { notes: 'C4', duration: '4n', time: 1.5 },
+            
+            { notes: 'G3', duration: '8n', time: 2.5 },
+            { notes: 'A#3', duration: '8n', time: 3.25 },
+            { notes: 'C#4', duration: '8n', time: 4 },
+            { notes: 'C4', duration: '4n', time: 4.75 },
+
+            { notes: 'G3', duration: '8n', time: 6 },
+            { notes: 'A#3', duration: '8n', time: 6.75 },
+            { notes: 'C4', duration: '4n', time: 7.5 },
+
+            { notes: 'A#3', duration: '8n', time: 9 },
+            { notes: 'G3', duration: '4n', time: 9.75 },
         ];
-        // Play only on certain bars to not be too repetitive
-        if (bar % 8 < 4) {
-            return phrase.filter(n => n.time < 16);
+
+        // Play the riff every 4 bars
+        if (bar % 4 === 0) {
+            return riff;
         }
         return [];
     }
 }
 class AccompanimentGenerator {
-    static chordProgression = [
-        ['E2', 'G2', 'B2'],   // E minor
-        ['C2', 'E2', 'G2'],   // C major
-        ['G2', 'B2', 'D3'],   // G major
-        ['D2', 'F#2', 'A2']   // D major
-    ];
+   static createScore(bar: number): AccompanimentNote[] {
+        const riff = [
+            { notes: ['G2', 'D3'], duration: '8n', time: 0 },
+            { notes: ['A#2', 'F3'], duration: '8n', time: 0.75 },
+            { notes: ['C3', 'G3'], duration: '4n', time: 1.5 },
+            
+            { notes: ['G2', 'D3'], duration: '8n', time: 2.5 },
+            { notes: ['A#2', 'F3'], duration: '8n', time: 3.25 },
+            { notes: ['C#3', 'G#3'], duration: '8n', time: 4 },
+            { notes: ['C3', 'G3'], duration: '4n', time: 4.75 },
 
-    static createScore(bar: number): AccompanimentNote[] {
-         const chord = this.chordProgression[Math.floor(bar / 4) % this.chordProgression.length];
-         // Play the chord on the first beat of every 4th bar
-         if (bar % 4 === 0) {
-            return [{
-                notes: chord,
-                time: 0,
-                duration: '1n'
-            }];
-         }
-         return [];
+            { notes: ['G2', 'D3'], duration: '8n', time: 6 },
+            { notes: ['A#2', 'F3'], duration: '8n', time: 6.75 },
+            { notes: ['C3', 'G3'], duration: '4n', time: 7.5 },
+
+            { notes: ['A#2', 'F3'], duration: '8n', time: 9 },
+            { notes: ['G2', 'D3'], duration: '4n', time: 9.75 },
+        ];
+        
+        if (bar % 4 === 0) {
+            return riff;
+        }
+        return [];
     }
 }
 
@@ -222,7 +247,7 @@ const Scheduler = {
 
             if (this.instruments.bass !== 'none') {
                 const bassScore = BassGenerator.createScore('E')
-                    .map(note => ({...note, time: note.time * this.secondsPerBeat }));
+                    .map(note => ({...note, time: (note.time as number) * this.secondsPerBeat, duration: note.duration as Tone.Unit.Time, velocity: 0.9 }));
                 self.postMessage({ type: 'bass_score', data: { score: bassScore } });
             }
             if (this.instruments.solo !== 'none') {
