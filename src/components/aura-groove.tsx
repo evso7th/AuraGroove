@@ -144,6 +144,7 @@ export function AuraGroove() {
             break;
         
         case 'accompaniment_score':
+            console.log('AURA-GROOVE: Received accompaniment_score from worker', data.score);
             if (accompanimentSynthManagerRef.current && data.score && data.score.length > 0) {
                 const now = Tone.now();
                 data.score.forEach((note: AccompanimentNote) => {

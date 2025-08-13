@@ -23,6 +23,7 @@ export class AccompanimentSynthManager {
      * @param name The name of the instrument to activate ('organ', 'none', etc.).
      */
     public setInstrument(name: InstrumentName) {
+        console.log(`ACCOMPANIMENT-MANAGER: setInstrument called with: ${name}`);
         if (name === this.currentInstrument && this.currentSynth) {
             return;
         }
@@ -58,6 +59,8 @@ export class AccompanimentSynthManager {
     private createSynth(name: InstrumentName) {
         switch (name) {
             case 'organ':
+                this.distortion = new Tone.Distortion(0.05);
+                this.tremolo = new Tone.Tremolo(2, 0.2);
                 this.currentSynth = new Tone.PolySynth(Tone.Synth, {
                      polyphony: 4,
                      oscillator: {
@@ -70,10 +73,8 @@ export class AccompanimentSynthManager {
                         release: 0.4,
                     },
                      volume: -15,
-                });
-                this.distortion = new Tone.Distortion(0.05);
-                this.tremolo = new Tone.Tremolo(2, 0.2);
-                this.currentSynth.chain(this.distortion, this.tremolo, Tone.Destination);
+                }).chain(this.distortion, this.tremolo, Tone.Destination);
+                console.log('ACCOMPANIMENT-MANAGER: Organ synth created and chained to effects.');
                 break;
             default:
                 this.currentSynth = null;
@@ -81,6 +82,7 @@ export class AccompanimentSynthManager {
     }
     
     public triggerAttackRelease(notes: string | string[], duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
+        console.log(`ACCOMPANIMENT-MANAGER: triggerAttackRelease called with notes: ${notes}`);
         if (this.currentSynth) {
             this.currentSynth.triggerAttackRelease(notes, duration, time, velocity);
         }
