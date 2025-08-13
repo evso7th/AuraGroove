@@ -59,7 +59,7 @@ export class SoloSynthManager {
         switch (name) {
             case 'organ':
                 this.distortion = new Tone.Distortion(0.05);
-                this.tremolo = new Tone.Tremolo(2, 0.2);
+                this.tremolo = new Tone.Tremolo(2, 0.2).start();
                 
                 const organ = new Tone.PolySynth(Tone.Synth, {
                      oscillator: {
