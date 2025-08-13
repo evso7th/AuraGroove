@@ -28,6 +28,7 @@ import { Slider } from "@/components/ui/slider";
 import { BassSynthManager } from "@/lib/bass-synth-manager";
 import { SoloSynthManager } from "@/lib/solo-synth-manager";
 import { AccompanimentSynthManager } from "@/lib/accompaniment-synth-manager";
+import { DrumNote, BassNote, SoloNote, AccompanimentNote } from '@/types/music';
 
 
 export type Instruments = {
@@ -43,31 +44,6 @@ export type DrumSettings = {
 };
 
 export type ScoreName = 'generative' | 'promenade';
-
-type BassNote = {
-    note: string;
-    time: number;
-    duration: number;
-    velocity: number;
-}
-
-type SoloNote = {
-    notes: string | string[];
-    time: Tone.Unit.Time;
-    duration: Tone.Unit.Time;
-}
-
-type DrumNote = {
-    sample: string;
-    time: number;
-    velocity?: number;
-}
-
-type AccompanimentNote = {
-    notes: string | string[];
-    time: Tone.Unit.Time;
-    duration: Tone.Unit.Time;
-}
 
 const samplePaths: Record<string, string> = {
     kick: '/assets/drums/kick_drum6.wav',
