@@ -82,10 +82,10 @@ export function AuraGroove() {
 
    useEffect(() => {
     // This effect runs only once on the client side
-    setLoadingText("Initializing...");
+    setLoadingText("Initializing Worker...");
     
     // 1. Initialize Worker
-    const worker = new Worker('/workers/ambient.worker.js');
+    const worker = new Worker(new URL('../app/ambient.worker.ts', import.meta.url));
     musicWorkerRef.current = worker;
 
     const handleMessage = (event: MessageEvent) => {
@@ -94,9 +94,8 @@ export function AuraGroove() {
       switch(type) {
         case 'initialized':
           isWorkerInitialized.current = true;
-           setLoadingText("");
-           setIsReady(true);
-           setIsInitializing(false);
+           setLoadingText("Loading Samples...");
+           loadSamples();
           break;
         
         case 'started':
@@ -178,7 +177,7 @@ export function AuraGroove() {
     worker.onmessage = handleMessage;
     
     // Fetch all audio files as raw ArrayBuffers
-    const fetchSamples = async () => {
+    const loadSamples = async () => {
         try {
             const fetchedSamples = await Promise.all(
                 Object.entries(samplePaths).map(async ([name, url]) => {
@@ -191,25 +190,18 @@ export function AuraGroove() {
                 })
             );
 
-            const workerSamples: Record<string, ArrayBuffer> = {};
             const mainThreadSampleMap: Record<string, AudioBuffer> = {};
             
-             if (!Tone.context || Tone.context.state !== 'running') {
-                await Tone.start();
-            }
-            
             await Promise.all(fetchedSamples.map(async ({ name, buffer }) => {
-                workerSamples[name] = buffer.slice(0); 
                 const mainBuffer = await Tone.context.decodeAudioData(buffer.slice(0));
                 mainThreadSampleMap[name] = mainBuffer;
             }));
 
             drumPlayersRef.current = new Tone.Players(mainThreadSampleMap).toDestination();
 
-            musicWorkerRef.current?.postMessage({
-                command: 'init',
-                data: { samples: workerSamples, sampleRate: Tone.context.sampleRate }
-            }, Object.values(workerSamples));
+            setLoadingText("");
+            setIsReady(true);
+            setIsInitializing(false);
 
         } catch (error) {
             console.error("Sample loading failed:", error);
@@ -223,7 +215,7 @@ export function AuraGroove() {
         }
     };
     
-    fetchSamples();
+    musicWorkerRef.current?.postMessage({ command: 'init' });
 
     
     // 4. Cleanup
