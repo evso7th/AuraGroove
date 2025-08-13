@@ -34,14 +34,11 @@ export class AccompanimentSynthManager {
             return;
         }
 
-        this.currentSynth = this.createSynth(name);
+        this.createSynth(name);
     }
     
     public startEffects() {
-        if (this.currentInstrument === 'organ' && this.currentSynth && !this.distortion) {
-            this.distortion = new Tone.Distortion(0.05);
-            this.tremolo = new Tone.Tremolo(2, 0.2);
-            this.currentSynth.chain(this.distortion, this.tremolo, Tone.Destination);
+        if (this.currentInstrument === 'organ' && this.tremolo) {
             this.tremolo.start();
         }
     }
@@ -49,12 +46,6 @@ export class AccompanimentSynthManager {
     public stopEffects() {
         if (this.tremolo) {
             this.tremolo.stop();
-            this.tremolo.dispose();
-            this.tremolo = null;
-        }
-        if (this.distortion) {
-            this.distortion.dispose();
-            this.distortion = null;
         }
     }
 
@@ -64,11 +55,10 @@ export class AccompanimentSynthManager {
      * @param name The name of the instrument.
      * @returns A Tone.PolySynth instance or null if the name is not recognized.
      */
-    private createSynth(name: InstrumentName): Tone.PolySynth | null {
-        let synth;
+    private createSynth(name: InstrumentName) {
         switch (name) {
             case 'organ':
-                synth = new Tone.PolySynth(Tone.Synth, {
+                this.currentSynth = new Tone.PolySynth(Tone.Synth, {
                      polyphony: 4,
                      oscillator: {
                         type: 'sawtooth',
@@ -81,12 +71,13 @@ export class AccompanimentSynthManager {
                     },
                      volume: -15,
                 });
+                this.distortion = new Tone.Distortion(0.05);
+                this.tremolo = new Tone.Tremolo(2, 0.2);
+                this.currentSynth.chain(this.distortion, this.tremolo, Tone.Destination);
                 break;
             default:
-                return null;
+                this.currentSynth = null;
         }
-        // Don't connect to destination directly, it will be done in startEffects
-        return synth;
     }
     
     public triggerAttackRelease(notes: string | string[], duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
@@ -109,6 +100,14 @@ export class AccompanimentSynthManager {
      */
     public dispose() {
         this.stopEffects();
+        if (this.tremolo) {
+            this.tremolo.dispose();
+            this.tremolo = null;
+        }
+        if (this.distortion) {
+            this.distortion.dispose();
+            this.distortion = null;
+        }
         if (this.currentSynth) {
             this.currentSynth.disconnect();
             this.currentSynth.dispose();
