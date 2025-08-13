@@ -38,10 +38,10 @@ export class SoloSynthManager {
     }
     
     public startEffects() {
-       if (this.currentInstrument === 'organ' && !this.distortion) {
+       if (this.currentInstrument === 'organ' && this.currentSynth && !this.distortion) {
             this.distortion = new Tone.Distortion(0.05);
             this.tremolo = new Tone.Tremolo(2, 0.2).toDestination();
-            this.currentSynth?.chain(this.distortion, this.tremolo);
+            this.currentSynth.chain(this.distortion, this.tremolo);
             this.tremolo.start();
         }
     }
@@ -84,7 +84,7 @@ export class SoloSynthManager {
             default:
                 return null;
         }
-        synth.toDestination();
+        // Don't connect to destination directly, it will be done in startEffects
         return synth;
     }
     

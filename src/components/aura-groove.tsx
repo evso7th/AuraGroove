@@ -290,16 +290,20 @@ export function AuraGroove() {
 
         if (!soloSynthManagerRef.current) {
             soloSynthManagerRef.current = new SoloSynthManager();
-            soloSynthManagerRef.current.setInstrument(instruments.solo);
         }
         if (!accompanimentSynthManagerRef.current) {
             accompanimentSynthManagerRef.current = new AccompanimentSynthManager();
-            accompanimentSynthManagerRef.current.setInstrument(instruments.accompaniment);
         }
         if (!bassSynthManagerRef.current) {
             bassSynthManagerRef.current = new BassSynthManager();
-            bassSynthManagerRef.current.setInstrument(instruments.bass);
         }
+
+        soloSynthManagerRef.current.setInstrument(instruments.solo);
+        accompanimentSynthManagerRef.current.setInstrument(instruments.accompaniment);
+        bassSynthManagerRef.current.setInstrument(instruments.bass);
+        
+        soloSynthManagerRef.current.startEffects();
+        accompanimentSynthManagerRef.current.startEffects();
 
         setIsInitializing(true);
         setLoadingText("Starting playback...");
@@ -312,9 +316,6 @@ export function AuraGroove() {
             command: 'start',
             data: { drumSettings, instruments, bpm, score }
         });
-        
-        soloSynthManagerRef.current.startEffects();
-        accompanimentSynthManagerRef.current.startEffects();
 
     } catch (error) {
         console.error("Failed to prepare audio:", error);
@@ -332,6 +333,7 @@ export function AuraGroove() {
     soloSynthManagerRef.current?.releaseAll();
     bassSynthManagerRef.current?.releaseAll();
     accompanimentSynthManagerRef.current?.releaseAll();
+    
     soloSynthManagerRef.current?.stopEffects();
     accompanimentSynthManagerRef.current?.stopEffects();
     
