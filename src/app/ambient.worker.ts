@@ -150,17 +150,24 @@ class EffectsGenerator {
         }
 
         if (effectType === 'bell') {
+            if (Math.random() > 0.4) return []; // Only play bells sometimes
+
             const windChimeNotes = ['C5', 'Eb5', 'F5', 'G5', 'Bb5']; // C Minor Pentatonic
-            const numberOfChimes = Math.floor(Math.random() * 3) + 2; 
+            const numberOfChimes = Math.floor(Math.random() * 2) + 2; // 2-3 chimes
             let currentTime = Math.random() * (beatsPerBar - 2); 
             
             for (let i = 0; i < numberOfChimes; i++) {
-                if (Math.random() > 0.3) { 
-                    const note = windChimeNotes[Math.floor(Math.random() * windChimeNotes.length)];
-                    score.push({ type: 'bell', time: currentTime, note, duration: '1n' });
-                    
-                    currentTime += (Math.random() * 0.3) + 0.4;
-                }
+                const note = windChimeNotes[Math.floor(Math.random() * windChimeNotes.length)];
+                score.push({ 
+                    type: 'bell', 
+                    time: currentTime, 
+                    note, 
+                    duration: '1n',
+                    isFirst: i === 0 
+                });
+                
+                // Increase time for the next note
+                currentTime += (Math.random() * 0.3) + 0.4; // 0.4 to 0.7 seconds delay
             }
         }
         if (effectType === 'piu') {

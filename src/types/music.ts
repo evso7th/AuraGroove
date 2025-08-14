@@ -1,3 +1,4 @@
+
 import type * as Tone from 'tone';
 
 export type Instruments = {
@@ -46,6 +47,7 @@ export type EffectNote = {
     time: number; // time in beats
     note: string; // pitch of the effect
     duration?: Tone.Unit.Time; // optional duration
+    isFirst?: boolean; // For special handling of the first note in a sequence
 }
 
 export type ScoreName = 'generative' | 'promenade';

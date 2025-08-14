@@ -5,6 +5,9 @@ import type { EffectNote, EffectsSettings } from '@/types/music';
 
 type EffectMode = EffectsSettings['mode'];
 
+const DEFAULT_BELL_ATTACK = 0.01;
+const FIRST_NOTE_BELL_ATTACK = 0.2;
+
 /**
  * Manages the lifecycle and triggering of SFX synthesizers.
  */
@@ -34,9 +37,9 @@ export class EffectsSynthManager {
         this.bellSynth = new Tone.MetalSynth({
             frequency: 440,
             envelope: {
-                attack: 0.01,
+                attack: DEFAULT_BELL_ATTACK,
                 decay: 1.4,
-                release: 2.0, // Longer release for airiness
+                release: 2.5, // Longer release for airiness
             },
             harmonicity: 8.5, // More complex, chime-like harmonics
             modulationIndex: 20,
@@ -69,7 +72,18 @@ export class EffectsSynthManager {
                 break;
             case 'bell':
                 if (this.currentMode === 'bell' || this.currentMode === 'mixed') {
+                    // Specific logic for the first note of a chime sequence
+                    if (effect.isFirst) {
+                        this.bellSynth.envelope.attack = FIRST_NOTE_BELL_ATTACK;
+                    }
+
                     this.bellSynth.triggerAttackRelease(effect.note, effect.duration || '2n', time);
+
+                    // Reset attack to default for subsequent notes
+                    if (effect.isFirst) {
+                        // Schedule the reset shortly after the attack phase
+                         this.bellSynth.envelope.attack = DEFAULT_BELL_ATTACK;
+                    }
                 }
                 break;
         }
