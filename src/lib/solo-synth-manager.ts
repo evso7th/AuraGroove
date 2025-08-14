@@ -1,9 +1,10 @@
 
 import * as Tone from 'tone';
-import type { Instruments } from '@/components/aura-groove';
+import type { Instruments } from '@/types/music';
 import type { FxBus } from './fx-bus';
 
 type InstrumentName = Instruments['solo'];
+const DEFAULT_VOLUME = -9;
 
 /**
  * Manages the lifecycle of solo instrument synthesizers.
@@ -11,15 +12,19 @@ type InstrumentName = Instruments['solo'];
 export class SoloSynthManager {
     private currentSynth: Tone.PolySynth | null = null;
     private currentInstrument: InstrumentName = 'none';
-    private isSynthCreated = false;
     private fxBus: FxBus;
+    private readonly defaultVolume: number;
 
     constructor(fxBus: FxBus) {
         this.fxBus = fxBus;
+        this.defaultVolume = DEFAULT_VOLUME;
     }
 
     public setInstrument(name: InstrumentName) {
-        if (name === this.currentInstrument && this.isSynthCreated) {
+        if (name === this.currentInstrument && this.currentSynth) {
+            if (this.currentSynth.volume.value === -Infinity) {
+                this.fadeIn(0.1);
+            }
             return;
         }
 
@@ -31,7 +36,6 @@ export class SoloSynthManager {
         }
 
         this.createSynth(name);
-        this.isSynthCreated = true;
     }
     
     private createSynth(name: InstrumentName) {
@@ -48,8 +52,8 @@ export class SoloSynthManager {
                         sustain: 0.9,
                         release: 0.4,
                     },
-                     volume: -9, // Adjusted volume for better mix
-                 }).connect(this.fxBus.soloInput); // Connect to the correct mixer channel
+                     volume: this.defaultVolume,
+                 }).connect(this.fxBus.soloInput);
                  break;
             default:
                 this.currentSynth = null;
@@ -76,12 +80,21 @@ export class SoloSynthManager {
         }
     }
 
+    public fadeIn(duration: number) {
+        if (this.currentSynth) {
+            try {
+                this.currentSynth.volume.rampTo(this.defaultVolume, duration);
+            } catch (e) {
+                // Ignore errors if context is already closed
+            }
+        }
+    }
+
     public dispose() {
         if (this.currentSynth) {
             this.currentSynth.dispose();
             this.currentSynth = null;
         }
-        this.isSynthCreated = false;
     }
 }
 

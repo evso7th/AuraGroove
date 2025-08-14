@@ -344,6 +344,10 @@ export function AuraGroove() {
         accompanimentSynthManagerRef.current?.setInstrument(instruments.accompaniment);
         bassSynthManagerRef.current?.setInstrument(instruments.bass);
         effectsSynthManagerRef.current?.setMode(effectsSettings.mode);
+        
+        soloSynthManagerRef.current?.fadeIn(0.5);
+        accompanimentSynthManagerRef.current?.fadeIn(0.5);
+        bassSynthManagerRef.current?.fadeIn(0.5);
 
         setIsInitializing(true);
         setLoadingText("Starting playback...");
@@ -372,7 +376,7 @@ export function AuraGroove() {
   const handleStop = useCallback(() => {
     soloSynthManagerRef.current?.fadeOut(1);
     accompanimentSynthManagerRef.current?.fadeOut(1);
-    bassSynthManagerRef.current?.releaseAll();
+    bassSynthManagerRef.current?.fadeOut(1);
     
     if (Tone.Transport.state !== 'stopped') {
         Tone.Transport.stop();
@@ -694,5 +698,7 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    
 
     

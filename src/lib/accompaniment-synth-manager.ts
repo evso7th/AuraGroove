@@ -1,9 +1,11 @@
 
 import * as Tone from 'tone';
-import type { Instruments } from '@/components/aura-groove';
+import type { Instruments } from '@/types/music';
 import type { FxBus } from './fx-bus';
 
 type InstrumentName = Instruments['accompaniment'];
+
+const DEFAULT_VOLUME = -12;
 
 /**
  * Manages the lifecycle of accompaniment instrument synthesizers.
@@ -11,15 +13,21 @@ type InstrumentName = Instruments['accompaniment'];
 export class AccompanimentSynthManager {
     private currentSynth: Tone.PolySynth | null = null;
     private currentInstrument: InstrumentName = 'none';
-    private isSynthCreated = false;
     private fxBus: FxBus;
+    private readonly defaultVolume: number;
+
 
     constructor(fxBus: FxBus) {
         this.fxBus = fxBus;
+        this.defaultVolume = DEFAULT_VOLUME;
     }
 
     public setInstrument(name: InstrumentName) {
-        if (name === this.currentInstrument && this.isSynthCreated) {
+        if (name === this.currentInstrument && this.currentSynth) {
+            // If the synth exists but might be silenced, "wake it up"
+            if (this.currentSynth.volume.value === -Infinity) {
+                this.fadeIn(0.1);
+            }
             return;
         }
 
@@ -31,7 +39,6 @@ export class AccompanimentSynthManager {
         }
 
         this.createSynth(name);
-        this.isSynthCreated = true;
     }
     
     private createSynth(name: InstrumentName) {
@@ -48,8 +55,8 @@ export class AccompanimentSynthManager {
                         sustain: 0.9,
                         release: 0.4,
                     },
-                     volume: -12, // Adjusted volume for better mix
-                }).connect(this.fxBus.accompanimentInput); // Connect to the correct mixer channel
+                     volume: this.defaultVolume,
+                }).connect(this.fxBus.accompanimentInput);
                 break;
             default:
                 this.currentSynth = null;
@@ -75,13 +82,22 @@ export class AccompanimentSynthManager {
             }
         }
     }
+    
+    public fadeIn(duration: number) {
+        if (this.currentSynth) {
+            try {
+                this.currentSynth.volume.rampTo(this.defaultVolume, duration);
+            } catch (e) {
+                // Ignore errors if the context is already closed
+            }
+        }
+    }
 
     public dispose() {
         if (this.currentSynth) {
             this.currentSynth.dispose();
             this.currentSynth = null;
         }
-        this.isSynthCreated = false;
     }
 }
 
