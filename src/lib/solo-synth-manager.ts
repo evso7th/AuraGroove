@@ -90,7 +90,6 @@ export class SoloSynthManager {
     }
 
     private setVolume(volume: number, duration: number) {
-        const rampTime = Tone.now() + duration;
         this.voices.forEach(voice => {
             try {
                 voice.volume.rampTo(volume, duration);
