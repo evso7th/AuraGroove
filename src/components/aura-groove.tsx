@@ -30,10 +30,8 @@ import type { BassSynthManager } from "@/lib/bass-synth-manager";
 import type { SoloSynthManager } from "@/lib/solo-synth-manager";
 import type { AccompanimentSynthManager } from "@/lib/accompaniment-synth-manager";
 import type { EffectsSynthManager } from "@/lib/effects-synth-manager";
-import { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote, DrumSettings, EffectsSettings, Instruments } from '@/types/music';
+import { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote, DrumSettings, EffectsSettings, Instruments, ScoreName } from '@/types/music';
 
-
-export type ScoreName = 'generative' | 'promenade';
 
 const samplePaths: Record<string, string> = {
     kick: '/assets/drums/kick_drum6.wav',
@@ -67,10 +65,6 @@ export function AuraGroove() {
   // Instrument FX States
   const [soloFx, setSoloFx] = useState({ distortion: { enabled: false, wet: 0.5 } });
   const [accompanimentFx, setAccompanimentFx] = useState({ chorus: { enabled: false, wet: 0.4, frequency: 1.5, depth: 0.7 } });
-
-  // Master FX States
-  const [masterReverbSettings, setMasterReverbSettings] = useState({ enabled: true, wet: 0.3, decay: 4.5 });
-  const [masterDelaySettings, setMasterDelaySettings] = useState({ enabled: true, wet: 0.2, delayTime: 0.5, feedback: 0.3 });
   
   const { toast } = useToast();
 
@@ -241,20 +235,6 @@ export function AuraGroove() {
       updateWorkerSettings();
     }
   }, [drumSettings, instruments, effectsSettings, bpm, score, isReady, isPlaying, updateWorkerSettings]);
-
-   useEffect(() => {
-        if (!isReady || !fxBusRef.current) return;
-        fxBusRef.current.masterReverb.wet.value = masterReverbSettings.enabled ? masterReverbSettings.wet : 0;
-        fxBusRef.current.masterReverb.decay = masterReverbSettings.decay;
-    }, [masterReverbSettings, isReady]);
-
-    useEffect(() => {
-        if (!isReady || !fxBusRef.current) return;
-        const fx = fxBusRef.current.masterDelay;
-        fx.wet.value = masterDelaySettings.enabled ? masterDelaySettings.wet : 0;
-        fx.delayTime.value = masterDelaySettings.delayTime;
-        fx.feedback.value = masterDelaySettings.feedback;
-    }, [masterDelaySettings, isReady]);
 
     useEffect(() => {
         if (!isReady || !fxBusRef.current?.soloDistortion) return;
@@ -598,35 +578,6 @@ export function AuraGroove() {
                         disabled={isBusy || isPlaying || !effectsEnabled}
                     />
                 </div>
-            </div>
-        </div>
-
-
-        <div className="space-y-4 rounded-lg border p-4">
-          <h3 className="text-lg font-medium text-primary">Master Effects</h3>
-            {/* Reverb Controls */}
-            <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                    <Label htmlFor="reverb-enabled" className="flex items-center gap-1.5"><Wind className="h-4 w-4"/> Reverb</Label>
-                    <Switch id="reverb-enabled" checked={masterReverbSettings.enabled} onCheckedChange={(c) => setMasterReverbSettings(s => ({...s, enabled: c}))} disabled={isBusy || isPlaying} />
-                </div>
-                <Label>Wet</Label>
-                <Slider value={[masterReverbSettings.wet]} max={1} step={0.05} onValueChange={(v) => setMasterReverbSettings(s => ({...s, wet: v[0]}))} disabled={isBusy || isPlaying || !masterReverbSettings.enabled} />
-                 <Label>Decay</Label>
-                <Slider value={[masterReverbSettings.decay]} min={0.5} max={10} step={0.5} onValueChange={(v) => setMasterReverbSettings(s => ({...s, decay: v[0]}))} disabled={isBusy || isPlaying || !masterReverbSettings.enabled} />
-            </div>
-             {/* Delay Controls */}
-            <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                    <Label htmlFor="delay-enabled" className="flex items-center gap-1.5"><Waves className="h-4 w-4"/> Delay</Label>
-                    <Switch id="delay-enabled" checked={masterDelaySettings.enabled} onCheckedChange={(c) => setMasterDelaySettings(s => ({...s, enabled: c}))} disabled={isBusy || isPlaying} />
-                </div>
-                <Label>Wet</Label>
-                <Slider value={[masterDelaySettings.wet]} max={1} step={0.05} onValueChange={(v) => setMasterDelaySettings(s => ({...s, wet: v[0]}))} disabled={isBusy || isPlaying || !masterDelaySettings.enabled} />
-                <Label>Time</Label>
-                <Slider value={[masterDelaySettings.delayTime]} max={1} step={0.1} onValueChange={(v) => setMasterDelaySettings(s => ({...s, delayTime: v[0]}))} disabled={isBusy || isPlaying || !masterDelaySettings.enabled} />
-                <Label>Feedback</Label>
-                <Slider value={[masterDelaySettings.feedback]} max={0.9} step={0.1} onValueChange={(v) => setMasterDelaySettings(s => ({...s, feedback: v[0]}))} disabled={isBusy || isPlaying || !masterDelaySettings.enabled} />
             </div>
         </div>
          
