@@ -85,7 +85,7 @@ export class SoloSynthManager {
             try {
                 this.currentSynth.volume.rampTo(this.defaultVolume, duration);
             } catch (e) {
-                // Ignore errors if context is already closed
+                // Ignore errors if the context is already closed
             }
         }
     }
