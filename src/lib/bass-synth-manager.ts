@@ -7,8 +7,6 @@ type InstrumentName = Instruments['bass'];
 
 /**
  * Manages the lifecycle of the bass instrument synthesizer.
- * This class ensures that synths are created, configured, and disposed of correctly,
- * preventing memory leaks and audio glitches.
  */
 export class BassSynthManager {
     private currentSynth: Tone.MonoSynth | null = null;
@@ -20,11 +18,6 @@ export class BassSynthManager {
         this.fxBus = fxBus;
     }
 
-    /**
-     * Sets the active bass instrument. If the instrument is different from the current one,
-     * it disposes of the old synth and creates a new one.
-     * @param name The name of the instrument to activate.
-     */
     public setInstrument(name: InstrumentName) {
         if (name === this.currentInstrument && this.isSynthCreated) {
             return;
@@ -41,11 +34,6 @@ export class BassSynthManager {
         this.isSynthCreated = true;
     }
 
-    /**
-     * Creates a synth instance based on the instrument name.
-     * @param name The name of the instrument.
-     * @returns A Tone.MonoSynth instance or null if the name is not recognized.
-     */
     private createSynth(name: InstrumentName): Tone.MonoSynth | null {
         switch (name) {
             case 'bass synth':
@@ -60,7 +48,7 @@ export class BassSynthManager {
                         release: 1.5,
                     },
                     volume: -6,
-                }).connect(this.fxBus.input);
+                }).connect(this.fxBus.bassInput); // Connect to the correct mixer channel
             default:
                 return null;
         }
@@ -72,10 +60,6 @@ export class BassSynthManager {
         }
     }
 
-    /**
-     * Releases all currently playing notes on the active synth.
-     * Essential for stopping sound immediately.
-     */
     public releaseAll() {
         if (this.currentSynth) {
             try {
@@ -86,16 +70,13 @@ export class BassSynthManager {
         }
     }
 
-    /**
-     * Disposes of the current synth to free up resources.
-     * This is crucial for preventing memory leaks when switching instruments or stopping playback.
-     */
     public dispose() {
         if (this.currentSynth) {
             this.currentSynth.dispose();
             this.currentSynth = null;
         }
         this.isSynthCreated = false;
-        this.currentInstrument = null;
     }
 }
+
+    

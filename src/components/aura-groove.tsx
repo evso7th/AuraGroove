@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import * as Tone from 'tone';
-import { Drum, Loader2, Music, Pause, Speaker, FileMusic, Waves, Wind, ToyBrick } from "lucide-react";
+import { Drum, Loader2, Music, Pause, Speaker, FileMusic, Waves, Wind, ToyBrick, GitBranch, ChevronsRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,11 +44,6 @@ export type DrumSettings = {
     volume: number;
 };
 
-export type FxSettings = {
-    enabled: boolean;
-    wet: number; // 0 (dry) to 1 (wet)
-};
-
 export type ScoreName = 'generative' | 'promenade';
 
 const samplePaths: Record<string, string> = {
@@ -62,7 +57,7 @@ const samplePaths: Record<string, string> = {
 export function AuraGroove() {
   const [isReady, setIsReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isInitializing, setIsInitializing] = useState(true); // Start in initializing state
+  const [isInitializing, setIsInitializing] = useState(true); 
   const [loadingText, setLoadingText] = useState("Initializing...");
   const [drumSettings, setDrumSettings] = useState<DrumSettings>({
       enabled: true,
@@ -77,10 +72,13 @@ export function AuraGroove() {
   const [bpm, setBpm] = useState(100);
   const [score, setScore] = useState<ScoreName>('generative');
   
+  // Instrument FX States
+  const [soloFx, setSoloFx] = useState({ distortion: { enabled: false, wet: 0.5 } });
+  const [accompanimentFx, setAccompanimentFx] = useState({ chorus: { enabled: false, wet: 0.4, frequency: 1.5, depth: 0.7 } });
+
   // Master FX States
-  const [reverbSettings, setReverbSettings] = useState({ enabled: true, wet: 0.3, decay: 4.5 });
-  const [delaySettings, setDelaySettings] = useState({ enabled: true, wet: 0.2, delayTime: 0.5, feedback: 0.3 });
-  const [chorusSettings, setChorusSettings] = useState({ enabled: false, wet: 0.5, frequency: 1.5, depth: 0.7 });
+  const [masterReverbSettings, setMasterReverbSettings] = useState({ enabled: true, wet: 0.3, decay: 4.5 });
+  const [masterDelaySettings, setMasterDelaySettings] = useState({ enabled: true, wet: 0.2, delayTime: 0.5, feedback: 0.3 });
   
   const { toast } = useToast();
 
@@ -113,6 +111,7 @@ export function AuraGroove() {
             accompanimentSynthManagerRef.current = new AccompanimentSynthManager(fxBusRef.current);
             
             setLoadingText("Loading Samples...");
+            // Pass the now-created fxBus to loadSamples
             await loadSamples(fxBusRef.current);
 
         } catch (error) {
@@ -214,6 +213,7 @@ export function AuraGroove() {
 
     worker.onmessage = handleMessage;
     
+    // Now takes fxBus as an argument
     const loadSamples = async (fxBus: FxBus) => {
         try {
             const fetchedSamples = await Promise.all(
@@ -234,11 +234,12 @@ export function AuraGroove() {
                 mainThreadSampleMap[name] = mainBuffer;
             }));
 
-            drumPlayersRef.current = new Tone.Players(mainThreadSampleMap).connect(fxBus.input);
+            // Connect to the correct input on the mixer
+            drumPlayersRef.current = new Tone.Players(mainThreadSampleMap).connect(fxBus.drumInput);
 
             setLoadingText("");
             setIsReady(true);
-            setIsInitializing(false);
+setIsInitializing(false);
 
         } catch (error) {
             console.error("Sample loading failed:", error);
@@ -287,43 +288,50 @@ export function AuraGroove() {
     }
   }, [drumSettings, instruments, bpm, score, isReady, isPlaying, updateWorkerSettings]);
 
+   // Master Effects
    useEffect(() => {
         if (!isReady || !fxBusRef.current) return;
-        fxBusRef.current.reverb.wet.value = reverbSettings.enabled ? reverbSettings.wet : 0;
-        fxBusRef.current.reverb.decay = reverbSettings.decay;
-    }, [reverbSettings, isReady]);
+        fxBusRef.current.masterReverb.wet.value = masterReverbSettings.enabled ? masterReverbSettings.wet : 0;
+        fxBusRef.current.masterReverb.decay = masterReverbSettings.decay;
+    }, [masterReverbSettings, isReady]);
 
     useEffect(() => {
         if (!isReady || !fxBusRef.current) return;
-        const fx = fxBusRef.current.delay;
-        fx.wet.value = delaySettings.enabled ? delaySettings.wet : 0;
-        fx.delayTime.value = delaySettings.delayTime;
-        fx.feedback.value = delaySettings.feedback;
-    }, [delaySettings, isReady]);
+        const fx = fxBusRef.current.masterDelay;
+        fx.wet.value = masterDelaySettings.enabled ? masterDelaySettings.wet : 0;
+        fx.delayTime.value = masterDelaySettings.delayTime;
+        fx.feedback.value = masterDelaySettings.feedback;
+    }, [masterDelaySettings, isReady]);
 
+    // Solo Effects
     useEffect(() => {
-        if (!isReady || !fxBusRef.current) return;
-        const fx = fxBusRef.current.chorus;
-        fx.wet.value = chorusSettings.enabled ? chorusSettings.wet : 0;
-        fx.frequency.value = chorusSettings.frequency;
-        fx.depth = chorusSettings.depth;
-    }, [chorusSettings, isReady]);
+        if (!isReady || !fxBusRef.current?.soloDistortion) return;
+        const fx = fxBusRef.current.soloDistortion;
+        fx.wet.value = soloFx.distortion.enabled ? soloFx.distortion.wet : 0;
+    }, [soloFx.distortion, isReady]);
+
+    // Accompaniment Effects
+    useEffect(() => {
+        if (!isReady || !fxBusRef.current?.accompanimentChorus) return;
+        const fx = fxBusRef.current.accompanimentChorus;
+        fx.wet.value = accompanimentFx.chorus.enabled ? accompanimentFx.chorus.wet : 0;
+        fx.frequency.value = accompanimentFx.chorus.frequency;
+        fx.depth = accompanimentFx.chorus.depth;
+    }, [accompanimentFx.chorus, isReady]);
+
   
-
   const handlePlay = useCallback(async () => {
     try {
         if (Tone.context.state !== 'running') {
             await Tone.start();
         }
 
-        if (!musicWorkerRef.current || !bassSynthManagerRef.current || !soloSynthManagerRef.current || !accompanimentSynthManagerRef.current) {
+        if (!musicWorkerRef.current || !fxBusRef.current || !bassSynthManagerRef.current || !soloSynthManagerRef.current || !accompanimentSynthManagerRef.current) {
             setIsInitializing(true);
             setLoadingText("Waiting for audio engine...");
-            // The useEffect initialization will handle the rest
             return;
         }
 
-        // Set instruments on every play press to ensure they are configured
         soloSynthManagerRef.current?.setInstrument(instruments.solo);
         accompanimentSynthManagerRef.current?.setInstrument(instruments.accompaniment);
         bassSynthManagerRef.current?.setInstrument(instruments.bass);
@@ -353,23 +361,17 @@ export function AuraGroove() {
   }, [drumSettings, instruments, bpm, score, toast]);
 
   const handleStop = useCallback(() => {
-    // Graceful stop: fade out synths and release bass notes
     soloSynthManagerRef.current?.fadeOut(1);
     accompanimentSynthManagerRef.current?.fadeOut(1);
     bassSynthManagerRef.current?.releaseAll();
     
-    // Stop the transport and worker
     if (Tone.Transport.state !== 'stopped') {
         Tone.Transport.stop();
         Tone.Transport.cancel();
     }
     musicWorkerRef.current?.postMessage({ command: 'stop' });
     
-    // Dispose all synths to prepare for next run
-    soloSynthManagerRef.current?.dispose();
-    accompanimentSynthManagerRef.current?.dispose();
-    bassSynthManagerRef.current?.dispose();
-
+    // We don't dispose the synths and fx bus anymore on stop, only on unmount
   }, []);
   
   const handleTogglePlay = useCallback(() => {
@@ -389,16 +391,23 @@ export function AuraGroove() {
         Tone.Transport.start();
     }
 
-    const testSynth = new Tone.Synth().connect(fxBusRef.current.input);
-    const sequence = new Tone.Sequence((time, note) => {
-        testSynth.triggerAttackRelease(note, "8n", time);
-    }, ["A4", "B4", "C5", "D5"], "4n").start(0);
+    // Test each channel
+    const soloSynth = new Tone.Synth().connect(fxBusRef.current.soloInput);
+    const accompSynth = new Tone.Synth().connect(fxBusRef.current.accompanimentInput);
+    const bassSynth = new Tone.Synth().connect(fxBusRef.current.bassInput);
 
+    const now = Tone.now();
+    soloSynth.triggerAttackRelease("C5", "8n", now);
+    accompSynth.triggerAttackRelease("E4", "8n", now + 0.5);
+    bassSynth.triggerAttackRelease("G3", "8n", now + 1);
+    drumPlayersRef.current?.player("kick").start(now + 1.5);
+    
     Tone.Transport.scheduleOnce((time) => {
-        sequence.stop();
-        sequence.dispose();
-        testSynth.dispose();
-    }, `+${Tone.Time("1m").toSeconds()}`);
+        soloSynth.dispose();
+        accompSynth.dispose();
+        bassSynth.dispose();
+    }, now + 2);
+
 
   }, []);
 
@@ -449,46 +458,67 @@ export function AuraGroove() {
         </div>
         
         <div className="space-y-4 rounded-lg border p-4">
-           <h3 className="text-lg font-medium text-primary flex items-center gap-2"><ToyBrick className="h-5 w-5" /> Instruments</h3>
-           <div className="grid grid-cols-3 items-center gap-4">
-            <Label htmlFor="solo-instrument" className="text-right">Solo</Label>
-            <Select
-              value={instruments.solo}
-              onValueChange={(v) => setInstruments(i => ({...i, solo: v as Instruments['solo']}))}
-              disabled={isBusy || isPlaying}
-            >
-              <SelectTrigger id="solo-instrument" className="col-span-2">
-                <SelectValue placeholder="Select instrument" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">None</SelectItem>
-                <SelectItem value="synthesizer" disabled>Synthesizer</SelectItem>
-                <SelectItem value="piano" disabled>Piano</SelectItem>
-                <SelectItem value="organ">Organ</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid grid-cols-3 items-center gap-4">
-            <Label htmlFor="accompaniment-instrument" className="text-right">Accompaniment</Label>
-             <Select
-              value={instruments.accompaniment}
-              onValueChange={(v) => setInstruments(i => ({...i, accompaniment: v as Instruments['accompaniment']}))}
-              disabled={isBusy || isPlaying}
-            >
-              <SelectTrigger id="accompaniment-instrument" className="col-span-2">
-                <SelectValue placeholder="Select instrument" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">None</SelectItem>
-                <SelectItem value="synthesizer" disabled>Synthesizer</SelectItem>
-                <SelectItem value="piano" disabled>Piano</SelectItem>
-                <SelectItem value="organ">Organ</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-           <div className="grid grid-cols-3 items-center gap-4">
-            <Label htmlFor="bass-instrument" className="text-right">Bass</Label>
-             <div className="col-span-2 flex items-center gap-2">
+           <h3 className="text-lg font-medium text-primary flex items-center gap-2"><GitBranch className="h-5 w-5" /> Instrument Channels</h3>
+
+           {/* Solo Channel */}
+            <div className="space-y-3 rounded-md border p-3">
+                <Label htmlFor="solo-instrument" className="font-semibold">Solo</Label>
+                <Select
+                  value={instruments.solo}
+                  onValueChange={(v) => setInstruments(i => ({...i, solo: v as Instruments['solo']}))}
+                  disabled={isBusy || isPlaying}
+                >
+                  <SelectTrigger id="solo-instrument">
+                    <SelectValue placeholder="Select instrument" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    <SelectItem value="synthesizer" disabled>Synthesizer</SelectItem>
+                    <SelectItem value="piano" disabled>Piano</SelectItem>
+                    <SelectItem value="organ">Organ</SelectItem>
+                  </SelectContent>
+                </Select>
+                 <div className="space-y-2 pt-2">
+                    <div className="flex items-center justify-between">
+                        <Label htmlFor="solo-dist-enabled" className="flex items-center gap-1.5"><ChevronsRight className="h-4 w-4"/> Distortion</Label>
+                        <Switch id="solo-dist-enabled" checked={soloFx.distortion.enabled} onCheckedChange={(c) => setSoloFx(s => ({...s, distortion: {...s.distortion, enabled: c}}))} disabled={isBusy || isPlaying} />
+                    </div>
+                    <Label className="text-xs text-muted-foreground">Amount</Label>
+                    <Slider value={[soloFx.distortion.wet]} max={1} step={0.05} onValueChange={(v) => setSoloFx(s => ({...s, distortion: {...s.distortion, wet: v[0]}}))} disabled={isBusy || isPlaying || !soloFx.distortion.enabled} />
+                </div>
+            </div>
+
+            {/* Accompaniment Channel */}
+            <div className="space-y-3 rounded-md border p-3">
+                <Label htmlFor="accompaniment-instrument" className="font-semibold">Accompaniment</Label>
+                 <Select
+                  value={instruments.accompaniment}
+                  onValueChange={(v) => setInstruments(i => ({...i, accompaniment: v as Instruments['accompaniment']}))}
+                  disabled={isBusy || isPlaying}
+                >
+                  <SelectTrigger id="accompaniment-instrument">
+                    <SelectValue placeholder="Select instrument" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    <SelectItem value="synthesizer" disabled>Synthesizer</SelectItem>
+                    <SelectItem value="piano" disabled>Piano</SelectItem>
+                    <SelectItem value="organ">Organ</SelectItem>
+                  </SelectContent>
+                </Select>
+                <div className="space-y-2 pt-2">
+                    <div className="flex items-center justify-between">
+                        <Label htmlFor="accomp-chorus-enabled" className="flex items-center gap-1.5"><ChevronsRight className="h-4 w-4"/> Chorus</Label>
+                        <Switch id="accomp-chorus-enabled" checked={accompanimentFx.chorus.enabled} onCheckedChange={(c) => setAccompanimentFx(s => ({...s, chorus: {...s.chorus, enabled: c}}))} disabled={isBusy || isPlaying} />
+                    </div>
+                    <Label className="text-xs text-muted-foreground">Wet</Label>
+                    <Slider value={[accompanimentFx.chorus.wet]} max={1} step={0.05} onValueChange={(v) => setAccompanimentFx(s => ({...s, chorus: {...s.chorus, wet: v[0]}}))} disabled={isBusy || isPlaying || !accompanimentFx.chorus.enabled} />
+                </div>
+            </div>
+
+            {/* Bass Channel */}
+            <div className="space-y-3 rounded-md border p-3">
+                <Label htmlFor="bass-instrument" className="font-semibold">Bass</Label>
                 <Select
                     value={instruments.bass}
                     onValueChange={(v) => setInstruments(i => ({...i, bass: v as Instruments['bass']}))}
@@ -502,51 +532,53 @@ export function AuraGroove() {
                         <SelectItem value="bass synth">Bass Synth</SelectItem>
                     </SelectContent>
                 </Select>
-             </div>
-          </div>
+            </div>
+            
+            {/* Drums Channel */}
+            <div className="space-y-3 rounded-md border p-3">
+                <Label className="font-semibold flex items-center gap-2"><Drum className="h-5 w-5"/> Drums</Label>
+                <div className="flex items-center justify-between pt-2">
+                    <Label htmlFor="drums-enabled">Enable Drums</Label>
+                    <Switch
+                        id="drums-enabled"
+                        checked={drumSettings.enabled}
+                        onCheckedChange={(c) => setDrumSettings(d => ({ ...d, enabled: c }))}
+                        disabled={isBusy || isPlaying || !isGenerative}
+                    />
+                </div>
+                <div className="grid grid-cols-3 items-center gap-4">
+                    <Label htmlFor="drum-pattern" className="text-right">Pattern</Label>
+                    <Select
+                        value={drumSettings.pattern}
+                        onValueChange={(v) => setDrumSettings(d => ({ ...d, pattern: v as DrumSettings['pattern'] }))}
+                        disabled={isBusy || isPlaying || !drumSettings.enabled || !isGenerative}
+                    >
+                        <SelectTrigger id="drum-pattern" className="col-span-2">
+                            <SelectValue placeholder="Select pattern" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="basic">Basic</SelectItem>
+                            <SelectItem value="breakbeat">Breakbeat</SelectItem>
+                            <SelectItem value="slow">Slow</SelectItem>
+                            <SelectItem value="heavy">Heavy</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="grid grid-cols-3 items-center gap-4">
+                    <Label className="text-right flex items-center gap-1.5"><Speaker className="h-4 w-4"/> Volume</Label>
+                    <Slider
+                        value={[drumSettings.volume]}
+                        max={1}
+                        step={0.05}
+                        onValueChange={(v) => setDrumSettings(d => ({ ...d, volume: v[0] }))}
+                        className="col-span-2"
+                        disabled={isBusy || isPlaying || !drumSettings.enabled}
+                    />
+                </div>
+            </div>
+
         </div>
 
-        <div className="space-y-4 rounded-lg border p-4">
-             <h3 className="text-lg font-medium text-primary flex items-center gap-2"><Drum className="h-5 w-5"/> Drums</h3>
-             <div className="flex items-center justify-between pt-2">
-                <Label htmlFor="drums-enabled">Enable Drums</Label>
-                <Switch
-                    id="drums-enabled"
-                    checked={drumSettings.enabled}
-                    onCheckedChange={(c) => setDrumSettings(d => ({ ...d, enabled: c }))}
-                    disabled={isBusy || isPlaying || !isGenerative}
-                />
-            </div>
-            <div className="grid grid-cols-3 items-center gap-4">
-                <Label htmlFor="drum-pattern" className="text-right">Pattern</Label>
-                <Select
-                    value={drumSettings.pattern}
-                    onValueChange={(v) => setDrumSettings(d => ({ ...d, pattern: v as DrumSettings['pattern'] }))}
-                    disabled={isBusy || isPlaying || !drumSettings.enabled || !isGenerative}
-                >
-                    <SelectTrigger id="drum-pattern" className="col-span-2">
-                        <SelectValue placeholder="Select pattern" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="basic">Basic</SelectItem>
-                        <SelectItem value="breakbeat">Breakbeat</SelectItem>
-                        <SelectItem value="slow">Slow</SelectItem>
-                        <SelectItem value="heavy">Heavy</SelectItem>
-                    </SelectContent>
-                </Select>
-            </div>
-            <div className="grid grid-cols-3 items-center gap-4">
-                <Label className="text-right flex items-center gap-1.5"><Speaker className="h-4 w-4"/> Volume</Label>
-                <Slider
-                    value={[drumSettings.volume]}
-                    max={1}
-                    step={0.05}
-                    onValueChange={(v) => setDrumSettings(d => ({ ...d, volume: v[0] }))}
-                    className="col-span-2"
-                    disabled={isBusy || isPlaying || !drumSettings.enabled}
-                />
-            </div>
-        </div>
 
         <div className="space-y-4 rounded-lg border p-4">
           <h3 className="text-lg font-medium text-primary">Master Effects</h3>
@@ -554,38 +586,25 @@ export function AuraGroove() {
             <div className="space-y-2">
                 <div className="flex items-center justify-between">
                     <Label htmlFor="reverb-enabled" className="flex items-center gap-1.5"><Wind className="h-4 w-4"/> Reverb</Label>
-                    <Switch id="reverb-enabled" checked={reverbSettings.enabled} onCheckedChange={(c) => setReverbSettings(s => ({...s, enabled: c}))} disabled={isBusy || isPlaying} />
+                    <Switch id="reverb-enabled" checked={masterReverbSettings.enabled} onCheckedChange={(c) => setMasterReverbSettings(s => ({...s, enabled: c}))} disabled={isBusy || isPlaying} />
                 </div>
                 <Label>Wet</Label>
-                <Slider value={[reverbSettings.wet]} max={1} step={0.05} onValueChange={(v) => setReverbSettings(s => ({...s, wet: v[0]}))} disabled={isBusy || isPlaying || !reverbSettings.enabled} />
+                <Slider value={[masterReverbSettings.wet]} max={1} step={0.05} onValueChange={(v) => setMasterReverbSettings(s => ({...s, wet: v[0]}))} disabled={isBusy || isPlaying || !masterReverbSettings.enabled} />
                  <Label>Decay</Label>
-                <Slider value={[reverbSettings.decay]} min={0.5} max={10} step={0.5} onValueChange={(v) => setReverbSettings(s => ({...s, decay: v[0]}))} disabled={isBusy || isPlaying || !reverbSettings.enabled} />
+                <Slider value={[masterReverbSettings.decay]} min={0.5} max={10} step={0.5} onValueChange={(v) => setMasterReverbSettings(s => ({...s, decay: v[0]}))} disabled={isBusy || isPlaying || !masterReverbSettings.enabled} />
             </div>
              {/* Delay Controls */}
             <div className="space-y-2">
                 <div className="flex items-center justify-between">
                     <Label htmlFor="delay-enabled" className="flex items-center gap-1.5"><Waves className="h-4 w-4"/> Delay</Label>
-                    <Switch id="delay-enabled" checked={delaySettings.enabled} onCheckedChange={(c) => setDelaySettings(s => ({...s, enabled: c}))} disabled={isBusy || isPlaying} />
+                    <Switch id="delay-enabled" checked={masterDelaySettings.enabled} onCheckedChange={(c) => setMasterDelaySettings(s => ({...s, enabled: c}))} disabled={isBusy || isPlaying} />
                 </div>
                 <Label>Wet</Label>
-                <Slider value={[delaySettings.wet]} max={1} step={0.05} onValueChange={(v) => setDelaySettings(s => ({...s, wet: v[0]}))} disabled={isBusy || isPlaying || !delaySettings.enabled} />
+                <Slider value={[masterDelaySettings.wet]} max={1} step={0.05} onValueChange={(v) => setMasterDelaySettings(s => ({...s, wet: v[0]}))} disabled={isBusy || isPlaying || !masterDelaySettings.enabled} />
                 <Label>Time</Label>
-                <Slider value={[delaySettings.delayTime]} max={1} step={0.1} onValueChange={(v) => setDelaySettings(s => ({...s, delayTime: v[0]}))} disabled={isBusy || isPlaying || !delaySettings.enabled} />
+                <Slider value={[masterDelaySettings.delayTime]} max={1} step={0.1} onValueChange={(v) => setMasterDelaySettings(s => ({...s, delayTime: v[0]}))} disabled={isBusy || isPlaying || !masterDelaySettings.enabled} />
                 <Label>Feedback</Label>
-                <Slider value={[delaySettings.feedback]} max={0.9} step={0.1} onValueChange={(v) => setDelaySettings(s => ({...s, feedback: v[0]}))} disabled={isBusy || isPlaying || !delaySettings.enabled} />
-            </div>
-             {/* Chorus Controls */}
-            <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                    <Label htmlFor="chorus-enabled" className="flex items-center gap-1.5"><Speaker className="h-4 w-4"/> Chorus</Label>
-                    <Switch id="chorus-enabled" checked={chorusSettings.enabled} onCheckedChange={(c) => setChorusSettings(s => ({...s, enabled: c}))} disabled={isBusy || isPlaying} />
-                </div>
-                 <Label>Wet</Label>
-                <Slider value={[chorusSettings.wet]} max={1} step={0.05} onValueChange={(v) => setChorusSettings(s => ({...s, wet: v[0]}))} disabled={isBusy || isPlaying || !chorusSettings.enabled} />
-                 <Label>Frequency</Label>
-                <Slider value={[chorusSettings.frequency]} min={0.5} max={10} step={0.5} onValueChange={(v) => setChorusSettings(s => ({...s, frequency: v[0]}))} disabled={isBusy || isPlaying || !chorusSettings.enabled} />
-                 <Label>Depth</Label>
-                <Slider value={[chorusSettings.depth]} max={1} step={0.1} onValueChange={(v) => setChorusSettings(s => ({...s, depth: v[0]}))} disabled={isBusy || isPlaying || !chorusSettings.enabled} />
+                <Slider value={[masterDelaySettings.feedback]} max={0.9} step={0.1} onValueChange={(v) => setMasterDelaySettings(s => ({...s, feedback: v[0]}))} disabled={isBusy || isPlaying || !masterDelaySettings.enabled} />
             </div>
         </div>
          
@@ -636,3 +655,5 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    
