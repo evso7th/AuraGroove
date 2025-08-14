@@ -1,4 +1,3 @@
-
 import type * as Tone from 'tone';
 
 export type Instruments = {
