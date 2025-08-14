@@ -1,6 +1,9 @@
 
+"use client";
+
 import * as Tone from 'tone';
 import type { Instruments } from '@/components/aura-groove';
+import { fxBus } from './fx-bus';
 
 type InstrumentName = Instruments['bass'];
 
@@ -56,7 +59,7 @@ export class BassSynthManager {
                         release: 1.5,
                     },
                     volume: -8,
-                }).toDestination();
+                }).connect(fxBus.input);
             default:
                 return null;
         }
