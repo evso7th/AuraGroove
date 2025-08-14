@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import * as Tone from 'tone';
-import { Drum, Loader2, Music, Pause, Speaker, FileMusic, Beaker } from "lucide-react";
+import { Drum, Loader2, Music, Pause, Speaker, FileMusic } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,7 +29,6 @@ import { BassSynthManager } from "@/lib/bass-synth-manager";
 import { SoloSynthManager } from "@/lib/solo-synth-manager";
 import { AccompanimentSynthManager } from "@/lib/accompaniment-synth-manager";
 import { DrumNote, BassNote, SoloNote, AccompanimentNote } from '@/types/music';
-import { fxBus } from "@/lib/fx-bus";
 
 
 export type Instruments = {
@@ -71,7 +70,6 @@ export function AuraGroove() {
   });
   const [bpm, setBpm] = useState(100);
   const [score, setScore] = useState<ScoreName>('generative');
-  const [masterVolume, setMasterVolume] = useState(0);
   const { toast } = useToast();
 
   const musicWorkerRef = useRef<Worker>();
@@ -321,16 +319,6 @@ export function AuraGroove() {
     }
   }, [isPlaying, handleStop, handlePlay]);
 
-  const handleTestBus = () => {
-    // Create a simple oscillator, connect it to the bus, play a short note, and then dispose of it.
-    const osc = new Tone.Oscillator().connect(fxBus.input);
-    osc.start().stop("+0.5");
-  };
-
-  useEffect(() => {
-    fxBus.channel.volume.value = masterVolume;
-  }, [masterVolume]);
-  
   const isBusy = isInitializing || !isReady;
   const isGenerative = score === 'generative';
 
@@ -374,27 +362,6 @@ export function AuraGroove() {
                     className="col-span-2"
                     disabled={isBusy || isPlaying}
                 />
-            </div>
-        </div>
-
-        <div className="space-y-4 rounded-lg border p-4">
-           <h3 className="text-lg font-medium text-primary">Mixer</h3>
-            <div className="grid grid-cols-3 items-center gap-4">
-                <Label className="text-right flex items-center gap-1.5"><Speaker className="h-4 w-4"/> Master</Label>
-                <Slider
-                    value={[masterVolume]}
-                    min={-40}
-                    max={6}
-                    step={1}
-                    onValueChange={(v) => setMasterVolume(v[0])}
-                    className="col-span-2"
-                />
-            </div>
-            <div className="flex items-center justify-end">
-                <Button variant="outline" size="sm" onClick={handleTestBus} disabled={isBusy} className="gap-2">
-                    <Beaker className="h-4 w-4"/>
-                    Test Bus
-                </Button>
             </div>
         </div>
 
