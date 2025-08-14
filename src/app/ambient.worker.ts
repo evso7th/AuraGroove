@@ -124,13 +124,16 @@ class AccompanimentGenerator {
         const barStartBeat = (bar % 4) * beatsPerBar;
         const barEndBeat = barStartBeat + beatsPerBar;
        
-        return smokeOnTheWaterRiff
+        const generatedScore = smokeOnTheWaterRiff
             .filter(note => note.time >= barStartBeat && note.time < barEndBeat)
             .map(note => ({
                 notes: note.notes.accompaniment,
                 time: note.time - barStartBeat,
                 duration: note.duration,
             }));
+        
+        console.log(`[Worker.AccompanimentGenerator] Bar ${bar}: Generated score with ${generatedScore.length} notes.`);
+        return generatedScore;
     }
 }
 

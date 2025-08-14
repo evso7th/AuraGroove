@@ -6,6 +6,7 @@ import type { FxBus } from './fx-bus';
 type InstrumentName = Instruments['accompaniment'];
 
 const DEFAULT_VOLUME = -12;
+let instanceCounter = 0;
 
 /**
  * Manages the lifecycle of accompaniment instrument synthesizers.
@@ -15,11 +16,14 @@ export class AccompanimentSynthManager {
     private currentInstrument: InstrumentName = 'none';
     private fxBus: FxBus;
     private readonly defaultVolume: number;
+    private instanceId: number;
 
 
     constructor(fxBus: FxBus) {
         this.fxBus = fxBus;
         this.defaultVolume = DEFAULT_VOLUME;
+        this.instanceId = ++instanceCounter;
+        console.log(`[AccompManager] CONSTRUCTOR: New instance created, ID: ${this.instanceId}`);
     }
 
     public setInstrument(name: InstrumentName) {
@@ -35,6 +39,7 @@ export class AccompanimentSynthManager {
         this.currentInstrument = name;
 
         if (name === 'none') {
+            console.log(`[AccompManager ID: ${this.instanceId}] setInstrument: Instrument set to 'none'.`);
             return;
         }
 
@@ -42,6 +47,7 @@ export class AccompanimentSynthManager {
     }
     
     private createSynth(name: InstrumentName) {
+        console.log(`[AccompManager ID: ${this.instanceId}] CREATE_SYNTH: Creating new PolySynth for instrument: ${name}`);
         switch (name) {
             case 'organ':
                 this.currentSynth = new Tone.PolySynth(Tone.Synth, {
@@ -65,6 +71,8 @@ export class AccompanimentSynthManager {
     
     public triggerAttackRelease(notes: string | string[], duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
         if (this.currentSynth) {
+            const noteCount = Array.isArray(notes) ? notes.length : 1;
+            console.log(`[AccompManager ID: ${this.instanceId}] triggerAttackRelease: Received ${noteCount} notes to play.`, { notes, time });
             this.currentSynth.triggerAttackRelease(notes, duration, time, velocity);
         }
     }
@@ -75,6 +83,7 @@ export class AccompanimentSynthManager {
     
     public fadeOut(duration: number) {
         if (this.currentSynth) {
+            console.log(`[AccompManager ID: ${this.instanceId}] fadeOut: Fading out over ${duration}s.`);
             try {
                 this.currentSynth.volume.rampTo(-Infinity, duration);
             } catch (e) {
@@ -85,6 +94,7 @@ export class AccompanimentSynthManager {
     
     public fadeIn(duration: number) {
         if (this.currentSynth) {
+            console.log(`[AccompManager ID: ${this.instanceId}] fadeIn: Fading in over ${duration}s to ${this.defaultVolume}dB.`);
             try {
                 this.currentSynth.volume.rampTo(this.defaultVolume, duration);
             } catch (e) {
@@ -95,10 +105,9 @@ export class AccompanimentSynthManager {
 
     public dispose() {
         if (this.currentSynth) {
+            console.log(`[AccompManager ID: ${this.instanceId}] DISPOSE: Disposing of current synth.`);
             this.currentSynth.dispose();
             this.currentSynth = null;
         }
     }
 }
-
-    
