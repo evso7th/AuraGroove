@@ -78,5 +78,3 @@ export const promenadeScore: {
         { notes: ['D2', 'F#2', 'A2'], duration: '1n', time: 12 },
     ]
 };
-
-    

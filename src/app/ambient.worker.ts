@@ -268,7 +268,7 @@ const Scheduler = {
 
             if (this.instruments.bass !== 'none') {
                 const bassScore = BassGenerator.createScore(this.barCount, this.beatsPerBar)
-                    .map(note => ({...note, time: (note.time as number) * this.secondsPerBeat, duration: note.duration as Tone.Unit.Time, velocity: 0.9 }));
+                    .map(note => ({...note, time: (note.time as number) * this.secondsPerBeat, duration: note.duration, velocity: 0.9 }));
                 if (bassScore.length > 0) self.postMessage({ type: 'bass_score', data: { score: bassScore } });
             }
             if (this.instruments.solo !== 'none') {
@@ -322,5 +322,3 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
-
-    

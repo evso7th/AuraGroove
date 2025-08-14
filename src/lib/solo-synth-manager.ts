@@ -27,11 +27,6 @@ const instrumentPresets: Record<Exclude<InstrumentName, 'none'>, Tone.SynthOptio
     }
 };
 
-
-/**
- * Manages the lifecycle of solo instrument synthesizers using a pool of mono synths.
- * Synths are created lazily on first use and reconfigured on instrument change.
- */
 export class SoloSynthManager {
     private voices: Tone.Synth[] = [];
     private isInitialized = false;
@@ -45,11 +40,10 @@ export class SoloSynthManager {
         this.defaultVolume = DEFAULT_VOLUME;
     }
 
-    private initializeVoices() {
+    private ensureSynthsInitialized() {
         if (this.isInitialized) return;
         
         console.log(`SOLO: Lazily creating pool of ${NUM_VOICES} voices.`);
-
         this.voices = Array.from({ length: NUM_VOICES }, () => 
             new Tone.Synth({ volume: -Infinity }).connect(this.fxBus.soloInput)
         );
@@ -57,7 +51,7 @@ export class SoloSynthManager {
     }
 
     public setInstrument(name: InstrumentName) {
-        this.initializeVoices();
+        this.ensureSynthsInitialized();
 
         if (name === 'none') {
             this.fadeOut(0.1);
@@ -65,25 +59,21 @@ export class SoloSynthManager {
             return;
         }
 
-        if (name === this.currentInstrument) {
-            if (this.voices.length > 0 && this.voices[0].volume.value === -Infinity) {
-                this.fadeIn(0.1);
-            }
-            return;
-        }
+        if (name === this.currentInstrument) return;
 
         console.log(`SOLO: Setting instrument to ${name}`);
         const preset = instrumentPresets[name];
         this.voices.forEach(voice => {
             voice.set(preset);
         });
-        this.fadeIn(0.01);
 
+        this.fadeIn(0.01);
         this.currentInstrument = name;
     }
     
     public triggerAttackRelease(notes: string | string[], duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
-        if (!this.isInitialized || this.currentInstrument === 'none' || !this.voices.length) return;
+        this.ensureSynthsInitialized();
+        if (this.currentInstrument === 'none' || !this.voices.length) return;
 
         const notesToPlay = Array.isArray(notes) ? notes : [notes];
         const scheduledTime = time || Tone.now();
@@ -120,19 +110,17 @@ export class SoloSynthManager {
     }
 
     public fadeIn(duration: number) {
-        this.setVolume(this.defaultVolume, duration);
+         if (this.currentInstrument !== 'none') {
+            this.setVolume(this.defaultVolume, duration);
+        }
     }
     
-    private disposeVoices() {
+    public dispose() {
         if (this.voices.length > 0) {
             console.log("SOLO: Disposing all voices");
             this.voices.forEach(voice => voice.dispose());
             this.voices = [];
             this.isInitialized = false;
         }
-    }
-
-    public dispose() {
-       this.disposeVoices();
     }
 }

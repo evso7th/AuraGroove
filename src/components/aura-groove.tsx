@@ -88,38 +88,22 @@ export function AuraGroove() {
     const worker = new Worker(new URL('../app/ambient.worker.ts', import.meta.url));
     musicWorkerRef.current = worker;
     
-    const initializeAudioEngine = async () => {
-        setLoadingText("Initializing Audio Engine...");
-        try {
-            const { FxBus } = await import('@/lib/fx-bus');
-            fxBusRef.current = new FxBus();
-            
-            const { BassSynthManager } = await import('@/lib/bass-synth-manager');
-            bassSynthManagerRef.current = new BassSynthManager(fxBusRef.current);
-
-            const { SoloSynthManager } = await import('@/lib/solo-synth-manager');
-            soloSynthManagerRef.current = new SoloSynthManager(fxBusRef.current);
-            
-            const { AccompanimentSynthManager } = await import('@/lib/accompaniment-synth-manager');
-            accompanimentSynthManagerRef.current = new AccompanimentSynthManager(fxBusRef.current);
-
-            const { EffectsSynthManager } = await import('@/lib/effects-synth-manager');
-            effectsSynthManagerRef.current = new EffectsSynthManager(fxBusRef.current);
-            
-            setLoadingText("Loading Samples...");
-            await loadSamples(fxBusRef.current);
-
-        } catch (error) {
-             console.error("Audio initialization failed:", error);
-             toast({
-                variant: "destructive",
-                title: "Failed to initialize audio components",
-                description: error instanceof Error ? error.message : "An unknown error occurred.",
-            });
-            setLoadingText("Error initializing audio.");
-            setIsInitializing(false);
-        }
-    };
+    // Instantiate managers immediately. They will internally handle the lazy-loading of Tone.js components.
+    import('@/lib/fx-bus').then(({ FxBus }) => {
+        fxBusRef.current = new FxBus();
+        import('@/lib/bass-synth-manager').then(({ BassSynthManager }) => {
+            bassSynthManagerRef.current = new BassSynthManager(fxBusRef.current!);
+        });
+        import('@/lib/solo-synth-manager').then(({ SoloSynthManager }) => {
+            soloSynthManagerRef.current = new SoloSynthManager(fxBusRef.current!);
+        });
+        import('@/lib/accompaniment-synth-manager').then(({ AccompanimentSynthManager }) => {
+            accompanimentSynthManagerRef.current = new AccompanimentSynthManager(fxBusRef.current!);
+        });
+         import('@/lib/effects-synth-manager').then(({ EffectsSynthManager }) => {
+            effectsSynthManagerRef.current = new EffectsSynthManager(fxBusRef.current!);
+        });
+    });
 
 
     const handleMessage = (event: MessageEvent) => {
@@ -127,7 +111,11 @@ export function AuraGroove() {
       
       switch(type) {
         case 'initialized':
-           initializeAudioEngine();
+           // Worker is ready, now we can proceed with loading things that need a running audio context
+           // which we will get on first user interaction.
+           setIsReady(true);
+           setIsInitializing(false);
+           setLoadingText("");
           break;
         
         case 'started':
@@ -220,46 +208,7 @@ export function AuraGroove() {
 
     worker.onmessage = handleMessage;
     
-    const loadSamples = async (fxBus: FxBus) => {
-        try {
-            const fetchedSamples = await Promise.all(
-                Object.entries(samplePaths).map(async ([name, url]) => {
-                    const response = await fetch(url);
-                    if (!response.ok) {
-                        throw new Error(`Failed to fetch sample: ${name}`);
-                    }
-                    const buffer = await response.arrayBuffer();
-                    return { name, buffer };
-                })
-            );
-
-            const mainThreadSampleMap: Record<string, AudioBuffer> = {};
-            
-            await Promise.all(fetchedSamples.map(async ({ name, buffer }) => {
-                const mainBuffer = await Tone.context.decodeAudioData(buffer.slice(0));
-                mainThreadSampleMap[name] = mainBuffer;
-            }));
-
-            drumPlayersRef.current = new Tone.Players(mainThreadSampleMap).connect(fxBus.drumInput);
-
-            setLoadingText("");
-            setIsReady(true);
-            setIsInitializing(false);
-
-        } catch (error) {
-            console.error("Sample loading failed:", error);
-            toast({
-                variant: "destructive",
-                title: "Failed to load audio samples",
-                description: error instanceof Error ? error.message : "An unknown error occurred.",
-            });
-            setLoadingText("Error loading samples.");
-            setIsInitializing(false);
-        }
-    };
-    
     musicWorkerRef.current?.postMessage({ command: 'init' });
-
     
     return () => {
       if (musicWorkerRef.current) {
@@ -332,11 +281,32 @@ export function AuraGroove() {
     try {
         if (Tone.context.state !== 'running') {
             await Tone.start();
+            console.log("AudioContext started!");
         }
+
+        // Load samples on first play, if not already loaded
+        if (!drumPlayersRef.current) {
+            setIsInitializing(true);
+            setLoadingText("Loading samples...");
+            const fetchedSamples = await Promise.all(
+                Object.entries(samplePaths).map(async ([name, url]) => {
+                    const response = await fetch(url);
+                    if (!response.ok) throw new Error(`Failed to fetch sample: ${name}`);
+                    return { name, buffer: await response.arrayBuffer() };
+                })
+            );
+            const mainThreadSampleMap = await Promise.all(fetchedSamples.map(async ({ name, buffer }) => {
+                return [name, await Tone.context.decodeAudioData(buffer.slice(0))];
+            }));
+            drumPlayersRef.current = new Tone.Players(Object.fromEntries(mainThreadSampleMap)).connect(fxBusRef.current!.drumInput);
+            setLoadingText("Samples loaded.");
+        }
+
 
         if (!musicWorkerRef.current || !fxBusRef.current || !bassSynthManagerRef.current || !soloSynthManagerRef.current || !accompanimentSynthManagerRef.current || !effectsSynthManagerRef.current) {
             setIsInitializing(true);
             setLoadingText("Waiting for audio engine...");
+            // This should ideally not happen if managers are instantiated on load
             return;
         }
 
@@ -403,6 +373,7 @@ export function AuraGroove() {
         Tone.Transport.start();
     }
 
+    // Lazy-init synths for testing
     const soloSynth = new Tone.Synth().connect(fxBusRef.current.soloInput);
     const accompSynth = new Tone.Synth().connect(fxBusRef.current.accompanimentInput);
     const bassSynth = new Tone.Synth().connect(fxBusRef.current.bassInput);
@@ -412,7 +383,15 @@ export function AuraGroove() {
     soloSynth.triggerAttackRelease("C5", "8n", now);
     accompSynth.triggerAttackRelease("E4", "8n", now + 0.5);
     bassSynth.triggerAttackRelease("G3", "8n", now + 1);
-    drumPlayersRef.current?.player("kick").start(now + 1.5);
+    
+    if (drumPlayersRef.current) {
+        drumPlayersRef.current.player("kick").start(now + 1.5);
+    } else {
+         const kickPlayer = new Tone.Player('/assets/drums/kick_drum6.wav').toDestination();
+         await Tone.loaded();
+         kickPlayer.start(now + 1.5);
+    }
+    
     sfxSynth.triggerAttackRelease("C6", "16n", now + 2);
 
     
@@ -426,7 +405,7 @@ export function AuraGroove() {
 
   }, []);
 
-  const isBusy = isInitializing || !isReady;
+  const isBusy = isInitializing;
   const isGenerative = score === 'generative';
   const drumsEnabled = drumSettings.pattern !== 'none';
   const effectsEnabled = effectsSettings.mode !== 'none';
@@ -673,17 +652,17 @@ export function AuraGroove() {
           <Button
             type="button"
             onClick={handleTogglePlay}
-            disabled={isBusy}
+            disabled={isBusy && !isReady}
             className="w-full text-lg py-6"
           >
-            {isBusy ? (
+            {isBusy && !isReady ? (
               <Loader2 className="mr-2 h-6 w-6 animate-spin" />
             ) : isPlaying ? (
               <Pause className="mr-2 h-6 w-6" />
             ) : (
               <Music className="mr-2 h-6 w-6" />
             )}
-            {isBusy ? loadingText : isPlaying ? "Stop" : "Play"}
+            {isBusy && !isReady ? loadingText : isPlaying ? "Stop" : "Play"}
           </Button>
           <Button
             type="button"
@@ -698,7 +677,3 @@ export function AuraGroove() {
     </Card>
   );
 }
-
-    
-
-    

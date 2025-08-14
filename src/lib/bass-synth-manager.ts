@@ -20,10 +20,6 @@ const instrumentPresets: Record<Exclude<InstrumentName, 'none'>, Tone.MonoSynthO
     }
 };
 
-/**
- * Manages the lifecycle of the bass instrument synthesizer.
- * The synth is created lazily on first use and reconfigured on instrument change.
- */
 export class BassSynthManager {
     private currentSynth: Tone.MonoSynth | null = null;
     private isInitialized = false;
@@ -36,7 +32,7 @@ export class BassSynthManager {
         this.defaultVolume = DEFAULT_VOLUME;
     }
 
-    private initializeSynth() {
+    private ensureSynthInitialized() {
         if (this.isInitialized) return;
         
         console.log("BASS: Lazily creating MonoSynth.");
@@ -45,7 +41,7 @@ export class BassSynthManager {
     }
 
     public setInstrument(name: InstrumentName) {
-        this.initializeSynth();
+        this.ensureSynthInitialized();
         if (!this.currentSynth) return;
 
         if (name === 'none') {
@@ -54,22 +50,17 @@ export class BassSynthManager {
             return;
         }
 
-        if (name === this.currentInstrument) {
-            if (this.currentSynth.volume.value === -Infinity) {
-                this.fadeIn(0.1);
-            }
-            return;
-        }
+        if (name === this.currentInstrument) return;
         
         console.log(`BASS: Setting instrument to ${name}`);
         const preset = instrumentPresets[name];
         this.currentSynth.set(preset);
         this.fadeIn(0.01);
-
         this.currentInstrument = name;
     }
     
     public triggerAttackRelease(note: string, duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
+        this.ensureSynthInitialized();
         if (this.currentSynth && this.currentInstrument !== 'none') {
             this.currentSynth.triggerAttackRelease(note, duration, time, velocity);
         }
