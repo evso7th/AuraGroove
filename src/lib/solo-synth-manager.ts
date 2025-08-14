@@ -7,11 +7,34 @@ type InstrumentName = Instruments['solo'];
 const DEFAULT_VOLUME = -9;
 const NUM_VOICES = 2; // 2 voices for solo instrument
 
+const instrumentPresets: Record<Exclude<InstrumentName, 'none'>, Tone.SynthOptions> = {
+    'organ': {
+        oscillator: { type: 'sawtooth' },
+        envelope: {
+            attack: 0.16,
+            decay: 0.15,
+            sustain: 0.9,
+            release: 0.4,
+        },
+    },
+    'synthesizer': {
+        oscillator: { type: 'sine' },
+        envelope: { attack: 0.01, decay: 0.2, sustain: 0.2, release: 0.8 },
+    },
+    'piano': { // Example preset, as it's disabled in UI
+         oscillator: { type: 'sine' }, // Simplified
+         envelope: { attack: 0.01, decay: 0.5, sustain: 0.1, release: 0.8 },
+    }
+};
+
+
 /**
  * Manages the lifecycle of solo instrument synthesizers using a pool of mono synths.
+ * Synths are created lazily on first use and reconfigured on instrument change.
  */
 export class SoloSynthManager {
     private voices: Tone.Synth[] = [];
+    private isInitialized = false;
     private currentInstrument: InstrumentName = 'none';
     private fxBus: FxBus;
     private readonly defaultVolume: number;
@@ -22,42 +45,26 @@ export class SoloSynthManager {
         this.defaultVolume = DEFAULT_VOLUME;
     }
 
-    private initializeVoices(name: InstrumentName) {
-        this.disposeVoices();
-
-        if (name === 'none') return;
-
-        console.log(`SOLO: Creating pool of ${NUM_VOICES} voices for ${name}`);
-        let synthOptions: Tone.SynthOptions;
-
-        switch (name) {
-            case 'organ':
-                 synthOptions = {
-                     oscillator: { type: 'sawtooth' },
-                     envelope: {
-                         attack: 0.16,
-                         decay: 0.15,
-                         sustain: 0.9,
-                         release: 0.4,
-                     },
-                     volume: this.defaultVolume,
-                 };
-                 break;
-            default:
-                synthOptions = {
-                     oscillator: { type: 'sine' },
-                     envelope: { attack: 0.01, decay: 0.2, sustain: 0.2, release: 0.8 },
-                     volume: this.defaultVolume,
-                 };
-        }
+    private initializeVoices() {
+        if (this.isInitialized) return;
+        
+        console.log(`SOLO: Lazily creating pool of ${NUM_VOICES} voices.`);
 
         this.voices = Array.from({ length: NUM_VOICES }, () => 
-            new Tone.Synth(synthOptions).connect(this.fxBus.soloInput)
+            new Tone.Synth({ volume: -Infinity }).connect(this.fxBus.soloInput)
         );
+        this.isInitialized = true;
     }
 
-
     public setInstrument(name: InstrumentName) {
+        this.initializeVoices();
+
+        if (name === 'none') {
+            this.fadeOut(0.1);
+            this.currentInstrument = 'none';
+            return;
+        }
+
         if (name === this.currentInstrument) {
             if (this.voices.length > 0 && this.voices[0].volume.value === -Infinity) {
                 this.fadeIn(0.1);
@@ -65,12 +72,18 @@ export class SoloSynthManager {
             return;
         }
 
+        console.log(`SOLO: Setting instrument to ${name}`);
+        const preset = instrumentPresets[name];
+        this.voices.forEach(voice => {
+            voice.set(preset);
+        });
+        this.fadeIn(0.01);
+
         this.currentInstrument = name;
-        this.initializeVoices(name);
     }
     
     public triggerAttackRelease(notes: string | string[], duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
-        if (!this.voices.length) return;
+        if (!this.isInitialized || this.currentInstrument === 'none' || !this.voices.length) return;
 
         const notesToPlay = Array.isArray(notes) ? notes : [notes];
         const scheduledTime = time || Tone.now();
@@ -87,10 +100,12 @@ export class SoloSynthManager {
     }
 
     public releaseAll() {
+        if (!this.isInitialized) return;
         this.voices.forEach(voice => voice.triggerRelease());
     }
 
     private setVolume(volume: number, duration: number) {
+        if (!this.isInitialized) return;
         this.voices.forEach(voice => {
             try {
                 voice.volume.rampTo(volume, duration);
@@ -113,6 +128,7 @@ export class SoloSynthManager {
             console.log("SOLO: Disposing all voices");
             this.voices.forEach(voice => voice.dispose());
             this.voices = [];
+            this.isInitialized = false;
         }
     }
 
