@@ -47,7 +47,7 @@ export function AuraGroove() {
   const [isInitializing, setIsInitializing] = useState(true); 
   const [loadingText, setLoadingText] = useState("Initializing...");
   const [drumSettings, setDrumSettings] = useState<DrumSettings>({
-      pattern: 'basic',
+      pattern: 'dreamtales-beat',
       volume: 0.85,
   });
   const [effectsSettings, setEffectsSettings] = useState<EffectsSettings>({
@@ -450,8 +450,8 @@ export function AuraGroove() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">None</SelectItem>
-                    <SelectItem value="synthesizer" disabled>Synthesizer</SelectItem>
-                    <SelectItem value="piano" disabled>Piano</SelectItem>
+                    <SelectItem value="synthesizer">Synthesizer</SelectItem>
+                    <SelectItem value="piano">Piano</SelectItem>
                     <SelectItem value="organ">Organ</SelectItem>
                   </SelectContent>
                 </Select>
@@ -478,8 +478,8 @@ export function AuraGroove() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">None</SelectItem>
-                    <SelectItem value="synthesizer" disabled>Synthesizer</SelectItem>
-                    <SelectItem value="piano" disabled>Piano</SelectItem>
+                    <SelectItem value="synthesizer">Synthesizer</SelectItem>
+                    <SelectItem value="piano">Piano</SelectItem>
                     <SelectItem value="organ">Organ</SelectItem>
                   </SelectContent>
                 </Select>
@@ -526,6 +526,7 @@ export function AuraGroove() {
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="none">None</SelectItem>
+                            <SelectItem value="dreamtales-beat">DreamTales Beat</SelectItem>
                             <SelectItem value="basic">Basic</SelectItem>
                             <SelectItem value="breakbeat">Breakbeat</SelectItem>
                             <SelectItem value="slow">Slow</SelectItem>
@@ -628,5 +629,3 @@ export function AuraGroove() {
     </Card>
   );
 }
-
-    

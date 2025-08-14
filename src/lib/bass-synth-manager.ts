@@ -9,7 +9,19 @@ const DEFAULT_VOLUME = 0;
 const instrumentPresets: Record<Exclude<InstrumentName, 'none'>, Tone.MonoSynthOptions> = {
     'bass synth': {
         oscillator: {
-            type: 'sine'
+            type: 'sawtooth'
+        },
+        filter: {
+            type: 'lowpass',
+            rolloff: -24,
+        },
+        filterEnvelope: {
+            attack: 0.01,
+            decay: 0.1,
+            sustain: 0.8,
+            release: 1.5,
+            baseFrequency: 50, // Start low
+            octaves: 3, // Sweep range
         },
         envelope: {
             attack: 0.1,

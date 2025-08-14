@@ -8,7 +8,7 @@ export type Instruments = {
 };
 
 export type DrumSettings = {
-    pattern: 'basic' | 'breakbeat' | 'slow' | 'heavy' | 'none';
+    pattern: 'basic' | 'breakbeat' | 'slow' | 'heavy' | 'none' | 'dreamtales-beat';
     volume: number;
 };
 
@@ -52,5 +52,3 @@ export type EffectNote = {
 }
 
 export type ScoreName = 'dreamtales' | 'promenade';
-
-    
