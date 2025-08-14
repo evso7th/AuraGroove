@@ -192,7 +192,7 @@ export function AuraGroove() {
                 mainThreadSampleMap[name] = mainBuffer;
             }));
 
-            drumPlayersRef.current = new Tone.Players(mainThreadSampleMap).toDestination();
+            drumPlayersRef.current = new Tone.Players(mainThreadSampleMap).connect(fxBus.input);
 
             setLoadingText("");
             setIsReady(true);
