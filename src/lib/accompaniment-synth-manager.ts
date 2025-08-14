@@ -1,6 +1,7 @@
 
 import * as Tone from 'tone';
 import type { Instruments } from '@/components/aura-groove';
+import { fxBus } from './fx-bus';
 
 type InstrumentName = Instruments['accompaniment'];
 
@@ -74,7 +75,7 @@ export class AccompanimentSynthManager {
                         release: 0.4,
                     },
                      volume: -15,
-                }).chain(this.distortion, this.tremolo, Tone.Destination);
+                }).chain(this.distortion, this.tremolo, fxBus.input);
                 break;
             default:
                 this.currentSynth = null;
