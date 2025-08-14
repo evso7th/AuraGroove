@@ -47,7 +47,7 @@ export class SoloSynthManager {
                         sustain: 0.9,
                         release: 0.4,
                     },
-                     volume: -18,
+                     volume: -9, // Adjusted volume for better mix
                  }).connect(this.fxBus.soloInput); // Connect to the correct mixer channel
                  break;
             default:
@@ -83,5 +83,3 @@ export class SoloSynthManager {
         this.isSynthCreated = false;
     }
 }
-
-    

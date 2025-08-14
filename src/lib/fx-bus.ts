@@ -4,6 +4,7 @@ import * as Tone from 'tone';
 /**
  * A central multi-channel mixer (FX Bus) to route all instruments through.
  * This allows for applying both individual channel effects and master effects.
+ * This revised version simplifies routing to ensure signal path integrity.
  */
 export class FxBus {
     // Master channel for global effects
@@ -11,61 +12,50 @@ export class FxBus {
     public masterReverb: Tone.Reverb;
     public masterDelay: Tone.FeedbackDelay;
 
-    // Individual channels for each instrument type
-    public soloChannel: Tone.Channel;
-    public accompanimentChannel: Tone.Channel;
-    public bassChannel: Tone.Channel;
-    public drumChannel: Tone.Channel;
-
-    // Individual effects
+    // Individual effects for each instrument type
     public soloDistortion: Tone.Distortion;
     public accompanimentChorus: Tone.Chorus;
 
+    // Direct inputs for each instrument.
+    // These act as entry points to the mixer bus.
+    public soloInput: Tone.Gain;
+    public accompanimentInput: Tone.Gain;
+    public bassInput: Tone.Gain;
+    public drumInput: Tone.Gain;
+
     constructor() {
-        // 1. Create individual instrument channels
-        this.soloChannel = new Tone.Channel({ volume: -3, pan: -0.1 }).toDestination();
-        this.accompanimentChannel = new Tone.Channel({ volume: -9, pan: 0.1 }).toDestination();
-        this.bassChannel = new Tone.Channel({ volume: 0 }).toDestination();
-        this.drumChannel = new Tone.Channel({ volume: -6 }).toDestination();
+        // 1. Create the master channel which everything will eventually flow into.
+        this.masterChannel = new Tone.Channel({ volume: 0 });
 
-        // 2. Create and connect individual effects to their channels
-        this.soloDistortion = new Tone.Distortion({ distortion: 0.4, wet: 0 }).toDestination();
-        this.soloChannel.connect(this.soloDistortion);
-        
-        this.accompanimentChorus = new Tone.Chorus({ frequency: 1.5, delayTime: 3.5, depth: 0.7, wet: 0 }).toDestination();
-        this.accompanimentChannel.connect(this.accompanimentChorus);
-        
-        // 3. Create the master channel
-        this.masterChannel = new Tone.Channel({ volume: 0 }).toDestination();
-
-        // 4. Connect all individual channels to the master channel
-        this.soloDistortion.connect(this.masterChannel);
-        this.accompanimentChorus.connect(this.masterChannel);
-        this.bassChannel.connect(this.masterChannel);
-        this.drumChannel.connect(this.masterChannel);
-
-        // 5. Create and chain master effects from the master channel
+        // 2. Create master effects.
         this.masterReverb = new Tone.Reverb({ decay: 4.5, preDelay: 0.01, wet: 0.3 });
         this.masterDelay = new Tone.FeedbackDelay({ delayTime: 0.5, feedback: 0.3, wet: 0.2 });
+        
+        // 3. Chain master effects and connect to the final destination.
         this.masterChannel.chain(this.masterDelay, this.masterReverb, Tone.Destination);
-    }
 
-    // Expose inputs for each instrument channel
-    public get soloInput() { return this.soloChannel; }
-    public get accompanimentInput() { return this.accompanimentChannel; }
-    public get bassInput() { return this.bassChannel; }
-    public get drumInput() { return this.drumChannel; }
+        // 4. Create individual effects for each channel.
+        this.soloDistortion = new Tone.Distortion({ distortion: 0.4, wet: 0 }).connect(this.masterChannel);
+        this.accompanimentChorus = new Tone.Chorus({ frequency: 1.5, delayTime: 3.5, depth: 0.7, wet: 0 }).connect(this.masterChannel);
+        
+        // 5. Create direct inputs for each instrument.
+        // These inputs will be connected to the corresponding individual effect.
+        this.soloInput = new Tone.Gain().connect(this.soloDistortion);
+        this.accompanimentInput = new Tone.Gain().connect(this.accompanimentChorus);
+        this.bassInput = new Tone.Gain().connect(this.masterChannel); // Bass has no individual effect, goes direct to master
+        this.drumInput = new Tone.Gain().connect(this.masterChannel);  // Drums go direct to master
+    }
     
     public dispose() {
         // Dispose individual effects first
         this.soloDistortion.dispose();
         this.accompanimentChorus.dispose();
         
-        // Dispose channels
-        this.soloChannel.dispose();
-        this.accompanimentChannel.dispose();
-        this.bassChannel.dispose();
-        this.drumChannel.dispose();
+        // Dispose Gain nodes
+        this.soloInput.dispose();
+        this.accompanimentInput.dispose();
+        this.bassInput.dispose();
+        this.drumInput.dispose();
 
         // Dispose master effects and channel
         this.masterReverb.dispose();
@@ -73,5 +63,3 @@ export class FxBus {
         this.masterChannel.dispose();
     }
 }
-
-    

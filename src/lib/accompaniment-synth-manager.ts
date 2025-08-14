@@ -48,7 +48,7 @@ export class AccompanimentSynthManager {
                         sustain: 0.9,
                         release: 0.4,
                     },
-                     volume: -18,
+                     volume: -12, // Adjusted volume for better mix
                 }).connect(this.fxBus.accompanimentInput); // Connect to the correct mixer channel
                 break;
             default:
@@ -84,5 +84,3 @@ export class AccompanimentSynthManager {
         this.isSynthCreated = false;
     }
 }
-
-    

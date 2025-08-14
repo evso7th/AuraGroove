@@ -47,7 +47,7 @@ export class BassSynthManager {
                         sustain: 0.4,
                         release: 1.5,
                     },
-                    volume: -6,
+                    volume: 0, // Adjusted for better presence
                 }).connect(this.fxBus.bassInput); // Connect to the correct mixer channel
             default:
                 return null;
@@ -78,5 +78,3 @@ export class BassSynthManager {
         this.isSynthCreated = false;
     }
 }
-
-    
