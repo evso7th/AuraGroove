@@ -132,7 +132,6 @@ class AccompanimentGenerator {
                 duration: note.duration,
             }));
         
-        console.log(`[Worker.AccompanimentGenerator] Bar ${bar}: Generated score with ${generatedScore.length} notes.`);
         return generatedScore;
     }
 }
@@ -153,13 +152,16 @@ class EffectsGenerator {
         if (effectType === 'bell') {
             // "Music of the Wind" logic for bells
             const windChimeNotes = ['C5', 'Eb5', 'F5', 'G5', 'Bb5']; // C Minor Pentatonic
-            const numberOfChimes = Math.floor(Math.random() * 3) + 1; // 1 to 3 chimes per bar
+            const numberOfChimes = Math.floor(Math.random() * 3) + 2; // 2 to 4 chimes per bar
+            let currentTime = Math.random() * (beatsPerBar - 1); // Start somewhere in the bar, leaving space for the sequence
             
             for (let i = 0; i < numberOfChimes; i++) {
-                if (Math.random() > 0.4) { // Add some randomness to whether a chime plays
+                if (Math.random() > 0.3) { // Increase chance of a chime playing
                     const note = windChimeNotes[Math.floor(Math.random() * windChimeNotes.length)];
-                    const time = Math.random() * beatsPerBar; // Random time within the bar
-                    score.push({ type: 'bell', time, note, duration: '2n' });
+                    score.push({ type: 'bell', time: currentTime, note, duration: '1n' });
+                    
+                    // Add a small, random delay for the next chime to create a sequence
+                    currentTime += (Math.random() * 0.1) + 0.15; // 0.15s to 0.25s delay
                 }
             }
         }
