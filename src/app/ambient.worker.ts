@@ -2,11 +2,26 @@
 /// <reference lib="webworker" />
 
 import { promenadeScore } from '@/lib/scores/promenade';
-import type { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote, DrumSettings, EffectsSettings } from '@/types/music';
+import type { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote, DrumSettings, EffectsSettings, ScoreName } from '@/types/music';
 
 // --- 1. PatternProvider (The Music Sheet Library) ---
 const PatternProvider = {
     drumPatterns: {
+        'dreamtales-beat': [
+            { sample: 'ride', time: 0, velocity: 0.7 },
+            { sample: 'ride', time: 1, velocity: 0.6 },
+            { sample: 'kick', time: 2, velocity: 0.8 },
+            { sample: 'ride', time: 2, velocity: 0.7 },
+            { sample: 'ride', time: 3, velocity: 0.6 },
+            { sample: 'snare', time: 3.5, velocity: 0.5 },
+        ],
+        'dreamtales-fill': [
+            { sample: 'snare', time: 2.0, velocity: 0.6 },
+            { sample: 'snare', time: 2.5, velocity: 0.7 },
+            { sample: 'hat', time: 3.0, velocity: 0.5 },
+            { sample: 'hat', time: 3.5, velocity: 0.6 },
+        ],
+        // Keep old patterns for now, might be useful
         basic: [
             { sample: 'kick', time: 0 },
             { sample: 'hat', time: 0.5 },
@@ -47,94 +62,43 @@ const PatternProvider = {
         ],
         none: [],
     },
-    getDrumPattern(name: DrumSettings['pattern']) {
-        return this.drumPatterns[name] || this.drumPatterns.basic;
+    getDrumPattern(name: DrumSettings['pattern'] | 'dreamtales-beat' | 'dreamtales-fill') {
+        return this.drumPatterns[name as keyof typeof this.drumPatterns] || [];
     },
 };
 
-// --- "Smoke on the Water" Riff Definition ---
-const smokeOnTheWaterRiff = [
-    // Bar 1
-    { time: 0, duration: '4n', notes: { bass: 'G2', solo: 'G3', accompaniment: ['G2', 'D3', 'G3'] }},
-    { time: 1, duration: '4n', notes: { bass: 'A#2', solo: 'A#3', accompaniment: ['A#2', 'F3', 'A#3'] }},
-    { time: 2, duration: '2n', notes: { bass: 'C3', solo: 'C4', accompaniment: ['C3', 'G3', 'C4'] }},
-    // Bar 2
-    { time: 4, duration: '4n', notes: { bass: 'G2', solo: 'G3', accompaniment: ['G2', 'D3', 'G3'] }},
-    { time: 5, duration: '4n', notes: { bass: 'A#2', solo: 'A#3', accompaniment: ['A#2', 'F3', 'A#3'] }},
-    { time: 6, duration: '4n', notes: { bass: 'C#3', solo: 'C#4', accompaniment: ['C#3', 'G#3', 'C#4'] }},
-    { time: 7, duration: '4n', notes: { bass: 'C3', solo: 'C4', accompaniment: ['C3', 'G3', 'C4'] }},
-    // Bar 3
-    { time: 8, duration: '4n', notes: { bass: 'G2', solo: 'G3', accompaniment: ['G2', 'D3', 'G3'] }},
-    { time: 9, duration: '4n', notes: { bass: 'A#2', solo: 'A#3', accompaniment: ['A#2', 'F3', 'A#3'] }},
-    { time: 10, duration: '2n', notes: { bass: 'C3', solo: 'C4', accompaniment: ['C3', 'G3', 'C4'] }},
-    // Bar 4
-    { time: 12, duration: '4n', notes: { bass: 'A#2', solo: 'A#3', accompaniment: ['A#2', 'F3', 'A#3'] }},
-    { time: 13, duration: '2n', notes: { bass: 'G2', solo: 'G3', accompaniment: ['G2', 'D3', 'G3'] }},
-];
-
-
 // --- 2. Instrument Generators (The Composers) ---
-class DrumGenerator {
-    static createScore(patternName: DrumSettings['pattern'], barNumber: number, totalBars: number, beatsPerBar = 4): DrumNote[] {
-        if (patternName === 'none') return [];
-        const pattern = PatternProvider.getDrumPattern(patternName);
-        let score: DrumNote[] = [...pattern];
 
-        if (barNumber % 4 === 0) {
-            score = score.filter(note => note.time !== 0);
-            score.push({ sample: 'crash', time: 0, velocity: 0.8 });
-        }
-        
-        return score;
+// --- DreamTales Style Generators ---
+class DreamTalesDrumGenerator {
+    static createScore(barNumber: number): DrumNote[] {
+        const patternName = (barNumber + 1) % 8 === 0 ? 'dreamtales-fill' : 'dreamtales-beat';
+        return PatternProvider.getDrumPattern(patternName);
     }
 }
 
-class BassGenerator {
-     static createScore(bar: number, beatsPerBar = 4): BassNote[] {
-        const barStartBeat = (bar % 4) * beatsPerBar;
-        const barEndBeat = barStartBeat + beatsPerBar;
-
-        return smokeOnTheWaterRiff
-            .filter(note => note.time >= barStartBeat && note.time < barEndBeat)
-            .map(note => ({
-                note: note.notes.bass,
-                time: note.time - barStartBeat,
-                duration: note.duration,
-                velocity: 0.9
-            }));
+class DreamTalesBassGenerator {
+    // TODO: Get harmony from a central place
+    static createScore(barNumber: number): BassNote[] {
+        // Simple drone on 'E1' for now
+        return [{ note: 'E1', time: 0, duration: '1n', velocity: 1.0 }];
     }
 }
 
-class SoloGenerator {
-     static createScore(bar: number, beatsPerBar = 4): SoloNote[] {
-        const barStartBeat = (bar % 4) * beatsPerBar;
-        const barEndBeat = barStartBeat + beatsPerBar;
-       
-        return smokeOnTheWaterRiff
-            .filter(note => note.time >= barStartBeat && note.time < barEndBeat)
-            .map(note => ({
-                notes: note.notes.solo,
-                time: note.time - barStartBeat,
-                duration: note.duration,
-            }));
+class DreamTalesSoloGenerator {
+    static createScore(barNumber: number): SoloNote[] {
+        // Placeholder - will generate "elfic" melodies later
+        return [];
     }
 }
-class AccompanimentGenerator {
-   static createScore(bar: number, beatsPerBar = 4): AccompanimentNote[] {
-        const barStartBeat = (bar % 4) * beatsPerBar;
-        const barEndBeat = barStartBeat + beatsPerBar;
-       
-        const generatedScore = smokeOnTheWaterRiff
-            .filter(note => note.time >= barStartBeat && note.time < barEndBeat)
-            .map(note => ({
-                notes: note.notes.accompaniment,
-                time: note.time - barStartBeat,
-                duration: note.duration,
-            }));
-        
-        return generatedScore;
+
+class DreamTalesAccompanimentGenerator {
+    static createScore(barNumber: number): AccompanimentNote[] {
+        // Placeholder - will generate pads/arpeggios later
+        return [];
     }
 }
+
 
 class EffectsGenerator {
     static createScore(mode: EffectsSettings['mode'], bar: number, beatsPerBar = 4): EffectNote[] {
@@ -153,8 +117,8 @@ class EffectsGenerator {
              if (Math.random() > 0.4) return [];
 
             const windChimeNotes = ['C5', 'Eb5', 'F5', 'G5', 'Bb5']; // C Minor Pentatonic
-            const numberOfChimes = Math.random() > 0.5 ? 5 : 4; // 4 or 5 notes
-            const durations = ['4n', '4n', ...Array(numberOfChimes - 2).fill('8n')];
+            const durations = ['4n', '4n', '8n', '8n', '8n'];
+            const numberOfChimes = Math.random() > 0.5 ? 5 : 4;
             
             let currentTime = Math.random() * (beatsPerBar / 2); // Start in the first half of the bar
             
@@ -170,10 +134,8 @@ class EffectsGenerator {
                     isFirst: i === 0,
                 });
 
-                // The pause is equal to the duration of the note. So we advance time by 2 * duration.
-                // For a quarter note ('4n'), this means advancing by a half note ('2n').
                 const durationInBeats = duration === '4n' ? 1 : 0.5;
-                currentTime += durationInBeats * 2;
+                currentTime += durationInBeats * 2; // Sound duration + pause of same duration
             }
         }
         if (effectType === 'piu') {
@@ -198,7 +160,7 @@ const Scheduler = {
     instruments: { solo: 'none', accompaniment: 'none', bass: 'none' } as any,
     drumSettings: { pattern: 'basic', volume: 0.85 } as any,
     effectsSettings: { mode: 'none', volume: 0.7 } as any,
-    score: 'generative' as 'generative' | 'promenade',
+    score: 'dreamtales' as ScoreName,
 
 
     // Calculated properties
@@ -244,8 +206,6 @@ const Scheduler = {
 
     tick() {
         if (!this.isRunning) return;
-        
-        const currentBarStartTime = this.barCount * this.barDuration;
 
         if (this.score === 'promenade') {
             const getNotesForBar = <T extends { time: number | string }>(notes: T[]): T[] => {
@@ -282,27 +242,25 @@ const Scheduler = {
                  if (barAccompanimentNotes.length > 0) self.postMessage({ type: 'accompaniment_score', data: { score: barAccompanimentNotes } });
             }
 
-        } else { // Generative logic
+        } else if (this.score === 'dreamtales') { 
             if (this.drumSettings.pattern !== 'none') {
-                const drumScore = DrumGenerator.createScore(
-                    this.drumSettings.pattern, 
-                    this.barCount, -1
-                ).map(note => ({ ...note, time: note.time * this.secondsPerBeat }));
-                self.postMessage({ type: 'drum_score', data: { score: drumScore } });
+                const drumScore = DreamTalesDrumGenerator.createScore(this.barCount)
+                    .map(note => ({ ...note, time: note.time * this.secondsPerBeat }));
+                if (drumScore.length > 0) self.postMessage({ type: 'drum_score', data: { score: drumScore } });
             }
 
             if (this.instruments.bass !== 'none') {
-                const bassScore = BassGenerator.createScore(this.barCount, this.beatsPerBar)
-                    .map(note => ({...note, time: (note.time as number) * this.secondsPerBeat, duration: note.duration, velocity: 0.9 }));
+                const bassScore = DreamTalesBassGenerator.createScore(this.barCount)
+                    .map(note => ({...note, time: (note.time as number) * this.secondsPerBeat, duration: note.duration, velocity: 1.0 }));
                 if (bassScore.length > 0) self.postMessage({ type: 'bass_score', data: { score: bassScore } });
             }
             if (this.instruments.solo !== 'none') {
-                 const soloScore = SoloGenerator.createScore(this.barCount, this.beatsPerBar)
+                 const soloScore = DreamTalesSoloGenerator.createScore(this.barCount)
                      .map(note => ({...note, time: (note.time as number) * this.secondsPerBeat}));
                  if (soloScore.length > 0) self.postMessage({ type: 'solo_score', data: { score: soloScore } });
             }
             if (this.instruments.accompaniment !== 'none') {
-                const accompanimentScore = AccompanimentGenerator.createScore(this.barCount, this.beatsPerBar)
+                const accompanimentScore = DreamTalesAccompanimentGenerator.createScore(this.barCount)
                     .map(note => ({...note, time: (note.time as number) * this.secondsPerBeat}));
                 if(accompanimentScore.length > 0) self.postMessage({ type: 'accompaniment_score', data: { score: accompanimentScore } });
             }
@@ -347,7 +305,5 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
-
-    
 
     

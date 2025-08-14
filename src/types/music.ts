@@ -48,6 +48,9 @@ export type EffectNote = {
     note: string; // pitch of the effect
     duration?: Tone.Unit.Time; // optional duration
     isFirst?: boolean; // For special handling of the first note in a sequence
+    velocity?: number; // Optional velocity for the note
 }
 
-export type ScoreName = 'generative' | 'promenade';
+export type ScoreName = 'dreamtales' | 'promenade';
+
+    

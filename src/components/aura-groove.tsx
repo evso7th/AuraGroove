@@ -60,7 +60,7 @@ export function AuraGroove() {
     bass: "bass synth",
   });
   const [bpm, setBpm] = useState(100);
-  const [score, setScore] = useState<ScoreName>('generative');
+  const [score, setScore] = useState<ScoreName>('dreamtales');
   
   // Instrument FX States
   const [soloFx, setSoloFx] = useState({ distortion: { enabled: false, wet: 0.5 } });
@@ -386,7 +386,7 @@ export function AuraGroove() {
   }, []);
 
   const isBusy = isInitializing;
-  const isGenerative = score === 'generative';
+  const isDreamtales = score === 'dreamtales';
   const drumsEnabled = drumSettings.pattern !== 'none';
   const effectsEnabled = effectsSettings.mode !== 'none';
 
@@ -405,7 +405,7 @@ export function AuraGroove() {
         <div className="space-y-4 rounded-lg border p-4">
             <h3 className="text-lg font-medium text-primary flex items-center gap-2"><FileMusic className="h-5 w-5"/> Composition</h3>
             <div className="grid grid-cols-3 items-center gap-4">
-                 <Label htmlFor="score-selector" className="text-right">Score</Label>
+                 <Label htmlFor="score-selector" className="text-right">Style</Label>
                  <Select
                     value={score}
                     onValueChange={(v) => setScore(v as ScoreName)}
@@ -415,7 +415,7 @@ export function AuraGroove() {
                         <SelectValue placeholder="Select score" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="generative">Smoke on the Water</SelectItem>
+                        <SelectItem value="dreamtales">DreamTales</SelectItem>
                         <SelectItem value="promenade">Promenade</SelectItem>
                     </SelectContent>
                 </Select>
@@ -519,7 +519,7 @@ export function AuraGroove() {
                     <Select
                         value={drumSettings.pattern}
                         onValueChange={(v) => setDrumSettings(d => ({ ...d, pattern: v as DrumSettings['pattern'] }))}
-                        disabled={isBusy || isPlaying || !isGenerative}
+                        disabled={isBusy || isPlaying || !isDreamtales}
                     >
                         <SelectTrigger id="drum-pattern" className="col-span-2">
                             <SelectValue placeholder="Select pattern" />
@@ -628,3 +628,5 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    
