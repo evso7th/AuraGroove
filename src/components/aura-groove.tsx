@@ -29,6 +29,7 @@ import { BassSynthManager } from "@/lib/bass-synth-manager";
 import { SoloSynthManager } from "@/lib/solo-synth-manager";
 import { AccompanimentSynthManager } from "@/lib/accompaniment-synth-manager";
 import { DrumNote, BassNote, SoloNote, AccompanimentNote } from '@/types/music';
+import { fxBus } from "@/lib/fx-bus";
 
 
 export type Instruments = {
@@ -319,6 +320,27 @@ export function AuraGroove() {
     }
   }, [isPlaying, handleStop, handlePlay]);
 
+  const handleTestMixer = useCallback(async () => {
+    if (Tone.context.state !== 'running') {
+        await Tone.start();
+    }
+    if (Tone.Transport.state !== 'started') {
+        Tone.Transport.start();
+    }
+
+    const testSynth = new Tone.Synth().connect(fxBus.input);
+    const sequence = new Tone.Sequence((time, note) => {
+        testSynth.triggerAttackRelease(note, "8n", time);
+    }, ["A4", "B4", "C5", "D5"], "4n").start(0);
+
+    Tone.Transport.scheduleOnce((time) => {
+        sequence.stop();
+        sequence.dispose();
+        testSynth.dispose();
+    }, `+${Tone.Time("1m").toSeconds()}`);
+
+  }, []);
+
   const isBusy = isInitializing || !isReady;
   const isGenerative = score === 'generative';
 
@@ -483,21 +505,31 @@ export function AuraGroove() {
         )}
       </CardContent>
       <CardFooter className="flex-col gap-4">
-        <Button
-          type="button"
-          onClick={handleTogglePlay}
-          disabled={isBusy}
-          className="w-full text-lg py-6"
-        >
-          {isBusy ? (
-            <Loader2 className="mr-2 h-6 w-6 animate-spin" />
-          ) : isPlaying ? (
-            <Pause className="mr-2 h-6 w-6" />
-          ) : (
-            <Music className="mr-2 h-6 w-6" />
-          )}
-          {isBusy ? loadingText : isPlaying ? "Stop" : "Play"}
-        </Button>
+        <div className="flex gap-2 w-full">
+          <Button
+            type="button"
+            onClick={handleTogglePlay}
+            disabled={isBusy}
+            className="w-full text-lg py-6"
+          >
+            {isBusy ? (
+              <Loader2 className="mr-2 h-6 w-6 animate-spin" />
+            ) : isPlaying ? (
+              <Pause className="mr-2 h-6 w-6" />
+            ) : (
+              <Music className="mr-2 h-6 w-6" />
+            )}
+            {isBusy ? loadingText : isPlaying ? "Stop" : "Play"}
+          </Button>
+          <Button
+            type="button"
+            onClick={handleTestMixer}
+            disabled={isBusy || isPlaying}
+            variant="outline"
+          >
+            Test Mixer
+          </Button>
+        </div>
       </CardFooter>
     </Card>
   );
