@@ -56,7 +56,7 @@ export class BassSynthManager {
                         sustain: 0.4,
                         release: 1.5,
                     },
-                    volume: 0,
+                    volume: -6,
                 }).connect(fxBus.input);
             default:
                 return null;
@@ -96,5 +96,3 @@ export class BassSynthManager {
         this.currentInstrument = null;
     }
 }
-
-    

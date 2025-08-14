@@ -56,7 +56,7 @@ export class SoloSynthManager {
                         sustain: 0.9,
                         release: 0.4,
                     },
-                     volume: -15,
+                     volume: -18,
                  }).connect(fxBus.input);
                  break;
             default:
@@ -105,5 +105,3 @@ export class SoloSynthManager {
         this.currentInstrument = 'none';
     }
 }
-
-    

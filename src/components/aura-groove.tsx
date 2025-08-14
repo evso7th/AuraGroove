@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import * as Tone from 'tone';
-import { Drum, Loader2, Music, Pause, Speaker, FileMusic } from "lucide-react";
+import { Drum, Loader2, Music, Pause, Speaker, FileMusic, Waves, Wind, ToyBrick } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,6 +44,11 @@ export type DrumSettings = {
     volume: number;
 };
 
+export type FxSettings = {
+    enabled: boolean;
+    wet: number; // 0 (dry) to 1 (wet)
+};
+
 export type ScoreName = 'generative' | 'promenade';
 
 const samplePaths: Record<string, string> = {
@@ -71,6 +76,11 @@ export function AuraGroove() {
   });
   const [bpm, setBpm] = useState(100);
   const [score, setScore] = useState<ScoreName>('generative');
+  
+  const [reverbSettings, setReverbSettings] = useState<FxSettings>({ enabled: true, wet: 0.3 });
+  const [delaySettings, setDelaySettings] = useState<FxSettings>({ enabled: true, wet: 0.2 });
+  const [chorusSettings, setChorusSettings] = useState<FxSettings>({ enabled: false, wet: 0.5 });
+  
   const { toast } = useToast();
 
   const musicWorkerRef = useRef<Worker>();
@@ -249,6 +259,7 @@ export function AuraGroove() {
       soloSynthManagerRef.current?.dispose();
       accompanimentSynthManagerRef.current?.dispose();
       drumPlayersRef.current?.dispose();
+      fxBus.dispose();
       if (Tone.Transport.state !== 'stopped') {
         Tone.Transport.stop();
         Tone.Transport.cancel();
@@ -270,6 +281,21 @@ export function AuraGroove() {
       updateWorkerSettings();
     }
   }, [drumSettings, instruments, bpm, score, isReady, isPlaying, updateWorkerSettings]);
+
+   useEffect(() => {
+        if (!isReady || !fxBus) return;
+        fxBus.reverb.wet.value = reverbSettings.enabled ? reverbSettings.wet : 0;
+    }, [reverbSettings, isReady]);
+
+    useEffect(() => {
+        if (!isReady || !fxBus) return;
+        fxBus.delay.wet.value = delaySettings.enabled ? delaySettings.wet : 0;
+    }, [delaySettings, isReady]);
+
+    useEffect(() => {
+        if (!isReady || !fxBus) return;
+        fxBus.chorus.wet.value = chorusSettings.enabled ? chorusSettings.wet : 0;
+    }, [chorusSettings, isReady]);
   
 
   const handlePlay = useCallback(async () => {
@@ -408,9 +434,9 @@ export function AuraGroove() {
                 />
             </div>
         </div>
-
+        
         <div className="space-y-4 rounded-lg border p-4">
-           <h3 className="text-lg font-medium text-primary">Instruments</h3>
+           <h3 className="text-lg font-medium text-primary flex items-center gap-2"><ToyBrick className="h-5 w-5" /> Instruments</h3>
            <div className="grid grid-cols-3 items-center gap-4">
             <Label htmlFor="solo-instrument" className="text-right">Solo</Label>
             <Select
@@ -508,6 +534,34 @@ export function AuraGroove() {
                 />
             </div>
         </div>
+
+        <div className="space-y-4 rounded-lg border p-4">
+          <h3 className="text-lg font-medium text-primary">Master Effects</h3>
+            {/* Reverb Controls */}
+            <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                    <Label htmlFor="reverb-enabled" className="flex items-center gap-1.5"><Wind className="h-4 w-4"/> Reverb</Label>
+                    <Switch id="reverb-enabled" checked={reverbSettings.enabled} onCheckedChange={(c) => setReverbSettings(s => ({...s, enabled: c}))} disabled={isBusy || isPlaying} />
+                </div>
+                <Slider value={[reverbSettings.wet]} max={1} step={0.05} onValueChange={(v) => setReverbSettings(s => ({...s, wet: v[0]}))} disabled={isBusy || isPlaying || !reverbSettings.enabled} />
+            </div>
+             {/* Delay Controls */}
+            <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                    <Label htmlFor="delay-enabled" className="flex items-center gap-1.5"><Waves className="h-4 w-4"/> Delay</Label>
+                    <Switch id="delay-enabled" checked={delaySettings.enabled} onCheckedChange={(c) => setDelaySettings(s => ({...s, enabled: c}))} disabled={isBusy || isPlaying} />
+                </div>
+                <Slider value={[delaySettings.wet]} max={1} step={0.05} onValueChange={(v) => setDelaySettings(s => ({...s, wet: v[0]}))} disabled={isBusy || isPlaying || !delaySettings.enabled} />
+            </div>
+             {/* Chorus Controls */}
+            <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                    <Label htmlFor="chorus-enabled" className="flex items-center gap-1.5"><Speaker className="h-4 w-4"/> Chorus</Label>
+                    <Switch id="chorus-enabled" checked={chorusSettings.enabled} onCheckedChange={(c) => setChorusSettings(s => ({...s, enabled: c}))} disabled={isBusy || isPlaying} />
+                </div>
+                <Slider value={[chorusSettings.wet]} max={1} step={0.05} onValueChange={(v) => setChorusSettings(s => ({...s, wet: v[0]}))} disabled={isBusy || isPlaying || !chorusSettings.enabled} />
+            </div>
+        </div>
          
          {isBusy && (
             <div className="flex flex-col items-center justify-center text-muted-foreground space-y-2 min-h-[40px]">
@@ -556,5 +610,3 @@ export function AuraGroove() {
     </Card>
   );
 }
-
-    
