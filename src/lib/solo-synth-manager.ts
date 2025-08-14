@@ -57,6 +57,7 @@ export class SoloSynthManager {
     
     public triggerAttackRelease(notes: string | string[], duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
         if (this.currentSynth) {
+            console.log('solo-synth-manager.ts: Triggering solo notes:', notes);
             this.currentSynth.triggerAttackRelease(notes, duration, time, velocity);
         }
     }

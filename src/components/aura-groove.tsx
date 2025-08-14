@@ -168,6 +168,7 @@ export function AuraGroove() {
             break;
         
         case 'solo_score':
+            console.log('aura-groove.tsx: Received solo score from worker:', data.score);
             if (soloSynthManagerRef.current && data.score && data.score.length > 0) {
                 const now = Tone.now();
                 data.score.forEach((note: SoloNote) => {
@@ -181,6 +182,7 @@ export function AuraGroove() {
             break;
         
         case 'accompaniment_score':
+            console.log('aura-groove.tsx: Received accompaniment score from worker:', data.score);
             if (accompanimentSynthManagerRef.current && data.score && data.score.length > 0) {
                 const now = Tone.now();
                 data.score.forEach((note: AccompanimentNote) => {
@@ -655,5 +657,3 @@ setIsInitializing(false);
     </Card>
   );
 }
-
-    

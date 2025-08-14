@@ -58,6 +58,7 @@ export class AccompanimentSynthManager {
     
     public triggerAttackRelease(notes: string | string[], duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
         if (this.currentSynth) {
+            console.log('accompaniment-synth-manager.ts: Triggering accompaniment notes:', notes);
             this.currentSynth.triggerAttackRelease(notes, duration, time, velocity);
         }
     }
