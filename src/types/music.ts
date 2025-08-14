@@ -49,4 +49,4 @@ export type EffectNote = {
     duration?: Tone.Unit.Time; // optional duration
 }
 
-    
+export type ScoreName = 'generative' | 'promenade';
