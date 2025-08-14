@@ -6,108 +6,118 @@ import type { FxBus } from './fx-bus';
 type InstrumentName = Instruments['accompaniment'];
 
 const DEFAULT_VOLUME = -12;
-let instanceCounter = 0;
+const NUM_VOICES = 4; // 4 voices for accompaniment chords
 
 /**
- * Manages the lifecycle of accompaniment instrument synthesizers.
+ * Manages the lifecycle of accompaniment instrument synthesizers using a pool of mono synths.
  */
 export class AccompanimentSynthManager {
-    private currentSynth: Tone.PolySynth | null = null;
+    private voices: Tone.Synth[] = [];
     private currentInstrument: InstrumentName = 'none';
     private fxBus: FxBus;
     private readonly defaultVolume: number;
-    private instanceId: number;
-
+    private nextVoiceIndex = 0;
 
     constructor(fxBus: FxBus) {
         this.fxBus = fxBus;
         this.defaultVolume = DEFAULT_VOLUME;
-        this.instanceId = ++instanceCounter;
-        console.log(`[AccompManager] CONSTRUCTOR: New instance created, ID: ${this.instanceId}`);
+        // The instrument is initially 'none', so we don't create synths yet.
     }
 
-    public setInstrument(name: InstrumentName) {
-        if (name === this.currentInstrument && this.currentSynth) {
-            // If the synth exists but might be silenced, "wake it up"
-            if (this.currentSynth.volume.value === -Infinity) {
-                this.fadeIn(0.1);
-            }
-            return;
-        }
+    private initializeVoices(name: InstrumentName) {
+        // Dispose of any existing voices before creating new ones
+        this.disposeVoices();
 
-        this.dispose(); 
-        this.currentInstrument = name;
+        if (name === 'none') return;
+        
+        let synthOptions: Tone.SynthOptions;
 
-        if (name === 'none') {
-            console.log(`[AccompManager ID: ${this.instanceId}] setInstrument: Instrument set to 'none'.`);
-            return;
-        }
-
-        this.createSynth(name);
-    }
-    
-    private createSynth(name: InstrumentName) {
-        console.log(`[AccompManager ID: ${this.instanceId}] CREATE_SYNTH: Creating new PolySynth for instrument: ${name}`);
         switch (name) {
             case 'organ':
-                this.currentSynth = new Tone.PolySynth(Tone.Synth, {
-                     polyphony: 4,
-                     oscillator: {
-                        type: 'sawtooth',
-                    },
+                synthOptions = {
+                    oscillator: { type: 'sawtooth' },
                     envelope: {
                         attack: 0.16,
                         decay: 0.15,
                         sustain: 0.9,
                         release: 0.4,
                     },
-                     volume: this.defaultVolume,
-                }).connect(this.fxBus.accompanimentInput);
+                    volume: this.defaultVolume,
+                };
                 break;
             default:
-                this.currentSynth = null;
+                // Default to a basic synth if instrument is unknown
+                 synthOptions = {
+                     oscillator: { type: 'triangle' },
+                     envelope: { attack: 0.02, decay: 0.1, sustain: 0.3, release: 1 },
+                     volume: this.defaultVolume,
+                 };
         }
+        
+        this.voices = Array.from({ length: NUM_VOICES }, () => 
+            new Tone.Synth(synthOptions).connect(this.fxBus.accompanimentInput)
+        );
+    }
+
+    public setInstrument(name: InstrumentName) {
+        if (name === this.currentInstrument) {
+            if (this.voices.length > 0 && this.voices[0].volume.value === -Infinity) {
+                this.fadeIn(0.1);
+            }
+            return;
+        }
+
+        this.currentInstrument = name;
+        this.initializeVoices(name);
     }
     
     public triggerAttackRelease(notes: string | string[], duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
-        if (this.currentSynth) {
-            const noteCount = Array.isArray(notes) ? notes.length : 1;
-            console.log(`[AccompManager ID: ${this.instanceId}] triggerAttackRelease: Received ${noteCount} notes to play.`, { notes, time });
-            this.currentSynth.triggerAttackRelease(notes, duration, time, velocity);
-        }
+        if (!this.voices.length) return;
+
+        const notesToPlay = Array.isArray(notes) ? notes : [notes];
+        const scheduledTime = time || Tone.now();
+
+        notesToPlay.forEach(note => {
+            const voice = this.voices[this.nextVoiceIndex];
+            voice.triggerAttack(note, scheduledTime, velocity);
+            
+            // Schedule the release
+            const releaseTime = scheduledTime + Tone.Time(duration).toSeconds();
+            voice.triggerRelease(releaseTime);
+            
+            this.nextVoiceIndex = (this.nextVoiceIndex + 1) % this.voices.length;
+        });
     }
 
     public releaseAll() {
-        this.currentSynth?.releaseAll();
+        this.voices.forEach(voice => voice.triggerRelease());
     }
     
-    public fadeOut(duration: number) {
-        if (this.currentSynth) {
-            console.log(`[AccompManager ID: ${this.instanceId}] fadeOut: Fading out over ${duration}s.`);
+    private setVolume(volume: number, duration: number) {
+        const rampTime = Tone.now() + duration;
+        this.voices.forEach(voice => {
             try {
-                this.currentSynth.volume.rampTo(-Infinity, duration);
+                voice.volume.rampTo(volume, duration);
             } catch (e) {
-                // Ignore errors if the context is already closed
+                // Ignore errors if context is closed
             }
-        }
+        });
+    }
+
+    public fadeOut(duration: number) {
+        this.setVolume(-Infinity, duration);
     }
     
     public fadeIn(duration: number) {
-        if (this.currentSynth) {
-            console.log(`[AccompManager ID: ${this.instanceId}] fadeIn: Fading in over ${duration}s to ${this.defaultVolume}dB.`);
-            try {
-                this.currentSynth.volume.rampTo(this.defaultVolume, duration);
-            } catch (e) {
-                // Ignore errors if the context is already closed
-            }
-        }
+        this.setVolume(this.defaultVolume, duration);
+    }
+    
+    private disposeVoices() {
+        this.voices.forEach(voice => voice.dispose());
+        this.voices = [];
     }
 
     public dispose() {
-        if (this.currentSynth) {
-            console.log(`[AccompManager ID: ${this.instanceId}] DISPOSE: Disposing of current synth.`);
-            this.currentSynth.dispose();
-            this.currentSynth = null;
-        }
+        this.disposeVoices();
     }
 }

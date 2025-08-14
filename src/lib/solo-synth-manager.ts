@@ -5,97 +5,115 @@ import type { FxBus } from './fx-bus';
 
 type InstrumentName = Instruments['solo'];
 const DEFAULT_VOLUME = -9;
+const NUM_VOICES = 2; // 2 voices for solo instrument
 
 /**
- * Manages the lifecycle of solo instrument synthesizers.
+ * Manages the lifecycle of solo instrument synthesizers using a pool of mono synths.
  */
 export class SoloSynthManager {
-    private currentSynth: Tone.PolySynth | null = null;
+    private voices: Tone.Synth[] = [];
     private currentInstrument: InstrumentName = 'none';
     private fxBus: FxBus;
     private readonly defaultVolume: number;
+    private nextVoiceIndex = 0;
 
     constructor(fxBus: FxBus) {
         this.fxBus = fxBus;
         this.defaultVolume = DEFAULT_VOLUME;
     }
 
+    private initializeVoices(name: InstrumentName) {
+        this.disposeVoices();
+
+        if (name === 'none') return;
+
+        let synthOptions: Tone.SynthOptions;
+
+        switch (name) {
+            case 'organ':
+                 synthOptions = {
+                     oscillator: { type: 'sawtooth' },
+                     envelope: {
+                         attack: 0.16,
+                         decay: 0.15,
+                         sustain: 0.9,
+                         release: 0.4,
+                     },
+                     volume: this.defaultVolume,
+                 };
+                 break;
+            default:
+                synthOptions = {
+                     oscillator: { type: 'sine' },
+                     envelope: { attack: 0.01, decay: 0.2, sustain: 0.2, release: 0.8 },
+                     volume: this.defaultVolume,
+                 };
+        }
+
+        this.voices = Array.from({ length: NUM_VOICES }, () => 
+            new Tone.Synth(synthOptions).connect(this.fxBus.soloInput)
+        );
+    }
+
+
     public setInstrument(name: InstrumentName) {
-        if (name === this.currentInstrument && this.currentSynth) {
-            if (this.currentSynth.volume.value === -Infinity) {
+        if (name === this.currentInstrument) {
+            if (this.voices.length > 0 && this.voices[0].volume.value === -Infinity) {
                 this.fadeIn(0.1);
             }
             return;
         }
 
-        this.dispose(); 
         this.currentInstrument = name;
-
-        if (name === 'none') {
-            return;
-        }
-
-        this.createSynth(name);
-    }
-    
-    private createSynth(name: InstrumentName) {
-        switch (name) {
-            case 'organ':
-                 this.currentSynth = new Tone.PolySynth(Tone.Synth, {
-                     polyphony: 4,
-                     oscillator: {
-                        type: 'sawtooth',
-                    },
-                    envelope: {
-                        attack: 0.16,
-                        decay: 0.15,
-                        sustain: 0.9,
-                        release: 0.4,
-                    },
-                     volume: this.defaultVolume,
-                 }).connect(this.fxBus.soloInput);
-                 break;
-            default:
-                this.currentSynth = null;
-        }
+        this.initializeVoices(name);
     }
     
     public triggerAttackRelease(notes: string | string[], duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
-        if (this.currentSynth) {
-            this.currentSynth.triggerAttackRelease(notes, duration, time, velocity);
-        }
+        if (!this.voices.length) return;
+
+        const notesToPlay = Array.isArray(notes) ? notes : [notes];
+        const scheduledTime = time || Tone.now();
+
+        notesToPlay.forEach(note => {
+            const voice = this.voices[this.nextVoiceIndex];
+            voice.triggerAttack(note, scheduledTime, velocity);
+
+            const releaseTime = scheduledTime + Tone.Time(duration).toSeconds();
+            voice.triggerRelease(releaseTime);
+
+            this.nextVoiceIndex = (this.nextVoiceIndex + 1) % this.voices.length;
+        });
     }
 
     public releaseAll() {
-        this.currentSynth?.releaseAll();
+        this.voices.forEach(voice => voice.triggerRelease());
+    }
+
+    private setVolume(volume: number, duration: number) {
+        const rampTime = Tone.now() + duration;
+        this.voices.forEach(voice => {
+            try {
+                voice.volume.rampTo(volume, duration);
+            } catch (e) {
+                 // Ignore error if context is already closed
+            }
+        });
     }
 
     public fadeOut(duration: number) {
-        if (this.currentSynth) {
-            try {
-                 this.currentSynth.volume.rampTo(-Infinity, duration);
-            } catch(e) {
-                // Ignore error if context is already closed
-            }
-        }
+        this.setVolume(-Infinity, duration);
     }
 
     public fadeIn(duration: number) {
-        if (this.currentSynth) {
-            try {
-                this.currentSynth.volume.rampTo(this.defaultVolume, duration);
-            } catch (e) {
-                // Ignore errors if the context is already closed
-            }
-        }
+        this.setVolume(this.defaultVolume, duration);
+    }
+    
+    private disposeVoices() {
+        this.voices.forEach(voice => voice.dispose());
+        this.voices = [];
     }
 
     public dispose() {
-        if (this.currentSynth) {
-            this.currentSynth.dispose();
-            this.currentSynth = null;
-        }
+       this.disposeVoices();
     }
 }
-
-    
