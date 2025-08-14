@@ -150,24 +150,30 @@ class EffectsGenerator {
         }
 
         if (effectType === 'bell') {
-            if (Math.random() > 0.4) return []; // Only play bells sometimes
+             if (Math.random() > 0.4) return [];
 
             const windChimeNotes = ['C5', 'Eb5', 'F5', 'G5', 'Bb5']; // C Minor Pentatonic
-            const numberOfChimes = Math.floor(Math.random() * 2) + 2; // 2-3 chimes
-            let currentTime = Math.random() * (beatsPerBar - 2); 
+            const numberOfChimes = Math.random() > 0.5 ? 5 : 4; // 4 or 5 notes
+            const durations = ['4n', '4n', ...Array(numberOfChimes - 2).fill('8n')];
+            
+            let currentTime = Math.random() * (beatsPerBar / 2); // Start in the first half of the bar
             
             for (let i = 0; i < numberOfChimes; i++) {
                 const note = windChimeNotes[Math.floor(Math.random() * windChimeNotes.length)];
-                score.push({ 
-                    type: 'bell', 
-                    time: currentTime, 
-                    note, 
-                    duration: '1n',
-                    isFirst: i === 0 
-                });
+                const duration = durations[i];
                 
-                // Increase time for the next note
-                currentTime += (Math.random() * 0.3) + 0.4; // 0.4 to 0.7 seconds delay
+                score.push({
+                    type: 'bell',
+                    time: currentTime,
+                    note,
+                    duration,
+                    isFirst: i === 0,
+                });
+
+                // The pause is equal to the duration of the note. So we advance time by 2 * duration.
+                // For a quarter note ('4n'), this means advancing by a half note ('2n').
+                const durationInBeats = duration === '4n' ? 1 : 0.5;
+                currentTime += durationInBeats * 2;
             }
         }
         if (effectType === 'piu') {
@@ -341,5 +347,7 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
+
+    
 
     
