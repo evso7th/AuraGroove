@@ -21,11 +21,9 @@ export class AccompanimentSynthManager {
     constructor(fxBus: FxBus) {
         this.fxBus = fxBus;
         this.defaultVolume = DEFAULT_VOLUME;
-        // The instrument is initially 'none', so we don't create synths yet.
     }
 
     private initializeVoices(name: InstrumentName) {
-        // Dispose of any existing voices before creating new ones
         this.disposeVoices();
 
         if (name === 'none') return;
@@ -46,7 +44,6 @@ export class AccompanimentSynthManager {
                 };
                 break;
             default:
-                // Default to a basic synth if instrument is unknown
                  synthOptions = {
                      oscillator: { type: 'triangle' },
                      envelope: { attack: 0.02, decay: 0.1, sustain: 0.3, release: 1 },
@@ -81,7 +78,6 @@ export class AccompanimentSynthManager {
             const voice = this.voices[this.nextVoiceIndex];
             voice.triggerAttack(note, scheduledTime, velocity);
             
-            // Schedule the release
             const releaseTime = scheduledTime + Tone.Time(duration).toSeconds();
             voice.triggerRelease(releaseTime);
             
