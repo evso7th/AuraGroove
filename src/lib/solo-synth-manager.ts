@@ -1,7 +1,7 @@
 
 import * as Tone from 'tone';
 import type { Instruments } from '@/components/aura-groove';
-import { fxBus } from './fx-bus';
+import type { FxBus } from './fx-bus';
 
 type InstrumentName = Instruments['solo'];
 
@@ -14,8 +14,11 @@ export class SoloSynthManager {
     private currentSynth: Tone.PolySynth | null = null;
     private currentInstrument: InstrumentName = 'none';
     private isSynthCreated = false;
+    private fxBus: FxBus;
 
-    constructor() {}
+    constructor(fxBus: FxBus) {
+        this.fxBus = fxBus;
+    }
 
     /**
      * Sets the active solo instrument. If the instrument is different from the current one,
@@ -57,7 +60,7 @@ export class SoloSynthManager {
                         release: 0.4,
                     },
                      volume: -18,
-                 }).connect(fxBus.input);
+                 }).connect(this.fxBus.input);
                  break;
             default:
                 this.currentSynth = null;

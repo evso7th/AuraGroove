@@ -1,7 +1,7 @@
 
 import * as Tone from 'tone';
 import type { Instruments } from '@/components/aura-groove';
-import { fxBus } from './fx-bus';
+import type { FxBus } from './fx-bus';
 
 type InstrumentName = Instruments['bass'];
 
@@ -14,8 +14,11 @@ export class BassSynthManager {
     private currentSynth: Tone.MonoSynth | null = null;
     private currentInstrument: InstrumentName | null = null;
     private isSynthCreated = false;
+    private fxBus: FxBus;
 
-    constructor() {}
+    constructor(fxBus: FxBus) {
+        this.fxBus = fxBus;
+    }
 
     /**
      * Sets the active bass instrument. If the instrument is different from the current one,
@@ -57,7 +60,7 @@ export class BassSynthManager {
                         release: 1.5,
                     },
                     volume: -6,
-                }).connect(fxBus.input);
+                }).connect(this.fxBus.input);
             default:
                 return null;
         }

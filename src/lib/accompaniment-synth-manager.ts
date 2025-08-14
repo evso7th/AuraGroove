@@ -1,7 +1,7 @@
 
 import * as Tone from 'tone';
 import type { Instruments } from '@/components/aura-groove';
-import { fxBus } from './fx-bus';
+import type { FxBus } from './fx-bus';
 
 type InstrumentName = Instruments['accompaniment'];
 
@@ -14,8 +14,11 @@ export class AccompanimentSynthManager {
     private currentSynth: Tone.PolySynth | null = null;
     private currentInstrument: InstrumentName = 'none';
     private isSynthCreated = false;
+    private fxBus: FxBus;
 
-    constructor() {}
+    constructor(fxBus: FxBus) {
+        this.fxBus = fxBus;
+    }
 
     /**
      * Sets the active accompaniment instrument. If the instrument is different from the current one,
@@ -58,7 +61,7 @@ export class AccompanimentSynthManager {
                         release: 0.4,
                     },
                      volume: -18,
-                }).connect(fxBus.input);
+                }).connect(this.fxBus.input);
                 break;
             default:
                 this.currentSynth = null;
