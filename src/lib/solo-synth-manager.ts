@@ -1,4 +1,3 @@
-"use client";
 
 import * as Tone from 'tone';
 import type { Instruments } from '@/components/aura-groove';
@@ -39,15 +38,6 @@ export class SoloSynthManager {
         this.isSynthCreated = true;
     }
     
-    public startEffects() {
-       // No-op, effects removed
-    }
-    
-    public stopEffects() {
-        // No-op, effects removed
-    }
-
-
     /**
      * Creates a synth instance based on the instrument name.
      * @param name The name of the instrument.
@@ -115,3 +105,5 @@ export class SoloSynthManager {
         this.currentInstrument = 'none';
     }
 }
+
+    

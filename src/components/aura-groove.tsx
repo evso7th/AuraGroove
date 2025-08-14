@@ -25,9 +25,9 @@ import { Label } from "@/components/ui/label";
 import Logo from "@/components/icons";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
-import { BassSynthManager } from "@/lib/bass-synth-manager";
-import { SoloSynthManager } from "@/lib/solo-synth-manager";
-import { AccompanimentSynthManager } from "@/lib/accompaniment-synth-manager";
+import type { BassSynthManager } from "@/lib/bass-synth-manager";
+import type { SoloSynthManager } from "@/lib/solo-synth-manager";
+import type { AccompanimentSynthManager } from "@/lib/accompaniment-synth-manager";
 import { DrumNote, BassNote, SoloNote, AccompanimentNote } from '@/types/music';
 import { fxBus } from "@/lib/fx-bus";
 
@@ -74,9 +74,9 @@ export function AuraGroove() {
   const { toast } = useToast();
 
   const musicWorkerRef = useRef<Worker>();
-  const bassSynthManagerRef = useRef<BassSynthManager>(new BassSynthManager());
-  const soloSynthManagerRef = useRef<SoloSynthManager>(new SoloSynthManager());
-  const accompanimentSynthManagerRef = useRef<AccompanimentSynthManager>(new AccompanimentSynthManager());
+  const bassSynthManagerRef = useRef<BassSynthManager | null>(null);
+  const soloSynthManagerRef = useRef<SoloSynthManager | null>(null);
+  const accompanimentSynthManagerRef = useRef<AccompanimentSynthManager | null>(null);
   const drumPlayersRef = useRef<Tone.Players | null>(null);
 
    useEffect(() => {
@@ -84,14 +84,41 @@ export function AuraGroove() {
     
     const worker = new Worker(new URL('../app/ambient.worker.ts', import.meta.url));
     musicWorkerRef.current = worker;
+    
+    const initializeAudio = async () => {
+        setLoadingText("Initializing Synths...");
+        try {
+            const { BassSynthManager } = await import('@/lib/bass-synth-manager');
+            bassSynthManagerRef.current = new BassSynthManager();
+
+            const { SoloSynthManager } = await import('@/lib/solo-synth-manager');
+            soloSynthManagerRef.current = new SoloSynthManager();
+            
+            const { AccompanimentSynthManager } = await import('@/lib/accompaniment-synth-manager');
+            accompanimentSynthManagerRef.current = new AccompanimentSynthManager();
+            
+            setLoadingText("Loading Samples...");
+            await loadSamples();
+
+        } catch (error) {
+             console.error("Audio initialization failed:", error);
+             toast({
+                variant: "destructive",
+                title: "Failed to initialize audio components",
+                description: error instanceof Error ? error.message : "An unknown error occurred.",
+            });
+            setLoadingText("Error initializing audio.");
+            setIsInitializing(false);
+        }
+    };
+
 
     const handleMessage = (event: MessageEvent) => {
       const { type, data, error } = event.data;
       
       switch(type) {
         case 'initialized':
-           setLoadingText("Loading Samples...");
-           loadSamples();
+           initializeAudio();
           break;
         
         case 'started':
@@ -251,9 +278,10 @@ export function AuraGroove() {
             await Tone.start();
         }
 
-        if (!musicWorkerRef.current) {
+        if (!musicWorkerRef.current || !bassSynthManagerRef.current || !soloSynthManagerRef.current || !accompanimentSynthManagerRef.current) {
             setIsInitializing(true);
             setLoadingText("Waiting for audio engine...");
+            // The useEffect initialization will handle the rest
             return;
         }
 
@@ -261,9 +289,6 @@ export function AuraGroove() {
         soloSynthManagerRef.current?.setInstrument(instruments.solo);
         accompanimentSynthManagerRef.current?.setInstrument(instruments.accompaniment);
         bassSynthManagerRef.current?.setInstrument(instruments.bass);
-
-        soloSynthManagerRef.current?.startEffects();
-        accompanimentSynthManagerRef.current?.startEffects();
 
         setIsInitializing(true);
         setLoadingText("Starting playback...");
@@ -294,9 +319,6 @@ export function AuraGroove() {
     soloSynthManagerRef.current?.fadeOut(1);
     accompanimentSynthManagerRef.current?.fadeOut(1);
     bassSynthManagerRef.current?.releaseAll();
-    
-    soloSynthManagerRef.current?.stopEffects();
-    accompanimentSynthManagerRef.current?.stopEffects();
     
     // Stop the transport and worker
     if (Tone.Transport.state !== 'stopped') {
@@ -534,3 +556,5 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    
