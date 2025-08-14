@@ -150,11 +150,24 @@ class EffectsGenerator {
             effectType = mode;
         }
 
-        if (effectType === 'bell' && bar % 4 === 0) {
-            score.push({ type: 'bell', time: 0, note: 'C5' });
+        if (effectType === 'bell') {
+            // "Music of the Wind" logic for bells
+            const windChimeNotes = ['C5', 'Eb5', 'F5', 'G5', 'Bb5']; // C Minor Pentatonic
+            const numberOfChimes = Math.floor(Math.random() * 3) + 1; // 1 to 3 chimes per bar
+            
+            for (let i = 0; i < numberOfChimes; i++) {
+                if (Math.random() > 0.4) { // Add some randomness to whether a chime plays
+                    const note = windChimeNotes[Math.floor(Math.random() * windChimeNotes.length)];
+                    const time = Math.random() * beatsPerBar; // Random time within the bar
+                    score.push({ type: 'bell', time, note, duration: '2n' });
+                }
+            }
         }
         if (effectType === 'piu') {
-             score.push({ type: 'piu', time: 2.5, note: 'G5' });
+             // Keep original 'piu' logic
+             if (Math.random() < 0.25) { // Lower probability
+                score.push({ type: 'piu', time: 2.5, note: 'G5' });
+             }
         }
 
         return score;
@@ -322,3 +335,5 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
+
+    

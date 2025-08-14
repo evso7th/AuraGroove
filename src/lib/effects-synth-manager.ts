@@ -30,19 +30,19 @@ export class EffectsSynthManager {
         }).connect(this.fxBus.effectsInput);
         this.piuSynth.envelope.attackCurve = 'exponential';
 
-        // Configure the "bell" synth
+        // Configure the "bell" synth for a "wind chime" sound
         this.bellSynth = new Tone.MetalSynth({
-            frequency: 250,
+            frequency: 440,
             envelope: {
-                attack: 0.001,
+                attack: 0.01,
                 decay: 1.4,
-                release: 0.2,
+                release: 2.0, // Longer release for airiness
             },
-            harmonicity: 5.1,
-            modulationIndex: 32,
-            resonance: 4000,
+            harmonicity: 8.5, // More complex, chime-like harmonics
+            modulationIndex: 20,
+            resonance: 3500, // Slightly less sharp resonance
             octaves: 1.5,
-            volume: -15,
+            volume: -18, // A bit quieter to blend in
         }).connect(this.fxBus.effectsInput);
     }
     
@@ -69,7 +69,7 @@ export class EffectsSynthManager {
                 break;
             case 'bell':
                 if (this.currentMode === 'bell' || this.currentMode === 'mixed') {
-                    this.bellSynth.triggerAttackRelease(effect.note, effect.duration || '8n', time);
+                    this.bellSynth.triggerAttackRelease(effect.note, effect.duration || '2n', time);
                 }
                 break;
         }
@@ -80,3 +80,5 @@ export class EffectsSynthManager {
         this.bellSynth.dispose();
     }
 }
+
+    
