@@ -1,3 +1,4 @@
+"use client";
 
 import * as Tone from 'tone';
 import type { Instruments } from '@/components/aura-groove';
@@ -13,8 +14,6 @@ type InstrumentName = Instruments['accompaniment'];
 export class AccompanimentSynthManager {
     private currentSynth: Tone.PolySynth | null = null;
     private currentInstrument: InstrumentName = 'none';
-    private distortion: Tone.Distortion | null = null;
-    private tremolo: Tone.Tremolo | null = null;
     private isSynthCreated = false;
 
     constructor() {}
@@ -41,15 +40,11 @@ export class AccompanimentSynthManager {
     }
     
     public startEffects() {
-        if (this.tremolo && this.tremolo.state === 'stopped') {
-            this.tremolo.start();
-        }
+        // No-op, effects removed
     }
     
     public stopEffects() {
-        if (this.tremolo && this.tremolo.state === 'started') {
-            this.tremolo.stop();
-        }
+        // No-op, effects removed
     }
 
 
@@ -61,8 +56,6 @@ export class AccompanimentSynthManager {
     private createSynth(name: InstrumentName) {
         switch (name) {
             case 'organ':
-                this.distortion = new Tone.Distortion(0.05);
-                this.tremolo = new Tone.Tremolo(2, 0.2);
                 this.currentSynth = new Tone.PolySynth(Tone.Synth, {
                      polyphony: 4,
                      oscillator: {
@@ -75,7 +68,7 @@ export class AccompanimentSynthManager {
                         release: 0.4,
                     },
                      volume: -15,
-                }).chain(this.distortion, this.tremolo, fxBus.input);
+                }).connect(fxBus.input);
                 break;
             default:
                 this.currentSynth = null;
@@ -115,19 +108,9 @@ export class AccompanimentSynthManager {
      * This is crucial for preventing memory leaks when switching instruments or stopping playback.
      */
     public dispose() {
-        this.stopEffects();
-        
         if (this.currentSynth) {
             this.currentSynth.dispose();
             this.currentSynth = null;
-        }
-        if (this.tremolo) {
-            this.tremolo.dispose();
-            this.tremolo = null;
-        }
-        if (this.distortion) {
-            this.distortion.dispose();
-            this.distortion = null;
         }
         this.isSynthCreated = false;
         this.currentInstrument = 'none';
