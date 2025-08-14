@@ -28,6 +28,7 @@ export class AccompanimentSynthManager {
 
         if (name === 'none') return;
         
+        console.log(`ACCOMPANIMENT: Creating pool of ${NUM_VOICES} voices for ${name}`);
         let synthOptions: Tone.SynthOptions;
 
         switch (name) {
@@ -108,8 +109,11 @@ export class AccompanimentSynthManager {
     }
     
     private disposeVoices() {
-        this.voices.forEach(voice => voice.dispose());
-        this.voices = [];
+        if (this.voices.length > 0) {
+            console.log("ACCOMPANIMENT: Disposing all voices");
+            this.voices.forEach(voice => voice.dispose());
+            this.voices = [];
+        }
     }
 
     public dispose() {
