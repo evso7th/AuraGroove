@@ -25,11 +25,11 @@ import { Label } from "@/components/ui/label";
 import Logo from "@/components/icons";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
+import type { FxBus } from "@/lib/fx-bus";
 import type { BassSynthManager } from "@/lib/bass-synth-manager";
 import type { SoloSynthManager } from "@/lib/solo-synth-manager";
 import type { AccompanimentSynthManager } from "@/lib/accompaniment-synth-manager";
 import { DrumNote, BassNote, SoloNote, AccompanimentNote } from '@/types/music';
-import { fxBus } from "@/lib/fx-bus";
 
 
 export type Instruments = {
@@ -77,13 +77,15 @@ export function AuraGroove() {
   const [bpm, setBpm] = useState(100);
   const [score, setScore] = useState<ScoreName>('generative');
   
-  const [reverbSettings, setReverbSettings] = useState<FxSettings>({ enabled: true, wet: 0.3 });
-  const [delaySettings, setDelaySettings] = useState<FxSettings>({ enabled: true, wet: 0.2 });
-  const [chorusSettings, setChorusSettings] = useState<FxSettings>({ enabled: false, wet: 0.5 });
+  // Master FX States
+  const [reverbSettings, setReverbSettings] = useState({ enabled: true, wet: 0.3, decay: 4.5 });
+  const [delaySettings, setDelaySettings] = useState({ enabled: true, wet: 0.2, delayTime: 0.5, feedback: 0.3 });
+  const [chorusSettings, setChorusSettings] = useState({ enabled: false, wet: 0.5, frequency: 1.5, depth: 0.7 });
   
   const { toast } = useToast();
 
   const musicWorkerRef = useRef<Worker>();
+  const fxBusRef = useRef<FxBus | null>(null);
   const bassSynthManagerRef = useRef<BassSynthManager | null>(null);
   const soloSynthManagerRef = useRef<SoloSynthManager | null>(null);
   const accompanimentSynthManagerRef = useRef<AccompanimentSynthManager | null>(null);
@@ -95,20 +97,23 @@ export function AuraGroove() {
     const worker = new Worker(new URL('../app/ambient.worker.ts', import.meta.url));
     musicWorkerRef.current = worker;
     
-    const initializeAudio = async () => {
-        setLoadingText("Initializing Synths...");
+    const initializeAudioEngine = async () => {
+        setLoadingText("Initializing Audio Engine...");
         try {
+            const { FxBus } = await import('@/lib/fx-bus');
+            fxBusRef.current = new FxBus();
+            
             const { BassSynthManager } = await import('@/lib/bass-synth-manager');
-            bassSynthManagerRef.current = new BassSynthManager();
+            bassSynthManagerRef.current = new BassSynthManager(fxBusRef.current);
 
             const { SoloSynthManager } = await import('@/lib/solo-synth-manager');
-            soloSynthManagerRef.current = new SoloSynthManager();
+            soloSynthManagerRef.current = new SoloSynthManager(fxBusRef.current);
             
             const { AccompanimentSynthManager } = await import('@/lib/accompaniment-synth-manager');
-            accompanimentSynthManagerRef.current = new AccompanimentSynthManager();
+            accompanimentSynthManagerRef.current = new AccompanimentSynthManager(fxBusRef.current);
             
             setLoadingText("Loading Samples...");
-            await loadSamples();
+            await loadSamples(fxBusRef.current);
 
         } catch (error) {
              console.error("Audio initialization failed:", error);
@@ -128,7 +133,7 @@ export function AuraGroove() {
       
       switch(type) {
         case 'initialized':
-           initializeAudio();
+           initializeAudioEngine();
           break;
         
         case 'started':
@@ -209,7 +214,7 @@ export function AuraGroove() {
 
     worker.onmessage = handleMessage;
     
-    const loadSamples = async () => {
+    const loadSamples = async (fxBus: FxBus) => {
         try {
             const fetchedSamples = await Promise.all(
                 Object.entries(samplePaths).map(async ([name, url]) => {
@@ -259,7 +264,7 @@ export function AuraGroove() {
       soloSynthManagerRef.current?.dispose();
       accompanimentSynthManagerRef.current?.dispose();
       drumPlayersRef.current?.dispose();
-      fxBus.dispose();
+      fxBusRef.current?.dispose();
       if (Tone.Transport.state !== 'stopped') {
         Tone.Transport.stop();
         Tone.Transport.cancel();
@@ -283,18 +288,25 @@ export function AuraGroove() {
   }, [drumSettings, instruments, bpm, score, isReady, isPlaying, updateWorkerSettings]);
 
    useEffect(() => {
-        if (!isReady || !fxBus) return;
-        fxBus.reverb.wet.value = reverbSettings.enabled ? reverbSettings.wet : 0;
+        if (!isReady || !fxBusRef.current) return;
+        fxBusRef.current.reverb.wet.value = reverbSettings.enabled ? reverbSettings.wet : 0;
+        fxBusRef.current.reverb.decay = reverbSettings.decay;
     }, [reverbSettings, isReady]);
 
     useEffect(() => {
-        if (!isReady || !fxBus) return;
-        fxBus.delay.wet.value = delaySettings.enabled ? delaySettings.wet : 0;
+        if (!isReady || !fxBusRef.current) return;
+        const fx = fxBusRef.current.delay;
+        fx.wet.value = delaySettings.enabled ? delaySettings.wet : 0;
+        fx.delayTime.value = delaySettings.delayTime;
+        fx.feedback.value = delaySettings.feedback;
     }, [delaySettings, isReady]);
 
     useEffect(() => {
-        if (!isReady || !fxBus) return;
-        fxBus.chorus.wet.value = chorusSettings.enabled ? chorusSettings.wet : 0;
+        if (!isReady || !fxBusRef.current) return;
+        const fx = fxBusRef.current.chorus;
+        fx.wet.value = chorusSettings.enabled ? chorusSettings.wet : 0;
+        fx.frequency.value = chorusSettings.frequency;
+        fx.depth = chorusSettings.depth;
     }, [chorusSettings, isReady]);
   
 
@@ -369,6 +381,7 @@ export function AuraGroove() {
   }, [isPlaying, handleStop, handlePlay]);
 
   const handleTestMixer = useCallback(async () => {
+    if(!fxBusRef.current) return;
     if (Tone.context.state !== 'running') {
         await Tone.start();
     }
@@ -376,7 +389,7 @@ export function AuraGroove() {
         Tone.Transport.start();
     }
 
-    const testSynth = new Tone.Synth().connect(fxBus.input);
+    const testSynth = new Tone.Synth().connect(fxBusRef.current.input);
     const sequence = new Tone.Sequence((time, note) => {
         testSynth.triggerAttackRelease(note, "8n", time);
     }, ["A4", "B4", "C5", "D5"], "4n").start(0);
@@ -543,7 +556,10 @@ export function AuraGroove() {
                     <Label htmlFor="reverb-enabled" className="flex items-center gap-1.5"><Wind className="h-4 w-4"/> Reverb</Label>
                     <Switch id="reverb-enabled" checked={reverbSettings.enabled} onCheckedChange={(c) => setReverbSettings(s => ({...s, enabled: c}))} disabled={isBusy || isPlaying} />
                 </div>
+                <Label>Wet</Label>
                 <Slider value={[reverbSettings.wet]} max={1} step={0.05} onValueChange={(v) => setReverbSettings(s => ({...s, wet: v[0]}))} disabled={isBusy || isPlaying || !reverbSettings.enabled} />
+                 <Label>Decay</Label>
+                <Slider value={[reverbSettings.decay]} min={0.5} max={10} step={0.5} onValueChange={(v) => setReverbSettings(s => ({...s, decay: v[0]}))} disabled={isBusy || isPlaying || !reverbSettings.enabled} />
             </div>
              {/* Delay Controls */}
             <div className="space-y-2">
@@ -551,7 +567,12 @@ export function AuraGroove() {
                     <Label htmlFor="delay-enabled" className="flex items-center gap-1.5"><Waves className="h-4 w-4"/> Delay</Label>
                     <Switch id="delay-enabled" checked={delaySettings.enabled} onCheckedChange={(c) => setDelaySettings(s => ({...s, enabled: c}))} disabled={isBusy || isPlaying} />
                 </div>
+                <Label>Wet</Label>
                 <Slider value={[delaySettings.wet]} max={1} step={0.05} onValueChange={(v) => setDelaySettings(s => ({...s, wet: v[0]}))} disabled={isBusy || isPlaying || !delaySettings.enabled} />
+                <Label>Time</Label>
+                <Slider value={[delaySettings.delayTime]} max={1} step={0.1} onValueChange={(v) => setDelaySettings(s => ({...s, delayTime: v[0]}))} disabled={isBusy || isPlaying || !delaySettings.enabled} />
+                <Label>Feedback</Label>
+                <Slider value={[delaySettings.feedback]} max={0.9} step={0.1} onValueChange={(v) => setDelaySettings(s => ({...s, feedback: v[0]}))} disabled={isBusy || isPlaying || !delaySettings.enabled} />
             </div>
              {/* Chorus Controls */}
             <div className="space-y-2">
@@ -559,7 +580,12 @@ export function AuraGroove() {
                     <Label htmlFor="chorus-enabled" className="flex items-center gap-1.5"><Speaker className="h-4 w-4"/> Chorus</Label>
                     <Switch id="chorus-enabled" checked={chorusSettings.enabled} onCheckedChange={(c) => setChorusSettings(s => ({...s, enabled: c}))} disabled={isBusy || isPlaying} />
                 </div>
+                 <Label>Wet</Label>
                 <Slider value={[chorusSettings.wet]} max={1} step={0.05} onValueChange={(v) => setChorusSettings(s => ({...s, wet: v[0]}))} disabled={isBusy || isPlaying || !chorusSettings.enabled} />
+                 <Label>Frequency</Label>
+                <Slider value={[chorusSettings.frequency]} min={0.5} max={10} step={0.5} onValueChange={(v) => setChorusSettings(s => ({...s, frequency: v[0]}))} disabled={isBusy || isPlaying || !chorusSettings.enabled} />
+                 <Label>Depth</Label>
+                <Slider value={[chorusSettings.depth]} max={1} step={0.1} onValueChange={(v) => setChorusSettings(s => ({...s, depth: v[0]}))} disabled={isBusy || isPlaying || !chorusSettings.enabled} />
             </div>
         </div>
          
