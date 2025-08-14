@@ -2,7 +2,7 @@
 /// <reference lib="webworker" />
 
 import { promenadeScore } from '@/lib/scores/promenade';
-import type { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote } from '@/types/music';
+import type { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote, DrumSettings, EffectsSettings } from '@/types/music';
 
 // --- 1. PatternProvider (The Music Sheet Library) ---
 const PatternProvider = {
@@ -45,9 +45,10 @@ const PatternProvider = {
             { sample: 'snare', time: 3, velocity: 1.0 },
             { sample: 'ride', time: 3.5 },
         ],
+        none: [],
     },
-    getDrumPattern(name: string) {
-        return this.drumPatterns[name as keyof typeof this.drumPatterns] || this.drumPatterns.basic;
+    getDrumPattern(name: DrumSettings['pattern']) {
+        return this.drumPatterns[name] || this.drumPatterns.basic;
     },
 };
 
@@ -74,7 +75,8 @@ const smokeOnTheWaterRiff = [
 
 // --- 2. Instrument Generators (The Composers) ---
 class DrumGenerator {
-    static createScore(patternName: string, barNumber: number, totalBars: number, beatsPerBar = 4): DrumNote[] {
+    static createScore(patternName: DrumSettings['pattern'], barNumber: number, totalBars: number, beatsPerBar = 4): DrumNote[] {
+        if (patternName === 'none') return [];
         const pattern = PatternProvider.getDrumPattern(patternName);
         let score: DrumNote[] = [...pattern];
 
@@ -133,14 +135,25 @@ class AccompanimentGenerator {
 }
 
 class EffectsGenerator {
-    static createScore(bar: number, beatsPerBar = 4): EffectNote[] {
+    static createScore(mode: EffectsSettings['mode'], bar: number, beatsPerBar = 4): EffectNote[] {
+        if (mode === 'none') return [];
+        
         const score: EffectNote[] = [];
-        // Add a bell sound on the first beat of every 4th bar
-        if (bar % 4 === 0) {
+        
+        let effectType: 'piu' | 'bell' | null = null;
+        if (mode === 'mixed') {
+            effectType = Math.random() > 0.5 ? 'bell' : 'piu';
+        } else {
+            effectType = mode;
+        }
+
+        if (effectType === 'bell' && bar % 4 === 0) {
             score.push({ type: 'bell', time: 0, note: 'C5' });
         }
-        // Add a "piu" sound on the 3rd beat of every bar
-        score.push({ type: 'piu', time: 2.5, note: 'G5' });
+        if (effectType === 'piu') {
+             score.push({ type: 'piu', time: 2.5, note: 'G5' });
+        }
+
         return score;
     }
 }
@@ -155,7 +168,8 @@ const Scheduler = {
     // Settings from main thread
     bpm: 100,
     instruments: { solo: 'none', accompaniment: 'none', bass: 'none' } as any,
-    drumSettings: { enabled: false, pattern: 'basic' } as any,
+    drumSettings: { pattern: 'basic', volume: 0.85 } as any,
+    effectsSettings: { mode: 'none', volume: 0.7 } as any,
     score: 'generative' as 'generative' | 'promenade',
 
 
@@ -195,6 +209,7 @@ const Scheduler = {
     updateSettings(settings: any) {
         if (settings.instruments) this.instruments = settings.instruments;
         if (settings.drumSettings) this.drumSettings = settings.drumSettings;
+        if (settings.effectsSettings) this.effectsSettings = settings.effectsSettings;
         if (settings.bpm) this.bpm = settings.bpm;
         if (settings.score) this.score = settings.score;
     },
@@ -222,7 +237,7 @@ const Scheduler = {
                     }));
             };
             
-            if (this.drumSettings.enabled) {
+            if (this.drumSettings.pattern !== 'none') {
                 const barDrumNotes = getNotesForBar(promenadeScore.drums);
                 if (barDrumNotes.length > 0) self.postMessage({ type: 'drum_score', data: { score: barDrumNotes } });
             }
@@ -240,7 +255,7 @@ const Scheduler = {
             }
 
         } else { // Generative logic
-            if (this.drumSettings.enabled) {
+            if (this.drumSettings.pattern !== 'none') {
                 const drumScore = DrumGenerator.createScore(
                     this.drumSettings.pattern, 
                     this.barCount, -1
@@ -263,8 +278,8 @@ const Scheduler = {
                     .map(note => ({...note, time: (note.time as number) * this.secondsPerBeat}));
                 if(accompanimentScore.length > 0) self.postMessage({ type: 'accompaniment_score', data: { score: accompanimentScore } });
             }
-            // Generate and send effects score
-            const effectsScore = EffectsGenerator.createScore(this.barCount, this.beatsPerBar)
+            
+            const effectsScore = EffectsGenerator.createScore(this.effectsSettings.mode, this.barCount, this.beatsPerBar)
                 .map(note => ({ ...note, time: note.time * this.secondsPerBeat }));
             if (effectsScore.length > 0) {
                 self.postMessage({ type: 'effects_score', data: { score: effectsScore } });
@@ -304,3 +319,5 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
+
+    

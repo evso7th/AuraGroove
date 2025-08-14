@@ -1,7 +1,9 @@
 
 import * as Tone from 'tone';
 import type { FxBus } from './fx-bus';
-import type { EffectNote } from '@/types/music';
+import type { EffectNote, EffectsSettings } from '@/types/music';
+
+type EffectMode = EffectsSettings['mode'];
 
 /**
  * Manages the lifecycle and triggering of SFX synthesizers.
@@ -10,6 +12,7 @@ export class EffectsSynthManager {
     private piuSynth: Tone.Synth;
     private bellSynth: Tone.MetalSynth;
     private fxBus: FxBus;
+    private currentMode: EffectMode = 'none';
 
     constructor(fxBus: FxBus) {
         this.fxBus = fxBus;
@@ -42,17 +45,32 @@ export class EffectsSynthManager {
             volume: -15,
         }).connect(this.fxBus.effectsInput);
     }
+    
+    public setMode(mode: EffectMode) {
+        this.currentMode = mode;
+    }
+
+    public setVolume(volume: number) {
+        // Convert linear volume (0-1) to dB
+        const volumeInDb = Tone.gainToDb(volume);
+        this.fxBus.effectsInput.gain.value = volumeInDb;
+    }
 
     public trigger(effect: EffectNote, time: Tone.Unit.Time) {
+        if (this.currentMode === 'none') return;
+        
         switch (effect.type) {
             case 'piu':
-                // The "piu" sound is created with a fast pitch envelope
-                this.piuSynth.triggerAttack(effect.note, time);
-                this.piuSynth.frequency.rampTo(Tone.Frequency(effect.note).toFrequency() * 0.5, 0.2, time as number);
-                this.piuSynth.triggerRelease(time as number + 0.3);
+                 if (this.currentMode === 'piu' || this.currentMode === 'mixed') {
+                    this.piuSynth.triggerAttack(effect.note, time);
+                    this.piuSynth.frequency.rampTo(Tone.Frequency(effect.note).toFrequency() * 0.5, 0.2, time as number);
+                    this.piuSynth.triggerRelease(time as number + 0.3);
+                }
                 break;
             case 'bell':
-                this.bellSynth.triggerAttackRelease(effect.note, effect.duration || '8n', time);
+                if (this.currentMode === 'bell' || this.currentMode === 'mixed') {
+                    this.bellSynth.triggerAttackRelease(effect.note, effect.duration || '8n', time);
+                }
                 break;
         }
     }
@@ -62,3 +80,5 @@ export class EffectsSynthManager {
         this.bellSynth.dispose();
     }
 }
+
+    

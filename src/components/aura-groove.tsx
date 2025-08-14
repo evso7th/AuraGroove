@@ -30,20 +30,8 @@ import type { BassSynthManager } from "@/lib/bass-synth-manager";
 import type { SoloSynthManager } from "@/lib/solo-synth-manager";
 import type { AccompanimentSynthManager } from "@/lib/accompaniment-synth-manager";
 import type { EffectsSynthManager } from "@/lib/effects-synth-manager";
-import { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote } from '@/types/music';
+import { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote, DrumSettings, EffectsSettings, Instruments } from '@/types/music';
 
-
-export type Instruments = {
-  solo: 'synthesizer' | 'piano' | 'organ' | 'none';
-  accompaniment: 'synthesizer' | 'piano' | 'organ' | 'none';
-  bass: 'bass synth' | 'none';
-};
-
-export type DrumSettings = {
-    enabled: boolean;
-    pattern: 'basic' | 'breakbeat' | 'slow' | 'heavy';
-    volume: number;
-};
 
 export type ScoreName = 'generative' | 'promenade';
 
@@ -61,9 +49,12 @@ export function AuraGroove() {
   const [isInitializing, setIsInitializing] = useState(true); 
   const [loadingText, setLoadingText] = useState("Initializing...");
   const [drumSettings, setDrumSettings] = useState<DrumSettings>({
-      enabled: true,
       pattern: 'basic',
       volume: 0.85,
+  });
+  const [effectsSettings, setEffectsSettings] = useState<EffectsSettings>({
+    mode: 'none',
+    volume: 0.7,
   });
   const [instruments, setInstruments] = useState<Instruments>({
     solo: "organ",
@@ -291,16 +282,16 @@ export function AuraGroove() {
     if (musicWorkerRef.current && (isPlaying || isInitializing)) {
         musicWorkerRef.current?.postMessage({
             command: 'update_settings',
-            data: { instruments, drumSettings, bpm, score },
+            data: { instruments, drumSettings, effectsSettings, bpm, score },
         });
     }
-  }, [instruments, drumSettings, bpm, score, isPlaying, isInitializing]);
+  }, [instruments, drumSettings, effectsSettings, bpm, score, isPlaying, isInitializing]);
 
   useEffect(() => {
     if (isReady && isPlaying) { 
       updateWorkerSettings();
     }
-  }, [drumSettings, instruments, bpm, score, isReady, isPlaying, updateWorkerSettings]);
+  }, [drumSettings, instruments, effectsSettings, bpm, score, isReady, isPlaying, updateWorkerSettings]);
 
    useEffect(() => {
         if (!isReady || !fxBusRef.current) return;
@@ -330,6 +321,12 @@ export function AuraGroove() {
         fx.depth = accompanimentFx.chorus.depth;
     }, [accompanimentFx.chorus, isReady]);
 
+     useEffect(() => {
+        if (!isReady || !effectsSynthManagerRef.current) return;
+        effectsSynthManagerRef.current.setVolume(effectsSettings.volume);
+        effectsSynthManagerRef.current.setMode(effectsSettings.mode);
+    }, [effectsSettings, isReady]);
+
   
   const handlePlay = useCallback(async () => {
     try {
@@ -346,6 +343,7 @@ export function AuraGroove() {
         soloSynthManagerRef.current?.setInstrument(instruments.solo);
         accompanimentSynthManagerRef.current?.setInstrument(instruments.accompaniment);
         bassSynthManagerRef.current?.setInstrument(instruments.bass);
+        effectsSynthManagerRef.current?.setMode(effectsSettings.mode);
 
         setIsInitializing(true);
         setLoadingText("Starting playback...");
@@ -356,7 +354,7 @@ export function AuraGroove() {
         
         musicWorkerRef.current.postMessage({
             command: 'start',
-            data: { drumSettings, instruments, bpm, score }
+            data: { drumSettings, instruments, effectsSettings, bpm, score }
         });
 
     } catch (error) {
@@ -369,7 +367,7 @@ export function AuraGroove() {
         setIsInitializing(false);
         setLoadingText("");
     }
-  }, [drumSettings, instruments, bpm, score, toast]);
+  }, [drumSettings, instruments, effectsSettings, bpm, score, toast]);
 
   const handleStop = useCallback(() => {
     soloSynthManagerRef.current?.fadeOut(1);
@@ -426,6 +424,9 @@ export function AuraGroove() {
 
   const isBusy = isInitializing || !isReady;
   const isGenerative = score === 'generative';
+  const drumsEnabled = drumSettings.pattern !== 'none';
+  const effectsEnabled = effectsSettings.mode !== 'none';
+
 
   return (
     <Card className="w-full max-w-lg shadow-2xl">
@@ -550,26 +551,18 @@ export function AuraGroove() {
             {/* Drums Channel */}
             <div className="space-y-3 rounded-md border p-3">
                 <Label className="font-semibold flex items-center gap-2"><Drum className="h-5 w-5"/> Drums</Label>
-                <div className="flex items-center justify-between pt-2">
-                    <Label htmlFor="drums-enabled">Enable Drums</Label>
-                    <Switch
-                        id="drums-enabled"
-                        checked={drumSettings.enabled}
-                        onCheckedChange={(c) => setDrumSettings(d => ({ ...d, enabled: c }))}
-                        disabled={isBusy || isPlaying || !isGenerative}
-                    />
-                </div>
-                <div className="grid grid-cols-3 items-center gap-4">
+                <div className="grid grid-cols-3 items-center gap-4 pt-2">
                     <Label htmlFor="drum-pattern" className="text-right">Pattern</Label>
                     <Select
                         value={drumSettings.pattern}
                         onValueChange={(v) => setDrumSettings(d => ({ ...d, pattern: v as DrumSettings['pattern'] }))}
-                        disabled={isBusy || isPlaying || !drumSettings.enabled || !isGenerative}
+                        disabled={isBusy || isPlaying || !isGenerative}
                     >
                         <SelectTrigger id="drum-pattern" className="col-span-2">
                             <SelectValue placeholder="Select pattern" />
                         </SelectTrigger>
                         <SelectContent>
+                            <SelectItem value="none">None</SelectItem>
                             <SelectItem value="basic">Basic</SelectItem>
                             <SelectItem value="breakbeat">Breakbeat</SelectItem>
                             <SelectItem value="slow">Slow</SelectItem>
@@ -585,11 +578,44 @@ export function AuraGroove() {
                         step={0.05}
                         onValueChange={(v) => setDrumSettings(d => ({ ...d, volume: v[0] }))}
                         className="col-span-2"
-                        disabled={isBusy || isPlaying || !drumSettings.enabled}
+                        disabled={isBusy || isPlaying || !drumsEnabled}
                     />
                 </div>
             </div>
 
+            {/* Effects Channel */}
+            <div className="space-y-3 rounded-md border p-3">
+                <Label className="font-semibold flex items-center gap-2"><Sparkles className="h-5 w-5"/> Effects</Label>
+                <div className="grid grid-cols-3 items-center gap-4 pt-2">
+                    <Label htmlFor="effects-mode" className="text-right">Mode</Label>
+                    <Select
+                        value={effectsSettings.mode}
+                        onValueChange={(v) => setEffectsSettings(d => ({ ...d, mode: v as EffectsSettings['mode'] }))}
+                        disabled={isBusy || isPlaying}
+                    >
+                        <SelectTrigger id="effects-mode" className="col-span-2">
+                            <SelectValue placeholder="Select mode" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="none">None</SelectItem>
+                            <SelectItem value="piu">Piu</SelectItem>
+                            <SelectItem value="bell">Bell</SelectItem>
+                             <SelectItem value="mixed">Mixed</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="grid grid-cols-3 items-center gap-4">
+                    <Label className="text-right flex items-center gap-1.5"><Speaker className="h-4 w-4"/> Volume</Label>
+                    <Slider
+                        value={[effectsSettings.volume]}
+                        max={1}
+                        step={0.05}
+                        onValueChange={(v) => setEffectsSettings(d => ({ ...d, volume: v[0] }))}
+                        className="col-span-2"
+                        disabled={isBusy || isPlaying || !effectsEnabled}
+                    />
+                </div>
+            </div>
         </div>
 
 
@@ -618,14 +644,6 @@ export function AuraGroove() {
                 <Slider value={[masterDelaySettings.delayTime]} max={1} step={0.1} onValueChange={(v) => setMasterDelaySettings(s => ({...s, delayTime: v[0]}))} disabled={isBusy || isPlaying || !masterDelaySettings.enabled} />
                 <Label>Feedback</Label>
                 <Slider value={[masterDelaySettings.feedback]} max={0.9} step={0.1} onValueChange={(v) => setMasterDelaySettings(s => ({...s, feedback: v[0]}))} disabled={isBusy || isPlaying || !masterDelaySettings.enabled} />
-            </div>
-             {/* Effects Channel Teaser */}
-            <div className="space-y-2 pt-2">
-                <div className="flex items-center justify-between">
-                    <Label className="flex items-center gap-1.5 text-muted-foreground"><Sparkles className="h-4 w-4"/> Effects Channel</Label>
-                     <Switch disabled={true} />
-                </div>
-                 <p className="text-xs text-muted-foreground">Control the new SFX channel here in the future.</p>
             </div>
         </div>
          
@@ -676,3 +694,5 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    

@@ -1,6 +1,22 @@
 
 import type * as Tone from 'tone';
 
+export type Instruments = {
+  solo: 'synthesizer' | 'piano' | 'organ' | 'none';
+  accompaniment: 'synthesizer' | 'piano' | 'organ' | 'none';
+  bass: 'bass synth' | 'none';
+};
+
+export type DrumSettings = {
+    pattern: 'basic' | 'breakbeat' | 'slow' | 'heavy' | 'none';
+    volume: number;
+};
+
+export type EffectsSettings = {
+    mode: 'none' | 'piu' | 'bell' | 'mixed';
+    volume: number;
+};
+
 export type BassNote = {
     note: string;
     time: number;
@@ -32,3 +48,5 @@ export type EffectNote = {
     note: string; // pitch of the effect
     duration?: Tone.Unit.Time; // optional duration
 }
+
+    
