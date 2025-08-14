@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import * as Tone from 'tone';
-import { Drum, Loader2, Music, Pause, Speaker, FileMusic, Waves, Wind, ToyBrick, GitBranch, ChevronsRight } from "lucide-react";
+import { Drum, Loader2, Music, Pause, Speaker, FileMusic, Waves, Wind, ToyBrick, GitBranch, ChevronsRight, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,7 +29,8 @@ import type { FxBus } from "@/lib/fx-bus";
 import type { BassSynthManager } from "@/lib/bass-synth-manager";
 import type { SoloSynthManager } from "@/lib/solo-synth-manager";
 import type { AccompanimentSynthManager } from "@/lib/accompaniment-synth-manager";
-import { DrumNote, BassNote, SoloNote, AccompanimentNote } from '@/types/music';
+import type { EffectsSynthManager } from "@/lib/effects-synth-manager";
+import { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote } from '@/types/music';
 
 
 export type Instruments = {
@@ -87,6 +88,7 @@ export function AuraGroove() {
   const bassSynthManagerRef = useRef<BassSynthManager | null>(null);
   const soloSynthManagerRef = useRef<SoloSynthManager | null>(null);
   const accompanimentSynthManagerRef = useRef<AccompanimentSynthManager | null>(null);
+  const effectsSynthManagerRef = useRef<EffectsSynthManager | null>(null);
   const drumPlayersRef = useRef<Tone.Players | null>(null);
 
    useEffect(() => {
@@ -109,9 +111,11 @@ export function AuraGroove() {
             
             const { AccompanimentSynthManager } = await import('@/lib/accompaniment-synth-manager');
             accompanimentSynthManagerRef.current = new AccompanimentSynthManager(fxBusRef.current);
+
+            const { EffectsSynthManager } = await import('@/lib/effects-synth-manager');
+            effectsSynthManagerRef.current = new EffectsSynthManager(fxBusRef.current);
             
             setLoadingText("Loading Samples...");
-            // Pass the now-created fxBus to loadSamples
             await loadSamples(fxBusRef.current);
 
         } catch (error) {
@@ -192,6 +196,18 @@ export function AuraGroove() {
                 });
             }
             break;
+        
+        case 'effects_score':
+            if (effectsSynthManagerRef.current && data.score && data.score.length > 0) {
+                const now = Tone.now();
+                data.score.forEach((note: EffectNote) => {
+                    effectsSynthManagerRef.current?.trigger(
+                        note,
+                        now + note.time
+                    );
+                });
+            }
+            break;
 
         case 'stopped':
             setIsPlaying(false);
@@ -213,7 +229,6 @@ export function AuraGroove() {
 
     worker.onmessage = handleMessage;
     
-    // Now takes fxBus as an argument
     const loadSamples = async (fxBus: FxBus) => {
         try {
             const fetchedSamples = await Promise.all(
@@ -234,12 +249,11 @@ export function AuraGroove() {
                 mainThreadSampleMap[name] = mainBuffer;
             }));
 
-            // Connect to the correct input on the mixer
             drumPlayersRef.current = new Tone.Players(mainThreadSampleMap).connect(fxBus.drumInput);
 
             setLoadingText("");
             setIsReady(true);
-setIsInitializing(false);
+            setIsInitializing(false);
 
         } catch (error) {
             console.error("Sample loading failed:", error);
@@ -257,13 +271,13 @@ setIsInitializing(false);
 
     
     return () => {
-      // Cleanup on component unmount
       if (musicWorkerRef.current) {
         musicWorkerRef.current.terminate();
       }
       bassSynthManagerRef.current?.dispose();
       soloSynthManagerRef.current?.dispose();
       accompanimentSynthManagerRef.current?.dispose();
+      effectsSynthManagerRef.current?.dispose();
       drumPlayersRef.current?.dispose();
       fxBusRef.current?.dispose();
       if (Tone.Transport.state !== 'stopped') {
@@ -288,7 +302,6 @@ setIsInitializing(false);
     }
   }, [drumSettings, instruments, bpm, score, isReady, isPlaying, updateWorkerSettings]);
 
-   // Master Effects
    useEffect(() => {
         if (!isReady || !fxBusRef.current) return;
         fxBusRef.current.masterReverb.wet.value = masterReverbSettings.enabled ? masterReverbSettings.wet : 0;
@@ -303,14 +316,12 @@ setIsInitializing(false);
         fx.feedback.value = masterDelaySettings.feedback;
     }, [masterDelaySettings, isReady]);
 
-    // Solo Effects
     useEffect(() => {
         if (!isReady || !fxBusRef.current?.soloDistortion) return;
         const fx = fxBusRef.current.soloDistortion;
         fx.wet.value = soloFx.distortion.enabled ? soloFx.distortion.wet : 0;
     }, [soloFx.distortion, isReady]);
 
-    // Accompaniment Effects
     useEffect(() => {
         if (!isReady || !fxBusRef.current?.accompanimentChorus) return;
         const fx = fxBusRef.current.accompanimentChorus;
@@ -326,7 +337,7 @@ setIsInitializing(false);
             await Tone.start();
         }
 
-        if (!musicWorkerRef.current || !fxBusRef.current || !bassSynthManagerRef.current || !soloSynthManagerRef.current || !accompanimentSynthManagerRef.current) {
+        if (!musicWorkerRef.current || !fxBusRef.current || !bassSynthManagerRef.current || !soloSynthManagerRef.current || !accompanimentSynthManagerRef.current || !effectsSynthManagerRef.current) {
             setIsInitializing(true);
             setLoadingText("Waiting for audio engine...");
             return;
@@ -371,7 +382,6 @@ setIsInitializing(false);
     }
     musicWorkerRef.current?.postMessage({ command: 'stop' });
     
-    // We don't dispose the synths and fx bus anymore on stop, only on unmount
   }, []);
   
   const handleTogglePlay = useCallback(() => {
@@ -391,22 +401,25 @@ setIsInitializing(false);
         Tone.Transport.start();
     }
 
-    // Test each channel
     const soloSynth = new Tone.Synth().connect(fxBusRef.current.soloInput);
     const accompSynth = new Tone.Synth().connect(fxBusRef.current.accompanimentInput);
     const bassSynth = new Tone.Synth().connect(fxBusRef.current.bassInput);
+    const sfxSynth = new Tone.MetalSynth().connect(fxBusRef.current.effectsInput);
 
     const now = Tone.now();
     soloSynth.triggerAttackRelease("C5", "8n", now);
     accompSynth.triggerAttackRelease("E4", "8n", now + 0.5);
     bassSynth.triggerAttackRelease("G3", "8n", now + 1);
     drumPlayersRef.current?.player("kick").start(now + 1.5);
+    sfxSynth.triggerAttackRelease("C6", "16n", now + 2);
+
     
     Tone.Transport.scheduleOnce((time) => {
         soloSynth.dispose();
         accompSynth.dispose();
         bassSynth.dispose();
-    }, now + 2);
+        sfxSynth.dispose();
+    }, now + 3);
 
 
   }, []);
@@ -606,6 +619,14 @@ setIsInitializing(false);
                 <Label>Feedback</Label>
                 <Slider value={[masterDelaySettings.feedback]} max={0.9} step={0.1} onValueChange={(v) => setMasterDelaySettings(s => ({...s, feedback: v[0]}))} disabled={isBusy || isPlaying || !masterDelaySettings.enabled} />
             </div>
+             {/* Effects Channel Teaser */}
+            <div className="space-y-2 pt-2">
+                <div className="flex items-center justify-between">
+                    <Label className="flex items-center gap-1.5 text-muted-foreground"><Sparkles className="h-4 w-4"/> Effects Channel</Label>
+                     <Switch disabled={true} />
+                </div>
+                 <p className="text-xs text-muted-foreground">Control the new SFX channel here in the future.</p>
+            </div>
         </div>
          
          {isBusy && (
@@ -655,5 +676,3 @@ setIsInitializing(false);
     </Card>
   );
 }
-
-    

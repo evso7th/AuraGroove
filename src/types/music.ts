@@ -25,3 +25,10 @@ export type DrumNote = {
     time: number; // time in beats from the start of the loop
     velocity?: number;
 }
+
+export type EffectNote = {
+    type: 'piu' | 'bell';
+    time: number; // time in beats
+    note: string; // pitch of the effect
+    duration?: Tone.Unit.Time; // optional duration
+}

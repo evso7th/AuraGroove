@@ -2,7 +2,7 @@
 /// <reference lib="webworker" />
 
 import { promenadeScore } from '@/lib/scores/promenade';
-import type { DrumNote, BassNote, SoloNote, AccompanimentNote } from '@/types/music';
+import type { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote } from '@/types/music';
 
 // --- 1. PatternProvider (The Music Sheet Library) ---
 const PatternProvider = {
@@ -132,6 +132,19 @@ class AccompanimentGenerator {
     }
 }
 
+class EffectsGenerator {
+    static createScore(bar: number, beatsPerBar = 4): EffectNote[] {
+        const score: EffectNote[] = [];
+        // Add a bell sound on the first beat of every 4th bar
+        if (bar % 4 === 0) {
+            score.push({ type: 'bell', time: 0, note: 'C5' });
+        }
+        // Add a "piu" sound on the 3rd beat of every bar
+        score.push({ type: 'piu', time: 2.5, note: 'G5' });
+        return score;
+    }
+}
+
 
 // --- 3. Scheduler (The Conductor) ---
 const Scheduler = {
@@ -250,6 +263,12 @@ const Scheduler = {
                     .map(note => ({...note, time: (note.time as number) * this.secondsPerBeat}));
                 if(accompanimentScore.length > 0) self.postMessage({ type: 'accompaniment_score', data: { score: accompanimentScore } });
             }
+            // Generate and send effects score
+            const effectsScore = EffectsGenerator.createScore(this.barCount, this.beatsPerBar)
+                .map(note => ({ ...note, time: note.time * this.secondsPerBeat }));
+            if (effectsScore.length > 0) {
+                self.postMessage({ type: 'effects_score', data: { score: effectsScore } });
+            }
         }
         
         this.barCount++;
@@ -285,5 +304,3 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
-
-    
