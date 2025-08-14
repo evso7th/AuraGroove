@@ -150,24 +150,21 @@ class EffectsGenerator {
         }
 
         if (effectType === 'bell') {
-            // "Music of the Wind" logic for bells
             const windChimeNotes = ['C5', 'Eb5', 'F5', 'G5', 'Bb5']; // C Minor Pentatonic
-            const numberOfChimes = Math.floor(Math.random() * 3) + 2; // 2 to 4 chimes per bar
-            let currentTime = Math.random() * (beatsPerBar - 1); // Start somewhere in the bar, leaving space for the sequence
+            const numberOfChimes = Math.floor(Math.random() * 3) + 2; 
+            let currentTime = Math.random() * (beatsPerBar - 2); 
             
             for (let i = 0; i < numberOfChimes; i++) {
-                if (Math.random() > 0.3) { // Increase chance of a chime playing
+                if (Math.random() > 0.3) { 
                     const note = windChimeNotes[Math.floor(Math.random() * windChimeNotes.length)];
                     score.push({ type: 'bell', time: currentTime, note, duration: '1n' });
                     
-                    // Add a small, random delay for the next chime to create a sequence
-                    currentTime += (Math.random() * 0.1) + 0.15; // 0.15s to 0.25s delay
+                    currentTime += (Math.random() * 0.3) + 0.4;
                 }
             }
         }
         if (effectType === 'piu') {
-             // Keep original 'piu' logic
-             if (Math.random() < 0.25) { // Lower probability
+             if (Math.random() < 0.25) { 
                 score.push({ type: 'piu', time: 2.5, note: 'G5' });
              }
         }
