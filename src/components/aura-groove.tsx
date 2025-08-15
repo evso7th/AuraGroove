@@ -281,12 +281,13 @@ export function AuraGroove() {
 
     useEffect(() => {
         if (!isReady || !fxBusRef.current) return;
-        // Directly control the gain node on the fx bus for drums
+        // Control the volume on the dedicated drum channel.
         const gainValue = Tone.gainToDb(drumSettings.volume);
         try {
-            fxBusRef.current.drumInput.gain.rampTo(gainValue, 0.05);
+            // Using .volume, which is a property of Tone.Channel.
+            fxBusRef.current.drumInput.volume.rampTo(gainValue, 0.05);
         } catch(e) {
-            // ignore error
+            console.error("Failed to ramp drum volume:", e);
         }
     }, [drumSettings.volume, isReady]);
 
@@ -302,18 +303,16 @@ export function AuraGroove() {
         if (!drumPlayersRef.current) {
             setIsInitializing(true);
             setLoadingText("Loading samples...");
-            const fetchedSamples = await Promise.all(
-                Object.entries(samplePaths).map(async ([name, url]) => {
-                    const response = await fetch(url);
-                    if (!response.ok) throw new Error(`Failed to fetch sample: ${name}`);
-                    return { name, buffer: await response.arrayBuffer() };
-                })
-            );
-            const mainThreadSampleMap = await Promise.all(fetchedSamples.map(async ({ name, buffer }) => {
-                return [name, await Tone.context.decodeAudioData(buffer.slice(0))];
-            }));
-            drumPlayersRef.current = new Tone.Players(Object.fromEntries(mainThreadSampleMap)).connect(fxBusRef.current!.drumInput);
-            setLoadingText("Samples loaded.");
+            
+            // This is the correct way to connect Tone.Players to a dedicated channel in the FX bus
+            drumPlayersRef.current = new Tone.Players(samplePaths, {
+                onload: () => {
+                    setLoadingText("Samples loaded.");
+                    // The connection is done here to ensure it happens after loading
+                }
+            }).connect(fxBusRef.current!.drumInput);
+
+            await Tone.loaded();
         }
 
 
