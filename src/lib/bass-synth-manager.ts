@@ -1,48 +1,64 @@
 
 import * as Tone from 'tone';
-import type { Instruments } from '@/types/music';
+import type { Instruments, MixProfile } from '@/types/music';
 import type { FxBus } from './fx-bus';
 
 type InstrumentName = Instruments['bass'];
-const DEFAULT_VOLUME = -6;
+const DESKTOP_VOLUME = -6;
+const MOBILE_VOLUME = -7; // Slightly quieter on mobile, but more harmonics will compensate
 
-const instrumentPresets: Record<Exclude<InstrumentName, 'none'>, Tone.MonoSynthOptions> = {
-    'bass synth': {
-        oscillator: {
-            type: 'sawtooth'
-        },
-        filter: {
-            type: 'lowpass',
-            rolloff: -24,
-        },
-        filterEnvelope: {
-            attack: 0.04,
-            decay: 0.2,
-            sustain: 0.5,
-            release: 0.8,
-            baseFrequency: 40,
-            octaves: 2.5,
-        },
-        envelope: {
-            attack: 0.04,
-            decay: 0.5,
-            sustain: 0.8,
-            release: 0.7,
-        },
-        portamento: 0.5,
-    }
+const desktopPreset: Tone.MonoSynthOptions = {
+    oscillator: {
+        type: 'sawtooth'
+    },
+    filter: {
+        type: 'lowpass',
+        rolloff: -24,
+        Q: 1,
+    },
+    filterEnvelope: {
+        attack: 0.1,
+        decay: 0.3,
+        sustain: 0.6,
+        release: 1,
+        baseFrequency: 50,
+        octaves: 2.5,
+    },
+    envelope: {
+        attack: 0.05,
+        decay: 0.3,
+        sustain: 0.9,
+        release: 1.2,
+    },
+    portamento: 0.08,
 };
+
+const mobilePreset: Tone.MonoSynthOptions = {
+    ...desktopPreset,
+    filter: { // More aggressive filter to bring out harmonics on small speakers
+        type: 'lowpass',
+        rolloff: -12,
+        Q: 1.5,
+    },
+     filterEnvelope: {
+        ...desktopPreset.filterEnvelope,
+        baseFrequency: 80, // Higher base frequency for more mid-range presence
+        octaves: 3,
+    },
+};
+
 
 export class BassSynthManager {
     private currentSynth: Tone.MonoSynth | null = null;
     private isInitialized = false;
     private currentInstrument: InstrumentName = 'none';
     private fxBus: FxBus;
-    private readonly defaultVolume: number;
+    private currentVolume: number;
+    private currentProfile: MixProfile = 'desktop';
 
     constructor(fxBus: FxBus) {
         this.fxBus = fxBus;
-        this.defaultVolume = DEFAULT_VOLUME;
+        this.currentVolume = DESKTOP_VOLUME;
     }
 
     private ensureSynthInitialized() {
@@ -66,10 +82,31 @@ export class BassSynthManager {
         if (name === this.currentInstrument) return;
         
         console.log(`BASS: Setting instrument to ${name}`);
-        const preset = instrumentPresets[name];
-        this.currentSynth.set(preset);
+        this.applyProfileSettings();
         this.fadeIn(0.01);
         this.currentInstrument = name;
+    }
+
+    public setMixProfile(profile: MixProfile) {
+        this.currentProfile = profile;
+        this.currentVolume = profile === 'mobile' ? MOBILE_VOLUME : DESKTOP_VOLUME;
+        
+        if (this.isInitialized && this.currentSynth && this.currentInstrument !== 'none') {
+            console.log(`BASS: Applying ${profile} mix profile.`);
+            this.applyProfileSettings();
+            
+            // If already playing, ramp to the new volume
+            const isAudible = this.currentSynth.volume.value > -Infinity;
+            if (isAudible) {
+                this.currentSynth.volume.rampTo(this.currentVolume, 0.5);
+            }
+        }
+    }
+
+    private applyProfileSettings() {
+        if (!this.currentSynth) return;
+        const preset = this.currentProfile === 'mobile' ? mobilePreset : desktopPreset;
+        this.currentSynth.set(preset);
     }
     
     public triggerAttackRelease(note: string, duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
@@ -102,7 +139,7 @@ export class BassSynthManager {
     public fadeIn(duration: number) {
         if (this.currentSynth && this.currentInstrument !== 'none') {
             try {
-                this.currentSynth.volume.rampTo(this.defaultVolume, duration);
+                this.currentSynth.volume.rampTo(this.currentVolume, duration);
             } catch (e) {
                 // Ignore errors if the context is already closed
             }
@@ -118,3 +155,5 @@ export class BassSynthManager {
         }
     }
 }
+
+    

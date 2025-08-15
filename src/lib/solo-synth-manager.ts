@@ -1,10 +1,11 @@
 
 import * as Tone from 'tone';
-import type { Instruments } from '@/types/music';
+import type { Instruments, MixProfile } from '@/types/music';
 import type { FxBus } from './fx-bus';
 
 type InstrumentName = Instruments['solo'];
-const DEFAULT_VOLUME = -9;
+const DESKTOP_VOLUME = -9;
+const MOBILE_VOLUME = -8; // Slightly louder on mobile to cut through
 const NUM_VOICES = 2; // 2 voices for solo instrument
 
 const instrumentPresets: Record<Exclude<InstrumentName, 'none'>, Tone.SynthOptions> = {
@@ -32,12 +33,12 @@ export class SoloSynthManager {
     private isInitialized = false;
     private currentInstrument: InstrumentName = 'none';
     private fxBus: FxBus;
-    private readonly defaultVolume: number;
+    private currentVolume: number;
     private nextVoiceIndex = 0;
 
     constructor(fxBus: FxBus) {
         this.fxBus = fxBus;
-        this.defaultVolume = DEFAULT_VOLUME;
+        this.currentVolume = DESKTOP_VOLUME;
     }
 
     private ensureSynthsInitialized() {
@@ -69,6 +70,17 @@ export class SoloSynthManager {
 
         this.fadeIn(0.01);
         this.currentInstrument = name;
+    }
+
+    public setMixProfile(profile: MixProfile) {
+        this.currentVolume = profile === 'mobile' ? MOBILE_VOLUME : DESKTOP_VOLUME;
+        // If already playing, ramp to the new volume
+        if (this.isInitialized && this.currentInstrument !== 'none') {
+            const isAudible = this.voices.some(v => v.volume.value > -Infinity);
+            if (isAudible) {
+                 this.setVolume(this.currentVolume, 0.5);
+            }
+        }
     }
     
     public triggerAttackRelease(notes: string | string[], duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
@@ -111,7 +123,7 @@ export class SoloSynthManager {
 
     public fadeIn(duration: number) {
          if (this.currentInstrument !== 'none') {
-            this.setVolume(this.defaultVolume, duration);
+            this.setVolume(this.currentVolume, duration);
         }
     }
     
@@ -124,3 +136,5 @@ export class SoloSynthManager {
         }
     }
 }
+
+    

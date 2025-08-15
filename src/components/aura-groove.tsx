@@ -5,6 +5,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import * as Tone from 'tone';
 import { Drum, Loader2, Music, Pause, Speaker, FileMusic, Waves, Wind, ToyBrick, GitBranch, ChevronsRight, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useDeviceType } from "@/hooks/use-device-type";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -30,7 +31,7 @@ import type { BassSynthManager } from "@/lib/bass-synth-manager";
 import type { SoloSynthManager } from "@/lib/solo-synth-manager";
 import type { AccompanimentSynthManager } from "@/lib/accompaniment-synth-manager";
 import type { EffectsSynthManager } from "@/lib/effects-synth-manager";
-import { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote, DrumSettings, EffectsSettings, Instruments, ScoreName } from '@/types/music';
+import { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote, DrumSettings, EffectsSettings, Instruments, ScoreName, MixProfile } from '@/types/music';
 
 
 const samplePaths: Record<string, string> = {
@@ -66,6 +67,9 @@ export function AuraGroove() {
   const [soloFx, setSoloFx] = useState({ distortion: { enabled: false, wet: 0.5 } });
   const [accompanimentFx, setAccompanimentFx] = useState({ chorus: { enabled: false, wet: 0.4, frequency: 1.5, depth: 0.7 } });
   
+  const deviceType = useDeviceType();
+  const [mixProfile, setMixProfile] = useState<MixProfile>('desktop');
+
   const { toast } = useToast();
 
   const musicWorkerRef = useRef<Worker>();
@@ -75,6 +79,10 @@ export function AuraGroove() {
   const accompanimentSynthManagerRef = useRef<AccompanimentSynthManager | null>(null);
   const effectsSynthManagerRef = useRef<EffectsSynthManager | null>(null);
   const drumPlayersRef = useRef<Tone.Players | null>(null);
+
+  useEffect(() => {
+    setMixProfile(deviceType);
+  }, [deviceType]);
 
    useEffect(() => {
     setLoadingText("Initializing Worker...");
@@ -290,6 +298,12 @@ export function AuraGroove() {
             return;
         }
 
+        // Set initial mix profile for all managers
+        bassSynthManagerRef.current.setMixProfile(mixProfile);
+        soloSynthManagerRef.current.setMixProfile(mixProfile);
+        accompanimentSynthManagerRef.current.setMixProfile(mixProfile);
+
+
         soloSynthManagerRef.current?.setInstrument(instruments.solo);
         accompanimentSynthManagerRef.current?.setInstrument(instruments.accompaniment);
         bassSynthManagerRef.current?.setInstrument(instruments.bass);
@@ -321,7 +335,7 @@ export function AuraGroove() {
         setIsInitializing(false);
         setLoadingText("");
     }
-  }, [drumSettings, instruments, effectsSettings, bpm, score, toast]);
+  }, [drumSettings, instruments, effectsSettings, bpm, score, toast, mixProfile]);
 
   const handleStop = useCallback(() => {
     soloSynthManagerRef.current?.fadeOut(1);
@@ -343,6 +357,16 @@ export function AuraGroove() {
       handlePlay();
     }
   }, [isPlaying, handleStop, handlePlay]);
+  
+  // Update mix profile on all synth managers when it changes
+  useEffect(() => {
+      if (isPlaying) {
+          bassSynthManagerRef.current?.setMixProfile(mixProfile);
+          soloSynthManagerRef.current?.setMixProfile(mixProfile);
+          accompanimentSynthManagerRef.current?.setMixProfile(mixProfile);
+      }
+  }, [mixProfile, isPlaying]);
+
 
   const handleTestMixer = useCallback(async () => {
     if(!fxBusRef.current) return;
@@ -629,3 +653,5 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    

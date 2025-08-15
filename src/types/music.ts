@@ -52,3 +52,7 @@ export type EffectNote = {
 }
 
 export type ScoreName = 'dreamtales' | 'promenade';
+
+export type MixProfile = 'desktop' | 'mobile';
+
+    
