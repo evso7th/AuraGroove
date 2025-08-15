@@ -119,11 +119,7 @@ export class BassSynthManager {
         if (!isAudible) return;
         
         // Convert user volume (0-1) to dB adjustment.
-        // For volume, a linear scale from 0 to 1 is not perceived linearly. 
-        // We can use a curve to make the slider feel more natural.
-        // A simple power curve (e.g., power of 2) works well.
-        const userVolumeGain = this.userVolume ** 2;
-        const userVolumeDb = Tone.gainToDb(userVolumeGain);
+        const userVolumeDb = Tone.gainToDb(this.userVolume);
         const targetVolume = this.currentBaseVolumeDb + userVolumeDb;
 
         try {
@@ -182,6 +178,8 @@ export class BassSynthManager {
         }
     }
 }
+
+    
 
     
 
