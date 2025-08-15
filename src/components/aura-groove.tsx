@@ -281,10 +281,8 @@ export function AuraGroove() {
 
     useEffect(() => {
         if (!isReady || !fxBusRef.current) return;
-        // Control the volume on the dedicated drum channel.
         const gainValue = Tone.gainToDb(drumSettings.volume);
         try {
-            // Using .volume, which is a property of Tone.Channel.
             fxBusRef.current.drumInput.volume.rampTo(gainValue, 0.05);
         } catch(e) {
             console.error("Failed to ramp drum volume:", e);
@@ -304,13 +302,16 @@ export function AuraGroove() {
             setIsInitializing(true);
             setLoadingText("Loading samples...");
             
-            // This is the correct way to connect Tone.Players to a dedicated channel in the FX bus
             drumPlayersRef.current = new Tone.Players(samplePaths, {
                 onload: () => {
                     setLoadingText("Samples loaded.");
-                    // The connection is done here to ensure it happens after loading
                 }
-            }).connect(fxBusRef.current!.drumInput);
+            });
+
+            // IMPORTANT: Correctly route the players' output to the drum channel.
+            if (fxBusRef.current) {
+                drumPlayersRef.current.toDestination = () => fxBusRef.current!.drumInput;
+            }
 
             await Tone.loaded();
         }
@@ -706,4 +707,3 @@ export function AuraGroove() {
     
 
     
-
