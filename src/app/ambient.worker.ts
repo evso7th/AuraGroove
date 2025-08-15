@@ -72,6 +72,21 @@ const PatternProvider = {
 // --- 2. Instrument Generators (The Composers) ---
 
 // --- DreamTales Style Generators ---
+
+const DreamTalesHarmonyProvider = {
+    // Progression: Em - C - G - D (vi-IV-I-V in G Major)
+    chords: [
+        { root: 'E', scale: ['E', 'F#', 'G', 'A', 'B', 'C', 'D'] }, // E minor (Aeolian)
+        { root: 'C', scale: ['C', 'D', 'E', 'F', 'G', 'A', 'B'] }, // C major (Ionian)
+        { root: 'G', scale: ['G', 'A', 'B', 'C', 'D', 'E', 'F#'] }, // G major (Ionian)
+        { root: 'D', scale: ['D', 'E', 'F#', 'G', 'A', 'B', 'C#'] }  // D major (Ionian)
+    ],
+    getChord(barNumber: number) {
+        const chordIndex = Math.floor(barNumber / 2) % this.chords.length;
+        return this.chords[chordIndex];
+    }
+};
+
 class DreamTalesDrumGenerator {
     static createScore(barNumber: number): DrumNote[] {
         const patternName = (barNumber + 1) % 8 === 0 ? 'dreamtales-fill' : 'dreamtales-beat';
@@ -80,64 +95,93 @@ class DreamTalesDrumGenerator {
 }
 
 class DreamTalesBassGenerator {
-    private static riff: BassNote[] = [
-        // === "Verse" - 4 bars ===
-        // Bar 1
-        { note: 'E2', time: 0, duration: '2n', velocity: 1.0 },
-        { note: 'E2', time: 2, duration: '2n', velocity: 1.0 },
-        // Bar 2
-        { note: 'G2', time: 4, duration: '2n', velocity: 1.0 },
-        { note: 'G2', time: 6, duration: '2n', velocity: 1.0 },
-        // Bar 3
-        { note: 'A2', time: 8, duration: '2n', velocity: 1.0 },
-        { note: 'A2', time: 10, duration: '2n', velocity: 1.0 },
-        // Bar 4
-        { note: 'G2', time: 12, duration: '2n', velocity: 1.0 },
-        { note: 'E2', time: 14, duration: '2n', velocity: 1.0 },
-        
-        // === "Chorus" - 4 bars ===
-        // Bar 5
-        { note: 'C3', time: 16, duration: '2n', velocity: 1.0 },
-        { note: 'C3', time: 18, duration: '2n', velocity: 1.0 },
-        // Bar 6
-        { note: 'G2', time: 20, duration: '2n', velocity: 1.0 },
-        { note: 'G2', time: 22, duration: '2n', velocity: 1.0 },
-         // Bar 7
-        { note: 'D2', time: 24, duration: '2n', velocity: 1.0 },
-        { note: 'D2', time: 26, duration: '2n', velocity: 1.0 },
-        // Bar 8
-        { note: 'E2', time: 28, duration: '1n', velocity: 1.0 },
-    ];
+    private static lastBar = -1;
+    private static note: BassNote | null = null;
     
     static createScore(barNumber: number): BassNote[] {
-        const beatsPerBar = 4;
-        const riffLengthInBars = 8;
-        const currentRiffBar = barNumber % riffLengthInBars;
-
-        const barStartBeat = currentRiffBar * beatsPerBar;
-        const barEndBeat = barStartBeat + beatsPerBar;
-        
-        return this.riff
-            .filter(note => note.time >= barStartBeat && note.time < barEndBeat)
-            .map(note => ({
-                ...note,
-                time: note.time - barStartBeat, // Make time relative to the bar
-            }));
+        // Generate a new note only every 2 bars
+        if (barNumber % 2 === 0 && barNumber !== this.lastBar) {
+            this.lastBar = barNumber;
+            const { root } = DreamTalesHarmonyProvider.getChord(barNumber);
+            this.note = { note: `${root}2`, time: 0, duration: '2m', velocity: 1.0 };
+            return [this.note];
+        } else if (barNumber % 2 !== 0) {
+            // Return an empty array for odd bars to avoid re-triggering
+            return [];
+        }
+        // If it's the same bar, don't re-trigger
+        return [];
     }
 }
 
 
 class DreamTalesSoloGenerator {
+    private static lastNoteIndex = -1;
+    private static notes: string[] = [];
+
     static createScore(barNumber: number): SoloNote[] {
-        // Placeholder - will generate "elfic" melodies later
-        return [];
+        const beatsPerBar = 4;
+        const currentChord = DreamTalesHarmonyProvider.getChord(barNumber);
+        
+        // Use a wider range of notes for melody
+        const scaleWithOctaves = [
+            ...currentChord.scale.map(n => `${n}3`),
+            ...currentChord.scale.map(n => `${n}4`),
+            ...currentChord.scale.map(n => `${n}5`)
+        ];
+        
+        if (this.lastNoteIndex === -1 || JSON.stringify(scaleWithOctaves) !== JSON.stringify(this.notes)) {
+            this.notes = scaleWithOctaves;
+            this.lastNoteIndex = Math.floor(Math.random() * this.notes.length);
+        }
+
+        // Generate one note per bar
+        const noteTime = 0; // At the start of the bar
+        const noteDuration = '1m';
+        
+        // Stepwise motion: go up or down one step in the scale
+        const direction = Math.random() > 0.5 ? 1 : -1;
+        let nextNoteIndex = this.lastNoteIndex + direction;
+
+        // Boundary check
+        if (nextNoteIndex < 0 || nextNoteIndex >= this.notes.length) {
+            nextNoteIndex = this.lastNoteIndex - direction; // Reverse direction
+        }
+         if (nextNoteIndex < 0 || nextNoteIndex >= this.notes.length) {
+            nextNoteIndex = this.lastNoteIndex; // Stay on the same note if still out of bounds
+        }
+
+        const noteToPlay = this.notes[nextNoteIndex];
+        this.lastNoteIndex = nextNoteIndex;
+
+        return [{ notes: noteToPlay, time: noteTime, duration: noteDuration }];
     }
 }
 
 class DreamTalesAccompanimentGenerator {
+     private static lastBar = -1;
+
     static createScore(barNumber: number): AccompanimentNote[] {
-        // Placeholder - will generate pads/arpeggios later
-        return [];
+        if (barNumber % 2 !== 0) return []; // Play only every 2 bars with the bass
+
+        if (barNumber === this.lastBar) return [];
+        this.lastBar = barNumber;
+        
+        const { root, scale } = DreamTalesHarmonyProvider.getChord(barNumber);
+        
+        // Create a simple triad from the scale
+        const triad = [
+            `${root}3`,
+            `${scale[2]}3`,
+            `${scale[4]}4` // A bit more open voicing
+        ];
+
+        // Humanize the chord playing
+        return triad.map((note, index) => ({
+            notes: note,
+            time: index * 0.1, // Stagger the notes slightly
+            duration: '1m'
+        }));
     }
 }
 

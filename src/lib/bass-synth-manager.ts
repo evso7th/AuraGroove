@@ -4,7 +4,7 @@ import type { Instruments } from '@/types/music';
 import type { FxBus } from './fx-bus';
 
 type InstrumentName = Instruments['bass'];
-const DEFAULT_VOLUME = -3; // Lowered from 0
+const DEFAULT_VOLUME = -6;
 
 const instrumentPresets: Record<Exclude<InstrumentName, 'none'>, Tone.MonoSynthOptions> = {
     'bass synth': {
@@ -16,18 +16,18 @@ const instrumentPresets: Record<Exclude<InstrumentName, 'none'>, Tone.MonoSynthO
             rolloff: -24,
         },
         filterEnvelope: {
-            attack: 0.4,
+            attack: 0.04,
             decay: 0.2,
             sustain: 0.5,
-            release: 1.8,
+            release: 0.8,
             baseFrequency: 40,
             octaves: 2.5,
         },
         envelope: {
-            attack: 0.1,
-            decay: 0.3,
+            attack: 0.04,
+            decay: 0.5,
             sustain: 0.8,
-            release: 2.5,
+            release: 0.7,
         },
         portamento: 0.5,
     }
