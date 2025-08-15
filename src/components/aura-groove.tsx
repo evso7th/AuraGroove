@@ -298,20 +298,16 @@ export function AuraGroove() {
         }
 
         // Load samples on first play, if not already loaded
-        if (!drumPlayersRef.current) {
+        if (!drumPlayersRef.current && fxBusRef.current) {
             setIsInitializing(true);
             setLoadingText("Loading samples...");
             
             drumPlayersRef.current = new Tone.Players(samplePaths, {
                 onload: () => {
                     setLoadingText("Samples loaded.");
-                }
+                },
+                destination: fxBusRef.current.drumInput,
             });
-
-            // IMPORTANT: Correctly route the players' output to the drum channel.
-            if (fxBusRef.current) {
-                drumPlayersRef.current.toDestination = () => fxBusRef.current!.drumInput;
-            }
 
             await Tone.loaded();
         }
@@ -707,3 +703,4 @@ export function AuraGroove() {
     
 
     
+
