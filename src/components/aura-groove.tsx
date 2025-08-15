@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import * as Tone from 'tone';
-import { Drum, Loader2, Music, Pause, Speaker, FileMusic, Waves, Wind, ToyBrick, GitBranch, ChevronsRight, Sparkles } from "lucide-react";
+import { Drum, Loader2, Music, Pause, Speaker, FileMusic, Waves, Wind, ToyBrick, ChevronsRight, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useDeviceType } from "@/hooks/use-device-type";
 import { Button } from "@/components/ui/button";
@@ -474,7 +474,7 @@ export function AuraGroove() {
         </div>
         
         <div className="space-y-4 rounded-lg border p-4">
-           <h3 className="text-lg font-medium text-primary flex items-center gap-2"><GitBranch className="h-5 w-5" /> Instrument Channels</h3>
+           <h3 className="text-lg font-medium text-primary flex items-center gap-2"><Music className="h-5 w-5" /> Instrument Channels</h3>
 
            {/* Solo Channel */}
             <div className="space-y-3 rounded-md border p-3">
