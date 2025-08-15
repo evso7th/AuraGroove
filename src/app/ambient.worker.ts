@@ -81,6 +81,7 @@ class DreamTalesDrumGenerator {
 
 class DreamTalesBassGenerator {
     private static riff: BassNote[] = [
+        // === "Verse" - 4 bars ===
         // Bar 1
         { note: 'E1', time: 0, duration: '2n', velocity: 1.0 },
         { note: 'E1', time: 2, duration: '2n', velocity: 1.0 },
@@ -93,11 +94,24 @@ class DreamTalesBassGenerator {
         // Bar 4
         { note: 'G1', time: 12, duration: '2n', velocity: 1.0 },
         { note: 'E1', time: 14, duration: '2n', velocity: 1.0 },
+        
+        // === "Chorus" - 4 bars ===
+        // Bar 5
+        { note: 'C2', time: 16, duration: '2n', velocity: 1.0 },
+        { note: 'C2', time: 18, duration: '2n', velocity: 1.0 },
+        // Bar 6
+        { note: 'G1', time: 20, duration: '2n', velocity: 1.0 },
+        { note: 'G1', time: 22, duration: '2n', velocity: 1.0 },
+         // Bar 7
+        { note: 'D1', time: 24, duration: '2n', velocity: 1.0 },
+        { note: 'D1', time: 26, duration: '2n', velocity: 1.0 },
+        // Bar 8
+        { note: 'E1', time: 28, duration: '1n', velocity: 1.0 },
     ];
     
     static createScore(barNumber: number): BassNote[] {
         const beatsPerBar = 4;
-        const riffLengthInBars = 4;
+        const riffLengthInBars = 8;
         const currentRiffBar = barNumber % riffLengthInBars;
 
         const barStartBeat = currentRiffBar * beatsPerBar;
@@ -184,7 +198,7 @@ const Scheduler = {
     barCount: 0,
     
     // Settings from main thread
-    bpm: 100,
+    bpm: 75,
     instruments: { solo: 'none', accompaniment: 'none', bass: 'none' } as any,
     drumSettings: { pattern: 'basic', volume: 0.85 } as any,
     effectsSettings: { mode: 'none', volume: 0.7 } as any,
