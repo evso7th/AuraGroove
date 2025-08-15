@@ -9,7 +9,7 @@ const MOBILE_VOLUME_DB = -8;
 
 const desktopPreset: Tone.MonoSynthOptions = {
     oscillator: {
-        type: 'sawtooth'
+        type: 'sine' // Changed to sine for a deep, fundamental tone, distortion will add harmonics.
     },
     filter: {
         type: 'lowpass',
@@ -27,8 +27,8 @@ const desktopPreset: Tone.MonoSynthOptions = {
     envelope: {
         attack: 0.1,
         decay: 0.3,
-        sustain: 1.0,
-        release: 4.0,
+        sustain: 1.0, // Increased sustain for a powerful, held note
+        release: 4.0, // Kept long release for "тягучесть"
     },
     portamento: 0.08,
 };
@@ -47,8 +47,8 @@ const mobilePreset: Tone.MonoSynthOptions = {
         decay: 0.4,
         sustain: 0.7,
         release: 1.5,
-        baseFrequency: 50, // Increased from 40 for more presence
-        octaves: 2.5, // Increased from 2.2 for more presence
+        baseFrequency: 50,
+        octaves: 2.5,
     },
     envelope: {
         attack: 0.08,
