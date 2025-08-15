@@ -95,9 +95,6 @@ class DreamTalesDrumGenerator {
 }
 
 class DreamTalesBassGenerator {
-    private static lastBar = -1;
-    private static note: BassNote | null = null;
-    
     static createScore(barNumber: number): BassNote[] {
         // Generate a new note only every 2 bars, creating a long, foundational drone
         if (barNumber % 2 === 0) {
@@ -387,3 +384,5 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
+
+    
