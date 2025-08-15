@@ -1,11 +1,12 @@
 
 import * as Tone from 'tone';
-import type { Instruments, MixProfile } from '@/types/music';
+import type { InstrumentSettings, MixProfile } from '@/types/music';
 import type { FxBus } from './fx-bus';
 
-type InstrumentName = Instruments['solo'];
-const DESKTOP_VOLUME = -9;
-const MOBILE_VOLUME = -8; // Slightly louder on mobile to cut through
+type InstrumentName = InstrumentSettings['solo']['name'];
+
+const DESKTOP_VOLUME_DB = -9;
+const MOBILE_VOLUME_DB = -8; // Slightly louder on mobile to cut through
 const NUM_VOICES = 2; // 2 voices for solo instrument
 
 const instrumentPresets: Record<Exclude<InstrumentName, 'none'>, Tone.SynthOptions> = {
@@ -33,12 +34,13 @@ export class SoloSynthManager {
     private isInitialized = false;
     private currentInstrument: InstrumentName = 'none';
     private fxBus: FxBus;
-    private currentVolume: number;
+    private currentBaseVolumeDb: number;
+    private userVolume: number = 0.7; // Linear gain (0-1)
     private nextVoiceIndex = 0;
 
     constructor(fxBus: FxBus) {
         this.fxBus = fxBus;
-        this.currentVolume = DESKTOP_VOLUME;
+        this.currentBaseVolumeDb = DESKTOP_VOLUME_DB;
     }
 
     private ensureSynthsInitialized() {
@@ -73,16 +75,33 @@ export class SoloSynthManager {
     }
 
     public setMixProfile(profile: MixProfile) {
-        this.currentVolume = profile === 'mobile' ? MOBILE_VOLUME : DESKTOP_VOLUME;
-        // If already playing, ramp to the new volume
-        if (this.isInitialized && this.currentInstrument !== 'none') {
-            const isAudible = this.voices.some(v => v.volume.value > -Infinity);
-            if (isAudible) {
-                 this.setVolume(this.currentVolume, 0.5);
-            }
-        }
+        this.currentBaseVolumeDb = profile === 'mobile' ? MOBILE_VOLUME_DB : DESKTOP_VOLUME_DB;
+        this.updateVolume();
     }
     
+    public setVolume(volume: number) { // volume is linear 0-1
+        this.userVolume = volume;
+        this.updateVolume();
+    }
+
+    private updateVolume(rampTime: Tone.Unit.Time = 0.05) {
+        if (!this.isInitialized || this.currentInstrument === 'none') return;
+        
+        const isAudible = this.voices.some(v => v.volume.value > -Infinity);
+        if (!isAudible) return;
+
+        const userVolumeDb = Tone.gainToDb(this.userVolume);
+        const targetVolume = this.currentBaseVolumeDb + userVolumeDb;
+        
+        this.voices.forEach(voice => {
+            try {
+                voice.volume.rampTo(targetVolume, rampTime);
+            } catch (e) {
+                // Ignore error if context is already closed
+            }
+        });
+    }
+
     public triggerAttackRelease(notes: string | string[], duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
         this.ensureSynthsInitialized();
         if (this.currentInstrument === 'none' || !this.voices.length) return;
@@ -106,7 +125,7 @@ export class SoloSynthManager {
         this.voices.forEach(voice => voice.triggerRelease());
     }
 
-    private setVolume(volume: number, duration: number) {
+    private rampAllVoices(volume: number, duration: number) {
         if (!this.isInitialized) return;
         this.voices.forEach(voice => {
             try {
@@ -118,12 +137,14 @@ export class SoloSynthManager {
     }
 
     public fadeOut(duration: number) {
-        this.setVolume(-Infinity, duration);
+        this.rampAllVoices(-Infinity, duration);
     }
 
     public fadeIn(duration: number) {
          if (this.currentInstrument !== 'none') {
-            this.setVolume(this.currentVolume, duration);
+             const userVolumeDb = Tone.gainToDb(this.userVolume);
+             const targetVolume = this.currentBaseVolumeDb + userVolumeDb;
+            this.rampAllVoices(targetVolume, duration);
         }
     }
     
@@ -136,5 +157,3 @@ export class SoloSynthManager {
         }
     }
 }
-
-    

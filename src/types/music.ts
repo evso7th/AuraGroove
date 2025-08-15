@@ -1,10 +1,19 @@
 
 import type * as Tone from 'tone';
 
-export type Instruments = {
-  solo: 'synthesizer' | 'piano' | 'organ' | 'none';
-  accompaniment: 'synthesizer' | 'piano' | 'organ' | 'none';
-  bass: 'bass synth' | 'none';
+export type InstrumentSettings = {
+  solo: {
+      name: 'synthesizer' | 'piano' | 'organ' | 'none';
+      volume: number; // 0-1
+  };
+  accompaniment: {
+      name: 'synthesizer' | 'piano' | 'organ' | 'none';
+      volume: number; // 0-1
+  };
+  bass: {
+      name: 'bass synth' | 'none';
+      volume: number; // 0-1
+  };
 };
 
 export type DrumSettings = {
@@ -55,4 +64,9 @@ export type ScoreName = 'dreamtales' | 'promenade';
 
 export type MixProfile = 'desktop' | 'mobile';
 
-    
+// Obsolete, replaced by InstrumentSettings
+export type Instruments = {
+  solo: 'synthesizer' | 'piano' | 'organ' | 'none';
+  accompaniment: 'synthesizer' | 'piano' | 'organ' | 'none';
+  bass: 'bass synth' | 'none';
+};

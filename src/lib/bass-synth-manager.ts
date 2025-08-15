@@ -1,11 +1,11 @@
 
 import * as Tone from 'tone';
-import type { Instruments, MixProfile } from '@/types/music';
+import type { InstrumentSettings, MixProfile } from '@/types/music';
 import type { FxBus } from './fx-bus';
 
-type InstrumentName = Instruments['bass'];
-const DESKTOP_VOLUME = -11; // Quieter on desktop
-const MOBILE_VOLUME = 2; // Louder to cut through mobile speakers
+type InstrumentName = InstrumentSettings['bass']['name'];
+const DESKTOP_VOLUME_DB = -18; 
+const MOBILE_VOLUME_DB = 8; 
 
 const desktopPreset: Tone.MonoSynthOptions = {
     oscillator: {
@@ -50,12 +50,13 @@ export class BassSynthManager {
     private isInitialized = false;
     private currentInstrument: InstrumentName = 'none';
     private fxBus: FxBus;
-    private currentVolume: number;
+    private currentBaseVolumeDb: number;
+    private userVolume: number = 0.9; // Linear gain (0-1)
     private currentProfile: MixProfile = 'desktop';
 
     constructor(fxBus: FxBus) {
         this.fxBus = fxBus;
-        this.currentVolume = DESKTOP_VOLUME;
+        this.currentBaseVolumeDb = DESKTOP_VOLUME_DB;
     }
 
     private ensureSynthInitialized() {
@@ -86,19 +87,36 @@ export class BassSynthManager {
 
     public setMixProfile(profile: MixProfile) {
         this.currentProfile = profile;
-        this.currentVolume = profile === 'mobile' ? MOBILE_VOLUME : DESKTOP_VOLUME;
+        this.currentBaseVolumeDb = profile === 'mobile' ? MOBILE_VOLUME_DB : DESKTOP_VOLUME_DB;
+        this.updateVolume();
+    }
+    
+    public setVolume(volume: number) { // volume is linear 0-1
+        this.userVolume = volume;
+        this.updateVolume();
+    }
+
+    private updateVolume(rampTime: Tone.Unit.Time = 0.05) {
+        if (!this.currentSynth || this.currentInstrument === 'none') return;
         
-        if (this.isInitialized && this.currentSynth && this.currentInstrument !== 'none') {
-            console.log(`BASS: Applying ${profile} mix profile.`);
-            this.applyProfileSettings();
-            
-            // If already playing, ramp to the new volume
-            const isAudible = this.currentSynth.volume.value > -Infinity;
-            if (isAudible) {
-                this.currentSynth.volume.rampTo(this.currentVolume, 0.5);
-            }
+        const isAudible = this.currentSynth.volume.value > -Infinity;
+        if (!isAudible) return;
+        
+        // Convert user volume (0-1) to dB adjustment.
+        // For volume, a linear scale from 0 to 1 is not perceived linearly. 
+        // We can use a curve to make the slider feel more natural.
+        // A simple power curve (e.g., power of 2) works well.
+        const userVolumeGain = this.userVolume ** 2;
+        const userVolumeDb = Tone.gainToDb(userVolumeGain);
+        const targetVolume = this.currentBaseVolumeDb + userVolumeDb;
+
+        try {
+            this.currentSynth.volume.rampTo(targetVolume, rampTime);
+        } catch (e) {
+            // Ignore error
         }
     }
+
 
     private applyProfileSettings() {
         if (!this.currentSynth) return;
@@ -135,11 +153,7 @@ export class BassSynthManager {
 
     public fadeIn(duration: number) {
         if (this.currentSynth && this.currentInstrument !== 'none') {
-            try {
-                this.currentSynth.volume.rampTo(this.currentVolume, duration);
-            } catch (e) {
-                // Ignore errors if the context is already closed
-            }
+           this.updateVolume(duration);
         }
     }
 

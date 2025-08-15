@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import * as Tone from 'tone';
-import { Drum, Loader2, Music, Pause, Speaker, FileMusic, Waves, Wind, ToyBrick, GitBranch, ChevronsRight, Sparkles } from "lucide-react";
+import { Drum, Loader2, Music, Pause, Speaker, FileMusic, Waves, Wind, ToyBrick, GitBranch, ChevronsRight, Sparkles, Bass } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useDeviceType } from "@/hooks/use-device-type";
 import { Button } from "@/components/ui/button";
@@ -31,7 +31,7 @@ import type { BassSynthManager } from "@/lib/bass-synth-manager";
 import type { SoloSynthManager } from "@/lib/solo-synth-manager";
 import type { AccompanimentSynthManager } from "@/lib/accompaniment-synth-manager";
 import type { EffectsSynthManager } from "@/lib/effects-synth-manager";
-import { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote, DrumSettings, EffectsSettings, Instruments, ScoreName, MixProfile } from '@/types/music';
+import { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote, DrumSettings, EffectsSettings, InstrumentSettings, ScoreName, MixProfile } from '@/types/music';
 
 
 const samplePaths: Record<string, string> = {
@@ -49,16 +49,16 @@ export function AuraGroove() {
   const [loadingText, setLoadingText] = useState("Initializing...");
   const [drumSettings, setDrumSettings] = useState<DrumSettings>({
       pattern: 'dreamtales-beat',
-      volume: 0.85,
+      volume: 0.8,
   });
   const [effectsSettings, setEffectsSettings] = useState<EffectsSettings>({
     mode: 'none',
     volume: 0.7,
   });
-  const [instruments, setInstruments] = useState<Instruments>({
-    solo: "synthesizer",
-    accompaniment: "none",
-    bass: "bass synth",
+  const [instrumentSettings, setInstrumentSettings] = useState<InstrumentSettings>({
+    solo: { name: "synthesizer", volume: 0.7 },
+    accompaniment: { name: "none", volume: 0.8 },
+    bass: { name: "bass synth", volume: 0.9 },
   });
   const [bpm, setBpm] = useState(75);
   const [score, setScore] = useState<ScoreName>('dreamtales');
@@ -233,22 +233,37 @@ export function AuraGroove() {
     if (musicWorkerRef.current && (isPlaying || isInitializing)) {
         musicWorkerRef.current?.postMessage({
             command: 'update_settings',
-            data: { instruments, drumSettings, effectsSettings, bpm, score, mixProfile },
+            data: { instrumentSettings, drumSettings, effectsSettings, bpm, score, mixProfile },
         });
     }
-  }, [instruments, drumSettings, effectsSettings, bpm, score, isPlaying, isInitializing, mixProfile]);
+  }, [instrumentSettings, drumSettings, effectsSettings, bpm, score, isPlaying, isInitializing, mixProfile]);
 
   useEffect(() => {
     if (isReady && isPlaying) { 
       updateWorkerSettings();
     }
-  }, [drumSettings, instruments, effectsSettings, bpm, score, isReady, isPlaying, updateWorkerSettings]);
+  }, [drumSettings, instrumentSettings, effectsSettings, bpm, score, isReady, isPlaying, updateWorkerSettings]);
 
     useEffect(() => {
         if (!isReady || !fxBusRef.current?.soloDistortion) return;
         const fx = fxBusRef.current.soloDistortion;
         fx.wet.value = soloFx.distortion.enabled ? soloFx.distortion.wet : 0;
     }, [soloFx.distortion, isReady]);
+    
+    useEffect(() => {
+        if (!isReady || !soloSynthManagerRef.current) return;
+        soloSynthManagerRef.current.setVolume(instrumentSettings.solo.volume);
+    }, [instrumentSettings.solo.volume, isReady]);
+
+    useEffect(() => {
+        if (!isReady || !accompanimentSynthManagerRef.current) return;
+        accompanimentSynthManagerRef.current.setVolume(instrumentSettings.accompaniment.volume);
+    }, [instrumentSettings.accompaniment.volume, isReady]);
+
+    useEffect(() => {
+        if (!isReady || !bassSynthManagerRef.current) return;
+        bassSynthManagerRef.current.setVolume(instrumentSettings.bass.volume);
+    }, [instrumentSettings.bass.volume, isReady]);
 
     useEffect(() => {
         if (!isReady || !fxBusRef.current?.accompanimentChorus) return;
@@ -304,9 +319,9 @@ export function AuraGroove() {
         accompanimentSynthManagerRef.current.setMixProfile(mixProfile);
 
 
-        soloSynthManagerRef.current?.setInstrument(instruments.solo);
-        accompanimentSynthManagerRef.current?.setInstrument(instruments.accompaniment);
-        bassSynthManagerRef.current?.setInstrument(instruments.bass);
+        soloSynthManagerRef.current?.setInstrument(instrumentSettings.solo.name);
+        accompanimentSynthManagerRef.current?.setInstrument(instrumentSettings.accompaniment.name);
+        bassSynthManagerRef.current?.setInstrument(instrumentSettings.bass.name);
         effectsSynthManagerRef.current?.setMode(effectsSettings.mode);
         
         soloSynthManagerRef.current?.fadeIn(0.5);
@@ -322,7 +337,7 @@ export function AuraGroove() {
         
         musicWorkerRef.current.postMessage({
             command: 'start',
-            data: { drumSettings, instruments, effectsSettings, bpm, score, mixProfile }
+            data: { drumSettings, instrumentSettings, effectsSettings, bpm, score, mixProfile }
         });
 
     } catch (error) {
@@ -335,7 +350,7 @@ export function AuraGroove() {
         setIsInitializing(false);
         setLoadingText("");
     }
-  }, [drumSettings, instruments, effectsSettings, bpm, score, toast, mixProfile]);
+  }, [drumSettings, instrumentSettings, effectsSettings, bpm, score, toast, mixProfile]);
 
   const handleStop = useCallback(() => {
     soloSynthManagerRef.current?.fadeOut(1);
@@ -463,24 +478,29 @@ export function AuraGroove() {
 
            {/* Solo Channel */}
             <div className="space-y-3 rounded-md border p-3">
-                <Label htmlFor="solo-instrument" className="font-semibold">Solo</Label>
-                <Select
-                  value={instruments.solo}
-                  onValueChange={(v) => setInstruments(i => ({...i, solo: v as Instruments['solo']}))}
-                  disabled={isBusy || isPlaying}
-                >
-                  <SelectTrigger id="solo-instrument">
-                    <SelectValue placeholder="Select instrument" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    <SelectItem value="synthesizer">Synthesizer</SelectItem>
-                    <SelectItem value="piano">Piano</SelectItem>
-                    <SelectItem value="organ">Organ</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="flex justify-between items-center">
+                    <Label htmlFor="solo-instrument" className="font-semibold flex items-center gap-2"><Music className="h-5 w-5" /> Solo</Label>
+                     <Select
+                      value={instrumentSettings.solo.name}
+                      onValueChange={(v) => setInstrumentSettings(i => ({...i, solo: {...i.solo, name: v as InstrumentSettings['solo']['name']}}))}
+                      disabled={isBusy || isPlaying}
+                    >
+                      <SelectTrigger id="solo-instrument" className="w-[150px]">
+                        <SelectValue placeholder="Select instrument" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        <SelectItem value="synthesizer">Synthesizer</SelectItem>
+                        <SelectItem value="piano">Piano</SelectItem>
+                        <SelectItem value="organ">Organ</SelectItem>
+                      </SelectContent>
+                    </Select>
+                </div>
                  <div className="space-y-2 pt-2">
-                    <div className="flex items-center justify-between">
+                     <Label className="text-xs text-muted-foreground flex items-center gap-1.5"><Speaker className="h-4 w-4"/> Volume</Label>
+                     <Slider value={[instrumentSettings.solo.volume]} max={1} step={0.05} onValueChange={(v) => setInstrumentSettings(s => ({...s, solo: {...s.solo, volume: v[0]}}))} disabled={isBusy || isPlaying || instrumentSettings.solo.name === 'none'} />
+
+                    <div className="flex items-center justify-between pt-2">
                         <Label htmlFor="solo-dist-enabled" className="flex items-center gap-1.5"><ChevronsRight className="h-4 w-4"/> Distortion</Label>
                         <Switch id="solo-dist-enabled" checked={soloFx.distortion.enabled} onCheckedChange={(c) => setSoloFx(s => ({...s, distortion: {...s.distortion, enabled: c}}))} disabled={isBusy || isPlaying} />
                     </div>
@@ -491,24 +511,28 @@ export function AuraGroove() {
 
             {/* Accompaniment Channel */}
             <div className="space-y-3 rounded-md border p-3">
-                <Label htmlFor="accompaniment-instrument" className="font-semibold">Accompaniment</Label>
-                 <Select
-                  value={instruments.accompaniment}
-                  onValueChange={(v) => setInstruments(i => ({...i, accompaniment: v as Instruments['accompaniment']}))}
-                  disabled={isBusy || isPlaying}
-                >
-                  <SelectTrigger id="accompaniment-instrument">
-                    <SelectValue placeholder="Select instrument" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    <SelectItem value="synthesizer">Synthesizer</SelectItem>
-                    <SelectItem value="piano">Piano</SelectItem>
-                    <SelectItem value="organ">Organ</SelectItem>
-                  </SelectContent>
-                </Select>
+                 <div className="flex justify-between items-center">
+                    <Label htmlFor="accompaniment-instrument" className="font-semibold flex items-center gap-2"><Waves className="h-5 w-5" /> Accompaniment</Label>
+                     <Select
+                      value={instrumentSettings.accompaniment.name}
+                      onValueChange={(v) => setInstrumentSettings(i => ({...i, accompaniment: {...i.accompaniment, name: v as InstrumentSettings['accompaniment']['name']}}))}
+                      disabled={isBusy || isPlaying}
+                    >
+                      <SelectTrigger id="accompaniment-instrument" className="w-[150px]">
+                        <SelectValue placeholder="Select instrument" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        <SelectItem value="synthesizer">Synthesizer</SelectItem>
+                        <SelectItem value="piano">Piano</SelectItem>
+                        <SelectItem value="organ">Organ</SelectItem>
+                      </SelectContent>
+                    </Select>
+                </div>
                 <div className="space-y-2 pt-2">
-                    <div className="flex items-center justify-between">
+                    <Label className="text-xs text-muted-foreground flex items-center gap-1.5"><Speaker className="h-4 w-4"/> Volume</Label>
+                    <Slider value={[instrumentSettings.accompaniment.volume]} max={1} step={0.05} onValueChange={(v) => setInstrumentSettings(s => ({...s, accompaniment: {...s.accompaniment, volume: v[0]}}))} disabled={isBusy || isPlaying || instrumentSettings.accompaniment.name === 'none'} />
+                    <div className="flex items-center justify-between pt-2">
                         <Label htmlFor="accomp-chorus-enabled" className="flex items-center gap-1.5"><ChevronsRight className="h-4 w-4"/> Chorus</Label>
                         <Switch id="accomp-chorus-enabled" checked={accompanimentFx.chorus.enabled} onCheckedChange={(c) => setAccompanimentFx(s => ({...s, chorus: {...s.chorus, enabled: c}}))} disabled={isBusy || isPlaying} />
                     </div>
@@ -519,33 +543,38 @@ export function AuraGroove() {
 
             {/* Bass Channel */}
             <div className="space-y-3 rounded-md border p-3">
-                <Label htmlFor="bass-instrument" className="font-semibold">Bass</Label>
-                <Select
-                    value={instruments.bass}
-                    onValueChange={(v) => setInstruments(i => ({...i, bass: v as Instruments['bass']}))}
-                    disabled={isBusy || isPlaying}
-                    >
-                    <SelectTrigger id="bass-instrument" className="w-full">
-                        <SelectValue placeholder="Select instrument" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        <SelectItem value="bass synth">Bass Synth</SelectItem>
-                    </SelectContent>
-                </Select>
+                 <div className="flex justify-between items-center">
+                    <Label htmlFor="bass-instrument" className="font-semibold flex items-center gap-2"><Bass className="h-5 w-5"/> Bass</Label>
+                    <Select
+                        value={instrumentSettings.bass.name}
+                        onValueChange={(v) => setInstrumentSettings(i => ({...i, bass: {...i.bass, name: v as InstrumentSettings['bass']['name']}}))}
+                        disabled={isBusy || isPlaying}
+                        >
+                        <SelectTrigger id="bass-instrument" className="w-[150px]">
+                            <SelectValue placeholder="Select instrument" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="none">None</SelectItem>
+                            <SelectItem value="bass synth">Bass Synth</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+                 <div className="space-y-2 pt-2">
+                    <Label className="text-xs text-muted-foreground flex items-center gap-1.5"><Speaker className="h-4 w-4"/> Volume</Label>
+                    <Slider value={[instrumentSettings.bass.volume]} max={1} step={0.05} onValueChange={(v) => setInstrumentSettings(s => ({...s, bass: {...s.bass, volume: v[0]}}))} disabled={isBusy || isPlaying || instrumentSettings.bass.name === 'none'} />
+                </div>
             </div>
             
             {/* Drums Channel */}
             <div className="space-y-3 rounded-md border p-3">
-                <Label className="font-semibold flex items-center gap-2"><Drum className="h-5 w-5"/> Drums</Label>
-                <div className="grid grid-cols-3 items-center gap-4 pt-2">
-                    <Label htmlFor="drum-pattern" className="text-right">Pattern</Label>
+                 <div className="flex justify-between items-center">
+                    <Label className="font-semibold flex items-center gap-2"><Drum className="h-5 w-5"/> Drums</Label>
                     <Select
                         value={drumSettings.pattern}
                         onValueChange={(v) => setDrumSettings(d => ({ ...d, pattern: v as DrumSettings['pattern'] }))}
                         disabled={isBusy || isPlaying || !isDreamtales}
                     >
-                        <SelectTrigger id="drum-pattern" className="col-span-2">
+                        <SelectTrigger className="w-[150px]">
                             <SelectValue placeholder="Select pattern" />
                         </SelectTrigger>
                         <SelectContent>
@@ -558,14 +587,14 @@ export function AuraGroove() {
                         </SelectContent>
                     </Select>
                 </div>
-                <div className="grid grid-cols-3 items-center gap-4">
-                    <Label className="text-right flex items-center gap-1.5"><Speaker className="h-4 w-4"/> Volume</Label>
+                <div className="space-y-2 pt-2">
+                    <Label className="text-xs text-muted-foreground flex items-center gap-1.5"><Speaker className="h-4 w-4"/> Volume</Label>
                     <Slider
                         value={[drumSettings.volume]}
                         max={1}
                         step={0.05}
                         onValueChange={(v) => setDrumSettings(d => ({ ...d, volume: v[0] }))}
-                        className="col-span-2"
+                        className="w-full"
                         disabled={isBusy || isPlaying || !drumsEnabled}
                     />
                 </div>
@@ -573,15 +602,14 @@ export function AuraGroove() {
 
             {/* Effects Channel */}
             <div className="space-y-3 rounded-md border p-3">
-                <Label className="font-semibold flex items-center gap-2"><Sparkles className="h-5 w-5"/> Effects</Label>
-                <div className="grid grid-cols-3 items-center gap-4 pt-2">
-                    <Label htmlFor="effects-mode" className="text-right">Mode</Label>
+                <div className="flex justify-between items-center">
+                    <Label className="font-semibold flex items-center gap-2"><Sparkles className="h-5 w-5"/> Effects</Label>
                     <Select
                         value={effectsSettings.mode}
                         onValueChange={(v) => setEffectsSettings(d => ({ ...d, mode: v as EffectsSettings['mode'] }))}
                         disabled={isBusy || isPlaying}
                     >
-                        <SelectTrigger id="effects-mode" className="col-span-2">
+                        <SelectTrigger className="w-[150px]">
                             <SelectValue placeholder="Select mode" />
                         </SelectTrigger>
                         <SelectContent>
@@ -592,14 +620,14 @@ export function AuraGroove() {
                         </SelectContent>
                     </Select>
                 </div>
-                <div className="grid grid-cols-3 items-center gap-4">
-                    <Label className="text-right flex items-center gap-1.5"><Speaker className="h-4 w-4"/> Volume</Label>
+                <div className="space-y-2 pt-2">
+                    <Label className="text-xs text-muted-foreground flex items-center gap-1.5"><Speaker className="h-4 w-4"/> Volume</Label>
                     <Slider
                         value={[effectsSettings.volume]}
                         max={1}
                         step={0.05}
                         onValueChange={(v) => setEffectsSettings(d => ({ ...d, volume: v[0] }))}
-                        className="col-span-2"
+                        className="w-full"
                         disabled={isBusy || isPlaying || !effectsEnabled}
                     />
                 </div>
@@ -639,14 +667,6 @@ export function AuraGroove() {
               <Music className="mr-2 h-6 w-6" />
             )}
             {isBusy && !isReady ? loadingText : isPlaying ? "Stop" : "Play"}
-          </Button>
-          <Button
-            type="button"
-            onClick={handleTestMixer}
-            disabled={isBusy || isPlaying}
-            variant="outline"
-          >
-            Test Mixer
           </Button>
         </div>
       </CardFooter>

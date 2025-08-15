@@ -2,7 +2,7 @@
 /// <reference lib="webworker" />
 
 import { promenadeScore } from '@/lib/scores/promenade';
-import type { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote, DrumSettings, EffectsSettings, ScoreName, MixProfile } from '@/types/music';
+import type { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote, DrumSettings, EffectsSettings, ScoreName, MixProfile, Instruments, InstrumentSettings } from '@/types/music';
 
 // --- 1. PatternProvider (The Music Sheet Library) ---
 const PatternProvider = {
@@ -16,10 +16,10 @@ const PatternProvider = {
             { sample: 'snare', time: 3.5, velocity: 0.4 },
         ],
         'dreamtales-beat-mobile': [ // Cymbals (ride) are quieter
-            { sample: 'ride', time: 0, velocity: 0.18 },
-            { sample: 'ride', time: 1, velocity: 0.15 },
-            { sample: 'ride', time: 2, velocity: 0.18 },
-            { sample: 'ride', time: 3, velocity: 0.15 },
+            { sample: 'ride', time: 0, velocity: 0.05 },
+            { sample: 'ride', time: 1, velocity: 0.04 },
+            { sample: 'ride', time: 2, velocity: 0.05 },
+            { sample: 'ride', time: 3, velocity: 0.04 },
             { sample: 'kick', time: 2, velocity: 0.8 },
             { sample: 'snare', time: 3.5, velocity: 0.4 },
         ],
@@ -248,7 +248,11 @@ const Scheduler = {
     
     // Settings from main thread
     bpm: 75,
-    instruments: { solo: 'none', accompaniment: 'none', bass: 'none' } as any,
+    instrumentSettings: {
+        solo: { name: 'none', volume: 0.8 },
+        accompaniment: { name: 'none', volume: 0.8 },
+        bass: { name: 'none', volume: 0.8 },
+    } as InstrumentSettings,
     drumSettings: { pattern: 'dreamtales-beat', volume: 0.85 } as any,
     effectsSettings: { mode: 'none', volume: 0.7 } as any,
     score: 'dreamtales' as ScoreName,
@@ -289,7 +293,7 @@ const Scheduler = {
     },
     
     updateSettings(settings: any) {
-        if (settings.instruments) this.instruments = settings.instruments;
+        if (settings.instrumentSettings) this.instrumentSettings = settings.instrumentSettings;
         if (settings.drumSettings) this.drumSettings = settings.drumSettings;
         if (settings.effectsSettings) this.effectsSettings = settings.effectsSettings;
         if (settings.bpm) this.bpm = settings.bpm;
@@ -322,15 +326,15 @@ const Scheduler = {
                 const barDrumNotes = getNotesForBar(promenadeScore.drums);
                 if (barDrumNotes.length > 0) self.postMessage({ type: 'drum_score', data: { score: barDrumNotes } });
             }
-            if (this.instruments.bass !== 'none') {
+            if (this.instrumentSettings.bass.name !== 'none') {
                 const barBassNotes = getNotesForBar(promenadeScore.bass);
                 if (barBassNotes.length > 0) self.postMessage({ type: 'bass_score', data: { score: barBassNotes } });
             }
-            if (this.instruments.solo !== 'none') {
+            if (this.instrumentSettings.solo.name !== 'none') {
                  const barSoloNotes = getNotesForBar(promenadeScore.solo as any[]); // Cast to any to handle time format
                  if (barSoloNotes.length > 0) self.postMessage({ type: 'solo_score', data: { score: barSoloNotes } });
             }
-            if (this.instruments.accompaniment !== 'none') {
+            if (this.instrumentSettings.accompaniment.name !== 'none') {
                  const barAccompanimentNotes = getNotesForBar(promenadeScore.accompaniment as any[]); // Cast to any
                  if (barAccompanimentNotes.length > 0) self.postMessage({ type: 'accompaniment_score', data: { score: barAccompanimentNotes } });
             }
@@ -342,17 +346,17 @@ const Scheduler = {
                 if (drumScore.length > 0) self.postMessage({ type: 'drum_score', data: { score: drumScore } });
             }
 
-            if (this.instruments.bass !== 'none') {
+            if (this.instrumentSettings.bass.name !== 'none') {
                 const bassScore = DreamTalesBassGenerator.createScore(this.barCount)
                     .map(note => ({...note, time: (note.time as number) * this.secondsPerBeat, duration: note.duration, velocity: 1.0 }));
                 if (bassScore.length > 0) self.postMessage({ type: 'bass_score', data: { score: bassScore } });
             }
-            if (this.instruments.solo !== 'none') {
+            if (this.instrumentSettings.solo.name !== 'none') {
                  const soloScore = DreamTalesSoloGenerator.createScore(this.barCount)
                      .map(note => ({...note, time: (note.time as number) * this.secondsPerBeat}));
                  if (soloScore.length > 0) self.postMessage({ type: 'solo_score', data: { score: soloScore } });
             }
-            if (this.instruments.accompaniment !== 'none') {
+            if (this.instrumentSettings.accompaniment.name !== 'none') {
                 const accompanimentScore = DreamTalesAccompanimentGenerator.createScore(this.barCount)
                     .map(note => ({...note, time: (note.time as number) * this.secondsPerBeat}));
                 if(accompanimentScore.length > 0) self.postMessage({ type: 'accompaniment_score', data: { score: accompanimentScore } });
