@@ -2,9 +2,118 @@
 /// <reference lib="webworker" />
 
 import { promenadeScore } from '@/lib/scores/promenade';
-import type { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote, DrumSettings, EffectsSettings, ScoreName, MixProfile, Instruments, InstrumentSettings } from '@/types/music';
+import type { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote, DrumSettings, EffectsSettings, ScoreName, MixProfile, InstrumentSettings } from '@/types/music';
 
-// --- 1. PatternProvider (The Music Sheet Library) ---
+// --- NEW INTELLIGENT COMPOSITION ENGINE ---
+
+/**
+ * Generates and holds the unique musical identity for a session.
+ * This is the "DNA" of the composition.
+ */
+class MusicalGenome {
+    public readonly harmony: { root: string; scale: string[] }[];
+    public readonly soloAnchor: string[]; // The melodic "axiom"
+    public readonly bassAnchorRiff: { time: number; duration: string }[]; // The rhythmic anchor
+
+    constructor() {
+        // For now, we'll use a predefined harmony and anchors.
+        // Later, this can be replaced with procedural generation (e.g., Markov chains).
+        this.harmony = [
+            { root: 'E', scale: ['E', 'F#', 'G', 'A', 'B', 'C', 'D'] }, // E minor
+            { root: 'C', scale: ['C', 'D', 'E', 'F', 'G', 'A', 'B'] }, // C major
+            { root: 'G', scale: ['G', 'A', 'B', 'C', 'D', 'E', 'F#'] }, // G major
+            { root: 'D', scale: ['D', 'E', 'F#', 'G', 'A', 'B', 'C#'] }  // D major
+        ];
+        this.soloAnchor = ['B4', 'A4', 'G4'];
+        this.bassAnchorRiff = [
+            { time: 0, duration: '4n' },
+            { time: 1.5, duration: '8n' },
+            { time: 2.5, duration: '8n' },
+        ];
+    }
+}
+
+/**
+ * The "brain" of the composer. Uses the genome to generate evolving music.
+ */
+class EvolutionEngine {
+    private genome: MusicalGenome;
+    private soloState: {
+        lastPhrase: string[];
+        iterations: number;
+    };
+
+    constructor(genome: MusicalGenome) {
+        this.genome = genome;
+        this.soloState = {
+            lastPhrase: [...this.genome.soloAnchor],
+            iterations: 0,
+        };
+    }
+
+    public getHarmony(bar: number) {
+        const chordIndex = Math.floor(bar / 2) % this.genome.harmony.length;
+        return this.genome.harmony[chordIndex];
+    }
+
+    public generateSoloScore(bar: number): SoloNote[] {
+        const evolutionCycle = 8; // Return to anchor every 8 bars
+        if (bar % evolutionCycle === 0) {
+            this.soloState.lastPhrase = [...this.genome.soloAnchor];
+            this.soloState.iterations = 0;
+            return this.soloState.lastPhrase.map((note, i) => ({
+                notes: note,
+                time: i * 0.5,
+                duration: '8n'
+            }));
+        }
+
+        // Simple mutation rule: slightly alter pitch and timing
+        const newPhrase = this.soloState.lastPhrase.map(note => {
+            const currentHarmony = this.getHarmony(bar);
+            const scaleWithOctave = currentHarmony.scale.map(n => `${n}4`);
+            const currentIndex = scaleWithOctave.indexOf(note);
+            if (currentIndex === -1) return note; // Should not happen if logic is correct
+            
+            const nextIndex = (currentIndex + (Math.random() > 0.5 ? 1 : -1) + scaleWithOctave.length) % scaleWithOctave.length;
+            return scaleWithOctave[nextIndex];
+        });
+
+        this.soloState.lastPhrase = newPhrase;
+        this.soloState.iterations++;
+
+        return newPhrase.map((note, i) => ({
+            notes: note,
+            time: i * (0.5 + (Math.random() - 0.5) * 0.2), // Evolve rhythm slightly
+            duration: '8n'
+        }));
+    }
+
+    public generateAccompanimentScore(bar: number): AccompanimentNote[] {
+        if (bar % 2 !== 0) return []; // Play only every 2 bars
+        const { root, scale } = this.getHarmony(bar);
+        const triad = [`${root}3`, `${scale[2]}3`, `${scale[4]}3`];
+        return triad.map((note, index) => ({
+            notes: note,
+            time: index * 0.1,
+            duration: '1m'
+        }));
+    }
+    
+    public generateBassScore(bar: number): BassNote[] {
+         if (bar % 2 !== 0) return []; // Play only every 2 bars
+         const { root } = this.getHarmony(bar);
+         return this.genome.bassAnchorRiff.map(riffPart => ({
+             note: `${root}2`,
+             time: riffPart.time,
+             duration: riffPart.duration,
+             velocity: 0.9
+         }));
+    }
+}
+
+
+// --- PatternProvider (Remains the same for now) ---
 const PatternProvider = {
     drumPatterns: {
         'dreamtales-beat-desktop': [
@@ -31,45 +140,10 @@ const PatternProvider = {
             { sample: 'hat', time: 3.0, velocity: 0.5 },
             { sample: 'hat', time: 3.5, velocity: 0.6 },
         ],
-        // Keep old patterns for now, might be useful
-        basic: [
-            { sample: 'kick', time: 0 },
-            { sample: 'hat', time: 0.5 },
-            { sample: 'snare', time: 1 },
-            { sample: 'hat', time: 1.5 },
-            { sample: 'kick', time: 2 },
-            { sample: 'hat', time: 2.5 },
-            { sample: 'snare', time: 3 },
-            { sample: 'hat', time: 3.5 },
-        ],
-        breakbeat: [
-            { sample: 'kick', time: 0 },
-            { sample: 'hat', time: 0.5 },
-            { sample: 'kick', time: 0.75 },
-            { sample: 'snare', time: 1 },
-            { sample: 'hat', time: 1.5 },
-            { sample: 'kick', time: 2 },
-            { sample: 'snare', time: 2.5 },
-            { sample: 'hat', time: 3 },
-            { sample: 'snare', time: 3.25 },
-            { sample: 'hat', time: 3.5 },
-        ],
-        slow: [
-            { sample: 'kick', time: 0 },
-            { sample: 'hat', time: 1 },
-            { sample: 'snare', time: 2 },
-            { sample: 'hat', time: 3 },
-        ],
-        heavy: [
-            { sample: 'kick', time: 0, velocity: 1.0 },
-            { sample: 'ride', time: 0.5 },
-            { sample: 'snare', time: 1, velocity: 1.0 },
-            { sample: 'ride', time: 1.5 },
-            { sample: 'kick', time: 2, velocity: 1.0 },
-            { sample: 'ride', time: 2.5 },
-            { sample: 'snare', time: 3, velocity: 1.0 },
-            { sample: 'ride', time: 3.5 },
-        ],
+        basic: [ { sample: 'kick', time: 0 }, { sample: 'hat', time: 0.5 }, { sample: 'snare', time: 1 }, { sample: 'hat', time: 1.5 }, { sample: 'kick', time: 2 }, { sample: 'hat', time: 2.5 }, { sample: 'snare', time: 3 }, { sample: 'hat', time: 3.5 }, ],
+        breakbeat: [ { sample: 'kick', time: 0 }, { sample: 'hat', time: 0.5 }, { sample: 'kick', time: 0.75 }, { sample: 'snare', time: 1 }, { sample: 'hat', time: 1.5 }, { sample: 'kick', time: 2 }, { sample: 'snare', time: 2.5 }, { sample: 'hat', time: 3 }, { sample: 'snare', time: 3.25 }, { sample: 'hat', time: 3.5 }, ],
+        slow: [ { sample: 'kick', time: 0 }, { sample: 'hat', time: 1 }, { sample: 'snare', time: 2 }, { sample: 'hat', time: 3 }, ],
+        heavy: [ { sample: 'kick', time: 0, velocity: 1.0 }, { sample: 'ride', time: 0.5 }, { sample: 'snare', time: 1, velocity: 1.0 }, { sample: 'ride', time: 1.5 }, { sample: 'kick', time: 2, velocity: 1.0 }, { sample: 'ride', time: 2.5 }, { sample: 'snare', time: 3, velocity: 1.0 }, { sample: 'ride', time: 3.5 }, ],
         none: [],
     },
     getDrumPattern(name: string) {
@@ -77,163 +151,40 @@ const PatternProvider = {
     },
 };
 
-// --- 2. Instrument Generators (The Composers) ---
+// --- Drum and Effects Generators (Can remain simple for now) ---
 
-// --- DreamTales Style Generators ---
-
-const DreamTalesHarmonyProvider = {
-    // Progression: Em - C - G - D (vi-IV-I-V in G Major)
-    chords: [
-        { root: 'E', scale: ['E', 'F#', 'G', 'A', 'B', 'C', 'D'] }, // E minor (Aeolian)
-        { root: 'C', scale: ['C', 'D', 'E', 'F', 'G', 'A', 'B'] }, // C major (Ionian)
-        { root: 'G', scale: ['G', 'A', 'B', 'C', 'D', 'E', 'F#'] }, // G major (Ionian)
-        { root: 'D', scale: ['D', 'E', 'F#', 'G', 'A', 'B', 'C#'] }  // D major (Ionian)
-    ],
-    getChord(barNumber: number) {
-        const chordIndex = Math.floor(barNumber / 2) % this.chords.length;
-        return this.chords[chordIndex];
-    }
-};
-
-class DreamTalesDrumGenerator {
-    static createScore(barNumber: number, mixProfile: MixProfile): DrumNote[] {
+class DrumGenerator {
+    static createScore(pattern: string, barNumber: number, mixProfile: MixProfile): DrumNote[] {
         const isFillBar = (barNumber + 1) % 8 === 0;
         if (isFillBar) {
             return PatternProvider.getDrumPattern('dreamtales-fill');
         }
-        const patternName = mixProfile === 'mobile' ? 'dreamtales-beat-mobile' : 'dreamtales-beat-desktop';
-        return PatternProvider.getDrumPattern(patternName);
+        if (pattern === 'dreamtales-beat') {
+            const patternName = mixProfile === 'mobile' ? 'dreamtales-beat-mobile' : 'dreamtales-beat-desktop';
+            return PatternProvider.getDrumPattern(patternName);
+        }
+        return PatternProvider.getDrumPattern(pattern);
     }
 }
-
-class DreamTalesBassGenerator {
-    static createScore(barNumber: number): BassNote[] {
-        // Generate a new note only every 2 bars, creating a long, foundational drone
-        if (barNumber % 2 === 0) {
-            const { root } = DreamTalesHarmonyProvider.getChord(barNumber);
-            // The note lasts for 2 measures ('2m'), creating a "carpet" of sound
-            const note: BassNote = { note: `${root}2`, time: 0, duration: '2m', velocity: 1.0 };
-            return [note];
-        }
-        return []; // Return empty array for odd bars
-    }
-}
-
-
-class DreamTalesSoloGenerator {
-    private static lastNoteIndex = -1;
-    private static notes: string[] = [];
-
-    static createScore(barNumber: number): SoloNote[] {
-        const beatsPerBar = 4;
-        const currentChord = DreamTalesHarmonyProvider.getChord(barNumber);
-        
-        // Use a more controlled range of notes for melody. 4th octave is primary.
-        const scaleWithOctaves = [
-            ...currentChord.scale.map(n => `${n}4`),
-            ...currentChord.scale.map(n => `${n}3`)
-        ];
-        
-        if (this.lastNoteIndex === -1 || JSON.stringify(scaleWithOctaves) !== JSON.stringify(this.notes)) {
-            this.notes = scaleWithOctaves;
-            this.lastNoteIndex = Math.floor(Math.random() * this.notes.length);
-        }
-
-        // Generate one note per bar
-        const noteTime = 0; // At the start of the bar
-        const noteDuration = '1m';
-        
-        // Stepwise motion: go up or down one step in the scale
-        const direction = Math.random() > 0.5 ? 1 : -1;
-        let nextNoteIndex = this.lastNoteIndex + direction;
-
-        // Boundary check
-        if (nextNoteIndex < 0 || nextNoteIndex >= this.notes.length) {
-            nextNoteIndex = this.lastNoteIndex - direction; // Reverse direction
-        }
-         if (nextNoteIndex < 0 || nextNoteIndex >= this.notes.length) {
-            nextNoteIndex = this.lastNoteIndex; // Stay on the same note if still out of bounds
-        }
-
-        const noteToPlay = this.notes[nextNoteIndex];
-        this.lastNoteIndex = nextNoteIndex;
-
-        return [{ notes: noteToPlay, time: noteTime, duration: noteDuration }];
-    }
-}
-
-class DreamTalesAccompanimentGenerator {
-     private static lastBar = -1;
-
-    static createScore(barNumber: number): AccompanimentNote[] {
-        if (barNumber % 2 !== 0) return []; // Play only every 2 bars with the bass
-
-        if (barNumber === this.lastBar) return [];
-        this.lastBar = barNumber;
-        
-        const { root, scale } = DreamTalesHarmonyProvider.getChord(barNumber);
-        
-        // Create a simple triad from the scale, primarily in the 3rd octave
-        const triad = [
-            `${root}3`,
-            `${scale[2]}3`,
-            `${scale[4]}3` 
-        ];
-
-        // Humanize the chord playing
-        return triad.map((note, index) => ({
-            notes: note,
-            time: index * 0.1, // Stagger the notes slightly
-            duration: '1m'
-        }));
-    }
-}
-
 
 class EffectsGenerator {
     static createScore(mode: EffectsSettings['mode'], bar: number, beatsPerBar = 4): EffectNote[] {
         if (mode === 'none') return [];
-        
         const score: EffectNote[] = [];
-        
-        let effectType: 'piu' | 'bell' | null = null;
-        if (mode === 'mixed') {
-            effectType = Math.random() > 0.5 ? 'bell' : 'piu';
-        } else {
-            effectType = mode;
-        }
+        let effectType: 'piu' | 'bell' | null = Math.random() > 0.5 ? 'bell' : 'piu';
+        if (mode !== 'mixed') effectType = mode;
 
-        if (effectType === 'bell') {
-             if (Math.random() > 0.4) return [];
-
-            const windChimeNotes = ['C5', 'Eb5', 'F5', 'G5', 'Bb5']; // C Minor Pentatonic
-            const durations = ['4n', '4n', '8n', '8n', '8n'];
+        if (effectType === 'bell' && Math.random() < 0.4) {
+            const windChimeNotes = ['C5', 'Eb5', 'F5', 'G5', 'Bb5'];
             const numberOfChimes = Math.random() > 0.5 ? 5 : 4;
-            
-            let currentTime = Math.random() * (beatsPerBar / 2); // Start in the first half of the bar
-            
+            let currentTime = Math.random() * (beatsPerBar / 2);
             for (let i = 0; i < numberOfChimes; i++) {
-                const note = windChimeNotes[Math.floor(Math.random() * windChimeNotes.length)];
-                const duration = durations[i];
-                
-                score.push({
-                    type: 'bell',
-                    time: currentTime,
-                    note,
-                    duration,
-                    isFirst: i === 0,
-                });
-
-                const durationInBeats = duration === '4n' ? 1 : 0.5;
-                currentTime += durationInBeats * 2; // Sound duration + pause of same duration
+                score.push({ type: 'bell', time: currentTime, note: windChimeNotes[Math.floor(Math.random() * windChimeNotes.length)], duration: '4n', isFirst: i === 0 });
+                currentTime += 1;
             }
+        } else if (effectType === 'piu' && Math.random() < 0.25) {
+            score.push({ type: 'piu', time: 2.5, note: 'G5' });
         }
-        if (effectType === 'piu') {
-             if (Math.random() < 0.25) { 
-                score.push({ type: 'piu', time: 2.5, note: 'G5' });
-             }
-        }
-
         return score;
     }
 }
@@ -244,6 +195,7 @@ const Scheduler = {
     intervalId: null as any,
     isRunning: false,
     barCount: 0,
+    evolutionEngine: null as EvolutionEngine | null,
     
     // Settings from main thread
     bpm: 75,
@@ -262,19 +214,15 @@ const Scheduler = {
     get beatsPerBar() { return 4; },
     get secondsPerBeat() { return 60 / this.bpm; },
     get barDuration() { return this.beatsPerBar * this.secondsPerBeat; },
-    get lookahead() { return 0.1; }, // seconds
-
-
+    
     start() {
         if (this.isRunning) return;
 
         this.reset();
         this.isRunning = true;
+        this.evolutionEngine = new EvolutionEngine(new MusicalGenome());
         
-        // Generate the first chunk immediately
         this.tick();
-
-        // Then set up the interval for subsequent chunks
         this.intervalId = setInterval(() => this.tick(), this.barDuration * 1000);
         self.postMessage({ type: 'started' });
     },
@@ -284,6 +232,7 @@ const Scheduler = {
         clearInterval(this.intervalId);
         this.intervalId = null;
         this.isRunning = false;
+        this.evolutionEngine = null;
         self.postMessage({ type: 'stopped' });
     },
 
@@ -303,24 +252,46 @@ const Scheduler = {
     tick() {
         if (!this.isRunning) return;
 
-        if (this.score === 'promenade') {
+        if (this.score === 'dreamtales' && this.evolutionEngine) {
+            // Use the new EvolutionEngine
+            if (this.drumSettings.pattern !== 'none') {
+                 const drumScore = DrumGenerator.createScore(this.drumSettings.pattern, this.barCount, this.mixProfile)
+                    .map(note => ({ ...note, time: note.time * this.secondsPerBeat }));
+                if (drumScore.length > 0) self.postMessage({ type: 'drum_score', data: { score: drumScore } });
+            }
+            if (this.instrumentSettings.bass.name !== 'none') {
+                const bassScore = this.evolutionEngine.generateBassScore(this.barCount)
+                    .map(note => ({...note, time: note.time * this.secondsPerBeat }));
+                if (bassScore.length > 0) self.postMessage({ type: 'bass_score', data: { score: bassScore } });
+            }
+            if (this.instrumentSettings.solo.name !== 'none') {
+                const soloScore = this.evolutionEngine.generateSoloScore(this.barCount)
+                    .map(note => ({...note, time: (note.time as number) * this.secondsPerBeat}));
+                if (soloScore.length > 0) self.postMessage({ type: 'solo_score', data: { score: soloScore } });
+            }
+            if (this.instrumentSettings.accompaniment.name !== 'none') {
+                const accompanimentScore = this.evolutionEngine.generateAccompanimentScore(this.barCount)
+                    .map(note => ({...note, time: (note.time as number) * this.secondsPerBeat}));
+                if(accompanimentScore.length > 0) self.postMessage({ type: 'accompaniment_score', data: { score: accompanimentScore } });
+            }
+            const effectsScore = EffectsGenerator.createScore(this.effectsSettings.mode, this.barCount, this.beatsPerBar)
+                .map(note => ({ ...note, time: note.time * this.secondsPerBeat }));
+            if (effectsScore.length > 0) {
+                self.postMessage({ type: 'effects_score', data: { score: effectsScore } });
+            }
+
+        } else if (this.score === 'promenade') {
+            // Keep promenade as is
             const getNotesForBar = <T extends { time: number | string }>(notes: T[]): T[] => {
                 const barStartBeats = this.barCount * this.beatsPerBar;
                 const barEndBeats = (this.barCount + 1) * this.beatsPerBar;
-
                 return notes
                     .filter(note => {
-                        const noteTimeInBeats = typeof note.time === 'string' 
-                            ? 0 // This logic is simplified; Tone.Time would be needed for full conversion
-                            : note.time;
+                        const noteTimeInBeats = typeof note.time === 'string' ? 0 : note.time;
                         return noteTimeInBeats >= barStartBeats && noteTimeInBeats < barEndBeats;
                     })
-                    .map(note => ({
-                        ...note,
-                        time: (typeof note.time === 'number' ? note.time - barStartBeats : 0) * this.secondsPerBeat
-                    }));
+                    .map(note => ({ ...note, time: (typeof note.time === 'number' ? note.time - barStartBeats : 0) * this.secondsPerBeat }));
             };
-            
             if (this.drumSettings.pattern !== 'none') {
                 const barDrumNotes = getNotesForBar(promenadeScore.drums);
                 if (barDrumNotes.length > 0) self.postMessage({ type: 'drum_score', data: { score: barDrumNotes } });
@@ -330,41 +301,12 @@ const Scheduler = {
                 if (barBassNotes.length > 0) self.postMessage({ type: 'bass_score', data: { score: barBassNotes } });
             }
             if (this.instrumentSettings.solo.name !== 'none') {
-                 const barSoloNotes = getNotesForBar(promenadeScore.solo as any[]); // Cast to any to handle time format
+                 const barSoloNotes = getNotesForBar(promenadeScore.solo as any[]);
                  if (barSoloNotes.length > 0) self.postMessage({ type: 'solo_score', data: { score: barSoloNotes } });
             }
             if (this.instrumentSettings.accompaniment.name !== 'none') {
-                 const barAccompanimentNotes = getNotesForBar(promenadeScore.accompaniment as any[]); // Cast to any
+                 const barAccompanimentNotes = getNotesForBar(promenadeScore.accompaniment as any[]);
                  if (barAccompanimentNotes.length > 0) self.postMessage({ type: 'accompaniment_score', data: { score: barAccompanimentNotes } });
-            }
-
-        } else if (this.score === 'dreamtales') { 
-            if (this.drumSettings.pattern !== 'none') {
-                const drumScore = DreamTalesDrumGenerator.createScore(this.barCount, this.mixProfile)
-                    .map(note => ({ ...note, time: note.time * this.secondsPerBeat }));
-                if (drumScore.length > 0) self.postMessage({ type: 'drum_score', data: { score: drumScore } });
-            }
-
-            if (this.instrumentSettings.bass.name !== 'none') {
-                const bassScore = DreamTalesBassGenerator.createScore(this.barCount)
-                    .map(note => ({...note, time: (note.time as number) * this.secondsPerBeat, duration: note.duration, velocity: 1.0 }));
-                if (bassScore.length > 0) self.postMessage({ type: 'bass_score', data: { score: bassScore } });
-            }
-            if (this.instrumentSettings.solo.name !== 'none') {
-                 const soloScore = DreamTalesSoloGenerator.createScore(this.barCount)
-                     .map(note => ({...note, time: (note.time as number) * this.secondsPerBeat}));
-                 if (soloScore.length > 0) self.postMessage({ type: 'solo_score', data: { score: soloScore } });
-            }
-            if (this.instrumentSettings.accompaniment.name !== 'none') {
-                const accompanimentScore = DreamTalesAccompanimentGenerator.createScore(this.barCount)
-                    .map(note => ({...note, time: (note.time as number) * this.secondsPerBeat}));
-                if(accompanimentScore.length > 0) self.postMessage({ type: 'accompaniment_score', data: { score: accompanimentScore } });
-            }
-            
-            const effectsScore = EffectsGenerator.createScore(this.effectsSettings.mode, this.barCount, this.beatsPerBar)
-                .map(note => ({ ...note, time: note.time * this.secondsPerBeat }));
-            if (effectsScore.length > 0) {
-                self.postMessage({ type: 'effects_score', data: { score: effectsScore } });
             }
         }
         
@@ -380,7 +322,6 @@ self.onmessage = async (event: MessageEvent) => {
     try {
         switch (command) {
             case 'init':
-                // For now, just confirm initialization
                 self.postMessage({ type: 'initialized' });
                 break;
             
@@ -402,4 +343,3 @@ self.onmessage = async (event: MessageEvent) => {
     }
 };
 
-    
