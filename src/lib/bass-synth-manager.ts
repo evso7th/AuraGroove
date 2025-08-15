@@ -122,11 +122,8 @@ export class BassSynthManager {
             this.currentInstrument = 'none';
             return;
         }
-
-        // No need to change if it's the same instrument.
-        // This check was missing and could cause re-application of presets unnecessarily.
+        
         if (name === this.currentInstrument) {
-            // Ensure volume is correct if it was off
             if (this.currentSynth.volume.value === -Infinity) {
                  this.fadeIn(0.01);
             }
@@ -134,7 +131,7 @@ export class BassSynthManager {
         }
         
         console.log(`BASS: Setting instrument to ${name}`);
-        this.currentInstrument = name; // Set instrument name BEFORE applying settings
+        this.currentInstrument = name; 
         this.applyProfileSettings();
         this.fadeIn(0.01);
     }
@@ -142,7 +139,6 @@ export class BassSynthManager {
     public setMixProfile(profile: MixProfile) {
         this.currentProfile = profile;
         this.currentBaseVolumeDb = profile === 'mobile' ? MOBILE_VOLUME_DB : DESKTOP_VOLUME_DB;
-        // Only apply settings if an instrument is actually selected
         if(this.currentInstrument !== 'none') {
             this.applyProfileSettings();
         }
@@ -173,11 +169,14 @@ export class BassSynthManager {
 
     private applyProfileSettings() {
         if (!this.currentSynth || this.currentInstrument === 'none') return;
-        const preset = this.currentProfile === 'mobile' ? mobilePreset : instrumentPresets[this.currentInstrument];
+        
+        let preset = this.currentProfile === 'mobile' 
+            ? mobilePreset 
+            : instrumentPresets[this.currentInstrument];
         
         if (!preset) {
-            console.error(`BASS: No preset found for instrument: ${this.currentInstrument}`);
-            return;
+            console.error(`BASS: No preset found for instrument: ${this.currentInstrument}. Falling back to default.`);
+            preset = bassSynthPreset; // Fallback to a default preset
         }
 
         this.currentSynth.set(preset);
