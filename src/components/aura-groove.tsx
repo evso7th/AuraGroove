@@ -56,7 +56,7 @@ export function AuraGroove() {
     volume: 0.7,
   });
   const [instruments, setInstruments] = useState<Instruments>({
-    solo: "none",
+    solo: "synthesizer",
     accompaniment: "none",
     bass: "bass synth",
   });
