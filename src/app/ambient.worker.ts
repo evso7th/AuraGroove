@@ -10,12 +10,14 @@ const PatternProvider = {
         'dreamtales-beat': [
             { sample: 'ride', time: 0, velocity: 0.7 },
             { sample: 'ride', time: 1, velocity: 0.6 },
-            { sample: 'kick', time: 2, velocity: 0.8 },
             { sample: 'ride', time: 2, velocity: 0.7 },
             { sample: 'ride', time: 3, velocity: 0.6 },
-            { sample: 'snare', time: 3.5, velocity: 0.5 },
+            { sample: 'kick', time: 2, velocity: 0.8 },
+            { sample: 'snare', time: 3.5, velocity: 0.4 },
         ],
         'dreamtales-fill': [
+            { sample: 'ride', time: 0, velocity: 0.7 },
+            { sample: 'ride', time: 1, velocity: 0.6 },
             { sample: 'snare', time: 2.0, velocity: 0.6 },
             { sample: 'snare', time: 2.5, velocity: 0.7 },
             { sample: 'hat', time: 3.0, velocity: 0.5 },
@@ -78,12 +80,38 @@ class DreamTalesDrumGenerator {
 }
 
 class DreamTalesBassGenerator {
-    // TODO: Get harmony from a central place
+    private static riff: BassNote[] = [
+        // Bar 1
+        { note: 'E1', time: 0, duration: '2n', velocity: 1.0 },
+        { note: 'E1', time: 2, duration: '2n', velocity: 1.0 },
+        // Bar 2
+        { note: 'G1', time: 4, duration: '2n', velocity: 1.0 },
+        { note: 'G1', time: 6, duration: '2n', velocity: 1.0 },
+        // Bar 3
+        { note: 'A1', time: 8, duration: '2n', velocity: 1.0 },
+        { note: 'A1', time: 10, duration: '2n', velocity: 1.0 },
+        // Bar 4
+        { note: 'G1', time: 12, duration: '2n', velocity: 1.0 },
+        { note: 'E1', time: 14, duration: '2n', velocity: 1.0 },
+    ];
+    
     static createScore(barNumber: number): BassNote[] {
-        // Simple drone on 'E1' for now
-        return [{ note: 'E1', time: 0, duration: '1n', velocity: 1.0 }];
+        const beatsPerBar = 4;
+        const riffLengthInBars = 4;
+        const currentRiffBar = barNumber % riffLengthInBars;
+
+        const barStartBeat = currentRiffBar * beatsPerBar;
+        const barEndBeat = barStartBeat + beatsPerBar;
+        
+        return this.riff
+            .filter(note => note.time >= barStartBeat && note.time < barEndBeat)
+            .map(note => ({
+                ...note,
+                time: note.time - barStartBeat, // Make time relative to the bar
+            }));
     }
 }
+
 
 class DreamTalesSoloGenerator {
     static createScore(barNumber: number): SoloNote[] {
@@ -305,5 +333,3 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
-
-    

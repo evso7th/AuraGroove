@@ -59,7 +59,7 @@ export function AuraGroove() {
     accompaniment: "organ",
     bass: "bass synth",
   });
-  const [bpm, setBpm] = useState(100);
+  const [bpm, setBpm] = useState(75);
   const [score, setScore] = useState<ScoreName>('dreamtales');
   
   // Instrument FX States
