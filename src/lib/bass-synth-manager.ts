@@ -7,9 +7,35 @@ type InstrumentName = InstrumentSettings['bass']['name'];
 const DESKTOP_VOLUME_DB = -14; 
 const MOBILE_VOLUME_DB = -8; 
 
-const desktopPreset: Tone.MonoSynthOptions = {
+const bassSynthPreset: Tone.MonoSynthOptions = {
     oscillator: {
-        type: 'sine' // Changed to sine for a deep, fundamental tone, distortion will add harmonics.
+        type: 'sawtooth'
+    },
+    filter: {
+        type: 'lowpass',
+        rolloff: -24,
+        Q: 1,
+    },
+    filterEnvelope: {
+        attack: 0.1,
+        decay: 0.4,
+        sustain: 0.7,
+        release: 1.5,
+        baseFrequency: 50,
+        octaves: 2.5,
+    },
+    envelope: {
+        attack: 0.08,
+        decay: 0.4,
+        sustain: 0.9,
+        release: 1.5,
+    },
+    portamento: 0.08,
+};
+
+const bassGuitarPreset: Tone.MonoSynthOptions = {
+    oscillator: {
+        type: 'sine'
     },
     filter: {
         type: 'lowpass',
@@ -27,8 +53,8 @@ const desktopPreset: Tone.MonoSynthOptions = {
     envelope: {
         attack: 0.1,
         decay: 0.3,
-        sustain: 1.0, // Increased sustain for a powerful, held note
-        release: 4.0, // Kept long release for "тягучесть"
+        sustain: 1.0,
+        release: 4.0,
     },
     portamento: 0.08,
 };
@@ -59,6 +85,11 @@ const mobilePreset: Tone.MonoSynthOptions = {
     portamento: 0.08,
 };
 
+
+const instrumentPresets: Record<Exclude<InstrumentName, 'none'>, Tone.MonoSynthOptions> = {
+    'bass synth': bassSynthPreset,
+    'bassGuitar': bassGuitarPreset
+};
 
 export class BassSynthManager {
     private currentSynth: Tone.MonoSynth | null = null;
@@ -132,7 +163,7 @@ export class BassSynthManager {
 
     private applyProfileSettings() {
         if (!this.currentSynth) return;
-        const preset = this.currentProfile === 'mobile' ? mobilePreset : desktopPreset;
+        const preset = this.currentProfile === 'mobile' ? mobilePreset : instrumentPresets[this.currentInstrument];
         this.currentSynth.set(preset);
     }
     
@@ -178,3 +209,5 @@ export class BassSynthManager {
         }
     }
 }
+
+    

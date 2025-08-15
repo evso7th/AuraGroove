@@ -11,7 +11,7 @@ export type InstrumentSettings = {
       volume: number; // 0-1
   };
   bass: {
-      name: 'bass synth' | 'none';
+      name: 'bass synth' | 'bassGuitar' | 'none';
       volume: number; // 0-1
   };
 };
@@ -70,3 +70,5 @@ export type Instruments = {
   accompaniment: 'synthesizer' | 'piano' | 'organ' | 'none';
   bass: 'bass synth' | 'none';
 };
+
+    

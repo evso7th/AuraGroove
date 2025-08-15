@@ -202,10 +202,10 @@ const Scheduler = {
     instrumentSettings: {
         solo: { name: 'none', volume: 0.8 },
         accompaniment: { name: 'none', volume: 0.8 },
-        bass: { name: 'none', volume: 0.8 },
+        bass: { name: 'none', volume: 0.9 },
     } as InstrumentSettings,
-    drumSettings: { pattern: 'dreamtales-beat', volume: 0.7 } as any,
-    effectsSettings: { mode: 'none', volume: 0.7 } as any,
+    drumSettings: { pattern: 'dreamtales-beat', volume: 0.7 } as DrumSettings,
+    effectsSettings: { mode: 'none', volume: 0.7 } as EffectsSettings,
     score: 'dreamtales' as ScoreName,
     mixProfile: 'desktop' as MixProfile,
 
@@ -343,3 +343,5 @@ self.onmessage = async (event: MessageEvent) => {
     }
 };
 
+
+    

@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -306,7 +307,7 @@ export function AuraGroove() {
                 onload: () => {
                     setLoadingText("Samples loaded.");
                 },
-                destination: fxBusRef.current.drumInput,
+                destination: fxBusRef.current!.drumInput,
             });
 
             await Tone.loaded();
@@ -569,6 +570,7 @@ export function AuraGroove() {
                         <SelectContent>
                             <SelectItem value="none">None</SelectItem>
                             <SelectItem value="bass synth">Bass Synth</SelectItem>
+                            <SelectItem value="bassGuitar">Bass Guitar</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
@@ -695,3 +697,6 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+
+    
