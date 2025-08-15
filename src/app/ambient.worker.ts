@@ -226,7 +226,7 @@ const Scheduler = {
         this.isRunning = true;
         this.evolutionEngine = new EvolutionEngine(new MusicalGenome());
         
-        this.tick();
+        // The interval will call tick. We don't need to call it immediately here anymore.
         this.intervalId = setInterval(() => this.tick(), this.barDuration * 1000);
         self.postMessage({ type: 'started' });
     },
@@ -339,7 +339,6 @@ self.onmessage = async (event: MessageEvent) => {
                 break;
             
             case 'start':
-                Scheduler.updateSettings(data);
                 Scheduler.start();
                 break;
 
@@ -349,12 +348,13 @@ self.onmessage = async (event: MessageEvent) => {
             
             case 'update_settings':
                 Scheduler.updateSettings(data);
+                if (Scheduler.isRunning) {
+                    // Trigger an immediate tick to apply new settings
+                    Scheduler.tick();
+                }
                 break;
         }
     } catch (e) {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
-
-
-    

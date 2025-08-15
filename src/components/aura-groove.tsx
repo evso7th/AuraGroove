@@ -366,8 +366,10 @@ export function AuraGroove() {
             Tone.Transport.start();
         }
         
+        musicWorkerRef.current.postMessage({ command: 'start' });
+        // Immediately send settings to trigger the first tick
         musicWorkerRef.current.postMessage({
-            command: 'start',
+            command: 'update_settings',
             data: { drumSettings, instrumentSettings, effectsSettings, bpm, score, mixProfile }
         });
 
