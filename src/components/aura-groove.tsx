@@ -280,14 +280,14 @@ export function AuraGroove() {
     }, [effectsSettings, isReady]);
 
     useEffect(() => {
-        if (!isReady || !fxBusRef.current) return;
+        if (!isReady || !fxBusRef.current || !isPlaying) return;
         const gainValue = Tone.gainToDb(drumSettings.volume);
         try {
             fxBusRef.current.drumInput.volume.rampTo(gainValue, 0.05);
         } catch(e) {
             console.error("Failed to ramp drum volume:", e);
         }
-    }, [drumSettings.volume, isReady]);
+    }, [drumSettings.volume, isReady, isPlaying]);
 
   
   const handlePlay = useCallback(async () => {
@@ -695,12 +695,3 @@ export function AuraGroove() {
     </Card>
   );
 }
-
-    
-
-    
-
-    
-
-    
-
