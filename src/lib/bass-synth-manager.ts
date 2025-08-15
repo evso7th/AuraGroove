@@ -5,7 +5,7 @@ import type { FxBus } from './fx-bus';
 
 type InstrumentName = InstrumentSettings['bass']['name'];
 const DESKTOP_VOLUME_DB = -22; 
-const MOBILE_VOLUME_DB = -18; 
+const MOBILE_VOLUME_DB = -8; 
 
 const desktopPreset: Tone.MonoSynthOptions = {
     oscillator: {
@@ -20,15 +20,15 @@ const desktopPreset: Tone.MonoSynthOptions = {
         attack: 0.1,
         decay: 0.3,
         sustain: 0.6,
-        release: 4.5, // Increased for viscosity
+        release: 4.5,
         baseFrequency: 50,
         octaves: 2.5,
     },
     envelope: {
         attack: 0.05,
         decay: 0.3,
-        sustain: 1.0, // Full sustain for a continuous feel
-        release: 4.0, // Increased for viscosity
+        sustain: 1.0,
+        release: 4.0,
     },
     portamento: 0.08,
 };
@@ -40,21 +40,21 @@ const mobilePreset: Tone.MonoSynthOptions = {
     filter: {
         type: 'lowpass',
         rolloff: -24,
-        Q: 1, // Lowered resonance to avoid harshness
+        Q: 1,
     },
     filterEnvelope: {
         attack: 0.1,
-        decay: 0.4, // Slightly longer decay
+        decay: 0.4,
         sustain: 0.7,
-        release: 1.5, // Longer release for more body
-        baseFrequency: 40, // Lowered for deeper tone
+        release: 1.5,
+        baseFrequency: 40,
         octaves: 2.2,
     },
     envelope: {
-        attack: 0.08, // Slower attack
+        attack: 0.08,
         decay: 0.4,
         sustain: 0.9,
-        release: 1.5, // Slower release
+        release: 1.5,
     },
     portamento: 0.08,
 };
@@ -182,5 +182,7 @@ export class BassSynthManager {
         }
     }
 }
+
+    
 
     
