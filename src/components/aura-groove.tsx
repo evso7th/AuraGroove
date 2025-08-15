@@ -59,7 +59,7 @@ export function AuraGroove() {
   const [instrumentSettings, setInstrumentSettings] = useState<InstrumentSettings>({
     solo: { name: "synthesizer", volume: 0.8 },
     accompaniment: { name: "synthesizer", volume: 0.7 },
-    bass: { name: "bass synth", volume: 0.9 },
+    bass: { name: "bassGuitar", volume: 0.9 },
   });
   const [bpm, setBpm] = useState(75);
   const [score, setScore] = useState<ScoreName>('dreamtales');
@@ -92,6 +92,7 @@ export function AuraGroove() {
     musicWorkerRef.current = worker;
     
     // Instantiate managers immediately. They will internally handle the lazy-loading of Tone.js components.
+    setLoadingText("Loading audio modules...");
     import('@/lib/fx-bus').then(({ FxBus }) => {
         fxBusRef.current = new FxBus();
         import('@/lib/bass-synth-manager').then(({ BassSynthManager }) => {
@@ -105,6 +106,7 @@ export function AuraGroove() {
         });
          import('@/lib/effects-synth-manager').then(({ EffectsSynthManager }) => {
             effectsSynthManagerRef.current = new EffectsSynthManager(fxBusRef.current!);
+             setLoadingText("Audio modules loaded.");
         });
     });
 
@@ -133,7 +135,7 @@ export function AuraGroove() {
                  data.score.forEach((note: DrumNote) => {
                     const player = drumPlayersRef.current?.player(note.sample);
                     if (player && player.loaded) {
-                        player.start(now + note.time);
+                        player.start(now + note.time, undefined, undefined);
                     }
                 });
             }
@@ -293,32 +295,34 @@ export function AuraGroove() {
   
   const handlePlay = useCallback(async () => {
     try {
+        setLoadingText("Starting audio context...");
         if (Tone.context.state !== 'running') {
             await Tone.start();
             console.log("AudioContext started!");
         }
+        
+        setIsInitializing(true);
+        
+        if (!musicWorkerRef.current || !fxBusRef.current || !bassSynthManagerRef.current || !soloSynthManagerRef.current || !accompanimentSynthManagerRef.current || !effectsSynthManagerRef.current) {
+            setLoadingText("Waiting for audio engine...");
+            // This should ideally not happen if managers are instantiated on load
+            toast({ variant: "destructive", title: "Audio Error", description: "Audio engine not ready. Please refresh."});
+            setIsInitializing(false);
+            return;
+        }
 
         // Load samples on first play, if not already loaded
-        if (!drumPlayersRef.current && fxBusRef.current) {
-            setIsInitializing(true);
-            setLoadingText("Loading samples...");
+        if (!drumPlayersRef.current) {
+            setLoadingText("Loading samples (this may take a moment)...");
             
             drumPlayersRef.current = new Tone.Players(samplePaths, {
                 onload: () => {
                     setLoadingText("Samples loaded.");
                 },
-                destination: fxBusRef.current!.drumInput,
+                destination: fxBusRef.current.drumInput,
             });
 
             await Tone.loaded();
-        }
-
-
-        if (!musicWorkerRef.current || !fxBusRef.current || !bassSynthManagerRef.current || !soloSynthManagerRef.current || !accompanimentSynthManagerRef.current || !effectsSynthManagerRef.current) {
-            setIsInitializing(true);
-            setLoadingText("Waiting for audio engine...");
-            // This should ideally not happen if managers are instantiated on load
-            return;
         }
 
         // Set initial mix profile for all managers
@@ -336,7 +340,7 @@ export function AuraGroove() {
         accompanimentSynthManagerRef.current?.fadeIn(0.5);
         bassSynthManagerRef.current?.fadeIn(0.5);
 
-        setIsInitializing(true);
+        
         setLoadingText("Starting playback...");
         
         if (Tone.Transport.state !== 'started') {
@@ -683,14 +687,14 @@ export function AuraGroove() {
             disabled={isBusy && !isReady}
             className="w-full text-lg py-6"
           >
-            {isBusy && !isReady ? (
+            {isBusy ? (
               <Loader2 className="mr-2 h-6 w-6 animate-spin" />
             ) : isPlaying ? (
               <Pause className="mr-2 h-6 w-6" />
             ) : (
               <Music className="mr-2 h-6 w-6" />
             )}
-            {isBusy && !isReady ? loadingText : isPlaying ? "Stop" : "Play"}
+            {isBusy ? loadingText : isPlaying ? "Stop" : "Play"}
           </Button>
         </div>
       </CardFooter>
@@ -698,5 +702,7 @@ export function AuraGroove() {
   );
 }
 
+
+    
 
     
