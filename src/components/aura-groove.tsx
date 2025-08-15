@@ -132,7 +132,7 @@ export function AuraGroove() {
                  data.score.forEach((note: DrumNote) => {
                     const player = drumPlayersRef.current?.player(note.sample);
                     if (player && player.loaded) {
-                        player.start(now + note.time, 0, undefined, note.velocity);
+                        player.start(now + note.time);
                     }
                 });
             }
@@ -707,3 +707,4 @@ export function AuraGroove() {
     
 
     
+
