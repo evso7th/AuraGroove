@@ -68,7 +68,5 @@ export type MixProfile = 'desktop' | 'mobile';
 export type Instruments = {
   solo: 'synthesizer' | 'piano' | 'organ' | 'none';
   accompaniment: 'synthesizer' | 'piano' | 'organ' | 'none';
-  bass: 'bass synth' | 'none';
+  bass: 'bass synth' | 'bassGuitar' | 'none';
 };
-
-    

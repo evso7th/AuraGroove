@@ -95,14 +95,18 @@ export function AuraGroove() {
     setLoadingText("Loading audio modules...");
     import('@/lib/fx-bus').then(({ FxBus }) => {
         fxBusRef.current = new FxBus();
+        setLoadingText("Mixer created.");
         import('@/lib/bass-synth-manager').then(({ BassSynthManager }) => {
             bassSynthManagerRef.current = new BassSynthManager(fxBusRef.current!);
+            setLoadingText("Bass synth ready.");
         });
         import('@/lib/solo-synth-manager').then(({ SoloSynthManager }) => {
             soloSynthManagerRef.current = new SoloSynthManager(fxBusRef.current!);
+             setLoadingText("Solo synth ready.");
         });
         import('@/lib/accompaniment-synth-manager').then(({ AccompanimentSynthManager }) => {
             accompanimentSynthManagerRef.current = new AccompanimentSynthManager(fxBusRef.current!);
+             setLoadingText("Accompaniment synth ready.");
         });
          import('@/lib/effects-synth-manager').then(({ EffectsSynthManager }) => {
             effectsSynthManagerRef.current = new EffectsSynthManager(fxBusRef.current!);
@@ -135,7 +139,7 @@ export function AuraGroove() {
                  data.score.forEach((note: DrumNote) => {
                     const player = drumPlayersRef.current?.player(note.sample);
                     if (player && player.loaded) {
-                        player.start(now + note.time, undefined, undefined);
+                         player.start(now + note.time);
                     }
                 });
             }
@@ -305,11 +309,21 @@ export function AuraGroove() {
         
         if (!musicWorkerRef.current || !fxBusRef.current || !bassSynthManagerRef.current || !soloSynthManagerRef.current || !accompanimentSynthManagerRef.current || !effectsSynthManagerRef.current) {
             setLoadingText("Waiting for audio engine...");
-            // This should ideally not happen if managers are instantiated on load
             toast({ variant: "destructive", title: "Audio Error", description: "Audio engine not ready. Please refresh."});
             setIsInitializing(false);
             return;
         }
+
+        // Set initial mix profile for all managers
+        bassSynthManagerRef.current.setMixProfile(mixProfile);
+        soloSynthManagerRef.current.setMixProfile(mixProfile);
+        accompanimentSynthManagerRef.current.setMixProfile(mixProfile);
+
+
+        soloSynthManagerRef.current?.setInstrument(instrumentSettings.solo.name);
+        accompanimentSynthManagerRef.current?.setInstrument(instrumentSettings.accompaniment.name);
+        bassSynthManagerRef.current?.setInstrument(instrumentSettings.bass.name);
+        effectsSynthManagerRef.current?.setMode(effectsSettings.mode);
 
         // Load samples on first play, if not already loaded
         if (!drumPlayersRef.current) {
@@ -324,17 +338,6 @@ export function AuraGroove() {
 
             await Tone.loaded();
         }
-
-        // Set initial mix profile for all managers
-        bassSynthManagerRef.current.setMixProfile(mixProfile);
-        soloSynthManagerRef.current.setMixProfile(mixProfile);
-        accompanimentSynthManagerRef.current.setMixProfile(mixProfile);
-
-
-        soloSynthManagerRef.current?.setInstrument(instrumentSettings.solo.name);
-        accompanimentSynthManagerRef.current?.setInstrument(instrumentSettings.accompaniment.name);
-        bassSynthManagerRef.current?.setInstrument(instrumentSettings.bass.name);
-        effectsSynthManagerRef.current?.setMode(effectsSettings.mode);
         
         soloSynthManagerRef.current?.fadeIn(0.5);
         accompanimentSynthManagerRef.current?.fadeIn(0.5);
@@ -701,8 +704,3 @@ export function AuraGroove() {
     </Card>
   );
 }
-
-
-    
-
-    

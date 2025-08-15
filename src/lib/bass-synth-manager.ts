@@ -123,18 +123,29 @@ export class BassSynthManager {
             return;
         }
 
-        if (name === this.currentInstrument) return;
+        // No need to change if it's the same instrument.
+        // This check was missing and could cause re-application of presets unnecessarily.
+        if (name === this.currentInstrument) {
+            // Ensure volume is correct if it was off
+            if (this.currentSynth.volume.value === -Infinity) {
+                 this.fadeIn(0.01);
+            }
+            return;
+        }
         
         console.log(`BASS: Setting instrument to ${name}`);
+        this.currentInstrument = name; // Set instrument name BEFORE applying settings
         this.applyProfileSettings();
         this.fadeIn(0.01);
-        this.currentInstrument = name;
     }
 
     public setMixProfile(profile: MixProfile) {
         this.currentProfile = profile;
         this.currentBaseVolumeDb = profile === 'mobile' ? MOBILE_VOLUME_DB : DESKTOP_VOLUME_DB;
-        this.applyProfileSettings(); // Re-apply settings for the new profile
+        // Only apply settings if an instrument is actually selected
+        if(this.currentInstrument !== 'none') {
+            this.applyProfileSettings();
+        }
         this.updateVolume();
     }
     
@@ -149,7 +160,6 @@ export class BassSynthManager {
         const isAudible = this.currentSynth.volume.value > -Infinity;
         if (!isAudible) return;
         
-        // Convert user volume (0-1) to dB adjustment.
         const userVolumeDb = Tone.gainToDb(this.userVolume);
         const targetVolume = this.currentBaseVolumeDb + userVolumeDb;
 
@@ -162,8 +172,14 @@ export class BassSynthManager {
 
 
     private applyProfileSettings() {
-        if (!this.currentSynth) return;
+        if (!this.currentSynth || this.currentInstrument === 'none') return;
         const preset = this.currentProfile === 'mobile' ? mobilePreset : instrumentPresets[this.currentInstrument];
+        
+        if (!preset) {
+            console.error(`BASS: No preset found for instrument: ${this.currentInstrument}`);
+            return;
+        }
+
         this.currentSynth.set(preset);
     }
     
@@ -209,5 +225,3 @@ export class BassSynthManager {
         }
     }
 }
-
-    
