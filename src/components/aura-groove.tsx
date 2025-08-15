@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import * as Tone from 'tone';
-import { Drum, Loader2, Music, Pause, Speaker, FileMusic, Waves, Wind, ToyBrick, ChevronsRight, Sparkles } from "lucide-react";
+import { Drum, Loader2, Music, Pause, Speaker, FileMusic, Waves, ChevronsRight, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useDeviceType } from "@/hooks/use-device-type";
 import { Button } from "@/components/ui/button";
@@ -49,7 +49,7 @@ export function AuraGroove() {
   const [loadingText, setLoadingText] = useState("Initializing...");
   const [drumSettings, setDrumSettings] = useState<DrumSettings>({
       pattern: 'dreamtales-beat',
-      volume: 0.8,
+      volume: 0.7,
   });
   const [effectsSettings, setEffectsSettings] = useState<EffectsSettings>({
     mode: 'none',
