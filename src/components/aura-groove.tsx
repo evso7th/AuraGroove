@@ -233,10 +233,10 @@ export function AuraGroove() {
     if (musicWorkerRef.current && (isPlaying || isInitializing)) {
         musicWorkerRef.current?.postMessage({
             command: 'update_settings',
-            data: { instruments, drumSettings, effectsSettings, bpm, score },
+            data: { instruments, drumSettings, effectsSettings, bpm, score, mixProfile },
         });
     }
-  }, [instruments, drumSettings, effectsSettings, bpm, score, isPlaying, isInitializing]);
+  }, [instruments, drumSettings, effectsSettings, bpm, score, isPlaying, isInitializing, mixProfile]);
 
   useEffect(() => {
     if (isReady && isPlaying) { 
@@ -322,7 +322,7 @@ export function AuraGroove() {
         
         musicWorkerRef.current.postMessage({
             command: 'start',
-            data: { drumSettings, instruments, effectsSettings, bpm, score }
+            data: { drumSettings, instruments, effectsSettings, bpm, score, mixProfile }
         });
 
     } catch (error) {

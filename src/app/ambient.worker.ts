@@ -2,12 +2,12 @@
 /// <reference lib="webworker" />
 
 import { promenadeScore } from '@/lib/scores/promenade';
-import type { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote, DrumSettings, EffectsSettings, ScoreName } from '@/types/music';
+import type { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote, DrumSettings, EffectsSettings, ScoreName, MixProfile } from '@/types/music';
 
 // --- 1. PatternProvider (The Music Sheet Library) ---
 const PatternProvider = {
     drumPatterns: {
-        'dreamtales-beat': [
+        'dreamtales-beat-desktop': [
             { sample: 'ride', time: 0, velocity: 0.7 },
             { sample: 'ride', time: 1, velocity: 0.6 },
             { sample: 'ride', time: 2, velocity: 0.7 },
@@ -15,7 +15,15 @@ const PatternProvider = {
             { sample: 'kick', time: 2, velocity: 0.8 },
             { sample: 'snare', time: 3.5, velocity: 0.4 },
         ],
-        'dreamtales-fill': [
+        'dreamtales-beat-mobile': [ // Cymbals (ride) are quieter
+            { sample: 'ride', time: 0, velocity: 0.35 },
+            { sample: 'ride', time: 1, velocity: 0.3 },
+            { sample: 'ride', time: 2, velocity: 0.35 },
+            { sample: 'ride', time: 3, velocity: 0.3 },
+            { sample: 'kick', time: 2, velocity: 0.8 },
+            { sample: 'snare', time: 3.5, velocity: 0.4 },
+        ],
+        'dreamtales-fill': [ // Fills can be the same for now
             { sample: 'ride', time: 0, velocity: 0.7 },
             { sample: 'ride', time: 1, velocity: 0.6 },
             { sample: 'snare', time: 2.0, velocity: 0.6 },
@@ -64,7 +72,7 @@ const PatternProvider = {
         ],
         none: [],
     },
-    getDrumPattern(name: DrumSettings['pattern'] | 'dreamtales-beat' | 'dreamtales-fill') {
+    getDrumPattern(name: string) {
         return this.drumPatterns[name as keyof typeof this.drumPatterns] || [];
     },
 };
@@ -88,8 +96,12 @@ const DreamTalesHarmonyProvider = {
 };
 
 class DreamTalesDrumGenerator {
-    static createScore(barNumber: number): DrumNote[] {
-        const patternName = (barNumber + 1) % 8 === 0 ? 'dreamtales-fill' : 'dreamtales-beat';
+    static createScore(barNumber: number, mixProfile: MixProfile): DrumNote[] {
+        const isFillBar = (barNumber + 1) % 8 === 0;
+        if (isFillBar) {
+            return PatternProvider.getDrumPattern('dreamtales-fill');
+        }
+        const patternName = mixProfile === 'mobile' ? 'dreamtales-beat-mobile' : 'dreamtales-beat-desktop';
         return PatternProvider.getDrumPattern(patternName);
     }
 }
@@ -237,9 +249,10 @@ const Scheduler = {
     // Settings from main thread
     bpm: 75,
     instruments: { solo: 'none', accompaniment: 'none', bass: 'none' } as any,
-    drumSettings: { pattern: 'basic', volume: 0.85 } as any,
+    drumSettings: { pattern: 'dreamtales-beat', volume: 0.85 } as any,
     effectsSettings: { mode: 'none', volume: 0.7 } as any,
     score: 'dreamtales' as ScoreName,
+    mixProfile: 'desktop' as MixProfile,
 
 
     // Calculated properties
@@ -281,6 +294,7 @@ const Scheduler = {
         if (settings.effectsSettings) this.effectsSettings = settings.effectsSettings;
         if (settings.bpm) this.bpm = settings.bpm;
         if (settings.score) this.score = settings.score;
+        if (settings.mixProfile) this.mixProfile = settings.mixProfile;
     },
 
     tick() {
@@ -323,7 +337,7 @@ const Scheduler = {
 
         } else if (this.score === 'dreamtales') { 
             if (this.drumSettings.pattern !== 'none') {
-                const drumScore = DreamTalesDrumGenerator.createScore(this.barCount)
+                const drumScore = DreamTalesDrumGenerator.createScore(this.barCount, this.mixProfile)
                     .map(note => ({ ...note, time: note.time * this.secondsPerBeat }));
                 if (drumScore.length > 0) self.postMessage({ type: 'drum_score', data: { score: drumScore } });
             }
