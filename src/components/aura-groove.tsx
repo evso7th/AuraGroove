@@ -134,14 +134,22 @@ export function AuraGroove() {
              break;
 
         case 'drum_score':
+            console.log(`[AURA_GROOVE_TRACE] Received 'drum_score' from worker. Score length: ${data.score?.length}`);
             if (drumPlayersRef.current && data.score && data.score.length > 0) {
                  const now = Tone.now();
-                 data.score.forEach((note: DrumNote) => {
+                 console.log('[AURA_GROOVE_TRACE] drumPlayersRef is valid. Processing score...');
+                 data.score.forEach((note: DrumNote, index: number) => {
                     const player = drumPlayersRef.current?.player(note.sample);
+                    console.log(`[AURA_GROOVE_TRACE] Note ${index}: sample=${note.sample}, time=${note.time}. Player found: ${!!player}. Player loaded: ${player?.loaded}`);
                     if (player && player.loaded) {
+                         console.log(`[AURA_GROOVE_TRACE] Scheduling sample '${note.sample}' at ${now + note.time}`);
                          player.start(now + note.time);
+                    } else {
+                         console.warn(`[AURA_GROOVE_TRACE] SKIPPING UNLOADED OR INVALID PLAYER for sample: ${note.sample}`);
                     }
                 });
+            } else {
+                 console.warn('[AURA_GROOVE_TRACE] Received drum_score but drumPlayersRef is not ready or score is empty.');
             }
             break;
 
@@ -329,9 +337,17 @@ export function AuraGroove() {
         if (!drumPlayersRef.current) {
             setLoadingText("Loading samples (this may take a moment)...");
             
+            if (!fxBusRef.current) {
+                console.error("handlePlay: fxBusRef is not initialized!");
+                toast({ variant: "destructive", title: "Audio Error", description: "Mixer not ready. Please refresh."});
+                setIsInitializing(false);
+                return;
+            }
+
             drumPlayersRef.current = new Tone.Players(samplePaths, {
                 onload: () => {
                     setLoadingText("Samples loaded.");
+                    console.log("[AURA_GROOVE_TRACE] All drum samples loaded successfully.");
                 },
                 destination: fxBusRef.current.drumInput,
             });

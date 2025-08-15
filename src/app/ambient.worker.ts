@@ -155,15 +155,19 @@ const PatternProvider = {
 
 class DrumGenerator {
     static createScore(pattern: string, barNumber: number, mixProfile: MixProfile): DrumNote[] {
+        console.log(`[WORKER_TRACE] DrumGenerator.createScore called. Pattern: ${pattern}, Bar: ${barNumber}, Profile: ${mixProfile}`);
         const isFillBar = (barNumber + 1) % 8 === 0;
+        let score;
         if (isFillBar) {
-            return PatternProvider.getDrumPattern('dreamtales-fill');
-        }
-        if (pattern === 'dreamtales-beat') {
+            score = PatternProvider.getDrumPattern('dreamtales-fill');
+        } else if (pattern === 'dreamtales-beat') {
             const patternName = mixProfile === 'mobile' ? 'dreamtales-beat-mobile' : 'dreamtales-beat-desktop';
-            return PatternProvider.getDrumPattern(patternName);
+            score = PatternProvider.getDrumPattern(patternName);
+        } else {
+            score = PatternProvider.getDrumPattern(pattern);
         }
-        return PatternProvider.getDrumPattern(pattern);
+        console.log(`[WORKER_TRACE] DrumGenerator produced score with ${score.length} notes.`);
+        return score;
     }
 }
 
@@ -253,11 +257,20 @@ const Scheduler = {
         if (!this.isRunning) return;
 
         if (this.score === 'dreamtales' && this.evolutionEngine) {
+             console.log(`[WORKER_TRACE] Scheduler.tick() called for bar ${this.barCount}.`);
             // Use the new EvolutionEngine
             if (this.drumSettings.pattern !== 'none') {
+                 console.log(`[WORKER_TRACE] Drum pattern is '${this.drumSettings.pattern}'. Generating score.`);
                  const drumScore = DrumGenerator.createScore(this.drumSettings.pattern, this.barCount, this.mixProfile)
                     .map(note => ({ ...note, time: note.time * this.secondsPerBeat }));
-                if (drumScore.length > 0) self.postMessage({ type: 'drum_score', data: { score: drumScore } });
+                if (drumScore.length > 0) {
+                    console.log(`[WORKER_TRACE] Posting 'drum_score' to main thread with ${drumScore.length} notes.`);
+                    self.postMessage({ type: 'drum_score', data: { score: drumScore } });
+                } else {
+                    console.log(`[WORKER_TRACE] Drum score was generated, but it is empty. No message will be sent.`);
+                }
+            } else {
+                console.log(`[WORKER_TRACE] Drum pattern is 'none'. Skipping drum score generation.`);
             }
             if (this.instrumentSettings.bass.name !== 'none') {
                 const bassScore = this.evolutionEngine.generateBassScore(this.barCount)
