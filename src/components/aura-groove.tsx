@@ -57,7 +57,7 @@ export function AuraGroove() {
   });
   const [instrumentSettings, setInstrumentSettings] = useState<InstrumentSettings>({
     solo: { name: "synthesizer", volume: 0.7 },
-    accompaniment: { name: "none", volume: 0.8 },
+    accompaniment: { name: "synthesizer", volume: 0.8 },
     bass: { name: "bass synth", volume: 0.9 },
   });
   const [bpm, setBpm] = useState(75);
