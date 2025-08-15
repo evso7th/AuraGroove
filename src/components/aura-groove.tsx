@@ -55,8 +55,8 @@ export function AuraGroove() {
     volume: 0.7,
   });
   const [instruments, setInstruments] = useState<Instruments>({
-    solo: "organ",
-    accompaniment: "organ",
+    solo: "none",
+    accompaniment: "none",
     bass: "bass synth",
   });
   const [bpm, setBpm] = useState(75);
