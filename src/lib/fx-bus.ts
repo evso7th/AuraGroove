@@ -27,7 +27,7 @@ export class FxBus {
         this.soloInput = new Tone.Gain().chain(this.soloDistortion, this.masterChannel);
         this.accompanimentInput = new Tone.Gain().chain(this.accompanimentChorus, this.masterChannel);
         this.bassInput = new Tone.Gain().connect(this.masterChannel);
-        this.drumInput = new Tone.Gain().connect(this.masterChannel);
+        this.drumInput = new Tone.Gain().connect(this.masterChannel); // Gain node added here for volume control
         this.effectsInput = new Tone.Gain().connect(this.masterChannel);
     }
     

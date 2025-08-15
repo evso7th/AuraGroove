@@ -132,9 +132,7 @@ export function AuraGroove() {
                  data.score.forEach((note: DrumNote) => {
                     const player = drumPlayersRef.current?.player(note.sample);
                     if (player && player.loaded) {
-                        const noteVelocity = note.velocity ?? 1.0;
-                        const finalGain = drumSettings.volume * noteVelocity;
-                        player.start(now + note.time, 0, undefined, finalGain);
+                        player.start(now + note.time, 0, undefined, note.velocity);
                     }
                 });
             }
@@ -229,7 +227,7 @@ export function AuraGroove() {
         Tone.Transport.cancel();
       }
     };
-  }, [toast, drumSettings.volume]); 
+  }, [toast]); 
   
   const updateWorkerSettings = useCallback(() => {
     if (musicWorkerRef.current && (isPlaying || isInitializing)) {
@@ -280,6 +278,17 @@ export function AuraGroove() {
         effectsSynthManagerRef.current.setVolume(effectsSettings.volume);
         effectsSynthManagerRef.current.setMode(effectsSettings.mode);
     }, [effectsSettings, isReady]);
+
+    useEffect(() => {
+        if (!isReady || !fxBusRef.current) return;
+        // Directly control the gain node on the fx bus for drums
+        const gainValue = Tone.gainToDb(drumSettings.volume);
+        try {
+            fxBusRef.current.drumInput.gain.rampTo(gainValue, 0.05);
+        } catch(e) {
+            // ignore error
+        }
+    }, [drumSettings.volume, isReady]);
 
   
   const handlePlay = useCallback(async () => {

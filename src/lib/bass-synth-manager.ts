@@ -47,8 +47,8 @@ const mobilePreset: Tone.MonoSynthOptions = {
         decay: 0.4,
         sustain: 0.7,
         release: 1.5,
-        baseFrequency: 40,
-        octaves: 2.2,
+        baseFrequency: 50, // Increased from 40 for more presence
+        octaves: 2.5, // Increased from 2.2 for more presence
     },
     envelope: {
         attack: 0.08,
