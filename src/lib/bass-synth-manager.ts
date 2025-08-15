@@ -27,9 +27,9 @@ const instrumentPresets: Record<Exclude<InstrumentName, 'none'>, Tone.MonoSynthO
             attack: 0.1,
             decay: 0.3,
             sustain: 0.8,
-            release: 2.5, // Увеличено для более длинного затухания
+            release: 2.5,
         },
-        portamento: 0.5, // Добавлено глиссандо/портаменто
+        portamento: 0.5,
     }
 };
 
