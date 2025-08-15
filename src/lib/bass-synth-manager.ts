@@ -4,8 +4,8 @@ import type { Instruments, MixProfile } from '@/types/music';
 import type { FxBus } from './fx-bus';
 
 type InstrumentName = Instruments['bass'];
-const DESKTOP_VOLUME = -6;
-const MOBILE_VOLUME = -7; // Slightly quieter on mobile, but more harmonics will compensate
+const DESKTOP_VOLUME = -7; // Slightly quieter on desktop
+const MOBILE_VOLUME = -8; // Quieter overall, but timbre change will add presence
 
 const desktopPreset: Tone.MonoSynthOptions = {
     oscillator: {
@@ -35,15 +35,12 @@ const desktopPreset: Tone.MonoSynthOptions = {
 
 const mobilePreset: Tone.MonoSynthOptions = {
     ...desktopPreset,
-    filter: { // More aggressive filter to bring out harmonics on small speakers
-        type: 'lowpass',
-        rolloff: -12,
-        Q: 1.5,
-    },
-     filterEnvelope: {
+    // On mobile, we want a deeper, less "honky" sound.
+    // We achieve this by lowering the filter's start and end points.
+    filterEnvelope: {
         ...desktopPreset.filterEnvelope,
-        baseFrequency: 80, // Higher base frequency for more mid-range presence
-        octaves: 3,
+        baseFrequency: 40, // Lower base frequency for a deeper sound
+        octaves: 2.2,      // Less filter sweep to keep it in the bass region
     },
 };
 
@@ -155,5 +152,3 @@ export class BassSynthManager {
         }
     }
 }
-
-    
