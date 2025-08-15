@@ -88,6 +88,7 @@ export class BassSynthManager {
     public setMixProfile(profile: MixProfile) {
         this.currentProfile = profile;
         this.currentBaseVolumeDb = profile === 'mobile' ? MOBILE_VOLUME_DB : DESKTOP_VOLUME_DB;
+        this.applyProfileSettings(); // Re-apply settings for the new profile
         this.updateVolume();
     }
     
