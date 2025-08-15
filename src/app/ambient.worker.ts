@@ -128,11 +128,10 @@ class DreamTalesSoloGenerator {
         const beatsPerBar = 4;
         const currentChord = DreamTalesHarmonyProvider.getChord(barNumber);
         
-        // Use a wider range of notes for melody
+        // Use a more controlled range of notes for melody. 4th octave is primary.
         const scaleWithOctaves = [
-            ...currentChord.scale.map(n => `${n}3`),
             ...currentChord.scale.map(n => `${n}4`),
-            ...currentChord.scale.map(n => `${n}5`)
+            ...currentChord.scale.map(n => `${n}3`)
         ];
         
         if (this.lastNoteIndex === -1 || JSON.stringify(scaleWithOctaves) !== JSON.stringify(this.notes)) {
@@ -174,11 +173,11 @@ class DreamTalesAccompanimentGenerator {
         
         const { root, scale } = DreamTalesHarmonyProvider.getChord(barNumber);
         
-        // Create a simple triad from the scale
+        // Create a simple triad from the scale, primarily in the 3rd octave
         const triad = [
             `${root}3`,
             `${scale[2]}3`,
-            `${scale[4]}4` // A bit more open voicing
+            `${scale[4]}3` 
         ];
 
         // Humanize the chord playing
@@ -253,7 +252,7 @@ const Scheduler = {
         accompaniment: { name: 'none', volume: 0.8 },
         bass: { name: 'none', volume: 0.8 },
     } as InstrumentSettings,
-    drumSettings: { pattern: 'dreamtales-beat', volume: 0.85 } as any,
+    drumSettings: { pattern: 'dreamtales-beat', volume: 0.7 } as any,
     effectsSettings: { mode: 'none', volume: 0.7 } as any,
     score: 'dreamtales' as ScoreName,
     mixProfile: 'desktop' as MixProfile,
