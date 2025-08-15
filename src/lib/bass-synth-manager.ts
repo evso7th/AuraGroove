@@ -20,15 +20,15 @@ const desktopPreset: Tone.MonoSynthOptions = {
         attack: 0.1,
         decay: 0.3,
         sustain: 0.6,
-        release: 1,
+        release: 4.5, // Increased for viscosity
         baseFrequency: 50,
         octaves: 2.5,
     },
     envelope: {
         attack: 0.05,
         decay: 0.3,
-        sustain: 0.9,
-        release: 1.2,
+        sustain: 1.0, // Full sustain for a continuous feel
+        release: 4.0, // Increased for viscosity
     },
     portamento: 0.08,
 };
