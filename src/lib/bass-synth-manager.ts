@@ -25,7 +25,7 @@ const desktopPreset: Tone.MonoSynthOptions = {
         octaves: 2.5,
     },
     envelope: {
-        attack: 0.05,
+        attack: 0.1,
         decay: 0.3,
         sustain: 1.0,
         release: 4.0,
