@@ -4,8 +4,8 @@ import type { Instruments, MixProfile } from '@/types/music';
 import type { FxBus } from './fx-bus';
 
 type InstrumentName = Instruments['bass'];
-const DESKTOP_VOLUME = -11; // Slightly quieter on desktop
-const MOBILE_VOLUME = -1; // Quieter overall, but timbre change will add presence
+const DESKTOP_VOLUME = -11; // Quieter on desktop
+const MOBILE_VOLUME = 2; // Louder to cut through mobile speakers
 
 const desktopPreset: Tone.MonoSynthOptions = {
     oscillator: {
