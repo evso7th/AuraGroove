@@ -100,18 +100,13 @@ class DreamTalesBassGenerator {
     
     static createScore(barNumber: number): BassNote[] {
         // Generate a new note only every 2 bars, creating a long, foundational drone
-        if (barNumber % 2 === 0 && barNumber !== this.lastBar) {
-            this.lastBar = barNumber;
+        if (barNumber % 2 === 0) {
             const { root } = DreamTalesHarmonyProvider.getChord(barNumber);
             // The note lasts for 2 measures ('2m'), creating a "carpet" of sound
-            this.note = { note: `${root}2`, time: 0, duration: '2m', velocity: 1.0 };
-            return [this.note];
-        } else if (barNumber % 2 !== 0) {
-            // Return an empty array for odd bars to avoid re-triggering the note
-            return [];
+            const note: BassNote = { note: `${root}2`, time: 0, duration: '2m', velocity: 1.0 };
+            return [note];
         }
-        // If it's the same bar (which can happen with fast re-renders), don't re-trigger
-        return [];
+        return []; // Return empty array for odd bars
     }
 }
 
