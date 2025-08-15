@@ -83,30 +83,30 @@ class DreamTalesBassGenerator {
     private static riff: BassNote[] = [
         // === "Verse" - 4 bars ===
         // Bar 1
-        { note: 'E1', time: 0, duration: '2n', velocity: 1.0 },
-        { note: 'E1', time: 2, duration: '2n', velocity: 1.0 },
+        { note: 'E2', time: 0, duration: '2n', velocity: 1.0 },
+        { note: 'E2', time: 2, duration: '2n', velocity: 1.0 },
         // Bar 2
-        { note: 'G1', time: 4, duration: '2n', velocity: 1.0 },
-        { note: 'G1', time: 6, duration: '2n', velocity: 1.0 },
+        { note: 'G2', time: 4, duration: '2n', velocity: 1.0 },
+        { note: 'G2', time: 6, duration: '2n', velocity: 1.0 },
         // Bar 3
-        { note: 'A1', time: 8, duration: '2n', velocity: 1.0 },
-        { note: 'A1', time: 10, duration: '2n', velocity: 1.0 },
+        { note: 'A2', time: 8, duration: '2n', velocity: 1.0 },
+        { note: 'A2', time: 10, duration: '2n', velocity: 1.0 },
         // Bar 4
-        { note: 'G1', time: 12, duration: '2n', velocity: 1.0 },
-        { note: 'E1', time: 14, duration: '2n', velocity: 1.0 },
+        { note: 'G2', time: 12, duration: '2n', velocity: 1.0 },
+        { note: 'E2', time: 14, duration: '2n', velocity: 1.0 },
         
         // === "Chorus" - 4 bars ===
         // Bar 5
-        { note: 'C2', time: 16, duration: '2n', velocity: 1.0 },
-        { note: 'C2', time: 18, duration: '2n', velocity: 1.0 },
+        { note: 'C3', time: 16, duration: '2n', velocity: 1.0 },
+        { note: 'C3', time: 18, duration: '2n', velocity: 1.0 },
         // Bar 6
-        { note: 'G1', time: 20, duration: '2n', velocity: 1.0 },
-        { note: 'G1', time: 22, duration: '2n', velocity: 1.0 },
+        { note: 'G2', time: 20, duration: '2n', velocity: 1.0 },
+        { note: 'G2', time: 22, duration: '2n', velocity: 1.0 },
          // Bar 7
-        { note: 'D1', time: 24, duration: '2n', velocity: 1.0 },
-        { note: 'D1', time: 26, duration: '2n', velocity: 1.0 },
+        { note: 'D2', time: 24, duration: '2n', velocity: 1.0 },
+        { note: 'D2', time: 26, duration: '2n', velocity: 1.0 },
         // Bar 8
-        { note: 'E1', time: 28, duration: '1n', velocity: 1.0 },
+        { note: 'E2', time: 28, duration: '1n', velocity: 1.0 },
     ];
     
     static createScore(barNumber: number): BassNote[] {
