@@ -227,7 +227,7 @@ export function AuraGroove() {
         Tone.Transport.cancel();
       }
     };
-  }, [toast]); 
+  }, [toast, drumSettings.volume]); 
   
   const updateWorkerSettings = useCallback(() => {
     if (musicWorkerRef.current && (isPlaying || isInitializing)) {
@@ -497,7 +497,10 @@ export function AuraGroove() {
                     </Select>
                 </div>
                  <div className="space-y-2 pt-2">
-                     <Label className="text-xs text-muted-foreground flex items-center gap-1.5"><Speaker className="h-4 w-4"/> Volume</Label>
+                     <div className="flex items-center justify-between">
+                         <Label className="text-xs text-muted-foreground flex items-center gap-1.5"><Speaker className="h-4 w-4"/> Volume</Label>
+                         <span className="text-xs font-mono text-muted-foreground">{Math.round(instrumentSettings.solo.volume * 100)}</span>
+                     </div>
                      <Slider value={[instrumentSettings.solo.volume]} max={1} step={0.05} onValueChange={(v) => setInstrumentSettings(s => ({...s, solo: {...s.solo, volume: v[0]}}))} disabled={isBusy || isPlaying || instrumentSettings.solo.name === 'none'} />
 
                     <div className="flex items-center justify-between pt-2">
@@ -530,7 +533,10 @@ export function AuraGroove() {
                     </Select>
                 </div>
                 <div className="space-y-2 pt-2">
-                    <Label className="text-xs text-muted-foreground flex items-center gap-1.5"><Speaker className="h-4 w-4"/> Volume</Label>
+                    <div className="flex items-center justify-between">
+                         <Label className="text-xs text-muted-foreground flex items-center gap-1.5"><Speaker className="h-4 w-4"/> Volume</Label>
+                         <span className="text-xs font-mono text-muted-foreground">{Math.round(instrumentSettings.accompaniment.volume * 100)}</span>
+                     </div>
                     <Slider value={[instrumentSettings.accompaniment.volume]} max={1} step={0.05} onValueChange={(v) => setInstrumentSettings(s => ({...s, accompaniment: {...s.accompaniment, volume: v[0]}}))} disabled={isBusy || isPlaying || instrumentSettings.accompaniment.name === 'none'} />
                     <div className="flex items-center justify-between pt-2">
                         <Label htmlFor="accomp-chorus-enabled" className="flex items-center gap-1.5"><ChevronsRight className="h-4 w-4"/> Chorus</Label>
@@ -560,7 +566,10 @@ export function AuraGroove() {
                     </Select>
                 </div>
                  <div className="space-y-2 pt-2">
-                    <Label className="text-xs text-muted-foreground flex items-center gap-1.5"><Speaker className="h-4 w-4"/> Volume</Label>
+                    <div className="flex items-center justify-between">
+                        <Label className="text-xs text-muted-foreground flex items-center gap-1.5"><Speaker className="h-4 w-4"/> Volume</Label>
+                        <span className="text-xs font-mono text-muted-foreground">{Math.round(instrumentSettings.bass.volume * 100)}</span>
+                    </div>
                     <Slider value={[instrumentSettings.bass.volume]} max={1} step={0.05} onValueChange={(v) => setInstrumentSettings(s => ({...s, bass: {...s.bass, volume: v[0]}}))} disabled={isBusy || isPlaying || instrumentSettings.bass.name === 'none'} />
                 </div>
             </div>
@@ -588,7 +597,10 @@ export function AuraGroove() {
                     </Select>
                 </div>
                 <div className="space-y-2 pt-2">
-                    <Label className="text-xs text-muted-foreground flex items-center gap-1.5"><Speaker className="h-4 w-4"/> Volume</Label>
+                    <div className="flex items-center justify-between">
+                        <Label className="text-xs text-muted-foreground flex items-center gap-1.5"><Speaker className="h-4 w-4"/> Volume</Label>
+                        <span className="text-xs font-mono text-muted-foreground">{Math.round(drumSettings.volume * 100)}</span>
+                    </div>
                     <Slider
                         value={[drumSettings.volume]}
                         max={1}
@@ -621,7 +633,10 @@ export function AuraGroove() {
                     </Select>
                 </div>
                 <div className="space-y-2 pt-2">
-                    <Label className="text-xs text-muted-foreground flex items-center gap-1.5"><Speaker className="h-4 w-4"/> Volume</Label>
+                    <div className="flex items-center justify-between">
+                        <Label className="text-xs text-muted-foreground flex items-center gap-1.5"><Speaker className="h-4 w-4"/> Volume</Label>
+                        <span className="text-xs font-mono text-muted-foreground">{Math.round(effectsSettings.volume * 100)}</span>
+                    </div>
                     <Slider
                         value={[effectsSettings.volume]}
                         max={1}
@@ -673,3 +688,5 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    

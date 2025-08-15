@@ -5,7 +5,7 @@ import type { FxBus } from './fx-bus';
 
 type InstrumentName = InstrumentSettings['bass']['name'];
 const DESKTOP_VOLUME_DB = -22; 
-const MOBILE_VOLUME_DB = 18; 
+const MOBILE_VOLUME_DB = -18; 
 
 const desktopPreset: Tone.MonoSynthOptions = {
     oscillator: {
@@ -34,14 +34,29 @@ const desktopPreset: Tone.MonoSynthOptions = {
 };
 
 const mobilePreset: Tone.MonoSynthOptions = {
-    ...desktopPreset,
-    // On mobile, we want a deeper, less "honky" sound.
-    // We achieve this by lowering the filter's start and end points.
-    filterEnvelope: {
-        ...desktopPreset.filterEnvelope,
-        baseFrequency: 40, // Lower base frequency for a deeper sound
-        octaves: 2.2,      // Less filter sweep to keep it in the bass region
+    oscillator: {
+        type: 'sawtooth'
     },
+    filter: {
+        type: 'lowpass',
+        rolloff: -24,
+        Q: 1, // Lowered resonance to avoid harshness
+    },
+    filterEnvelope: {
+        attack: 0.1,
+        decay: 0.4, // Slightly longer decay
+        sustain: 0.7,
+        release: 1.5, // Longer release for more body
+        baseFrequency: 40, // Lowered for deeper tone
+        octaves: 2.2,
+    },
+    envelope: {
+        attack: 0.08, // Slower attack
+        decay: 0.4,
+        sustain: 0.9,
+        release: 1.5, // Slower release
+    },
+    portamento: 0.08,
 };
 
 
@@ -167,3 +182,5 @@ export class BassSynthManager {
         }
     }
 }
+
+    
