@@ -4,7 +4,7 @@ import type { InstrumentSettings, MixProfile } from '@/types/music';
 import type { FxBus } from './fx-bus';
 
 type InstrumentName = InstrumentSettings['bass']['name'];
-const DESKTOP_VOLUME_DB = -22; 
+const DESKTOP_VOLUME_DB = -14; 
 const MOBILE_VOLUME_DB = -8; 
 
 const desktopPreset: Tone.MonoSynthOptions = {
@@ -178,9 +178,3 @@ export class BassSynthManager {
         }
     }
 }
-
-    
-
-    
-
-    
