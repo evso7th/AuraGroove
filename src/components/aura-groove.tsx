@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import * as Tone from 'tone';
-import { Drum, Loader2, Music, Pause, Speaker, FileMusic, Waves, Wind, ToyBrick, GitBranch, ChevronsRight, Sparkles, Bass } from "lucide-react";
+import { Drum, Loader2, Music, Pause, Speaker, FileMusic, Waves, Wind, ToyBrick, GitBranch, ChevronsRight, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useDeviceType } from "@/hooks/use-device-type";
 import { Button } from "@/components/ui/button";
@@ -544,7 +544,7 @@ export function AuraGroove() {
             {/* Bass Channel */}
             <div className="space-y-3 rounded-md border p-3">
                  <div className="flex justify-between items-center">
-                    <Label htmlFor="bass-instrument" className="font-semibold flex items-center gap-2"><Bass className="h-5 w-5"/> Bass</Label>
+                    <Label htmlFor="bass-instrument" className="font-semibold flex items-center gap-2"><Music className="h-5 w-5"/> Bass</Label>
                     <Select
                         value={instrumentSettings.bass.name}
                         onValueChange={(v) => setInstrumentSettings(i => ({...i, bass: {...i.bass, name: v as InstrumentSettings['bass']['name']}}))}
@@ -673,5 +673,3 @@ export function AuraGroove() {
     </Card>
   );
 }
-
-    
