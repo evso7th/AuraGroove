@@ -90,7 +90,6 @@ export function AuraGroove() {
     const worker = new Worker(new URL('../app/ambient.worker.ts', import.meta.url));
     musicWorkerRef.current = worker;
     
-    // Instantiate managers immediately. They will internally handle the lazy-loading of Tone.js components.
     setLoadingText("Loading audio modules...");
     import('@/lib/fx-bus').then(({ FxBus }) => {
         fxBusRef.current = new FxBus();
@@ -119,8 +118,6 @@ export function AuraGroove() {
       
       switch(type) {
         case 'initialized':
-           // Worker is ready, now we can proceed with loading things that need a running audio context
-           // which we will get on first user interaction.
            setIsReady(true);
            setIsInitializing(false);
            setLoadingText("");
@@ -322,21 +319,19 @@ export function AuraGroove() {
             return;
         }
 
-        // Set initial mix profile for all managers
         bassSynthManagerRef.current.setMixProfile(mixProfile);
         soloSynthManagerRef.current.setMixProfile(mixProfile);
         accompanimentSynthManagerRef.current.setMixProfile(mixProfile);
-
 
         soloSynthManagerRef.current?.setInstrument(instrumentSettings.solo.name);
         accompanimentSynthManagerRef.current?.setInstrument(instrumentSettings.accompaniment.name);
         bassSynthManagerRef.current?.setInstrument(instrumentSettings.bass.name);
         effectsSynthManagerRef.current?.setMode(effectsSettings.mode);
 
+        // --- CORRECTED DRUM INITIALIZATION ---
         // Load samples on first play, if not already loaded
+        setLoadingText("Loading samples (this may take a moment)...");
         if (!drumPlayersRef.current) {
-            setLoadingText("Loading samples (this may take a moment)...");
-            
             if (!fxBusRef.current) {
                 console.error("handlePlay: fxBusRef is not initialized!");
                 toast({ variant: "destructive", title: "Audio Error", description: "Mixer not ready. Please refresh."});
@@ -347,13 +342,13 @@ export function AuraGroove() {
             drumPlayersRef.current = new Tone.Players(samplePaths, {
                 onload: () => {
                     console.log("[AURA_GROOVE_TRACE] All drum samples loaded successfully.");
+                    setLoadingText("Samples loaded.");
                 },
                 destination: fxBusRef.current.drumInput,
             });
-
             await Tone.loaded();
-            setLoadingText("Samples loaded.");
         }
+        // --- END OF CORRECTION ---
         
         setLoadingText("Starting playback...");
         
@@ -403,7 +398,6 @@ export function AuraGroove() {
     }
   }, [isPlaying, handleStop, handlePlay]);
   
-  // Update mix profile on all synth managers when it changes
   useEffect(() => {
       if (isPlaying) {
           bassSynthManagerRef.current?.setMixProfile(mixProfile);
@@ -412,53 +406,10 @@ export function AuraGroove() {
       }
   }, [mixProfile, isPlaying]);
 
-
-  const handleTestMixer = useCallback(async () => {
-    if(!fxBusRef.current) return;
-    if (Tone.context.state !== 'running') {
-        await Tone.start();
-    }
-    if (Tone.Transport.state !== 'started') {
-        Tone.Transport.start();
-    }
-
-    // Lazy-init synths for testing
-    const soloSynth = new Tone.Synth().connect(fxBusRef.current.soloInput);
-    const accompSynth = new Tone.Synth().connect(fxBusRef.current.accompanimentInput);
-    const bassSynth = new Tone.Synth().connect(fxBusRef.current.bassInput);
-    const sfxSynth = new Tone.MetalSynth().connect(fxBusRef.current.effectsInput);
-
-    const now = Tone.now();
-    soloSynth.triggerAttackRelease("C5", "8n", now);
-    accompSynth.triggerAttackRelease("E4", "8n", now + 0.5);
-    bassSynth.triggerAttackRelease("G3", "8n", now + 1);
-    
-    if (drumPlayersRef.current) {
-        drumPlayersRef.current.player("kick").start(now + 1.5);
-    } else {
-         const kickPlayer = new Tone.Player('/assets/drums/kick_drum6.wav').toDestination();
-         await Tone.loaded();
-         kickPlayer.start(now + 1.5);
-    }
-    
-    sfxSynth.triggerAttackRelease("C6", "16n", now + 2);
-
-    
-    Tone.Transport.scheduleOnce((time) => {
-        soloSynth.dispose();
-        accompSynth.dispose();
-        bassSynth.dispose();
-        sfxSynth.dispose();
-    }, now + 3);
-
-
-  }, []);
-
   const isBusy = isInitializing;
   const isDreamtales = score === 'dreamtales';
   const drumsEnabled = drumSettings.pattern !== 'none';
   const effectsEnabled = effectsSettings.mode !== 'none';
-
 
   return (
     <Card className="w-full max-w-lg shadow-2xl">
