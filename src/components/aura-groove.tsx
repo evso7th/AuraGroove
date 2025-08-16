@@ -131,22 +131,38 @@ export function AuraGroove() {
 
         case 'drum_score':
             console.log(`[AURA_GROOVE_TRACE] Received 'drum_score' from worker. Score length: ${data.score?.length}`);
-            if (drumPlayersRef.current && data.score && data.score.length > 0) {
+            console.log(`[AURA_GROOVE_TRACE] STEP 1: Checking drumPlayersRef object.`);
+            if (!drumPlayersRef) {
+                console.error("[AURA_GROOVE_TRACE] CRITICAL: drumPlayersRef itself is null or undefined.");
+                return;
+            }
+            console.log(`[AURA_GROOVE_TRACE] STEP 2: drumPlayersRef exists. Checking drumPlayersRef.current.`);
+             if (!drumPlayersRef.current) {
+                console.error("[AURA_GROOVE_TRACE] CRITICAL: drumPlayersRef.current is null or undefined. The player object is not assigned yet.");
+                return;
+            }
+             console.log(`[AURA_GROOVE_TRACE] STEP 3: drumPlayersRef.current exists. Checking data integrity.`);
+            if (data && data.score && data.score.length > 0) {
+                 console.log(`[AURA_GROOVE_TRACE] STEP 4: Data is valid. Processing score with ${data.score.length} notes.`);
                  const now = Tone.now();
-                 console.log('[AURA_GROOVE_TRACE] drumPlayersRef is valid. Processing score...');
                  data.score.forEach((note: DrumNote, index: number) => {
+                    console.log(`[AURA_GROOVE_TRACE] STEP 5.${index}: Processing note. Sample: ${note.sample}, Time: ${note.time}`);
                     const player = drumPlayersRef.current!.player(note.sample);
-                    const isPlayerLoaded = player?.loaded;
-                    console.log(`[AURA_GROOVE_TRACE] Note ${index}: sample=${note.sample}, time=${note.time}. Player found: ${!!player}. Player loaded: ${isPlayerLoaded}`);
-                    if (player && isPlayerLoaded) {
-                         console.log(`[AURA_GROOVE_TRACE] Scheduling sample '${note.sample}' at ${now + note.time}`);
+                    if (!player) {
+                         console.warn(`[AURA_GROOVE_TRACE] SKIPPING: Player for sample '${note.sample}' not found in Tone.Players.`);
+                         return;
+                    }
+                    const isPlayerLoaded = player.loaded;
+                    console.log(`[AURA_GROOVE_TRACE] STEP 6.${index}: Player found. Loaded state: ${isPlayerLoaded}`);
+                    if (isPlayerLoaded) {
+                         console.log(`[AURA_GROOVE_TRACE] STEP 7.${index}: Scheduling sample '${note.sample}' at ${now + note.time}`);
                          player.start(now + note.time);
                     } else {
-                         console.warn(`[AURA_GROOVE_TRACE] SKIPPING UNLOADED OR INVALID PLAYER for sample: ${note.sample}`);
+                         console.warn(`[AURA_GROOVE_TRACE] SKIPPING: Player for sample '${note.sample}' is not loaded.`);
                     }
                 });
             } else {
-                 console.warn(`[AURA_GROOVE_TRACE] Received drum_score but drumPlayersRef is not ready or score is empty. drumPlayersRef.current is ${drumPlayersRef.current}`);
+                console.warn(`[AURA_GROOVE_TRACE] Received drum_score but data or score is empty. Data:`, data);
             }
             break;
 
@@ -307,8 +323,8 @@ export function AuraGroove() {
         setLoadingText("Starting audio context...");
         if (Tone.context.state !== 'running') {
             await Tone.start();
-            console.log("AudioContext started!");
         }
+        console.log("AudioContext started!");
         
         setIsInitializing(true);
         
