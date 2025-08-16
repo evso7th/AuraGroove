@@ -48,7 +48,11 @@ export class DrumMachine {
 
     public setVolume(volume: number) {
         // This now correctly adjusts the gain of the drum bus input.
-        this.fxBus.drumInput.gain.value = Tone.gainToDb(volume);
+        if (volume < 0.01) {
+            this.fxBus.drumInput.gain.value = -Infinity;
+        } else {
+            this.fxBus.drumInput.gain.value = Tone.gainToDb(volume);
+        }
     }
 
     public trigger(note: DrumNote, time: number) {
