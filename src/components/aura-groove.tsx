@@ -303,41 +303,30 @@ export function AuraGroove() {
         bassSynthManagerRef.current?.setInstrument(instrumentSettings.bass.name);
         effectsSynthManagerRef.current?.setMode(effectsSettings.mode);
         
-        setLoadingText("Loading samples...");
-        
-        // Initialize the new DrumMachine
-        if (!drumMachineRef.current) {
-            drumMachineRef.current = new DrumMachine(fxBusRef.current, () => {
-                // This callback runs when samples are loaded
-                setLoadingText("Starting playback...");
-        
-                if (Tone.Transport.state !== 'started') {
-                    Tone.Transport.start();
-                }
-                
-                soloSynthManagerRef.current?.fadeIn(0.5);
-                accompanimentSynthManagerRef.current?.fadeIn(0.5);
-                bassSynthManagerRef.current?.fadeIn(0.5);
-                
-                musicWorkerRef.current?.postMessage({ 
-                    command: 'start',
-                    data: { drumSettings, instrumentSettings, effectsSettings, bpm, score, mixProfile }
-                });
-            });
-        } else {
-             if (Tone.Transport.state !== 'started') {
+        const startPlayback = () => {
+            setLoadingText("Starting playback...");
+    
+            if (Tone.Transport.state !== 'started') {
                 Tone.Transport.start();
             }
-             soloSynthManagerRef.current?.fadeIn(0.5);
+            
+            soloSynthManagerRef.current?.fadeIn(0.5);
             accompanimentSynthManagerRef.current?.fadeIn(0.5);
             bassSynthManagerRef.current?.fadeIn(0.5);
             
-            musicWorkerRef.current.postMessage({ 
+            musicWorkerRef.current?.postMessage({ 
                 command: 'start',
                 data: { drumSettings, instrumentSettings, effectsSettings, bpm, score, mixProfile }
             });
-        }
+        };
 
+        setLoadingText("Loading samples...");
+        
+        if (drumMachineRef.current && drumMachineRef.current.isReady()) {
+            startPlayback();
+        } else {
+            drumMachineRef.current = new DrumMachine(fxBusRef.current, startPlayback);
+        }
 
     } catch (error) {
         console.error("Failed to prepare audio:", error);
