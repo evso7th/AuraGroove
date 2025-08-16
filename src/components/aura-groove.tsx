@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -347,25 +346,24 @@ export function AuraGroove() {
 
             drumPlayersRef.current = new Tone.Players(samplePaths, {
                 onload: () => {
-                    setLoadingText("Samples loaded.");
                     console.log("[AURA_GROOVE_TRACE] All drum samples loaded successfully.");
                 },
                 destination: fxBusRef.current.drumInput,
             });
 
             await Tone.loaded();
+            setLoadingText("Samples loaded.");
         }
-        
-        soloSynthManagerRef.current?.fadeIn(0.5);
-        accompanimentSynthManagerRef.current?.fadeIn(0.5);
-        bassSynthManagerRef.current?.fadeIn(0.5);
-
         
         setLoadingText("Starting playback...");
         
         if (Tone.Transport.state !== 'started') {
             Tone.Transport.start();
         }
+        
+        soloSynthManagerRef.current?.fadeIn(0.5);
+        accompanimentSynthManagerRef.current?.fadeIn(0.5);
+        bassSynthManagerRef.current?.fadeIn(0.5);
         
         musicWorkerRef.current.postMessage({ 
             command: 'start',
