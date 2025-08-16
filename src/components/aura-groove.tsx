@@ -31,16 +31,8 @@ import type { BassSynthManager } from "@/lib/bass-synth-manager";
 import type { SoloSynthManager } from "@/lib/solo-synth-manager";
 import type { AccompanimentSynthManager } from "@/lib/accompaniment-synth-manager";
 import type { EffectsSynthManager } from "@/lib/effects-synth-manager";
+import { DrumMachine } from "@/lib/drum-machine";
 import { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote, DrumSettings, EffectsSettings, InstrumentSettings, ScoreName, MixProfile } from '@/types/music';
-
-
-const samplePaths: Record<string, string> = {
-    kick: '/assets/drums/kick_drum6.wav',
-    snare: '/assets/drums/snare.wav',
-    hat: '/assets/drums/closed_hi_hat_accented.wav',
-    crash: '/assets/drums/crash1.wav',
-    ride: '/assets/drums/cymbal1.wav',
-};
 
 export function AuraGroove() {
   const [isReady, setIsReady] = useState(false);
@@ -78,7 +70,8 @@ export function AuraGroove() {
   const soloSynthManagerRef = useRef<SoloSynthManager | null>(null);
   const accompanimentSynthManagerRef = useRef<AccompanimentSynthManager | null>(null);
   const effectsSynthManagerRef = useRef<EffectsSynthManager | null>(null);
-  const drumPlayersRef = useRef<Tone.Players | null>(null);
+  const drumMachineRef = useRef<DrumMachine | null>(null);
+
 
   useEffect(() => {
     setMixProfile(deviceType);
@@ -130,39 +123,11 @@ export function AuraGroove() {
              break;
 
         case 'drum_score':
-            console.log(`[AURA_GROOVE_TRACE] Received 'drum_score' from worker. Score length: ${data.score?.length}`);
-            console.log(`[AURA_GROOVE_TRACE] STEP 1: Checking drumPlayersRef object.`);
-            if (!drumPlayersRef) {
-                console.error("[AURA_GROOVE_TRACE] CRITICAL: drumPlayersRef itself is null or undefined.");
-                return;
-            }
-            console.log(`[AURA_GROOVE_TRACE] STEP 2: drumPlayersRef exists. Checking drumPlayersRef.current.`);
-             if (!drumPlayersRef.current) {
-                console.error("[AURA_GROOVE_TRACE] CRITICAL: drumPlayersRef.current is null or undefined. The player object is not assigned yet.");
-                return;
-            }
-             console.log(`[AURA_GROOVE_TRACE] STEP 3: drumPlayersRef.current exists. Checking data integrity.`);
-            if (data && data.score && data.score.length > 0) {
-                 console.log(`[AURA_GROOVE_TRACE] STEP 4: Data is valid. Processing score with ${data.score.length} notes.`);
+            if (drumMachineRef.current && drumMachineRef.current.isReady() && data && data.score) {
                  const now = Tone.now();
-                 data.score.forEach((note: DrumNote, index: number) => {
-                    console.log(`[AURA_GROOVE_TRACE] STEP 5.${index}: Processing note. Sample: ${note.sample}, Time: ${note.time}`);
-                    const player = drumPlayersRef.current!.player(note.sample);
-                    if (!player) {
-                         console.warn(`[AURA_GROOVE_TRACE] SKIPPING: Player for sample '${note.sample}' not found in Tone.Players.`);
-                         return;
-                    }
-                    const isPlayerLoaded = player.loaded;
-                    console.log(`[AURA_GROOVE_TRACE] STEP 6.${index}: Player found. Loaded state: ${isPlayerLoaded}`);
-                    if (isPlayerLoaded) {
-                         console.log(`[AURA_GROOVE_TRACE] STEP 7.${index}: Scheduling sample '${note.sample}' at ${now + note.time}`);
-                         player.start(now + note.time);
-                    } else {
-                         console.warn(`[AURA_GROOVE_TRACE] SKIPPING: Player for sample '${note.sample}' is not loaded.`);
-                    }
+                 data.score.forEach((note: DrumNote) => {
+                    drumMachineRef.current!.trigger(note, now + note.time);
                 });
-            } else {
-                console.warn(`[AURA_GROOVE_TRACE] Received drum_score but data or score is empty. Data:`, data);
             }
             break;
 
@@ -248,7 +213,7 @@ export function AuraGroove() {
       soloSynthManagerRef.current?.dispose();
       accompanimentSynthManagerRef.current?.dispose();
       effectsSynthManagerRef.current?.dispose();
-      drumPlayersRef.current?.dispose();
+      drumMachineRef.current?.dispose();
       fxBusRef.current?.dispose();
       if (Tone.Transport.state !== 'stopped') {
         Tone.Transport.stop();
@@ -308,14 +273,9 @@ export function AuraGroove() {
     }, [effectsSettings, isReady]);
 
     useEffect(() => {
-        if (!isReady || !fxBusRef.current || !isPlaying) return;
-        const gainValue = Tone.gainToDb(drumSettings.volume);
-        try {
-            fxBusRef.current.drumInput.volume.rampTo(gainValue, 0.05);
-        } catch(e) {
-            console.error("Failed to ramp drum volume:", e);
-        }
-    }, [drumSettings.volume, isReady, isPlaying]);
+        if (!isReady || !drumMachineRef.current) return;
+        drumMachineRef.current.setVolume(drumSettings.volume);
+    }, [drumSettings.volume, isReady]);
 
   
   const handlePlay = useCallback(async () => {
@@ -324,12 +284,11 @@ export function AuraGroove() {
         if (Tone.context.state !== 'running') {
             await Tone.start();
         }
-        console.log("AudioContext started!");
         
         setIsInitializing(true);
+        setLoadingText("Waiting for audio engine...");
         
         if (!musicWorkerRef.current || !fxBusRef.current || !bassSynthManagerRef.current || !soloSynthManagerRef.current || !accompanimentSynthManagerRef.current || !effectsSynthManagerRef.current) {
-            setLoadingText("Waiting for audio engine...");
             toast({ variant: "destructive", title: "Audio Error", description: "Audio engine not ready. Please refresh."});
             setIsInitializing(false);
             return;
@@ -346,37 +305,39 @@ export function AuraGroove() {
         
         setLoadingText("Loading samples...");
         
-        if (!drumPlayersRef.current) {
-            if (!fxBusRef.current) {
-                toast({ variant: "destructive", title: "Audio Error", description: "FX Bus not ready."});
-                setIsInitializing(false);
-                return;
-            }
-            console.log("[AURA_GROOVE_TRACE] Creating Tone.Players instance.");
-            drumPlayersRef.current = new Tone.Players(samplePaths, {
-                onload: () => {
-                    console.log("[AURA_GROOVE_TRACE] All drum samples loaded successfully.");
-                },
-                destination: fxBusRef.current.drumInput,
+        // Initialize the new DrumMachine
+        if (!drumMachineRef.current) {
+            drumMachineRef.current = new DrumMachine(fxBusRef.current, () => {
+                // This callback runs when samples are loaded
+                setLoadingText("Starting playback...");
+        
+                if (Tone.Transport.state !== 'started') {
+                    Tone.Transport.start();
+                }
+                
+                soloSynthManagerRef.current?.fadeIn(0.5);
+                accompanimentSynthManagerRef.current?.fadeIn(0.5);
+                bassSynthManagerRef.current?.fadeIn(0.5);
+                
+                musicWorkerRef.current?.postMessage({ 
+                    command: 'start',
+                    data: { drumSettings, instrumentSettings, effectsSettings, bpm, score, mixProfile }
+                });
             });
-            await Tone.loaded();
-            console.log("[AURA_GROOVE_TRACE] Tone.loaded() completed.");
+        } else {
+             if (Tone.Transport.state !== 'started') {
+                Tone.Transport.start();
+            }
+             soloSynthManagerRef.current?.fadeIn(0.5);
+            accompanimentSynthManagerRef.current?.fadeIn(0.5);
+            bassSynthManagerRef.current?.fadeIn(0.5);
+            
+            musicWorkerRef.current.postMessage({ 
+                command: 'start',
+                data: { drumSettings, instrumentSettings, effectsSettings, bpm, score, mixProfile }
+            });
         }
-        
-        setLoadingText("Starting playback...");
-        
-        if (Tone.Transport.state !== 'started') {
-            Tone.Transport.start();
-        }
-        
-        soloSynthManagerRef.current?.fadeIn(0.5);
-        accompanimentSynthManagerRef.current?.fadeIn(0.5);
-        bassSynthManagerRef.current?.fadeIn(0.5);
-        
-        musicWorkerRef.current.postMessage({ 
-            command: 'start',
-            data: { drumSettings, instrumentSettings, effectsSettings, bpm, score, mixProfile }
-        });
+
 
     } catch (error) {
         console.error("Failed to prepare audio:", error);
