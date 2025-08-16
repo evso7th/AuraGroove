@@ -3,17 +3,26 @@ import * as Tone from 'tone';
 import type { FxBus } from './fx-bus';
 import type { DrumNote } from '@/types/music';
 
-const samplePaths: Record<string, string> = {
-    'kick': '/assets/drums/kick_drum6.wav',
-    'snare': '/assets/drums/snare.wav',
-    'hat': '/assets/drums/closed_hi_hat_accented.wav',
-    'crash': '/assets/drums/crash1.wav',
-    'ride': '/assets/drums/cymbal1.wav',
+// Map sample names to MIDI notes. Tone.Sampler requires this.
+const sampleNoteMapping: Record<string, string> = {
+    'kick': 'C1',
+    'snare': 'D1',
+    'hat': 'E1',
+    'crash': 'F1',
+    'ride': 'G1',
 };
+
+const samplePaths: Record<string, string> = {
+    [sampleNoteMapping['kick']]: '/assets/drums/kick_drum6.wav',
+    [sampleNoteMapping['snare']]: '/assets/drums/snare.wav',
+    [sampleNoteMapping['hat']]: '/assets/drums/closed_hi_hat_accented.wav',
+    [sampleNoteMapping['crash']]: '/assets/drums/crash1.wav',
+    [sampleNoteMapping['ride']]: '/assets/drums/cymbal1.wav',
+};
+
 
 /**
  * A robust drum machine using Tone.Sampler for precise and reliable sample playback.
- * This replaces the less reliable Tone.Players approach.
  */
 export class DrumMachine {
     private sampler: Tone.Sampler;
@@ -29,7 +38,7 @@ export class DrumMachine {
             onload: () => {
                 this.isLoaded = true;
                 onLoad();
-                console.log("DrumMachine: All samples loaded.");
+                console.log("DrumMachine: All samples loaded and mapped to notes.");
             },
         }).connect(this.fxBus.drumInput);
         this.updateVolume();
@@ -45,19 +54,21 @@ export class DrumMachine {
     }
 
     private updateVolume() {
-        const gainValue = Tone.gainToDb(this.userVolume);
-        if (this.sampler.volume) {
-           this.sampler.volume.value = gainValue;
-        }
+        // Tone.Sampler volume is a GainNode, so we use gain.value
+        // It's linear, so no need for gainToDb conversion here.
+        this.sampler.volume.value = Tone.gainToDb(this.userVolume);
     }
 
     public trigger(note: DrumNote, time: number) {
         if (!this.isLoaded) return;
         
-        // The sampler maps sample names to MIDI notes. We'll use a simple mapping.
-        // Or, we can trigger by the name if the sample names are simple notes like C4.
-        // For our case, we trigger the specific sample buffer by name.
-        this.sampler.triggerAttack(note.sample, time, note.velocity);
+        const noteToPlay = sampleNoteMapping[note.sample];
+        if (!noteToPlay) {
+            console.warn(`DrumMachine: No note mapping found for sample '${note.sample}'`);
+            return;
+        }
+        
+        this.sampler.triggerAttack(noteToPlay, time, note.velocity);
     }
     
     public dispose() {
