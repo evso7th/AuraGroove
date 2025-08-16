@@ -1,4 +1,3 @@
-
 /// <reference lib="webworker" />
 
 import { promenadeScore } from '@/lib/scores/promenade';
@@ -196,7 +195,7 @@ class EffectsGenerator {
 
 // --- 3. Scheduler (The Conductor) ---
 const Scheduler = {
-    intervalId: null as any,
+    timeoutId: null as any,
     isRunning: false,
     barCount: 0,
     evolutionEngine: null as EvolutionEngine | null,
@@ -226,15 +225,18 @@ const Scheduler = {
         this.isRunning = true;
         this.evolutionEngine = new EvolutionEngine(new MusicalGenome());
         
-        // The interval will call tick. We don't need to call it immediately here anymore.
-        this.intervalId = setInterval(() => this.tick(), this.barDuration * 1000);
+        // Start the recursive tick loop
+        this.tick();
+        
         self.postMessage({ type: 'started' });
     },
 
     stop() {
         if (!this.isRunning) return;
-        clearInterval(this.intervalId);
-        this.intervalId = null;
+        if (this.timeoutId) {
+            clearTimeout(this.timeoutId);
+            this.timeoutId = null;
+        }
         this.isRunning = false;
         this.evolutionEngine = null;
         self.postMessage({ type: 'stopped' });
@@ -324,6 +326,9 @@ const Scheduler = {
         }
         
         this.barCount++;
+        
+        // Schedule the next tick
+        this.timeoutId = setTimeout(() => this.tick(), this.barDuration * 1000);
     }
 };
 
@@ -339,6 +344,7 @@ self.onmessage = async (event: MessageEvent) => {
                 break;
             
             case 'start':
+                Scheduler.updateSettings(data);
                 Scheduler.start();
                 break;
 
@@ -348,10 +354,6 @@ self.onmessage = async (event: MessageEvent) => {
             
             case 'update_settings':
                 Scheduler.updateSettings(data);
-                if (Scheduler.isRunning) {
-                    // Trigger an immediate tick to apply new settings
-                    Scheduler.tick();
-                }
                 break;
         }
     } catch (e) {

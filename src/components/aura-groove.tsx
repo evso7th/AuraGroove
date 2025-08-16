@@ -140,8 +140,9 @@ export function AuraGroove() {
                  console.log('[AURA_GROOVE_TRACE] drumPlayersRef is valid. Processing score...');
                  data.score.forEach((note: DrumNote, index: number) => {
                     const player = drumPlayersRef.current?.player(note.sample);
-                    console.log(`[AURA_GROOVE_TRACE] Note ${index}: sample=${note.sample}, time=${note.time}. Player found: ${!!player}. Player loaded: ${player?.loaded}`);
-                    if (player && player.loaded) {
+                    const isPlayerLoaded = player?.loaded;
+                    console.log(`[AURA_GROOVE_TRACE] Note ${index}: sample=${note.sample}, time=${note.time}. Player found: ${!!player}. Player loaded: ${isPlayerLoaded}`);
+                    if (player && isPlayerLoaded) {
                          console.log(`[AURA_GROOVE_TRACE] Scheduling sample '${note.sample}' at ${now + note.time}`);
                          player.start(now + note.time);
                     } else {
@@ -245,13 +246,13 @@ export function AuraGroove() {
   }, [toast]); 
   
   const updateWorkerSettings = useCallback(() => {
-    if (musicWorkerRef.current && (isPlaying || isInitializing)) {
+    if (musicWorkerRef.current) {
         musicWorkerRef.current?.postMessage({
             command: 'update_settings',
             data: { instrumentSettings, drumSettings, effectsSettings, bpm, score, mixProfile },
         });
     }
-  }, [instrumentSettings, drumSettings, effectsSettings, bpm, score, isPlaying, isInitializing, mixProfile]);
+  }, [instrumentSettings, drumSettings, effectsSettings, bpm, score, mixProfile]);
 
   useEffect(() => {
     if (isReady && isPlaying) { 
@@ -366,10 +367,8 @@ export function AuraGroove() {
             Tone.Transport.start();
         }
         
-        musicWorkerRef.current.postMessage({ command: 'start' });
-        // Immediately send settings to trigger the first tick
-        musicWorkerRef.current.postMessage({
-            command: 'update_settings',
+        musicWorkerRef.current.postMessage({ 
+            command: 'start',
             data: { drumSettings, instrumentSettings, effectsSettings, bpm, score, mixProfile }
         });
 
