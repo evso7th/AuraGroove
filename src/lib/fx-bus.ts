@@ -15,7 +15,7 @@ export class FxBus {
     public soloInput: Tone.Gain;
     public accompanimentInput: Tone.Gain;
     public bassInput: Tone.Gain;
-    public drumInput: Tone.Channel; // Changed from Gain to Channel
+    public drumInput: Tone.Gain;
     public effectsInput: Tone.Gain;
 
     constructor() {
@@ -29,7 +29,7 @@ export class FxBus {
         this.soloInput = new Tone.Gain().chain(this.soloDistortion, this.masterChannel);
         this.accompanimentInput = new Tone.Gain().chain(this.accompanimentChorus, this.masterChannel);
         this.bassInput = new Tone.Gain().chain(this.bassDistortion, this.masterChannel); // Bass now goes through distortion
-        this.drumInput = new Tone.Channel({ volume: 0, pan: 0 }).connect(this.masterChannel); // Using a Channel for robust volume control
+        this.drumInput = new Tone.Gain().connect(this.masterChannel); // Using Gain for direct volume control
         this.effectsInput = new Tone.Gain().connect(this.masterChannel);
     }
     

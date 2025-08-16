@@ -28,8 +28,7 @@ export class DrumMachine {
     private sampler: Tone.Sampler;
     private isLoaded = false;
     private fxBus: FxBus;
-    private userVolume: number = 0.7; // Default volume
-
+    
     constructor(fxBus: FxBus, onLoad: () => void) {
         this.fxBus = fxBus;
         this.sampler = new Tone.Sampler({
@@ -41,7 +40,6 @@ export class DrumMachine {
                 console.log("DrumMachine: All samples loaded and mapped to notes.");
             },
         }).connect(this.fxBus.drumInput);
-        this.updateVolume();
     }
 
     public isReady(): boolean {
@@ -49,14 +47,8 @@ export class DrumMachine {
     }
 
     public setVolume(volume: number) {
-        this.userVolume = volume;
-        this.updateVolume();
-    }
-
-    private updateVolume() {
-        // Tone.Sampler volume is a GainNode, so we use gain.value
-        // It's linear, so no need for gainToDb conversion here.
-        this.sampler.volume.value = Tone.gainToDb(this.userVolume);
+        // This now correctly adjusts the gain of the drum bus input.
+        this.fxBus.drumInput.gain.value = Tone.gainToDb(volume);
     }
 
     public trigger(note: DrumNote, time: number) {
