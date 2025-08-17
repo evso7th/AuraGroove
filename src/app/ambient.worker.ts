@@ -153,7 +153,7 @@ class EvolutionEngine {
         // Convert phrase to score
         return phrase.map((note, i) => ({
             notes: note,
-            time: (i / 3), // Play as triplets
+            time: (i / 2), // Play as eighth notes
             duration: '4n'
         }));
     }

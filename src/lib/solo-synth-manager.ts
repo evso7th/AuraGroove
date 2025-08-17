@@ -21,7 +21,7 @@ const instrumentPresets: Record<Exclude<InstrumentName, 'none'>, Tone.SynthOptio
     },
     'synthesizer': {
         oscillator: { type: 'sine' },
-        envelope: { attack: 0.01, decay: 0.2, sustain: 0.2, release: 0.8 },
+        envelope: { attack: 0.01, decay: 0.2, sustain: 0.7, release: 0.8 },
     },
     'piano': { // Example preset, as it's disabled in UI
          oscillator: { type: 'sine' }, // Simplified
