@@ -106,9 +106,12 @@ export function AuraGroove() {
     });
 
 
+    // This will hold the monotonically increasing jitter offset for a single message batch
+    let jitterOffset = 0;
+    const JITTER_INCREMENT = 0.0001; // 0.1ms increment
+
     const handleMessage = (event: MessageEvent) => {
       const { type, data, error } = event.data;
-      const jitter = () => Math.random() * 0.005; // 0-5ms jitter
       
       switch(type) {
         case 'initialized':
@@ -124,10 +127,13 @@ export function AuraGroove() {
              break;
 
         case 'drum_score':
+             // Reset jitter offset at the start of a new batch of scores
+            jitterOffset = 0;
             if (drumMachineRef.current && drumMachineRef.current.isReady() && data && data.score) {
                  const now = Tone.now();
                  data.score.forEach((note: DrumNote) => {
-                    drumMachineRef.current!.trigger(note, now + note.time + jitter());
+                    jitterOffset += JITTER_INCREMENT;
+                    drumMachineRef.current!.trigger(note, now + note.time + jitterOffset);
                 });
             }
             break;
@@ -136,10 +142,11 @@ export function AuraGroove() {
              if (bassSynthManagerRef.current && data.score && data.score.length > 0) {
                 const now = Tone.now();
                 data.score.forEach((note: BassNote) => {
+                    jitterOffset += JITTER_INCREMENT;
                     bassSynthManagerRef.current?.triggerAttackRelease(
                         note.note,
                         note.duration,
-                        now + note.time + jitter(),
+                        now + note.time + jitterOffset,
                         note.velocity
                     );
                 });
@@ -150,10 +157,11 @@ export function AuraGroove() {
             if (soloSynthManagerRef.current && data.score && data.score.length > 0) {
                 const now = Tone.now();
                 data.score.forEach((note: SoloNote) => {
+                    jitterOffset += JITTER_INCREMENT;
                     soloSynthManagerRef.current?.triggerAttackRelease(
                         note.notes,
                         note.duration,
-                        now + note.time + jitter()
+                        now + note.time + jitterOffset
                     );
                 });
             }
@@ -163,10 +171,11 @@ export function AuraGroove() {
             if (accompanimentSynthManagerRef.current && data.score && data.score.length > 0) {
                 const now = Tone.now();
                 data.score.forEach((note: AccompanimentNote) => {
+                    jitterOffset += JITTER_INCREMENT;
                     accompanimentSynthManagerRef.current?.triggerAttackRelease(
                         note.notes,
                         note.duration,
-                        now + note.time + jitter()
+                        now + note.time + jitterOffset
                     );
                 });
             }
@@ -176,9 +185,10 @@ export function AuraGroove() {
             if (effectsSynthManagerRef.current && data.score && data.score.length > 0) {
                 const now = Tone.now();
                 data.score.forEach((note: EffectNote) => {
+                    jitterOffset += JITTER_INCREMENT;
                     effectsSynthManagerRef.current?.trigger(
                         note,
-                        now + note.time + jitter()
+                        now + note.time + jitterOffset
                     );
                 });
             }
@@ -256,7 +266,6 @@ export function AuraGroove() {
 
     useEffect(() => {
         if (!isReady || !bassSynthManagerRef.current) return;
-        console.log(`AURA_GROOVE_TRACE: useEffect for bass volume changed. New volume: ${instrumentSettings.bass.volume}`);
         bassSynthManagerRef.current.setVolume(instrumentSettings.bass.volume);
     }, [instrumentSettings.bass.volume, isReady]);
 
@@ -276,15 +285,12 @@ export function AuraGroove() {
 
     useEffect(() => {
         if (!isReady || !drumMachineRef.current) return;
-        console.log(`AURA_GROOVE_TRACE: useEffect for drum volume changed. New volume: ${drumSettings.volume}`);
         drumMachineRef.current.setVolume(drumSettings.volume);
     }, [drumSettings.volume, isReady]);
 
   
   const handlePlay = useCallback(async () => {
     try {
-        console.log("AURA_GROOVE_TRACE: handlePlay called.");
-        setLoadingText("Starting audio context...");
         if (Tone.context.state !== 'running') {
             await Tone.start();
         }
@@ -308,7 +314,6 @@ export function AuraGroove() {
         effectsSynthManagerRef.current?.setMode(effectsSettings.mode);
         
         const startPlayback = () => {
-            console.log("AURA_GROOVE_TRACE: startPlayback (callback from DrumMachine) called.");
             setLoadingText("Starting playback...");
     
             if (Tone.Transport.state !== 'started') {
@@ -328,10 +333,8 @@ export function AuraGroove() {
         setLoadingText("Loading samples...");
         
         if (drumMachineRef.current && drumMachineRef.current.isReady()) {
-            console.log("AURA_GROOVE_TRACE: Drum machine already ready, calling startPlayback directly.");
             startPlayback();
         } else {
-            console.log("AURA_GROOVE_TRACE: Initializing new DrumMachine.");
             drumMachineRef.current = new DrumMachine(fxBusRef.current, startPlayback);
         }
 
@@ -348,7 +351,6 @@ export function AuraGroove() {
   }, [drumSettings, instrumentSettings, effectsSettings, bpm, score, toast, mixProfile]);
 
   const handleStop = useCallback(() => {
-    console.log("AURA_GROOVE_TRACE: handleStop called.");
     soloSynthManagerRef.current?.fadeOut(1);
     accompanimentSynthManagerRef.current?.fadeOut(1);
     bassSynthManagerRef.current?.fadeOut(1);
@@ -641,5 +643,7 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    
 
     
