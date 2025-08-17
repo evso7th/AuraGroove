@@ -1,12 +1,11 @@
 
 import * as Tone from 'tone';
-import type { InstrumentSettings, MixProfile } from '@/types/music';
+import type { InstrumentSettings } from '@/types/music';
 import type { FxBus } from './fx-bus';
 
 type InstrumentName = InstrumentSettings['accompaniment']['name'];
 
-const DESKTOP_VOLUME_DB = -12;
-const MOBILE_VOLUME_DB = -14; // Slightly quieter on mobile to give space to bass/solo
+const MOBILE_VOLUME_DB = -14; // Base volume for all devices
 
 const NUM_VOICES = 4; // 4 voices for accompaniment chords
 
@@ -41,7 +40,7 @@ export class AccompanimentSynthManager {
 
     constructor(fxBus: FxBus) {
         this.fxBus = fxBus;
-        this.currentBaseVolumeDb = DESKTOP_VOLUME_DB;
+        this.currentBaseVolumeDb = MOBILE_VOLUME_DB;
     }
 
     private ensureSynthsInitialized() {
@@ -75,11 +74,6 @@ export class AccompanimentSynthManager {
         this.currentInstrument = name;
     }
 
-    public setMixProfile(profile: MixProfile) {
-        this.currentBaseVolumeDb = profile === 'mobile' ? MOBILE_VOLUME_DB : DESKTOP_VOLUME_DB;
-        this.updateVolume();
-    }
-    
     public setVolume(volume: number) { // volume is linear 0-1
         this.userVolume = volume;
         this.updateVolume();

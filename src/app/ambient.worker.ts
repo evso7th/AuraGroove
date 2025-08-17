@@ -2,7 +2,7 @@
 /// <reference lib="webworker" />
 
 import { promenadeScore } from '@/lib/scores/promenade';
-import type { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote, DrumSettings, EffectsSettings, ScoreName, MixProfile, InstrumentSettings } from '@/types/music';
+import type { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote, DrumSettings, EffectsSettings, ScoreName, InstrumentSettings } from '@/types/music';
 
 
 // --- NEW INTELLIGENT COMPOSITION ENGINE ---
@@ -233,20 +233,7 @@ class EvolutionEngine {
 // --- PatternProvider (Remains the same) ---
 const PatternProvider = {
     drumPatterns: {
-        'dreamtales-beat-desktop': [
-            // Core beat
-            { sample: 'kick', time: 0, velocity: 0.8 },
-            { sample: 'ride', time: 0, velocity: 0.7 },
-            { sample: 'ride', time: 1, velocity: 0.6 },
-            { sample: 'kick', time: 2, velocity: 0.7 },
-            { sample: 'ride', time: 2, velocity: 0.7 },
-            { sample: 'ride', time: 3, velocity: 0.6 },
-            // Ghost notes and hats
-            { sample: 'snare', time: 1.75, velocity: 0.08 }, // Ghost note
-            { sample: 'hat', time: 2.5, velocity: 0.2 },     // Infrequent hat
-            { sample: 'snare', time: 3.5, velocity: 0.1 },   // Ghost note
-        ],
-        'dreamtales-beat-mobile': [ 
+        'dreamtales-beat': [ 
             // Simplified for mobile clarity
             { sample: 'kick', time: 0, velocity: 0.8 },
             { sample: 'ride', time: 0, velocity: 0.05 },
@@ -290,15 +277,12 @@ const PatternProvider = {
 class DrumGenerator {
     private static fillPatterns = ['dreamtales-fill-1', 'dreamtales-fill-2', 'dreamtales-fill-3'];
 
-    static createScore(pattern: string, barNumber: number, mixProfile: MixProfile, isAnchorPhase: boolean): DrumNote[] {
+    static createScore(pattern: string, barNumber: number, isAnchorPhase: boolean): DrumNote[] {
         const isFillBar = (barNumber + 1) % 4 === 0 && !isAnchorPhase; // Fills only during evolution
         let score;
         if (isFillBar) {
             const randomFill = this.fillPatterns[Math.floor(Math.random() * this.fillPatterns.length)];
             score = PatternProvider.getDrumPattern(randomFill);
-        } else if (pattern === 'dreamtales-beat') {
-            const patternName = mixProfile === 'mobile' ? 'dreamtales-beat-mobile' : 'dreamtales-beat-desktop';
-            score = PatternProvider.getDrumPattern(patternName);
         } else {
             score = PatternProvider.getDrumPattern(pattern);
         }
@@ -346,7 +330,6 @@ const Scheduler = {
     drumSettings: { pattern: 'dreamtales-beat', volume: 0.7 } as DrumSettings,
     effectsSettings: { mode: 'none', volume: 0.7 } as EffectsSettings,
     score: 'dreamtales' as ScoreName,
-    mixProfile: 'desktop' as MixProfile,
 
 
     // Calculated properties
@@ -387,7 +370,6 @@ const Scheduler = {
         if (settings.effectsSettings) this.effectsSettings = settings.effectsSettings;
         if (settings.bpm) this.bpm = settings.bpm;
         if (settings.score) this.score = settings.score;
-        if (settings.mixProfile) this.mixProfile = settings.mixProfile;
     },
 
     tick() {
@@ -397,7 +379,7 @@ const Scheduler = {
             const engine = this.evolutionEngine;
 
             if (this.drumSettings.pattern !== 'none') {
-                 const drumScore = DrumGenerator.createScore(this.drumSettings.pattern, this.barCount, this.mixProfile, (engine as any).isAnchorPhase)
+                 const drumScore = DrumGenerator.createScore(this.drumSettings.pattern, this.barCount, (engine as any).isAnchorPhase)
                     .map(note => ({ ...note, time: note.time * this.secondsPerBeat }));
                 if (drumScore.length > 0) {
                     self.postMessage({ type: 'drum_score', data: { score: drumScore } });

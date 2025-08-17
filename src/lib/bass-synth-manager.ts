@@ -1,41 +1,12 @@
 
 import * as Tone from 'tone';
-import type { InstrumentSettings, MixProfile } from '@/types/music';
+import type { InstrumentSettings } from '@/types/music';
 import type { FxBus } from './fx-bus';
 
 type InstrumentName = InstrumentSettings['bass']['name'];
-const DESKTOP_VOLUME_DB = -18;
 const MOBILE_VOLUME_DB = -12;
 
-// Heavy "Iron Man" sound for Desktop - uses sawtooth for rich harmonics
-// and a low-pass filter to keep it bassy and controlled.
-const ironManPreset: Tone.MonoSynthOptions = {
-    oscillator: {
-        type: 'sawtooth'
-    },
-    filter: {
-        type: 'lowpass',
-        rolloff: -24,
-        Q: 2, // A bit of resonance for character
-    },
-    filterEnvelope: {
-        attack: 0.01,
-        decay: 0.7,
-        sustain: 0.5,
-        release: 1.5,
-        baseFrequency: 80, // Start low
-        octaves: 2.5, // Sweep over a range to create movement
-    },
-    envelope: {
-        attack: 0.02,
-        decay: 0.4,
-        sustain: 0.9,
-        release: 1.5,
-    },
-    portamento: 0.08,
-};
-
-// Adapted sound for Mobile speakers - also uses sawtooth but filter is different
+// Adapted sound for Mobile speakers - uses sawtooth but filter is different
 // to emphasize mid-range frequencies that are audible on small speakers.
 const mobilePreset: Tone.MonoSynthOptions = {
     oscillator: {
@@ -65,8 +36,8 @@ const mobilePreset: Tone.MonoSynthOptions = {
 
 
 const instrumentPresets: Record<Exclude<InstrumentName, 'none'>, Tone.MonoSynthOptions> = {
-    'bass synth': ironManPreset,
-    'bassGuitar': ironManPreset
+    'bass synth': mobilePreset,
+    'bassGuitar': mobilePreset
 };
 
 export class BassSynthManager {
@@ -76,11 +47,10 @@ export class BassSynthManager {
     private fxBus: FxBus;
     private currentBaseVolumeDb: number;
     private userVolume: number = 0.9; // Linear gain (0-1)
-    private currentProfile: MixProfile = 'desktop';
 
     constructor(fxBus: FxBus) {
         this.fxBus = fxBus;
-        this.currentBaseVolumeDb = DESKTOP_VOLUME_DB;
+        this.currentBaseVolumeDb = MOBILE_VOLUME_DB;
         console.log("BASS_TRACE: Manager constructed.");
     }
 
@@ -105,24 +75,17 @@ export class BassSynthManager {
         }
         
         const wasNone = this.currentInstrument === 'none';
-        this.currentInstrument = name; 
         
-        this.applyProfileSettings();
+        if (name !== this.currentInstrument) {
+            console.log(`BASS_TRACE: Applying mobile preset to synth.`);
+            this.currentSynth.set(mobilePreset);
+        }
+
+        this.currentInstrument = name; 
 
         if (wasNone) {
             this.fadeIn(0.01);
         }
-    }
-
-    public setMixProfile(profile: MixProfile) {
-        console.log(`BASS_TRACE: setMixProfile called with: ${profile}`);
-        this.currentProfile = profile;
-        this.currentBaseVolumeDb = profile === 'mobile' ? MOBILE_VOLUME_DB : DESKTOP_VOLUME_DB;
-        console.log(`BASS_TRACE: Base volume set to ${this.currentBaseVolumeDb} dB for ${profile}`);
-        if(this.currentInstrument !== 'none') {
-            this.applyProfileSettings();
-        }
-        this.updateVolume();
     }
     
     public setVolume(volume: number) { // volume is linear 0-1
@@ -146,18 +109,6 @@ export class BassSynthManager {
         } catch (e) {
             console.error("BASS_TRACE: Error in updateVolume rampTo", e);
         }
-    }
-
-
-    private applyProfileSettings() {
-        if (!this.currentSynth || this.currentInstrument === 'none') return;
-        
-        const preset = this.currentProfile === 'mobile' 
-            ? mobilePreset 
-            : ironManPreset; 
-        
-        console.log(`BASS_TRACE: Applying ${this.currentProfile} preset to synth.`);
-        this.currentSynth.set(preset);
     }
     
     public triggerAttackRelease(note: string, duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {

@@ -5,7 +5,6 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import * as Tone from 'tone';
 import { Drum, Loader2, Music, Pause, Speaker, FileMusic, Waves, ChevronsRight, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useDeviceType } from "@/hooks/use-device-type";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -32,7 +31,7 @@ import type { SoloSynthManager } from "@/lib/solo-synth-manager";
 import type { AccompanimentSynthManager } from "@/lib/accompaniment-synth-manager";
 import type { EffectsSynthManager } from "@/lib/effects-synth-manager";
 import { DrumMachine } from "@/lib/drum-machine";
-import { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote, DrumSettings, EffectsSettings, InstrumentSettings, ScoreName, MixProfile } from '@/types/music';
+import { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote, DrumSettings, EffectsSettings, InstrumentSettings, ScoreName } from '@/types/music';
 
 export function AuraGroove() {
   const [isReady, setIsReady] = useState(false);
@@ -59,8 +58,6 @@ export function AuraGroove() {
   const [soloFx, setSoloFx] = useState({ distortion: { enabled: false, wet: 0.5 } });
   const [accompanimentFx, setAccompanimentFx] = useState({ chorus: { enabled: false, wet: 0.4, frequency: 1.5, depth: 0.7 } });
   
-  const deviceType = useDeviceType();
-  const [mixProfile, setMixProfile] = useState<MixProfile>('desktop');
 
   const { toast } = useToast();
 
@@ -72,10 +69,6 @@ export function AuraGroove() {
   const effectsSynthManagerRef = useRef<EffectsSynthManager | null>(null);
   const drumMachineRef = useRef<DrumMachine | null>(null);
 
-
-  useEffect(() => {
-    setMixProfile(deviceType);
-  }, [deviceType]);
 
    useEffect(() => {
     setLoadingText("Initializing Worker...");
@@ -237,10 +230,10 @@ export function AuraGroove() {
     if (musicWorkerRef.current) {
         musicWorkerRef.current?.postMessage({
             command: 'update_settings',
-            data: { instrumentSettings, drumSettings, effectsSettings, bpm, score, mixProfile },
+            data: { instrumentSettings, drumSettings, effectsSettings, bpm, score },
         });
     }
-  }, [instrumentSettings, drumSettings, effectsSettings, bpm, score, mixProfile]);
+  }, [instrumentSettings, drumSettings, effectsSettings, bpm, score]);
 
   useEffect(() => {
     if (isReady && isPlaying) { 
@@ -304,10 +297,6 @@ export function AuraGroove() {
             return;
         }
 
-        bassSynthManagerRef.current.setMixProfile(mixProfile);
-        soloSynthManagerRef.current.setMixProfile(mixProfile);
-        accompanimentSynthManagerRef.current.setMixProfile(mixProfile);
-
         soloSynthManagerRef.current?.setInstrument(instrumentSettings.solo.name);
         accompanimentSynthManagerRef.current?.setInstrument(instrumentSettings.accompaniment.name);
         bassSynthManagerRef.current?.setInstrument(instrumentSettings.bass.name);
@@ -326,7 +315,7 @@ export function AuraGroove() {
             
             musicWorkerRef.current?.postMessage({ 
                 command: 'start',
-                data: { drumSettings, instrumentSettings, effectsSettings, bpm, score, mixProfile }
+                data: { drumSettings, instrumentSettings, effectsSettings, bpm, score }
             });
         };
 
@@ -348,7 +337,7 @@ export function AuraGroove() {
         setIsInitializing(false);
         setLoadingText("");
     }
-  }, [drumSettings, instrumentSettings, effectsSettings, bpm, score, toast, mixProfile]);
+  }, [drumSettings, instrumentSettings, effectsSettings, bpm, score, toast]);
 
   const handleStop = useCallback(() => {
     soloSynthManagerRef.current?.fadeOut(1);
@@ -371,13 +360,6 @@ export function AuraGroove() {
     }
   }, [isPlaying, handleStop, handlePlay]);
   
-  useEffect(() => {
-      if (isPlaying) {
-          bassSynthManagerRef.current?.setMixProfile(mixProfile);
-          soloSynthManagerRef.current?.setMixProfile(mixProfile);
-          accompanimentSynthManagerRef.current?.setMixProfile(mixProfile);
-      }
-  }, [mixProfile, isPlaying]);
 
   const isBusy = isInitializing;
   const isDreamtales = score === 'dreamtales';
@@ -643,9 +625,3 @@ export function AuraGroove() {
     </Card>
   );
 }
-
-    
-
-    
-
-    

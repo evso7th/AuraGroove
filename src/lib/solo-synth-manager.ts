@@ -1,12 +1,11 @@
 
 import * as Tone from 'tone';
-import type { InstrumentSettings, MixProfile } from '@/types/music';
+import type { InstrumentSettings } from '@/types/music';
 import type { FxBus } from './fx-bus';
 
 type InstrumentName = InstrumentSettings['solo']['name'];
 
-const DESKTOP_VOLUME_DB = -9;
-const MOBILE_VOLUME_DB = -8; // Slightly louder on mobile to cut through
+const MOBILE_VOLUME_DB = -8; // Base volume for all devices
 const NUM_VOICES = 2; // 2 voices for solo instrument
 
 const instrumentPresets: Record<Exclude<InstrumentName, 'none'>, Tone.SynthOptions> = {
@@ -40,7 +39,7 @@ export class SoloSynthManager {
 
     constructor(fxBus: FxBus) {
         this.fxBus = fxBus;
-        this.currentBaseVolumeDb = DESKTOP_VOLUME_DB;
+        this.currentBaseVolumeDb = MOBILE_VOLUME_DB;
     }
 
     private ensureSynthsInitialized() {
@@ -72,11 +71,6 @@ export class SoloSynthManager {
 
         this.fadeIn(0.01);
         this.currentInstrument = name;
-    }
-
-    public setMixProfile(profile: MixProfile) {
-        this.currentBaseVolumeDb = profile === 'mobile' ? MOBILE_VOLUME_DB : DESKTOP_VOLUME_DB;
-        this.updateVolume();
     }
     
     public setVolume(volume: number) { // volume is linear 0-1

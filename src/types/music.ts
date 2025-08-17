@@ -62,8 +62,6 @@ export type EffectNote = {
 
 export type ScoreName = 'dreamtales' | 'promenade';
 
-export type MixProfile = 'desktop' | 'mobile';
-
 // Obsolete, replaced by InstrumentSettings
 export type Instruments = {
   solo: 'synthesizer' | 'piano' | 'organ' | 'none';
