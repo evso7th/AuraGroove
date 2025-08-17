@@ -108,6 +108,7 @@ export function AuraGroove() {
 
     const handleMessage = (event: MessageEvent) => {
       const { type, data, error } = event.data;
+      const jitter = () => Math.random() * 0.005; // 0-5ms jitter
       
       switch(type) {
         case 'initialized':
@@ -126,7 +127,7 @@ export function AuraGroove() {
             if (drumMachineRef.current && drumMachineRef.current.isReady() && data && data.score) {
                  const now = Tone.now();
                  data.score.forEach((note: DrumNote) => {
-                    drumMachineRef.current!.trigger(note, now + note.time);
+                    drumMachineRef.current!.trigger(note, now + note.time + jitter());
                 });
             }
             break;
@@ -138,7 +139,7 @@ export function AuraGroove() {
                     bassSynthManagerRef.current?.triggerAttackRelease(
                         note.note,
                         note.duration,
-                        now + note.time,
+                        now + note.time + jitter(),
                         note.velocity
                     );
                 });
@@ -152,7 +153,7 @@ export function AuraGroove() {
                     soloSynthManagerRef.current?.triggerAttackRelease(
                         note.notes,
                         note.duration,
-                        now + note.time
+                        now + note.time + jitter()
                     );
                 });
             }
@@ -165,7 +166,7 @@ export function AuraGroove() {
                     accompanimentSynthManagerRef.current?.triggerAttackRelease(
                         note.notes,
                         note.duration,
-                        now + note.time
+                        now + note.time + jitter()
                     );
                 });
             }
@@ -177,7 +178,7 @@ export function AuraGroove() {
                 data.score.forEach((note: EffectNote) => {
                     effectsSynthManagerRef.current?.trigger(
                         note,
-                        now + note.time
+                        now + note.time + jitter()
                     );
                 });
             }
@@ -640,3 +641,5 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    
