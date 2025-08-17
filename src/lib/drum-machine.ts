@@ -35,6 +35,7 @@ export class DrumMachine {
         this.sampler = new Tone.Sampler({
             urls: samplePaths,
             baseUrl: '',
+            volume: 0, // Set internal sampler volume to max (0 dB)
             onload: () => {
                 this.isLoaded = true;
                 onLoad();
