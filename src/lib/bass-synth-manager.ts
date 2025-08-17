@@ -4,29 +4,30 @@ import type { InstrumentSettings, MixProfile } from '@/types/music';
 import type { FxBus } from './fx-bus';
 
 type InstrumentName = InstrumentSettings['bass']['name'];
-const DESKTOP_VOLUME_DB = -14; 
-const MOBILE_VOLUME_DB = -8; 
+const DESKTOP_VOLUME_DB = -14;
+const MOBILE_VOLUME_DB = -8;
 
-// Heavy "Iron Man" sound for Desktop
+// Heavy "Iron Man" sound for Desktop - uses sawtooth for rich harmonics
+// and a low-pass filter to keep it bassy and controlled.
 const ironManPreset: Tone.MonoSynthOptions = {
     oscillator: {
-        type: 'sawtooth' // Rich harmonics for distortion
+        type: 'sawtooth'
     },
     filter: {
         type: 'lowpass',
         rolloff: -24,
-        Q: 1.5,
+        Q: 2, // A bit of resonance for character
     },
     filterEnvelope: {
-        attack: 0.05,
+        attack: 0.01,
         decay: 0.7,
-        sustain: 0.8,
+        sustain: 0.5,
         release: 1.5,
-        baseFrequency: 500, // Keep some mid-range bite
-        octaves: 2.0,
+        baseFrequency: 80, // Start low
+        octaves: 2.5, // Sweep over a range to create movement
     },
     envelope: {
-        attack: 0.08,
+        attack: 0.02,
         decay: 0.4,
         sustain: 0.9,
         release: 1.5,
@@ -34,26 +35,27 @@ const ironManPreset: Tone.MonoSynthOptions = {
     portamento: 0.08,
 };
 
-// Adapted sound for Mobile speakers
+// Adapted sound for Mobile speakers - also uses sawtooth but filter is different
+// to emphasize mid-range frequencies that are audible on small speakers.
 const mobilePreset: Tone.MonoSynthOptions = {
     oscillator: {
-        type: 'square' // More focused mid-range
+        type: 'sawtooth' 
     },
     filter: {
-        type: 'lowpass',
-        rolloff: -12, // Less aggressive filtering
-        Q: 2,         // Higher Q to emphasize mids
+        type: 'lowpass', // Still a lowpass...
+        rolloff: -12,
+        Q: 3,         // ...but with higher Q to create a resonant peak
     },
     filterEnvelope: {
         attack: 0.05,
-        decay: 0.5,
+        decay: 0.3,
         sustain: 0.7,
         release: 1.0,
-        baseFrequency: 900, // Focus on mid-range for clarity
-        octaves: 1.5,
+        baseFrequency: 300, // Start higher to be in the audible mobile range
+        octaves: 1.5,       // Less sweep to keep it focused
     },
     envelope: {
-        attack: 0.08,
+        attack: 0.02,
         decay: 0.3,
         sustain: 0.9,
         release: 1.0,
@@ -63,7 +65,7 @@ const mobilePreset: Tone.MonoSynthOptions = {
 
 
 const instrumentPresets: Record<Exclude<InstrumentName, 'none'>, Tone.MonoSynthOptions> = {
-    'bass synth': ironManPreset, // Defaulting both to the target sound
+    'bass synth': ironManPreset,
     'bassGuitar': ironManPreset
 };
 
@@ -102,10 +104,8 @@ export class BassSynthManager {
         const wasNone = this.currentInstrument === 'none';
         this.currentInstrument = name; 
         
-        // Apply the correct profile settings for the new instrument
         this.applyProfileSettings();
 
-        // Only fade in if the synth was previously silent
         if (wasNone) {
             this.fadeIn(0.01);
         }
@@ -145,18 +145,12 @@ export class BassSynthManager {
     private applyProfileSettings() {
         if (!this.currentSynth || this.currentInstrument === 'none') return;
         
-        // The preset is now determined by the device profile, not the instrument name.
         const preset = this.currentProfile === 'mobile' 
             ? mobilePreset 
-            : instrumentPresets[this.currentInstrument];
+            : ironManPreset; // Use the desktop preset as the base for the selected instrument
         
-        if (!preset) {
-            console.error(`BASS: No preset found for instrument: ${this.currentInstrument}. Falling back to default.`);
-            this.currentSynth.set(ironManPreset);
-        } else {
-            console.log(`BASS: Applying ${this.currentProfile} preset.`);
-            this.currentSynth.set(preset);
-        }
+        console.log(`BASS: Applying ${this.currentProfile} preset.`);
+        this.currentSynth.set(preset);
     }
     
     public triggerAttackRelease(note: string, duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
