@@ -26,14 +26,14 @@ export class FxBus {
 
         this.soloDistortion = new Tone.Distortion({ distortion: 0.4, wet: 0 });
         this.accompanimentChorus = new Tone.Chorus({ frequency: 1.5, delayTime: 3.5, depth: 0.7, wet: 0 });
-        this.bassDistortion = new Tone.Distortion({ distortion: 0.3, wet: 1.0 }); 
+        this.bassDistortion = new Tone.Distortion({ distortion: 0.3, wet: 0 }); 
         
         console.log(`FXBUS_TRACE: Bass distortion created with distortion=${this.bassDistortion.distortion} and wet=${this.bassDistortion.wet.value}`);
 
         this.soloInput = new Tone.Gain().chain(this.soloDistortion, this.masterChannel);
         this.accompanimentInput = new Tone.Gain().chain(this.accompanimentChorus, this.masterChannel);
         this.bassInput = new Tone.Gain().chain(this.bassDistortion, this.masterChannel); 
-        this.drumInput = new Tone.Gain().connect(this.masterChannel); 
+        this.drumInput = new Tone.Gain({ gain: 0, units: 'decibels' }).connect(this.masterChannel);
         this.effectsInput = new Tone.Gain().connect(this.masterChannel);
         
         console.log(`FXBUS_TRACE: Input gains created. Initial values: bass=${this.bassInput.gain.value}, drums=${this.drumInput.gain.value}`);
