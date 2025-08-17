@@ -45,7 +45,7 @@ class MusicalGenome {
         let lastNoteIndex = Math.floor(baseScale.length / 2); // Start near the middle
         
         for (let i = 0; i < 12; i++) {
-            const octave = Math.random() < 0.3 ? '4' : '3'; // Prefer 3rd octave
+            const octave = Math.random() < 0.7 ? '3' : '4'; // Prefer 3rd octave
             melody.push(`${baseScale[lastNoteIndex]}${octave}`);
             
             // Bias towards smaller steps
@@ -57,7 +57,9 @@ class MusicalGenome {
 
     private generateAnchorAccompaniment(): string[][] {
        const { root, scale } = this.harmony[0];
-       const triad1 = [`${root}3`, `${scale[2]}3`, `${scale[4]}3`];
+       const octave3 = Math.random() < 0.8 ? '3' : '4';
+       const octave4 = Math.random() < 0.2 ? '3' : '4';
+       const triad1 = [`${root}3`, `${scale[2]}${octave3}`, `${scale[4]}${octave4}`];
        const { root: root2, scale: scale2 } = this.harmony[1];
        const triad2 = [`${root2}3`, `${scale2[2]}3`, `${scale2[4]}3`];
        return [triad1, triad2];
@@ -83,15 +85,13 @@ class EvolutionEngine {
         this.soloState = { lastPhrase: [...this.genome.soloAnchor] };
         this.accompanimentState = { lastPhrase: [...this.genome.accompanimentAnchor] };
         
-        // A (Anchor) - B (Evolution) - A (Anchor) - C (Evolution) ...
-        this.anchorLengthInBars = 8; // Anchor is 2 bars * 4 reps = 8 bars
+        this.anchorLengthInBars = 8;
         this.evolutionLengthInBars = this.calculateNextEvolutionLength();
         this.isAnchorPhase = true;
         this.barsIntoPhase = 0;
     }
 
     private calculateNextEvolutionLength(): number {
-        // Random duration between 2 and 3 minutes (approx. 40-60 bars at 75bpm)
         return 40 + Math.floor(Math.random() * 21);
     }
     
@@ -113,77 +113,93 @@ class EvolutionEngine {
     }
 
     /**
-     * Applies a set of mutation rules to a melody to create the next evolution.
-     * This is where the music "develops".
+     * Applies a set of musical mutation rules to a melody to create the next evolution.
+     * This method focuses on creating a more coherent and melodic phrase.
      */
     private evolvePhrase(phrase: string[], harmony: { root: string; scale: string[] }): string[] {
-        const scale3 = harmony.scale.map(n => `${n}3`);
-        const scale4 = harmony.scale.map(n => `${n}4`);
+        const newPhrase = [...phrase];
+        const scale = harmony.scale;
+        
+        for (let i = 0; i < newPhrase.length; i++) {
+             if (Math.random() < 0.4) { // ~40% chance to mutate a note
+                const note = newPhrase[i];
+                const noteName = note.slice(0, -1);
+                const octave = parseInt(note.slice(-1), 10);
+                const currentNoteIndexInScale = scale.indexOf(noteName);
 
-        return phrase.map(note => {
-            const currentOctave = note.slice(-1);
-            const noteName = note.slice(0, -1);
-
-            // Rule 1: Change pitch (most common)
-            if (Math.random() < 0.7) {
-                const currentScale = currentOctave === '3' ? scale3 : scale4;
-                const currentIndex = currentScale.indexOf(note);
-                if (currentIndex !== -1) {
-                    const step = Math.random() > 0.5 ? 1 : -1;
-                    const nextIndex = (currentIndex + step + currentScale.length) % currentScale.length;
-                    return currentScale[nextIndex];
+                // Rule 1: Stepwise motion (most common)
+                if (Math.random() < 0.7 && currentNoteIndexInScale !== -1) {
+                     const step = Math.random() < 0.5 ? 1 : -1;
+                     const nextNoteName = scale[(currentNoteIndexInScale + step + scale.length) % scale.length];
+                     newPhrase[i] = `${nextNoteName}${octave}`;
+                } 
+                // Rule 2: Jump to a chord tone (less common, for stability)
+                else if (Math.random() < 0.2) {
+                     const chordTones = [scale[0], scale[2], scale[4]];
+                     const targetTone = chordTones[Math.floor(Math.random() * chordTones.length)];
+                     const targetOctave = Math.random() < 0.7 ? 3 : 4; // Bias to 3rd octave
+                     newPhrase[i] = `${targetTone}${targetOctave}`;
                 }
+                // Rule 3: Keep a small part of the previous phrase for cohesion
+                else if (i > 0 && Math.random() < 0.1) {
+                    newPhrase[i] = newPhrase[i-1];
+                }
+                 // Rule 4: Change octave (rare)
+                else if (Math.random() < 0.05) {
+                    const newOctave = octave === 3 ? 4 : 3;
+                    newPhrase[i] = `${noteName}${newOctave}`;
+                }
+                // (Fallback: keep note the same)
             }
-             // Rule 2: Change octave
-            if (Math.random() < 0.15) {
-                return currentOctave === '3' ? `${noteName}4` : `${noteName}3`;
-            }
-            // Rule 3: Keep note the same (less common)
-            return note;
-        });
+        }
+        return newPhrase;
     }
+
 
     public generateSoloScore(bar: number): SoloNote[] {
         let phrase: string[];
         
         if (this.isAnchorPhase) {
-            // Play the unchanging anchor
             phrase = this.genome.soloAnchor;
-            // On the last bar of the anchor phase, set up the next evolution
             if (this.barsIntoPhase === this.anchorLengthInBars - 1) {
                 this.soloState.lastPhrase = this.evolvePhrase(this.genome.soloAnchor, this.getHarmony(bar));
             }
         } else {
-            // Evolve the last phrase
             phrase = this.evolvePhrase(this.soloState.lastPhrase, this.getHarmony(bar));
             this.soloState.lastPhrase = phrase;
         }
 
-        // Convert phrase to score
         return phrase.map((note, i) => ({
             notes: note,
-            time: i, // Play as quarter notes
+            time: i,
             duration: '4n.'
         }));
     }
 
     public generateAccompanimentScore(bar: number): AccompanimentNote[] {
         if (this.isAnchorPhase) {
-            // Play a simple, repetitive chord pattern for the anchor
              const chord = this.genome.accompanimentAnchor[bar % this.genome.accompanimentAnchor.length];
              return [{ notes: chord, time: 0, duration: '1m'}];
         } else {
-            // During evolution, make it more sparse and atmospheric
-             if (bar % 4 !== 0) return []; // Play only once every 4 bars
+             // During evolution, play arpeggios
              const { root, scale } = this.getHarmony(bar);
-             const octave3 = Math.random() < 0.2 ? '4' : '3';
-             const octave4 = Math.random() < 0.8 ? '4' : '3';
-             const chord = [`${root}2`, `${scale[2]}${octave3}`, `${scale[4]}${octave4}`, `${scale[6]}5`]; // Arpeggiated, wide chord
-             return [{ notes: chord, time: 0, duration: '1m' }];
+             const octave2 = '2';
+             const octave3 = '3';
+             // Create a simple triad for the arpeggio
+             const chord = [`${scale[0]}${octave3}`, `${scale[2]}${octave3}`, `${scale[4]}${octave3}`];
+             
+             const arpeggio: AccompanimentNote[] = [];
+             // Simple upward arpeggio
+             for (let i = 0; i < 4; i++) { // one bar of 16th notes
+                arpeggio.push({ notes: [chord[0]], time: i, duration: '16n' });
+                arpeggio.push({ notes: [chord[1]], time: i + 0.25, duration: '16n' });
+                arpeggio.push({ notes: [chord[2]], time: i + 0.5, duration: '16n' });
+                arpeggio.push({ notes: [chord[1]], time: i + 0.75, duration: '16n' });
+             }
+             return arpeggio;
         }
     }
     
-    // Bass remains stable and foundational, as requested.
     public generateBassScore(bar: number): BassNote[] {
          const { root } = this.getHarmony(bar);
          return this.genome.bassAnchorRiff.map(riffPart => ({
@@ -194,7 +210,6 @@ class EvolutionEngine {
          }));
     }
     
-    // Call this at the end of every tick
     public onBarComplete() {
         this.advancePhase();
     }
