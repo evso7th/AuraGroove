@@ -35,6 +35,7 @@ import { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote, DrumSettin
 
 export function AuraGroove() {
   const [isReady, setIsReady] = useState(false);
+  const [isDrumMachineReady, setIsDrumMachineReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true); 
   const [loadingText, setLoadingText] = useState("Initializing...");
@@ -80,6 +81,12 @@ export function AuraGroove() {
     import('@/lib/fx-bus').then(({ FxBus }) => {
         fxBusRef.current = new FxBus();
         setLoadingText("Mixer created.");
+        
+        drumMachineRef.current = new DrumMachine(fxBusRef.current, () => {
+          setIsDrumMachineReady(true);
+          setLoadingText("Drum samples loaded.");
+        });
+
         import('@/lib/bass-synth-manager').then(({ BassSynthManager }) => {
             bassSynthManagerRef.current = new BassSynthManager(fxBusRef.current!);
             setLoadingText("Bass synth ready.");
@@ -109,7 +116,6 @@ export function AuraGroove() {
       switch(type) {
         case 'initialized':
            setIsReady(true);
-           setIsInitializing(false);
            setLoadingText("");
           break;
         
@@ -226,6 +232,12 @@ export function AuraGroove() {
     };
   }, [toast]); 
   
+  useEffect(() => {
+    if (isReady && isDrumMachineReady) {
+      setIsInitializing(false);
+    }
+  }, [isReady, isDrumMachineReady]);
+
   const updateWorkerSettings = useCallback(() => {
     if (musicWorkerRef.current) {
         musicWorkerRef.current?.postMessage({
@@ -291,7 +303,7 @@ export function AuraGroove() {
         setIsInitializing(true);
         setLoadingText("Waiting for audio engine...");
         
-        if (!musicWorkerRef.current || !fxBusRef.current || !bassSynthManagerRef.current || !soloSynthManagerRef.current || !accompanimentSynthManagerRef.current || !effectsSynthManagerRef.current) {
+        if (!musicWorkerRef.current || !fxBusRef.current || !bassSynthManagerRef.current || !soloSynthManagerRef.current || !accompanimentSynthManagerRef.current || !effectsSynthManagerRef.current || !drumMachineRef.current) {
             toast({ variant: "destructive", title: "Audio Error", description: "Audio engine not ready. Please refresh."});
             setIsInitializing(false);
             return;
@@ -302,30 +314,20 @@ export function AuraGroove() {
         bassSynthManagerRef.current?.setInstrument(instrumentSettings.bass.name);
         effectsSynthManagerRef.current?.setMode(effectsSettings.mode);
         
-        const startPlayback = () => {
-            setLoadingText("Starting playback...");
-    
-            if (Tone.Transport.state !== 'started') {
-                Tone.Transport.start();
-            }
-            
-            soloSynthManagerRef.current?.fadeIn(0.5);
-            accompanimentSynthManagerRef.current?.fadeIn(0.5);
-            bassSynthManagerRef.current?.fadeIn(0.5);
-            
-            musicWorkerRef.current?.postMessage({ 
-                command: 'start',
-                data: { drumSettings, instrumentSettings, effectsSettings, bpm, score }
-            });
-        };
+        setLoadingText("Starting playback...");
 
-        setLoadingText("Loading samples...");
-        
-        if (drumMachineRef.current && drumMachineRef.current.isReady()) {
-            startPlayback();
-        } else {
-            drumMachineRef.current = new DrumMachine(fxBusRef.current, startPlayback);
+        if (Tone.Transport.state !== 'started') {
+            Tone.Transport.start();
         }
+        
+        soloSynthManagerRef.current?.fadeIn(0.5);
+        accompanimentSynthManagerRef.current?.fadeIn(0.5);
+        bassSynthManagerRef.current?.fadeIn(0.5);
+        
+        musicWorkerRef.current?.postMessage({ 
+            command: 'start',
+            data: { drumSettings, instrumentSettings, effectsSettings, bpm, score }
+        });
 
     } catch (error) {
         console.error("Failed to prepare audio:", error);
@@ -608,7 +610,7 @@ export function AuraGroove() {
           <Button
             type="button"
             onClick={handleTogglePlay}
-            disabled={isBusy && !isReady}
+            disabled={isBusy}
             className="w-full text-lg py-6"
           >
             {isBusy ? (
