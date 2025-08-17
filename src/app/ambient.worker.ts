@@ -222,11 +222,52 @@ class MandelbrotEngine {
     private zoom: number;
     private maxIterations = 50;
 
+    private targetX: number;
+    private targetY: number;
+    private targetZoom: number;
+
+    private cycleLength = 64; // Bars per "journey"
+    private cycleProgress = 0;
+
+    private readonly INTERESTING_POINTS = [
+        { x: -0.745, y: 0.186, zoom: 200 },       // "Seahorse Valley"
+        { x: -1.749, y: 0.0003, zoom: 1500 },      // A mini-Mandelbrot
+        { x: 0.274, y: 0.008, zoom: 250 },        // "Elephant Valley"
+        { x: -0.16, y: 1.04, zoom: 400 },         // A spiral region
+        { x: -0.745429, y: 0.113009, zoom: 800 }  // A detailed spiral
+    ];
+
     constructor(genome: MusicalGenome) {
         this.genome = genome;
-        this.x = -0.5;
-        this.y = 0;
-        this.zoom = 1;
+        
+        // Start at a random beautiful location
+        const startPoint = this.INTERESTING_POINTS[Math.floor(Math.random() * this.INTERESTING_POINTS.length)];
+        this.x = startPoint.x;
+        this.y = startPoint.y;
+        this.zoom = startPoint.zoom;
+        
+        // Set the first target
+        this.targetX = this.x;
+        this.targetY = this.y;
+        this.targetZoom = this.zoom;
+        this.cycleProgress = this.cycleLength; // Force a new target on the first run
+    }
+
+    private setNewTarget() {
+        const nextPoint = this.INTERESTING_POINTS[Math.floor(Math.random() * this.INTERESTING_POINTS.length)];
+        this.targetX = nextPoint.x;
+        this.targetY = nextPoint.y;
+        this.targetZoom = nextPoint.zoom;
+    }
+
+    private updatePosition() {
+        const progressRatio = this.cycleProgress / this.cycleLength;
+        // Ease-in-out curve for smoother transition
+        const easeRatio = progressRatio < 0.5 ? 2 * progressRatio * progressRatio : 1 - Math.pow(-2 * progressRatio + 2, 2) / 2;
+
+        this.x += (this.targetX - this.x) * easeRatio * 0.05;
+        this.y += (this.targetY - this.y) * easeRatio * 0.05;
+        this.zoom += (this.targetZoom - this.zoom) * easeRatio * 0.05;
     }
 
     private getMandelbrotValue(cx: number, cy: number): number {
@@ -276,6 +317,11 @@ class MandelbrotEngine {
         const harmony = this.getHarmony(bar);
         const value = this.getMandelbrotValue(this.x, this.y);
         const density = value / this.maxIterations;
+        const isTransitionBar = this.cycleProgress === this.cycleLength - 1;
+
+        if (isTransitionBar) {
+            return [{ notes: [`${harmony.scale[0]}3`], time: 0, duration: '1m' }];
+        }
 
         if (density < 0.2) { // Stable region -> long chord
             return [{ notes: [`${harmony.scale[0]}3`, `${harmony.scale[2]}3`, `${harmony.scale[4]}3`], time: 0, duration: '1m' }];
@@ -300,12 +346,12 @@ class MandelbrotEngine {
     }
     
     public onBarComplete() {
-        // "Travel" through the Mandelbrot set
-        this.x += 0.005 / this.zoom;
-        this.y += 0.002 / this.zoom;
-        if (this.zoom > 0.1) {
-          this.zoom *= 0.99;
+        if (this.cycleProgress >= this.cycleLength) {
+            this.setNewTarget();
+            this.cycleProgress = 0;
         }
+        this.updatePosition();
+        this.cycleProgress++;
     }
 }
 
@@ -464,9 +510,10 @@ const Scheduler = {
 
         if (this.compositionEngine) {
             const engine = this.compositionEngine;
+            const isAnchorPhase = (engine instanceof EvolveEngine) && (engine as any).isAnchorPhase;
 
             if (this.drumSettings.pattern !== 'none') {
-                 const drumScore = DrumGenerator.createScore(this.drumSettings.pattern, this.barCount, (engine as any).isAnchorPhase)
+                 const drumScore = DrumGenerator.createScore(this.drumSettings.pattern, this.barCount, isAnchorPhase)
                     .map(note => ({ ...note, time: note.time * this.secondsPerBeat }));
                 if (drumScore.length > 0) {
                     self.postMessage({ type: 'drum_score', data: { score: drumScore } });
@@ -488,7 +535,7 @@ const Scheduler = {
                 if(accompanimentScore.length > 0) self.postMessage({ type: 'accompaniment_score', data: { score: accompanimentScore } });
             }
             if(this.effectsSettings.mode !== 'none') {
-                const effectsScore = EffectsGenerator.createScore(this.effectsSettings.mode, this.barCount, this.beatsPerBar, (engine as any).isAnchorPhase)
+                const effectsScore = EffectsGenerator.createScore(this.effectsSettings.mode, this.barCount, this.beatsPerBar, isAnchorPhase)
                     .map(note => ({ ...note, time: note.time * this.secondsPerBeat }));
                 if (effectsScore.length > 0) {
                     self.postMessage({ type: 'effects_score', data: { score: effectsScore } });
