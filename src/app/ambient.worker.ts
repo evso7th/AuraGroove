@@ -10,6 +10,7 @@ import type { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote, DrumS
 /**
  * Generates and holds the unique musical identity for a session.
  * This is the "DNA" of the composition, created once per session.
+ * Now based on the harmony of "Gyöngyhajú lány" by Omega.
  */
 class MusicalGenome {
     public readonly harmony: { root: string; scale: string[] }[];
@@ -18,44 +19,40 @@ class MusicalGenome {
     public readonly bassAnchorRiff: { time: number; duration: string }[];
 
     constructor() {
+        // Harmony derived from "Gyöngyhajú lány" (Am - G - C - G ...)
         this.harmony = [
-            { root: 'E', scale: ['E', 'F#', 'G', 'A', 'B', 'C', 'D'] }, // E minor
-            { root: 'C', scale: ['C', 'D', 'E', 'F', 'G', 'A', 'B'] }, // C major
-            { root: 'G', scale: ['G', 'A', 'B', 'C', 'D', 'E', 'F#'] }, // G major
-            { root: 'D', scale: ['D', 'E', 'F#', 'G', 'A', 'B', 'C#'] }  // D major, adjusted scale
+            { root: 'A', scale: ['A', 'B', 'C', 'D', 'E', 'F', 'G'] },    // A minor
+            { root: 'G', scale: ['G', 'A', 'B', 'C', 'D', 'E', 'F#'] },   // G major
+            { root: 'C', scale: ['C', 'D', 'E', 'F', 'G', 'A', 'B'] },    // C major
+            { root: 'E', scale: ['E', 'F#', 'G', 'A', 'B', 'C', 'D'] }     // E minor (relative to G)
         ];
         
         this.soloAnchor = this.generateAnchorMelody();
         this.accompanimentAnchor = this.generateAnchorAccompaniment();
 
+        // A more static, drone-like bass riff suitable for the song's feel
         this.bassAnchorRiff = [
-            { time: 0, duration: '2n' },
-            { time: 2, duration: '2n' },
+            { time: 0, duration: '1m' },
         ];
     }
     
     private generateAnchorMelody(): string[] {
-        const baseScale = this.harmony[0].scale;
-        const melody: string[] = [];
-        let lastNoteIndex = Math.floor(baseScale.length / 2);
-        
-        for (let i = 0; i < 12; i++) {
-            const octave = Math.random() < 0.7 ? '3' : '4';
-            melody.push(`${baseScale[lastNoteIndex]}${octave}`);
-            const step = Math.random() > 0.8 ? (Math.random() > 0.5 ? 2 : -2) : (Math.random() > 0.5 ? 1 : -1);
-            lastNoteIndex = (lastNoteIndex + step + baseScale.length) % baseScale.length;
-        }
-        return melody;
+        // A simple melodic fragment inspired by the original vocal line
+        const baseScale = this.harmony[0].scale; // A minor
+        return [
+            `${baseScale[4]}3`, `${baseScale[5]}3`, `${baseScale[6]}3`, `${baseScale[4]}3`,
+            `${baseScale[2]}4`, `${baseScale[1]}4`, `${baseScale[0]}4`, `${baseScale[1]}4`,
+            `${baseScale[4]}3`, `${baseScale[5]}3`, `${baseScale[6]}3`, `${baseScale[4]}3`,
+        ];
     }
 
     private generateAnchorAccompaniment(): string[][] {
-       const { root, scale } = this.harmony[0];
-       const octave3 = Math.random() < 0.8 ? '3' : '4';
-       const octave4 = Math.random() < 0.2 ? '3' : '4';
-       const triad1 = [`${root}3`, `${scale[2]}${octave3}`, `${scale[4]}${octave4}`];
-       const { root: root2, scale: scale2 } = this.harmony[1];
-       const triad2 = [`${root2}3`, `${scale2[2]}3`, `${scale2[4]}3`];
-       return [triad1, triad2];
+       // Based on the core chords of the song
+       const chord1 = ['A2', 'C3', 'E3']; // Am
+       const chord2 = ['G2', 'B2', 'D3']; // G
+       const chord3 = ['C3', 'E3', 'G3']; // C
+       const chord4 = ['E2', 'G2', 'B2']; // Em
+       return [chord1, chord2, chord3, chord4];
     }
 }
 
@@ -202,7 +199,7 @@ class EvolveEngine {
     public generateBassScore(bar: number): BassNote[] {
          const { root } = this.getHarmony(bar);
          return this.genome.bassAnchorRiff.map(riffPart => ({
-             note: `${root}2`,
+             note: `${root}1`, // Use octave 1 for bass
              time: riffPart.time,
              duration: riffPart.duration,
              velocity: 0.8
@@ -234,7 +231,7 @@ class MandelbrotEngine {
     private cycleProgress = 0;
 
     private readonly INTERESTING_POINTS = [
-        { x: -0.745, y: 0.186, zoom: 200 },       // "Seahorse Valley"
+        { x: -0.745, y: 0.186, zoom: 200 },       // "Seahorse Valley" - Chosen as a beautiful starting point
         { x: -1.749, y: 0.0003, zoom: 1500 },      // A mini-Mandelbrot
         { x: 0.274, y: 0.008, zoom: 250 },        // "Elephant Valley"
         { x: -0.16, y: 1.04, zoom: 400 },         // A spiral region
@@ -246,7 +243,7 @@ class MandelbrotEngine {
     constructor(genome: MusicalGenome) {
         this.genome = genome;
         
-        // Start at a random beautiful location
+        // Start at a random beautiful location from our curated list
         const startPoint = this.INTERESTING_POINTS[Math.floor(Math.random() * this.INTERESTING_POINTS.length)];
         this.x = startPoint.x;
         this.y = startPoint.y;
@@ -256,11 +253,11 @@ class MandelbrotEngine {
         this.startY = this.y;
         this.startZoom = this.zoom;
         
-        // Set the first target
+        // Set the first target to the start point itself, so the first cycle is stable
         this.targetX = this.x;
         this.targetY = this.y;
         this.targetZoom = this.zoom;
-        this.cycleProgress = this.cycleLength; // Force a new target on the first run
+        this.cycleProgress = 0;
     }
 
     private setNewTarget() {
@@ -629,5 +626,7 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
+
+    
 
     
