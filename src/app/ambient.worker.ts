@@ -182,19 +182,22 @@ class EvolutionEngine {
              return [{ notes: chord, time: 0, duration: '1m'}];
         } else {
              // During evolution, play arpeggios
-             const { root, scale } = this.getHarmony(bar);
-             const octave2 = '2';
-             const octave3 = '3';
+             const { scale } = this.getHarmony(bar);
+             const octave3 = Math.random() < 0.8 ? '3' : '4';
+             const octave4 = Math.random() < 0.2 ? '3' : '4';
+
              // Create a simple triad for the arpeggio
-             const chord = [`${scale[0]}${octave3}`, `${scale[2]}${octave3}`, `${scale[4]}${octave3}`];
+             const chord = [`${scale[0]}${octave3}`, `${scale[2]}${octave3}`, `${scale[4]}${octave4}`];
              
              const arpeggio: AccompanimentNote[] = [];
-             // Simple upward arpeggio
-             for (let i = 0; i < 4; i++) { // one bar of 16th notes
-                arpeggio.push({ notes: [chord[0]], time: i, duration: '16n' });
-                arpeggio.push({ notes: [chord[1]], time: i + 0.25, duration: '16n' });
-                arpeggio.push({ notes: [chord[2]], time: i + 0.5, duration: '16n' });
-                arpeggio.push({ notes: [chord[1]], time: i + 0.75, duration: '16n' });
+             // Slower, more sparse 8th note arpeggio
+             const pattern = [chord[0], chord[1], chord[2], chord[1]]; // C-E-G-E or similar
+             for (let i = 0; i < 4; i++) { // 4 notes per bar (quarter notes)
+                arpeggio.push({
+                    notes: [pattern[i]],
+                    time: i, // Play on each beat
+                    duration: '8n' // Let them ring out a bit
+                });
              }
              return arpeggio;
         }
