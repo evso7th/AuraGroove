@@ -49,7 +49,6 @@ export class DrumMachine {
 
     public setVolume(volume: number) {
         console.log(`DRUM_TRACE: setVolume called with: ${volume}`);
-        // This now correctly adjusts the gain of the drum bus input.
         if (volume < 0.01) {
             this.fxBus.drumInput.gain.value = -Infinity;
             console.log("DRUM_TRACE: Volume < 0.01, setting gain to -Infinity.");
