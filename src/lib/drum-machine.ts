@@ -50,8 +50,8 @@ export class DrumMachine {
         if (volume < 0.01) {
             this.fxBus.drumInput.volume.value = -Infinity;
         } else {
-            // Let's give the drums a +12dB boost to make them prominent
-            const dbValue = Tone.gainToDb(volume) + 12;
+            // Let's give the drums a +14dB boost to make them prominent
+            const dbValue = Tone.gainToDb(volume) + 14;
             this.fxBus.drumInput.volume.value = dbValue;
         }
     }
