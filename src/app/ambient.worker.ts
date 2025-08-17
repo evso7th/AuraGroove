@@ -22,7 +22,7 @@ class MusicalGenome {
             { root: 'E', scale: ['E', 'F#', 'G', 'A', 'B', 'C', 'D'] }, // E minor
             { root: 'C', scale: ['C', 'D', 'E', 'F', 'G', 'A', 'B'] }, // C major
             { root: 'G', scale: ['G', 'A', 'B', 'C', 'D', 'E', 'F#'] }, // G major
-            { root: 'D', scale: ['D', 'F#', 'G', 'A', 'B', 'C#'] }  // D major, adjusted scale
+            { root: 'D', scale: ['D', 'E', 'F#', 'G', 'A', 'B', 'C#'] }  // D major, adjusted scale
         ];
         
         // --- Procedural Generation of the Anchor ---
@@ -223,26 +223,45 @@ class EvolutionEngine {
 const PatternProvider = {
     drumPatterns: {
         'dreamtales-beat-desktop': [
+            // Core beat
+            { sample: 'kick', time: 0, velocity: 0.8 },
             { sample: 'ride', time: 0, velocity: 0.7 },
             { sample: 'ride', time: 1, velocity: 0.6 },
+            { sample: 'kick', time: 2, velocity: 0.7 },
             { sample: 'ride', time: 2, velocity: 0.7 },
             { sample: 'ride', time: 3, velocity: 0.6 },
-            { sample: 'kick', time: 0, velocity: 0.8 },
-            { sample: 'kick', time: 2, velocity: 0.7 },
+            // Ghost notes and hats
+            { sample: 'snare', time: 1.75, velocity: 0.08 }, // Ghost note
+            { sample: 'hat', time: 2.5, velocity: 0.2 },     // Infrequent hat
+            { sample: 'snare', time: 3.5, velocity: 0.1 },   // Ghost note
         ],
         'dreamtales-beat-mobile': [ 
+            // Simplified for mobile clarity
+            { sample: 'kick', time: 0, velocity: 0.8 },
             { sample: 'ride', time: 0, velocity: 0.05 },
             { sample: 'ride', time: 1, velocity: 0.04 },
+            { sample: 'kick', time: 2, velocity: 0.7 },
             { sample: 'ride', time: 2, velocity: 0.05 },
             { sample: 'ride', time: 3, velocity: 0.04 },
-            { sample: 'kick', time: 0, velocity: 0.8 },
-            { sample: 'kick', time: 2, velocity: 0.7 },
         ],
-        'dreamtales-fill': [
-            { sample: 'hat', time: 2.0, velocity: 0.5 },
-            { sample: 'hat', time: 2.5, velocity: 0.6 },
+        'dreamtales-fill-1': [ // Simple fill with soft single crash
             { sample: 'hat', time: 3.0, velocity: 0.5 },
-            { sample: 'hat', time: 3.5, velocity: 0.6 },
+            { sample: 'hat', time: 3.25, velocity: 0.6 },
+            { sample: 'hat', time: 3.5, velocity: 0.5 },
+            { sample: 'crash', time: 3.5, velocity: 0.35 }, // Soft crash
+        ],
+        'dreamtales-fill-2': [ // More complex fill with double crash
+            { sample: 'snare', time: 2.5, velocity: 0.4 },
+            { sample: 'hat', time: 3.0, velocity: 0.5 },
+            { sample: 'hat', time: 3.25, velocity: 0.6 },
+            { sample: 'crash', time: 3.5, velocity: 0.3 }, // Soft
+            { sample: 'crash', time: 3.75, velocity: 0.25 },// Softer
+        ],
+        'dreamtales-fill-3': [ // A rolling snare fill
+            { sample: 'snare', time: 3.0, velocity: 0.2 },
+            { sample: 'snare', time: 3.25, velocity: 0.3 },
+            { sample: 'snare', time: 3.5, velocity: 0.4 },
+            { sample: 'snare', time: 3.75, velocity: 0.5 },
         ],
         basic: [ { sample: 'kick', time: 0 }, { sample: 'hat', time: 0.5 }, { sample: 'snare', time: 1 }, { sample: 'hat', time: 1.5 }, { sample: 'kick', time: 2 }, { sample: 'hat', time: 2.5 }, { sample: 'snare', time: 3 }, { sample: 'hat', time: 3.5 }, ],
         breakbeat: [ { sample: 'kick', time: 0 }, { sample: 'hat', time: 0.5 }, { sample: 'kick', time: 0.75 }, { sample: 'snare', time: 1 }, { sample: 'hat', time: 1.5 }, { sample: 'kick', time: 2 }, { sample: 'snare', time: 2.5 }, { sample: 'hat', time: 3 }, { sample: 'snare', time: 3.25 }, { sample: 'hat', time: 3.5 }, ],
@@ -258,11 +277,14 @@ const PatternProvider = {
 // --- Drum and Effects Generators (Modified for new logic) ---
 
 class DrumGenerator {
+    private static fillPatterns = ['dreamtales-fill-1', 'dreamtales-fill-2', 'dreamtales-fill-3'];
+
     static createScore(pattern: string, barNumber: number, mixProfile: MixProfile, isAnchorPhase: boolean): DrumNote[] {
         const isFillBar = (barNumber + 1) % 4 === 0 && !isAnchorPhase; // Fills only during evolution
         let score;
         if (isFillBar) {
-            score = PatternProvider.getDrumPattern('dreamtales-fill');
+            const randomFill = this.fillPatterns[Math.floor(Math.random() * this.fillPatterns.length)];
+            score = PatternProvider.getDrumPattern(randomFill);
         } else if (pattern === 'dreamtales-beat') {
             const patternName = mixProfile === 'mobile' ? 'dreamtales-beat-mobile' : 'dreamtales-beat-desktop';
             score = PatternProvider.getDrumPattern(patternName);
