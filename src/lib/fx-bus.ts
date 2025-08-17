@@ -19,25 +19,28 @@ export class FxBus {
     public effectsInput: Tone.Gain;
 
     constructor() {
+        console.log("FXBUS_TRACE: Constructor called.");
         this.masterChannel = new Tone.Channel({ volume: 0 });
         this.masterChannel.toDestination();
+        console.log("FXBUS_TRACE: Master channel created and connected to destination.");
 
         this.soloDistortion = new Tone.Distortion({ distortion: 0.4, wet: 0 });
         this.accompanimentChorus = new Tone.Chorus({ frequency: 1.5, delayTime: 3.5, depth: 0.7, wet: 0 });
-        // The "Iron Man" sound requires distortion. Wet = 1 means the effect is fully applied.
-        // We can adjust the 'distortion' amount for intensity.
         this.bassDistortion = new Tone.Distortion({ distortion: 0.3, wet: 1.0 }); 
         
         console.log(`FXBUS_TRACE: Bass distortion created with distortion=${this.bassDistortion.distortion} and wet=${this.bassDistortion.wet.value}`);
 
         this.soloInput = new Tone.Gain().chain(this.soloDistortion, this.masterChannel);
         this.accompanimentInput = new Tone.Gain().chain(this.accompanimentChorus, this.masterChannel);
-        this.bassInput = new Tone.Gain().chain(this.bassDistortion, this.masterChannel); // Bass now goes through distortion
-        this.drumInput = new Tone.Gain().connect(this.masterChannel); // Using Gain for direct volume control
+        this.bassInput = new Tone.Gain().chain(this.bassDistortion, this.masterChannel); 
+        this.drumInput = new Tone.Gain().connect(this.masterChannel); 
         this.effectsInput = new Tone.Gain().connect(this.masterChannel);
+        
+        console.log(`FXBUS_TRACE: Input gains created. Initial values: bass=${this.bassInput.gain.value}, drums=${this.drumInput.gain.value}`);
     }
     
     public dispose() {
+        console.log("FXBUS_TRACE: Dispose called.");
         this.soloDistortion.dispose();
         this.accompanimentChorus.dispose();
         this.bassDistortion.dispose();
@@ -49,5 +52,6 @@ export class FxBus {
         this.effectsInput.dispose();
 
         this.masterChannel.dispose();
+        console.log("FXBUS_TRACE: All nodes disposed.");
     }
 }

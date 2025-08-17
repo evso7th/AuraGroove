@@ -255,6 +255,7 @@ export function AuraGroove() {
 
     useEffect(() => {
         if (!isReady || !bassSynthManagerRef.current) return;
+        console.log(`AURA_GROOVE_TRACE: useEffect for bass volume changed. New volume: ${instrumentSettings.bass.volume}`);
         bassSynthManagerRef.current.setVolume(instrumentSettings.bass.volume);
     }, [instrumentSettings.bass.volume, isReady]);
 
@@ -274,12 +275,14 @@ export function AuraGroove() {
 
     useEffect(() => {
         if (!isReady || !drumMachineRef.current) return;
+        console.log(`AURA_GROOVE_TRACE: useEffect for drum volume changed. New volume: ${drumSettings.volume}`);
         drumMachineRef.current.setVolume(drumSettings.volume);
     }, [drumSettings.volume, isReady]);
 
   
   const handlePlay = useCallback(async () => {
     try {
+        console.log("AURA_GROOVE_TRACE: handlePlay called.");
         setLoadingText("Starting audio context...");
         if (Tone.context.state !== 'running') {
             await Tone.start();
@@ -304,6 +307,7 @@ export function AuraGroove() {
         effectsSynthManagerRef.current?.setMode(effectsSettings.mode);
         
         const startPlayback = () => {
+            console.log("AURA_GROOVE_TRACE: startPlayback (callback from DrumMachine) called.");
             setLoadingText("Starting playback...");
     
             if (Tone.Transport.state !== 'started') {
@@ -323,8 +327,10 @@ export function AuraGroove() {
         setLoadingText("Loading samples...");
         
         if (drumMachineRef.current && drumMachineRef.current.isReady()) {
+            console.log("AURA_GROOVE_TRACE: Drum machine already ready, calling startPlayback directly.");
             startPlayback();
         } else {
+            console.log("AURA_GROOVE_TRACE: Initializing new DrumMachine.");
             drumMachineRef.current = new DrumMachine(fxBusRef.current, startPlayback);
         }
 
@@ -341,6 +347,7 @@ export function AuraGroove() {
   }, [drumSettings, instrumentSettings, effectsSettings, bpm, score, toast, mixProfile]);
 
   const handleStop = useCallback(() => {
+    console.log("AURA_GROOVE_TRACE: handleStop called.");
     soloSynthManagerRef.current?.fadeOut(1);
     accompanimentSynthManagerRef.current?.fadeOut(1);
     bassSynthManagerRef.current?.fadeOut(1);
