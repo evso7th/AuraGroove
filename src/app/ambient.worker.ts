@@ -69,7 +69,7 @@ class MusicalGenome {
 
 /**
  * The "brain" of the composer. Uses the genome to generate evolving music.
- * Implements the "Rondo" structure (A-B-A-C...)
+ * Implements the "Rondo" structure (A-B-A-C...) with smooth transitions.
  */
 class EvolutionEngine {
     private genome: MusicalGenome;
@@ -106,67 +106,69 @@ class EvolutionEngine {
             }
         }
     }
+    
+    private isTransitionBar(): boolean {
+        const currentPhaseLength = this.isAnchorPhase ? this.anchorLengthInBars : this.evolutionLengthInBars;
+        return this.barsIntoPhase === currentPhaseLength - 1;
+    }
 
     public getHarmony(bar: number) {
         const chordIndex = Math.floor(bar / 4) % this.genome.harmony.length;
         return this.genome.harmony[chordIndex];
     }
 
-    /**
-     * Applies a set of musical mutation rules to a melody to create the next evolution.
-     * This method focuses on creating a more coherent and melodic phrase.
-     */
     private evolvePhrase(phrase: string[], harmony: { root: string; scale: string[] }): string[] {
         const newPhrase = [...phrase];
         const scale = harmony.scale;
         
         for (let i = 0; i < newPhrase.length; i++) {
-             if (Math.random() < 0.4) { // ~40% chance to mutate a note
+             if (Math.random() < 0.4) { 
                 const note = newPhrase[i];
                 const noteName = note.slice(0, -1);
                 const octave = parseInt(note.slice(-1), 10);
                 const currentNoteIndexInScale = scale.indexOf(noteName);
 
-                // Rule 1: Stepwise motion (most common)
                 if (Math.random() < 0.7 && currentNoteIndexInScale !== -1) {
                      const step = Math.random() < 0.5 ? 1 : -1;
                      const nextNoteName = scale[(currentNoteIndexInScale + step + scale.length) % scale.length];
                      newPhrase[i] = `${nextNoteName}${octave}`;
                 } 
-                // Rule 2: Jump to a chord tone (less common, for stability)
                 else if (Math.random() < 0.2) {
                      const chordTones = [scale[0], scale[2], scale[4]];
                      const targetTone = chordTones[Math.floor(Math.random() * chordTones.length)];
-                     const targetOctave = Math.random() < 0.7 ? 3 : 4; // Bias to 3rd octave
+                     const targetOctave = Math.random() < 0.7 ? 3 : 4; 
                      newPhrase[i] = `${targetTone}${targetOctave}`;
                 }
-                // Rule 3: Keep a small part of the previous phrase for cohesion
                 else if (i > 0 && Math.random() < 0.1) {
                     newPhrase[i] = newPhrase[i-1];
                 }
-                 // Rule 4: Change octave (rare)
                 else if (Math.random() < 0.05) {
                     const newOctave = octave === 3 ? 4 : 3;
                     newPhrase[i] = `${noteName}${newOctave}`;
                 }
-                // (Fallback: keep note the same)
             }
         }
         return newPhrase;
     }
-
 
     public generateSoloScore(bar: number): SoloNote[] {
         let phrase: string[];
         
         if (this.isAnchorPhase) {
             phrase = this.genome.soloAnchor;
-            if (this.barsIntoPhase === this.anchorLengthInBars - 1) {
+            // Pre-evolve the next phrase on the last bar of the anchor phase
+            if (this.isTransitionBar()) {
                 this.soloState.lastPhrase = this.evolvePhrase(this.genome.soloAnchor, this.getHarmony(bar));
             }
         } else {
-            phrase = this.evolvePhrase(this.soloState.lastPhrase, this.getHarmony(bar));
-            this.soloState.lastPhrase = phrase;
+            // On the last bar of evolution, generate a simpler, resolving phrase
+            if (this.isTransitionBar()) {
+                const { scale } = this.getHarmony(bar);
+                phrase = [scale[0], scale[2], scale[1], scale[0]].map(n => `${n}3`); // Simple resolving melody
+            } else {
+                phrase = this.evolvePhrase(this.soloState.lastPhrase, this.getHarmony(bar));
+                this.soloState.lastPhrase = phrase;
+            }
         }
 
         return phrase.map((note, i) => ({
@@ -178,25 +180,34 @@ class EvolutionEngine {
 
     public generateAccompanimentScore(bar: number): AccompanimentNote[] {
         if (this.isAnchorPhase) {
+             // On the transition bar, play a sparser chord to lead into the arpeggio
+             if (this.isTransitionBar()) {
+                 const chord = this.genome.accompanimentAnchor[bar % this.genome.accompanimentAnchor.length];
+                 return [{ notes: [chord[0], chord[2]], time: 0, duration: '2n' }]; // Play only root and fifth
+             }
              const chord = this.genome.accompanimentAnchor[bar % this.genome.accompanimentAnchor.length];
              return [{ notes: chord, time: 0, duration: '1m'}];
         } else {
-             // During evolution, play arpeggios
              const { scale } = this.getHarmony(bar);
              const octave3 = Math.random() < 0.8 ? '3' : '4';
              const octave4 = Math.random() < 0.2 ? '3' : '4';
-
-             // Create a simple triad for the arpeggio
              const chord = [`${scale[0]}${octave3}`, `${scale[2]}${octave3}`, `${scale[4]}${octave4}`];
-             
              const arpeggio: AccompanimentNote[] = [];
+
+             // On the transition bar, slow down the arpeggio to resolve into the anchor chord
+             if (this.isTransitionBar()) {
+                 arpeggio.push({ notes: [chord[0]], time: 0, duration: '2n' });
+                 arpeggio.push({ notes: [chord[1]], time: 2, duration: '2n' });
+                 return arpeggio;
+             }
+             
              // Slower, more sparse 8th note arpeggio
-             const pattern = [chord[0], chord[1], chord[2], chord[1]]; // C-E-G-E or similar
-             for (let i = 0; i < 4; i++) { // 4 notes per bar (quarter notes)
+             const pattern = [chord[0], chord[1], chord[2], chord[1]]; 
+             for (let i = 0; i < 4; i++) { 
                 arpeggio.push({
                     notes: [pattern[i]],
-                    time: i, // Play on each beat
-                    duration: '8n' // Let them ring out a bit
+                    time: i, 
+                    duration: '8n'
                 });
              }
              return arpeggio;
