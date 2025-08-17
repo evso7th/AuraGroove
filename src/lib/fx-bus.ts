@@ -28,6 +28,8 @@ export class FxBus {
         // We can adjust the 'distortion' amount for intensity.
         this.bassDistortion = new Tone.Distortion({ distortion: 0.3, wet: 1.0 }); 
         
+        console.log(`FXBUS_TRACE: Bass distortion created with distortion=${this.bassDistortion.distortion} and wet=${this.bassDistortion.wet.value}`);
+
         this.soloInput = new Tone.Gain().chain(this.soloDistortion, this.masterChannel);
         this.accompanimentInput = new Tone.Gain().chain(this.accompanimentChorus, this.masterChannel);
         this.bassInput = new Tone.Gain().chain(this.bassDistortion, this.masterChannel); // Bass now goes through distortion

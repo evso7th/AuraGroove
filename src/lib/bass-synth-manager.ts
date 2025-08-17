@@ -81,12 +81,13 @@ export class BassSynthManager {
     constructor(fxBus: FxBus) {
         this.fxBus = fxBus;
         this.currentBaseVolumeDb = DESKTOP_VOLUME_DB;
+        console.log("BASS_TRACE: Manager constructed.");
     }
 
     private ensureSynthInitialized() {
         if (this.isInitialized) return;
         
-        console.log("BASS: Lazily creating MonoSynth.");
+        console.log("BASS_TRACE: Lazily creating MonoSynth.");
         this.currentSynth = new Tone.MonoSynth({ volume: -Infinity }).connect(this.fxBus.bassInput);
         this.isInitialized = true;
     }
@@ -94,6 +95,8 @@ export class BassSynthManager {
     public setInstrument(name: InstrumentName) {
         this.ensureSynthInitialized();
         if (!this.currentSynth) return;
+        
+        console.log(`BASS_TRACE: setInstrument called with: ${name}`);
 
         if (name === 'none') {
             this.fadeOut(0.1);
@@ -112,8 +115,10 @@ export class BassSynthManager {
     }
 
     public setMixProfile(profile: MixProfile) {
+        console.log(`BASS_TRACE: setMixProfile called with: ${profile}`);
         this.currentProfile = profile;
         this.currentBaseVolumeDb = profile === 'mobile' ? MOBILE_VOLUME_DB : DESKTOP_VOLUME_DB;
+        console.log(`BASS_TRACE: Base volume set to ${this.currentBaseVolumeDb} dB for ${profile}`);
         if(this.currentInstrument !== 'none') {
             this.applyProfileSettings();
         }
@@ -121,6 +126,7 @@ export class BassSynthManager {
     }
     
     public setVolume(volume: number) { // volume is linear 0-1
+        console.log(`BASS_TRACE: setVolume called with: ${volume}`);
         this.userVolume = volume;
         this.updateVolume();
     }
@@ -133,11 +139,12 @@ export class BassSynthManager {
         
         const userVolumeDb = Tone.gainToDb(this.userVolume);
         const targetVolume = this.currentBaseVolumeDb + userVolumeDb;
+        console.log(`BASS_TRACE: updateVolume -> UserVol: ${this.userVolume} (${userVolumeDb.toFixed(2)} dB), BaseVol: ${this.currentBaseVolumeDb} dB, Target: ${targetVolume.toFixed(2)} dB`);
 
         try {
             this.currentSynth.volume.rampTo(targetVolume, rampTime);
         } catch (e) {
-            // Ignore error
+            console.error("BASS_TRACE: Error in updateVolume rampTo", e);
         }
     }
 
@@ -147,15 +154,16 @@ export class BassSynthManager {
         
         const preset = this.currentProfile === 'mobile' 
             ? mobilePreset 
-            : ironManPreset; // Use the desktop preset as the base for the selected instrument
+            : ironManPreset; 
         
-        console.log(`BASS: Applying ${this.currentProfile} preset.`);
+        console.log(`BASS_TRACE: Applying ${this.currentProfile} preset to synth.`);
         this.currentSynth.set(preset);
     }
     
     public triggerAttackRelease(note: string, duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
         this.ensureSynthInitialized();
         if (this.currentSynth && this.currentInstrument !== 'none') {
+            console.log(`BASS_TRACE: triggerAttackRelease -> Note: ${note}, Duration: ${duration}, Time: ${time}, Velocity: ${velocity}`);
             this.currentSynth.triggerAttackRelease(note, duration, time, velocity);
         }
     }
@@ -188,7 +196,7 @@ export class BassSynthManager {
 
     public dispose() {
         if (this.currentSynth) {
-            console.log("BASS: Disposing MonoSynth.");
+            console.log("BASS_TRACE: Disposing MonoSynth.");
             this.currentSynth.dispose();
             this.currentSynth = null;
             this.isInitialized = false;
