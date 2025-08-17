@@ -40,7 +40,7 @@ export function AuraGroove() {
   const [isInitializing, setIsInitializing] = useState(true); 
   const [loadingText, setLoadingText] = useState("Initializing...");
   const [drumSettings, setDrumSettings] = useState<DrumSettings>({
-      pattern: 'dreamtales-beat',
+      pattern: 'ambient-beat',
       volume: 0.7,
   });
   const [effectsSettings, setEffectsSettings] = useState<EffectsSettings>({
@@ -53,7 +53,7 @@ export function AuraGroove() {
     bass: { name: "bassGuitar", volume: 0.9 },
   });
   const [bpm, setBpm] = useState(75);
-  const [score, setScore] = useState<ScoreName>('dreamtales');
+  const [score, setScore] = useState<ScoreName>('evolve');
   
   // Instrument FX States
   const [soloFx, setSoloFx] = useState({ distortion: { enabled: false, wet: 0.5 } });
@@ -364,7 +364,7 @@ export function AuraGroove() {
   
 
   const isBusy = isInitializing;
-  const isDreamtales = score === 'dreamtales';
+  const isGenerative = score === 'evolve' || score === 'fractal';
   const drumsEnabled = drumSettings.pattern !== 'none';
   const effectsEnabled = effectsSettings.mode !== 'none';
 
@@ -392,7 +392,8 @@ export function AuraGroove() {
                         <SelectValue placeholder="Select score" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="dreamtales">DreamTales</SelectItem>
+                        <SelectItem value="evolve">Evolve (L-Logic)</SelectItem>
+                        <SelectItem value="fractal">Fractal (Mandelbrot)</SelectItem>
                         <SelectItem value="promenade">Promenade</SelectItem>
                     </SelectContent>
                 </Select>
@@ -520,14 +521,14 @@ export function AuraGroove() {
                     <Select
                         value={drumSettings.pattern}
                         onValueChange={(v) => setDrumSettings(d => ({ ...d, pattern: v as DrumSettings['pattern'] }))}
-                        disabled={isBusy || isPlaying || !isDreamtales}
+                        disabled={isBusy || isPlaying || !isGenerative}
                     >
                         <SelectTrigger className="w-[150px]">
                             <SelectValue placeholder="Select pattern" />
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="none">None</SelectItem>
-                            <SelectItem value="dreamtales-beat">DreamTales Beat</SelectItem>
+                            <SelectItem value="ambient-beat">Ambient Beat</SelectItem>
                             <SelectItem value="basic">Basic</SelectItem>
                             <SelectItem value="breakbeat">Breakbeat</SelectItem>
                             <SelectItem value="slow">Slow</SelectItem>
@@ -627,3 +628,5 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    

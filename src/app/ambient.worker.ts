@@ -5,7 +5,7 @@ import { promenadeScore } from '@/lib/scores/promenade';
 import type { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote, DrumSettings, EffectsSettings, ScoreName, InstrumentSettings } from '@/types/music';
 
 
-// --- NEW INTELLIGENT COMPOSITION ENGINE ---
+// --- NEW INTELLIGENT COMPOSITION ENGINES ---
 
 /**
  * Generates and holds the unique musical identity for a session.
@@ -25,7 +25,6 @@ class MusicalGenome {
             { root: 'D', scale: ['D', 'E', 'F#', 'G', 'A', 'B', 'C#'] }  // D major, adjusted scale
         ];
         
-        // --- Procedural Generation of the Anchor ---
         this.soloAnchor = this.generateAnchorMelody();
         this.accompanimentAnchor = this.generateAnchorAccompaniment();
 
@@ -35,20 +34,14 @@ class MusicalGenome {
         ];
     }
     
-    /**
-     * Generates a unique, melodious 12-note anchor melody for the session.
-     * Uses a constrained random walk to ensure it's playable and pleasant.
-     */
     private generateAnchorMelody(): string[] {
         const baseScale = this.harmony[0].scale;
         const melody: string[] = [];
-        let lastNoteIndex = Math.floor(baseScale.length / 2); // Start near the middle
+        let lastNoteIndex = Math.floor(baseScale.length / 2);
         
         for (let i = 0; i < 12; i++) {
-            const octave = Math.random() < 0.7 ? '3' : '4'; // Prefer 3rd octave
+            const octave = Math.random() < 0.7 ? '3' : '4';
             melody.push(`${baseScale[lastNoteIndex]}${octave}`);
-            
-            // Bias towards smaller steps
             const step = Math.random() > 0.8 ? (Math.random() > 0.5 ? 2 : -2) : (Math.random() > 0.5 ? 1 : -1);
             lastNoteIndex = (lastNoteIndex + step + baseScale.length) % baseScale.length;
         }
@@ -66,12 +59,9 @@ class MusicalGenome {
     }
 }
 
+// --- ENGINE 1: L-System Based Evolution ---
 
-/**
- * The "brain" of the composer. Uses the genome to generate evolving music.
- * Implements the "Rondo" structure (A-B-A-C...) with smooth transitions.
- */
-class EvolutionEngine {
+class EvolveEngine {
     private genome: MusicalGenome;
     private soloState: { lastPhrase: string[]; };
     private accompanimentState: { lastPhrase: string[][]; };
@@ -156,15 +146,13 @@ class EvolutionEngine {
         
         if (this.isAnchorPhase) {
             phrase = this.genome.soloAnchor;
-            // Pre-evolve the next phrase on the last bar of the anchor phase
             if (this.isTransitionBar()) {
                 this.soloState.lastPhrase = this.evolvePhrase(this.genome.soloAnchor, this.getHarmony(bar));
             }
         } else {
-            // On the last bar of evolution, generate a simpler, resolving phrase
             if (this.isTransitionBar()) {
                 const { scale } = this.getHarmony(bar);
-                phrase = [scale[0], scale[2], scale[1], scale[0]].map(n => `${n}3`); // Simple resolving melody
+                phrase = [scale[0], scale[2], scale[1], scale[0]].map(n => `${n}3`); 
             } else {
                 phrase = this.evolvePhrase(this.soloState.lastPhrase, this.getHarmony(bar));
                 this.soloState.lastPhrase = phrase;
@@ -180,10 +168,9 @@ class EvolutionEngine {
 
     public generateAccompanimentScore(bar: number): AccompanimentNote[] {
         if (this.isAnchorPhase) {
-             // On the transition bar, play a sparser chord to lead into the arpeggio
              if (this.isTransitionBar()) {
                  const chord = this.genome.accompanimentAnchor[bar % this.genome.accompanimentAnchor.length];
-                 return [{ notes: [chord[0], chord[2]], time: 0, duration: '2n' }]; // Play only root and fifth
+                 return [{ notes: [chord[0], chord[2]], time: 0, duration: '2n' }]; 
              }
              const chord = this.genome.accompanimentAnchor[bar % this.genome.accompanimentAnchor.length];
              return [{ notes: chord, time: 0, duration: '1m'}];
@@ -194,14 +181,12 @@ class EvolutionEngine {
              const chord = [`${scale[0]}${octave3}`, `${scale[2]}${octave3}`, `${scale[4]}${octave4}`];
              const arpeggio: AccompanimentNote[] = [];
 
-             // On the transition bar, slow down the arpeggio to resolve into the anchor chord
              if (this.isTransitionBar()) {
                  arpeggio.push({ notes: [chord[0]], time: 0, duration: '2n' });
                  arpeggio.push({ notes: [chord[1]], time: 2, duration: '2n' });
                  return arpeggio;
              }
              
-             // Slower, more sparse 8th note arpeggio
              const pattern = [chord[0], chord[1], chord[2], chord[1]]; 
              for (let i = 0; i < 4; i++) { 
                 arpeggio.push({
@@ -229,12 +214,106 @@ class EvolutionEngine {
     }
 }
 
+// --- ENGINE 2: Mandelbrot Fractal Based Generation ---
+class MandelbrotEngine {
+    private genome: MusicalGenome;
+    private x: number;
+    private y: number;
+    private zoom: number;
+    private maxIterations = 50;
 
-// --- PatternProvider (Remains the same) ---
+    constructor(genome: MusicalGenome) {
+        this.genome = genome;
+        this.x = -0.5;
+        this.y = 0;
+        this.zoom = 1;
+    }
+
+    private getMandelbrotValue(cx: number, cy: number): number {
+        let zx = 0;
+        let zy = 0;
+        let i = 0;
+        while (zx * zx + zy * zy < 4 && i < this.maxIterations) {
+            const tmp = zx * zx - zy * zy + cx;
+            zy = 2 * zx * zy + cy;
+            zx = tmp;
+            i++;
+        }
+        return i;
+    }
+
+    public getHarmony(bar: number) {
+        const chordIndex = Math.floor(bar / 4) % this.genome.harmony.length;
+        return this.genome.harmony[chordIndex];
+    }
+    
+    public generateSoloScore(bar: number): SoloNote[] {
+        const harmony = this.getHarmony(bar);
+        const score: SoloNote[] = [];
+        for (let i = 0; i < 8; i++) { // 8 notes per bar
+            const cx = this.x + (i - 4) / (256 * this.zoom);
+            const cy = this.y + (Math.sin(bar + i) * 2) / (256 * this.zoom);
+
+            const value = this.getMandelbrotValue(cx, cy);
+
+            if (value < this.maxIterations) {
+                const noteIndex = value % harmony.scale.length;
+                const octave = (Math.floor(value / harmony.scale.length) % 2) + 3; // Octaves 3 or 4
+                const note = `${harmony.scale[noteIndex]}${octave}`;
+                const durationValue = (this.maxIterations - value) / this.maxIterations;
+                const duration = durationValue > 0.5 ? '4n' : '8n';
+                score.push({
+                    notes: note,
+                    time: i * 0.5,
+                    duration: duration,
+                });
+            }
+        }
+        return score;
+    }
+
+    public generateAccompanimentScore(bar: number): AccompanimentNote[] {
+        const harmony = this.getHarmony(bar);
+        const value = this.getMandelbrotValue(this.x, this.y);
+        const density = value / this.maxIterations;
+
+        if (density < 0.2) { // Stable region -> long chord
+            return [{ notes: [`${harmony.scale[0]}3`, `${harmony.scale[2]}3`, `${harmony.scale[4]}3`], time: 0, duration: '1m' }];
+        } else { // Active region -> arpeggio
+            const chord = [`${harmony.scale[0]}3`, `${harmony.scale[2]}3`, `${harmony.scale[4]}3`];
+            const arpeggio: AccompanimentNote[] = [];
+            for (let i = 0; i < 4; i++) {
+                arpeggio.push({ notes: [chord[i % 3]], time: i, duration: '8n' });
+            }
+            return arpeggio;
+        }
+    }
+    
+    public generateBassScore(bar: number): BassNote[] {
+         const { root } = this.getHarmony(bar);
+         return this.genome.bassAnchorRiff.map(riffPart => ({
+             note: `${root}2`,
+             time: riffPart.time,
+             duration: riffPart.duration,
+             velocity: 0.8
+         }));
+    }
+    
+    public onBarComplete() {
+        // "Travel" through the Mandelbrot set
+        this.x += 0.005 / this.zoom;
+        this.y += 0.002 / this.zoom;
+        if (this.zoom > 0.1) {
+          this.zoom *= 0.99;
+        }
+    }
+}
+
+
+// --- PatternProvider (Updated) ---
 const PatternProvider = {
     drumPatterns: {
-        'dreamtales-beat': [ 
-            // Simplified for mobile clarity
+        'ambient-beat': [ 
             { sample: 'kick', time: 0, velocity: 0.8 },
             { sample: 'ride', time: 0, velocity: 0.05 },
             { sample: 'ride', time: 1, velocity: 0.04 },
@@ -242,20 +321,20 @@ const PatternProvider = {
             { sample: 'ride', time: 2, velocity: 0.05 },
             { sample: 'ride', time: 3, velocity: 0.04 },
         ],
-        'dreamtales-fill-1': [ // Simple fill with soft single crash
+        'ambient-fill-1': [
             { sample: 'hat', time: 3.0, velocity: 0.5 },
             { sample: 'hat', time: 3.25, velocity: 0.6 },
             { sample: 'hat', time: 3.5, velocity: 0.5 },
-            { sample: 'crash', time: 3.5, velocity: 0.35 }, // Soft crash
+            { sample: 'crash', time: 3.5, velocity: 0.35 },
         ],
-        'dreamtales-fill-2': [ // More complex fill with double crash
+        'ambient-fill-2': [
             { sample: 'snare', time: 2.5, velocity: 0.4 },
             { sample: 'hat', time: 3.0, velocity: 0.5 },
             { sample: 'hat', time: 3.25, velocity: 0.6 },
-            { sample: 'crash', time: 3.5, velocity: 0.3 }, // Soft
-            { sample: 'crash', time: 3.75, velocity: 0.25 },// Softer
+            { sample: 'crash', time: 3.5, velocity: 0.3 },
+            { sample: 'crash', time: 3.75, velocity: 0.25 },
         ],
-        'dreamtales-fill-3': [ // A rolling snare fill
+        'ambient-fill-3': [
             { sample: 'snare', time: 3.0, velocity: 0.2 },
             { sample: 'snare', time: 3.25, velocity: 0.3 },
             { sample: 'snare', time: 3.5, velocity: 0.4 },
@@ -275,10 +354,10 @@ const PatternProvider = {
 // --- Drum and Effects Generators (Modified for new logic) ---
 
 class DrumGenerator {
-    private static fillPatterns = ['dreamtales-fill-1', 'dreamtales-fill-2', 'dreamtales-fill-3'];
+    private static fillPatterns = ['ambient-fill-1', 'ambient-fill-2', 'ambient-fill-3'];
 
     static createScore(pattern: string, barNumber: number, isAnchorPhase: boolean): DrumNote[] {
-        const isFillBar = (barNumber + 1) % 4 === 0 && !isAnchorPhase; // Fills only during evolution
+        const isFillBar = (barNumber + 1) % 4 === 0 && !isAnchorPhase;
         let score;
         if (isFillBar) {
             const randomFill = this.fillPatterns[Math.floor(Math.random() * this.fillPatterns.length)];
@@ -292,12 +371,12 @@ class DrumGenerator {
 
 class EffectsGenerator {
     static createScore(mode: EffectsSettings['mode'], bar: number, beatsPerBar = 4, isAnchorPhase: boolean): EffectNote[] {
-        if (mode === 'none' || isAnchorPhase) return []; // Effects only during evolution
+        if (mode === 'none' || isAnchorPhase) return [];
         const score: EffectNote[] = [];
         let effectType: 'piu' | 'bell' | null = Math.random() > 0.5 ? 'bell' : 'piu';
         if (mode !== 'mixed') effectType = mode;
 
-        if (effectType === 'bell' && Math.random() < 0.2) { // Less frequent
+        if (effectType === 'bell' && Math.random() < 0.2) {
             const windChimeNotes = ['C5', 'Eb5', 'F5', 'G5', 'Bb5'];
             const numberOfChimes = Math.floor(3 + Math.random() * 3);
             let currentTime = Math.random() * (beatsPerBar / 2);
@@ -305,7 +384,7 @@ class EffectsGenerator {
                 score.push({ type: 'bell', time: currentTime, note: windChimeNotes[Math.floor(Math.random() * windChimeNotes.length)], duration: '2n', isFirst: i === 0 });
                 currentTime += Math.random() * 2;
             }
-        } else if (effectType === 'piu' && Math.random() < 0.15) { // Less frequent
+        } else if (effectType === 'piu' && Math.random() < 0.15) {
             score.push({ type: 'piu', time: Math.random() * beatsPerBar, note: 'G5' });
         }
         return score;
@@ -318,18 +397,18 @@ const Scheduler = {
     timeoutId: null as any,
     isRunning: false,
     barCount: 0,
-    evolutionEngine: null as EvolutionEngine | null,
+    compositionEngine: null as EvolveEngine | MandelbrotEngine | null,
     
     // Settings from main thread
     bpm: 75,
     instrumentSettings: {
         solo: { name: 'none', volume: 0.8 },
-        accompaniment: { name: 'none', volume: 0.8 },
+        accompaniment: { name: 'none', volume: 0.7 },
         bass: { name: 'none', volume: 0.9 },
     } as InstrumentSettings,
-    drumSettings: { pattern: 'dreamtales-beat', volume: 0.7 } as DrumSettings,
+    drumSettings: { pattern: 'ambient-beat', volume: 0.7 } as DrumSettings,
     effectsSettings: { mode: 'none', volume: 0.7 } as EffectsSettings,
-    score: 'dreamtales' as ScoreName,
+    score: 'evolve' as ScoreName,
 
 
     // Calculated properties
@@ -342,7 +421,15 @@ const Scheduler = {
 
         this.reset();
         this.isRunning = true;
-        this.evolutionEngine = new EvolutionEngine(new MusicalGenome());
+        
+        const genome = new MusicalGenome();
+        if (this.score === 'evolve') {
+            this.compositionEngine = new EvolveEngine(genome);
+        } else if (this.score === 'fractal') {
+            this.compositionEngine = new MandelbrotEngine(genome);
+        } else {
+            this.compositionEngine = null; // for promenade
+        }
         
         this.tick();
         
@@ -356,7 +443,7 @@ const Scheduler = {
             this.timeoutId = null;
         }
         this.isRunning = false;
-        this.evolutionEngine = null;
+        this.compositionEngine = null;
         self.postMessage({ type: 'stopped' });
     },
 
@@ -373,10 +460,10 @@ const Scheduler = {
     },
 
     tick() {
-        if (!this.isRunning || !this.evolutionEngine) return;
+        if (!this.isRunning) return;
 
-        if (this.score === 'dreamtales') {
-            const engine = this.evolutionEngine;
+        if (this.compositionEngine) {
+            const engine = this.compositionEngine;
 
             if (this.drumSettings.pattern !== 'none') {
                  const drumScore = DrumGenerator.createScore(this.drumSettings.pattern, this.barCount, (engine as any).isAnchorPhase)

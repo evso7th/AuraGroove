@@ -17,7 +17,7 @@ export type InstrumentSettings = {
 };
 
 export type DrumSettings = {
-    pattern: 'basic' | 'breakbeat' | 'slow' | 'heavy' | 'none' | 'dreamtales-beat';
+    pattern: 'basic' | 'breakbeat' | 'slow' | 'heavy' | 'none' | 'ambient-beat';
     volume: number;
 };
 
@@ -60,7 +60,7 @@ export type EffectNote = {
     velocity?: number; // Optional velocity for the note
 }
 
-export type ScoreName = 'dreamtales' | 'promenade';
+export type ScoreName = 'evolve' | 'fractal' | 'promenade';
 
 // Obsolete, replaced by InstrumentSettings
 export type Instruments = {
@@ -68,3 +68,5 @@ export type Instruments = {
   accompaniment: 'synthesizer' | 'piano' | 'organ' | 'none';
   bass: 'bass synth' | 'bassGuitar' | 'none';
 };
+
+    
