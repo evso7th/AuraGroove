@@ -50,11 +50,9 @@ export class DrumMachine {
     public setVolume(volume: number) {
         if (volume < 0.01) {
             this.fxBus.drumInput.gain.value = -Infinity;
-            console.log(`DRUM_DIAGNOSTIC: Target dB: -Infinity, Actual FxBus Gain: ${this.fxBus.drumInput.gain.value.toFixed(2)}`);
         } else {
             const dbValue = Tone.gainToDb(volume);
             this.fxBus.drumInput.gain.value = dbValue;
-            console.log(`DRUM_DIAGNOSTIC: Target dB: ${dbValue.toFixed(2)}, Actual FxBus Gain: ${this.fxBus.drumInput.gain.value.toFixed(2)}`);
         }
     }
 

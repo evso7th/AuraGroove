@@ -33,7 +33,7 @@ export class FxBus {
         this.soloInput = new Tone.Gain().chain(this.soloDistortion, this.masterChannel);
         this.accompanimentInput = new Tone.Gain().chain(this.accompanimentChorus, this.masterChannel);
         this.bassInput = new Tone.Gain().chain(this.bassDistortion, this.masterChannel); 
-        this.drumInput = new Tone.Gain({ gain: 0, units: 'decibels' }).connect(this.masterChannel);
+        this.drumInput = new Tone.Gain({ gain: 6, units: 'decibels' }).connect(this.masterChannel);
         this.effectsInput = new Tone.Gain().connect(this.masterChannel);
         
         console.log(`FXBUS_TRACE: Input gains created. Initial values: bass=${this.bassInput.gain.value}, drums=${this.drumInput.gain.value}`);
