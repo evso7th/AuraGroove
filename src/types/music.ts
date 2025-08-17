@@ -60,7 +60,7 @@ export type EffectNote = {
     velocity?: number; // Optional velocity for the note
 }
 
-export type ScoreName = 'evolve' | 'fractal' | 'promenade';
+export type ScoreName = 'evolve' | 'omega' | 'promenade';
 
 // Obsolete, replaced by InstrumentSettings
 export type Instruments = {
@@ -68,5 +68,7 @@ export type Instruments = {
   accompaniment: 'synthesizer' | 'piano' | 'organ' | 'none';
   bass: 'bass synth' | 'bassGuitar' | 'none';
 };
+
+    
 
     

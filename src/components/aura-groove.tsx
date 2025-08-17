@@ -364,7 +364,7 @@ export function AuraGroove() {
   
 
   const isBusy = isInitializing;
-  const isGenerative = score === 'evolve' || score === 'fractal';
+  const isGenerative = score === 'evolve' || score === 'omega';
   const drumsEnabled = drumSettings.pattern !== 'none';
   const effectsEnabled = effectsSettings.mode !== 'none';
 
@@ -393,7 +393,7 @@ export function AuraGroove() {
                     </SelectTrigger>
                     <SelectContent>
                         <SelectItem value="evolve">Evolve (L-Logic)</SelectItem>
-                        <SelectItem value="fractal">Fractal (Mandelbrot)</SelectItem>
+                        <SelectItem value="omega">Omega (Fractal)</SelectItem>
                         <SelectItem value="promenade">Promenade</SelectItem>
                     </SelectContent>
                 </Select>
@@ -628,5 +628,7 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    
 
     

@@ -489,7 +489,7 @@ const Scheduler = {
         const genome = new MusicalGenome();
         if (this.score === 'evolve') {
             this.compositionEngine = new EvolveEngine(genome);
-        } else if (this.score === 'fractal') {
+        } else if (this.score === 'omega') {
             this.compositionEngine = new MandelbrotEngine(genome);
         } else {
             this.compositionEngine = null; // for promenade
@@ -626,6 +626,8 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
+
+    
 
     
 
