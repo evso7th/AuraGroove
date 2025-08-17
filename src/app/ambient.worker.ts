@@ -43,9 +43,9 @@ class MusicalGenome {
         const baseScale = this.harmony[0].scale;
         const melody: string[] = [];
         let lastNoteIndex = Math.floor(baseScale.length / 2); // Start near the middle
-        const octave = '4';
-
+        
         for (let i = 0; i < 12; i++) {
+            const octave = Math.random() < 0.3 ? '4' : '3'; // Prefer 3rd octave
             melody.push(`${baseScale[lastNoteIndex]}${octave}`);
             
             // Bias towards smaller steps
@@ -117,19 +117,28 @@ class EvolutionEngine {
      * This is where the music "develops".
      */
     private evolvePhrase(phrase: string[], harmony: { root: string; scale: string[] }): string[] {
-        const scaleWithOctave = harmony.scale.map(n => `${n}4`);
+        const scale3 = harmony.scale.map(n => `${n}3`);
+        const scale4 = harmony.scale.map(n => `${n}4`);
 
         return phrase.map(note => {
-             // Rule 1: Change pitch (most common)
+            const currentOctave = note.slice(-1);
+            const noteName = note.slice(0, -1);
+
+            // Rule 1: Change pitch (most common)
             if (Math.random() < 0.7) {
-                const currentIndex = scaleWithOctave.indexOf(note);
+                const currentScale = currentOctave === '3' ? scale3 : scale4;
+                const currentIndex = currentScale.indexOf(note);
                 if (currentIndex !== -1) {
                     const step = Math.random() > 0.5 ? 1 : -1;
-                    const nextIndex = (currentIndex + step + scaleWithOctave.length) % scaleWithOctave.length;
-                    return scaleWithOctave[nextIndex];
+                    const nextIndex = (currentIndex + step + currentScale.length) % currentScale.length;
+                    return currentScale[nextIndex];
                 }
             }
-            // Rule 2: Keep note the same (less common)
+             // Rule 2: Change octave
+            if (Math.random() < 0.15) {
+                return currentOctave === '3' ? `${noteName}4` : `${noteName}3`;
+            }
+            // Rule 3: Keep note the same (less common)
             return note;
         });
     }
@@ -154,7 +163,7 @@ class EvolutionEngine {
         return phrase.map((note, i) => ({
             notes: note,
             time: i, // Play as quarter notes
-            duration: '4n'
+            duration: '4n.'
         }));
     }
 
@@ -167,7 +176,9 @@ class EvolutionEngine {
             // During evolution, make it more sparse and atmospheric
              if (bar % 4 !== 0) return []; // Play only once every 4 bars
              const { root, scale } = this.getHarmony(bar);
-             const chord = [`${root}2`, `${scale[2]}3`, `${scale[4]}4`, `${scale[6]}5`]; // Arpeggiated, wide chord
+             const octave3 = Math.random() < 0.2 ? '4' : '3';
+             const octave4 = Math.random() < 0.8 ? '4' : '3';
+             const chord = [`${root}2`, `${scale[2]}${octave3}`, `${scale[4]}${octave4}`, `${scale[6]}5`]; // Arpeggiated, wide chord
              return [{ notes: chord, time: 0, duration: '1m' }];
         }
     }
@@ -430,3 +441,5 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
+
+    
