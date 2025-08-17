@@ -47,7 +47,7 @@ const mobilePreset: Tone.MonoSynthOptions = {
         Q: 3,         // ...but with higher Q to create a resonant peak
     },
     filterEnvelope: {
-        attack: 0.05,
+        attack: 0.4,
         decay: 0.3,
         sustain: 0.7,
         release: 1.0,
@@ -55,7 +55,7 @@ const mobilePreset: Tone.MonoSynthOptions = {
         octaves: 1.5,       // Less sweep to keep it focused
     },
     envelope: {
-        attack: 0.02,
+        attack: 0.1,
         decay: 0.3,
         sustain: 0.9,
         release: 1.0,
