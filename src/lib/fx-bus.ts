@@ -24,7 +24,9 @@ export class FxBus {
 
         this.soloDistortion = new Tone.Distortion({ distortion: 0.4, wet: 0 });
         this.accompanimentChorus = new Tone.Chorus({ frequency: 1.5, delayTime: 3.5, depth: 0.7, wet: 0 });
-        this.bassDistortion = new Tone.Distortion({ distortion: 0.1, wet: 1.0 }); // Subtle distortion for bass
+        // The "Iron Man" sound requires distortion. Wet = 1 means the effect is fully applied.
+        // We can adjust the 'distortion' amount for intensity.
+        this.bassDistortion = new Tone.Distortion({ distortion: 0.3, wet: 1.0 }); 
         
         this.soloInput = new Tone.Gain().chain(this.soloDistortion, this.masterChannel);
         this.accompanimentInput = new Tone.Gain().chain(this.accompanimentChorus, this.masterChannel);

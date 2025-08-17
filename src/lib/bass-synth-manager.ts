@@ -7,22 +7,23 @@ type InstrumentName = InstrumentSettings['bass']['name'];
 const DESKTOP_VOLUME_DB = -14; 
 const MOBILE_VOLUME_DB = -8; 
 
-const bassSynthPreset: Tone.MonoSynthOptions = {
+// Heavy "Iron Man" sound for Desktop
+const ironManPreset: Tone.MonoSynthOptions = {
     oscillator: {
-        type: 'sawtooth'
+        type: 'sawtooth' // Rich harmonics for distortion
     },
     filter: {
         type: 'lowpass',
         rolloff: -24,
-        Q: 1,
+        Q: 1.5,
     },
     filterEnvelope: {
-        attack: 0.1,
-        decay: 0.4,
-        sustain: 0.7,
+        attack: 0.05,
+        decay: 0.7,
+        sustain: 0.8,
         release: 1.5,
-        baseFrequency: 50,
-        octaves: 2.5,
+        baseFrequency: 500, // Keep some mid-range bite
+        octaves: 2.0,
     },
     envelope: {
         attack: 0.08,
@@ -33,62 +34,37 @@ const bassSynthPreset: Tone.MonoSynthOptions = {
     portamento: 0.08,
 };
 
-const bassGuitarPreset: Tone.MonoSynthOptions = {
-    oscillator: {
-        type: 'sine'
-    },
-    filter: {
-        type: 'lowpass',
-        rolloff: -24,
-        Q: 1,
-    },
-    filterEnvelope: {
-        attack: 0.1,
-        decay: 0.3,
-        sustain: 0.6,
-        release: 4.5,
-        baseFrequency: 50,
-        octaves: 2.5,
-    },
-    envelope: {
-        attack: 0.1,
-        decay: 0.3,
-        sustain: 1.0,
-        release: 4.0,
-    },
-    portamento: 0.08,
-};
-
+// Adapted sound for Mobile speakers
 const mobilePreset: Tone.MonoSynthOptions = {
     oscillator: {
-        type: 'sawtooth'
+        type: 'square' // More focused mid-range
     },
     filter: {
         type: 'lowpass',
-        rolloff: -24,
-        Q: 1,
+        rolloff: -12, // Less aggressive filtering
+        Q: 2,         // Higher Q to emphasize mids
     },
     filterEnvelope: {
-        attack: 0.1,
-        decay: 0.4,
+        attack: 0.05,
+        decay: 0.5,
         sustain: 0.7,
-        release: 1.5,
-        baseFrequency: 50,
-        octaves: 2.5,
+        release: 1.0,
+        baseFrequency: 900, // Focus on mid-range for clarity
+        octaves: 1.5,
     },
     envelope: {
         attack: 0.08,
-        decay: 0.4,
+        decay: 0.3,
         sustain: 0.9,
-        release: 1.5,
+        release: 1.0,
     },
-    portamento: 0.08,
+    portamento: 0.05,
 };
 
 
 const instrumentPresets: Record<Exclude<InstrumentName, 'none'>, Tone.MonoSynthOptions> = {
-    'bass synth': bassSynthPreset,
-    'bassGuitar': bassGuitarPreset
+    'bass synth': ironManPreset, // Defaulting both to the target sound
+    'bassGuitar': ironManPreset
 };
 
 export class BassSynthManager {
@@ -123,17 +99,16 @@ export class BassSynthManager {
             return;
         }
         
-        if (name === this.currentInstrument) {
-            if (this.currentSynth.volume.value === -Infinity) {
-                 this.fadeIn(0.01);
-            }
-            return;
-        }
-        
-        console.log(`BASS: Setting instrument to ${name}`);
+        const wasNone = this.currentInstrument === 'none';
         this.currentInstrument = name; 
+        
+        // Apply the correct profile settings for the new instrument
         this.applyProfileSettings();
-        this.fadeIn(0.01);
+
+        // Only fade in if the synth was previously silent
+        if (wasNone) {
+            this.fadeIn(0.01);
+        }
     }
 
     public setMixProfile(profile: MixProfile) {
@@ -170,16 +145,18 @@ export class BassSynthManager {
     private applyProfileSettings() {
         if (!this.currentSynth || this.currentInstrument === 'none') return;
         
-        let preset = this.currentProfile === 'mobile' 
+        // The preset is now determined by the device profile, not the instrument name.
+        const preset = this.currentProfile === 'mobile' 
             ? mobilePreset 
             : instrumentPresets[this.currentInstrument];
         
         if (!preset) {
             console.error(`BASS: No preset found for instrument: ${this.currentInstrument}. Falling back to default.`);
-            preset = bassSynthPreset; // Fallback to a default preset
+            this.currentSynth.set(ironManPreset);
+        } else {
+            console.log(`BASS: Applying ${this.currentProfile} preset.`);
+            this.currentSynth.set(preset);
         }
-
-        this.currentSynth.set(preset);
     }
     
     public triggerAttackRelease(note: string, duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
