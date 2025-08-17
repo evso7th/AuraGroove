@@ -31,15 +31,13 @@ export class DrumMachine {
     
     constructor(fxBus: FxBus, onLoad: () => void) {
         this.fxBus = fxBus;
-        console.log("DRUM_TRACE: Constructing DrumMachine.");
         this.sampler = new Tone.Sampler({
             urls: samplePaths,
             baseUrl: '',
-            volume: 0, // Set internal sampler volume to max (0 dB)
+            volume: 0, 
             onload: () => {
                 this.isLoaded = true;
                 onLoad();
-                console.log("DRUM_TRACE: All samples loaded and mapped to notes.");
             },
         }).connect(this.fxBus.drumInput);
     }
@@ -48,12 +46,13 @@ export class DrumMachine {
         return this.isLoaded;
     }
 
-    public setVolume(volume: number) {
+    public setVolume(volume: number) { // volume is linear 0-1
         if (volume < 0.01) {
-            this.fxBus.drumInput.gain.value = -Infinity;
+            this.fxBus.drumInput.volume.value = -Infinity;
         } else {
-            const dbValue = Tone.gainToDb(volume);
-            this.fxBus.drumInput.gain.value = dbValue;
+            // Let's give the drums a +12dB boost to make them prominent
+            const dbValue = Tone.gainToDb(volume) + 12;
+            this.fxBus.drumInput.volume.value = dbValue;
         }
     }
 
@@ -62,7 +61,6 @@ export class DrumMachine {
         
         const noteToPlay = sampleNoteMapping[note.sample];
         if (!noteToPlay) {
-            console.warn(`DRUM_TRACE: No note mapping found for sample '${note.sample}'`);
             return;
         }
         
@@ -71,7 +69,6 @@ export class DrumMachine {
     
     public dispose() {
         if (this.sampler) {
-            console.log("DRUM_TRACE: Disposing sampler.");
             this.sampler.dispose();
         }
     }

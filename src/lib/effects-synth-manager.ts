@@ -53,10 +53,13 @@ export class EffectsSynthManager {
         this.currentMode = mode;
     }
 
-    public setVolume(volume: number) {
-        // Convert linear volume (0-1) to dB
-        const volumeInDb = Tone.gainToDb(volume);
-        this.fxBus.effectsInput.gain.value = volumeInDb;
+    public setVolume(volume: number) { // volume is linear 0-1
+        if (this.currentMode === 'none' || volume < 0.01) {
+            this.fxBus.effectsInput.volume.value = -Infinity;
+        } else {
+            const volumeInDb = Tone.gainToDb(volume);
+            this.fxBus.effectsInput.volume.value = volumeInDb;
+        }
     }
 
     public trigger(effect: EffectNote, time: Tone.Unit.Time) {
@@ -94,5 +97,3 @@ export class EffectsSynthManager {
         this.bellSynth.dispose();
     }
 }
-
-    

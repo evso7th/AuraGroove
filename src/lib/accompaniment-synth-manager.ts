@@ -34,21 +34,18 @@ export class AccompanimentSynthManager {
     private isInitialized = false;
     private currentInstrument: InstrumentName = 'none';
     private fxBus: FxBus;
-    private currentBaseVolumeDb: number;
     private userVolume: number = 0.8; // Linear gain (0-1)
     private nextVoiceIndex = 0;
 
     constructor(fxBus: FxBus) {
         this.fxBus = fxBus;
-        this.currentBaseVolumeDb = MOBILE_VOLUME_DB;
     }
 
     private ensureSynthsInitialized() {
         if (this.isInitialized) return;
         
-        console.log(`ACCOMPANIMENT: Lazily creating pool of ${NUM_VOICES} voices.`);
         this.voices = Array.from({ length: NUM_VOICES }, () => 
-            new Tone.Synth({ volume: -Infinity }).connect(this.fxBus.accompanimentInput)
+            new Tone.Synth({ volume: MOBILE_VOLUME_DB }).connect(this.fxBus.accompanimentInput)
         );
         this.isInitialized = true;
     }
@@ -57,21 +54,19 @@ export class AccompanimentSynthManager {
         this.ensureSynthsInitialized();
 
         if (name === 'none') {
-            this.fadeOut(0.1);
             this.currentInstrument = 'none';
             return;
         }
         
         if (name === this.currentInstrument) return;
 
-        console.log(`ACCOMPANIMENT: Setting instrument to ${name}`);
         const preset = instrumentPresets[name];
         this.voices.forEach(voice => {
             voice.set(preset);
         });
         
-        this.fadeIn(0.01);
         this.currentInstrument = name;
+        this.updateVolume(0.01);
     }
 
     public setVolume(volume: number) { // volume is linear 0-1
@@ -81,13 +76,9 @@ export class AccompanimentSynthManager {
 
     private updateVolume(rampTime: Tone.Unit.Time = 0.05) {
         if (!this.isInitialized || this.currentInstrument === 'none') return;
-
-        const isAudible = this.voices.some(v => v.volume.value > -Infinity);
-        if (!isAudible) return;
-
-        // Convert user volume (0-1) to dB adjustment.
+        
         const userVolumeDb = Tone.gainToDb(this.userVolume);
-        const targetVolume = this.currentBaseVolumeDb + userVolumeDb;
+        const targetVolume = MOBILE_VOLUME_DB + userVolumeDb;
         
         this.voices.forEach(voice => {
             try {
@@ -96,10 +87,12 @@ export class AccompanimentSynthManager {
                 // Ignore errors if context is closed
             }
         });
+        
+        // Also control the channel volume for master fade
+        this.fxBus.accompanimentInput.volume.rampTo(this.currentInstrument === 'none' ? -Infinity : 0, rampTime);
     }
 
     public triggerAttackRelease(notes: string | string[], duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
-        this.ensureSynthsInitialized();
         if (this.currentInstrument === 'none' || !this.voices.length) return;
 
         const notesToPlay = Array.isArray(notes) ? notes : [notes];
@@ -120,33 +113,19 @@ export class AccompanimentSynthManager {
         if (!this.isInitialized) return;
         this.voices.forEach(voice => voice.triggerRelease());
     }
-    
-    private rampAllVoices(volume: number, duration: number) {
-        if (!this.isInitialized) return;
-        this.voices.forEach(voice => {
-            try {
-                voice.volume.rampTo(volume, duration);
-            } catch (e) {
-                // Ignore errors if context is closed
-            }
-        });
-    }
 
     public fadeOut(duration: number) {
-        this.rampAllVoices(-Infinity, duration);
+        this.fxBus.accompanimentInput.volume.rampTo(-Infinity, duration);
     }
     
     public fadeIn(duration: number) {
         if (this.currentInstrument !== 'none') {
-            const userVolumeDb = Tone.gainToDb(this.userVolume);
-            const targetVolume = this.currentBaseVolumeDb + userVolumeDb;
-            this.rampAllVoices(targetVolume, duration);
+            this.fxBus.accompanimentInput.volume.rampTo(0, duration);
         }
     }
     
     public dispose() {
         if (this.voices.length > 0) {
-            console.log("ACCOMPANIMENT: Disposing all voices");
             this.voices.forEach(voice => voice.dispose());
             this.voices = [];
             this.isInitialized = false;

@@ -6,24 +6,22 @@ import type { FxBus } from './fx-bus';
 type InstrumentName = InstrumentSettings['bass']['name'];
 const MOBILE_VOLUME_DB = -12;
 
-// Adapted sound for Mobile speakers - uses sawtooth but filter is different
-// to emphasize mid-range frequencies that are audible on small speakers.
 const mobilePreset: Tone.MonoSynthOptions = {
     oscillator: {
         type: 'sawtooth' 
     },
     filter: {
-        type: 'lowpass', // Still a lowpass...
+        type: 'lowpass',
         rolloff: -12,
-        Q: 3,         // ...but with higher Q to create a resonant peak
+        Q: 3,
     },
     filterEnvelope: {
         attack: 0.4,
         decay: 0.3,
         sustain: 0.7,
         release: 1.0,
-        baseFrequency: 300, // Start higher to be in the audible mobile range
-        octaves: 1.5,       // Less sweep to keep it focused
+        baseFrequency: 300,
+        octaves: 1.5,
     },
     envelope: {
         attack: 0.1,
@@ -45,109 +43,82 @@ export class BassSynthManager {
     private isInitialized = false;
     private currentInstrument: InstrumentName = 'none';
     private fxBus: FxBus;
-    private currentBaseVolumeDb: number;
-    private userVolume: number = 0.9; // Linear gain (0-1)
+    private userVolume: number = 0.9;
 
     constructor(fxBus: FxBus) {
         this.fxBus = fxBus;
-        this.currentBaseVolumeDb = MOBILE_VOLUME_DB;
-        console.log("BASS_TRACE: Manager constructed.");
     }
 
     private ensureSynthInitialized() {
         if (this.isInitialized) return;
         
-        console.log("BASS_TRACE: Lazily creating MonoSynth.");
-        this.currentSynth = new Tone.MonoSynth({ volume: -Infinity }).connect(this.fxBus.bassInput);
+        this.currentSynth = new Tone.MonoSynth({ volume: MOBILE_VOLUME_DB }).connect(this.fxBus.bassInput);
         this.isInitialized = true;
     }
 
     public setInstrument(name: InstrumentName) {
         this.ensureSynthInitialized();
         if (!this.currentSynth) return;
-        
-        console.log(`BASS_TRACE: setInstrument called with: ${name}`);
 
         if (name === 'none') {
-            this.fadeOut(0.1);
             this.currentInstrument = 'none';
+            this.updateVolume(0.01);
             return;
         }
         
-        const wasNone = this.currentInstrument === 'none';
-        
         if (name !== this.currentInstrument) {
-            console.log(`BASS_TRACE: Applying mobile preset to synth.`);
-            this.currentSynth.set(mobilePreset);
+            this.currentSynth.set(instrumentPresets[name]);
         }
-
         this.currentInstrument = name; 
-
-        if (wasNone) {
-            this.fadeIn(0.01);
-        }
+        this.updateVolume(0.01);
     }
     
-    public setVolume(volume: number) { // volume is linear 0-1
-        console.log(`BASS_TRACE: setVolume called with: ${volume}`);
+    public setVolume(volume: number) {
         this.userVolume = volume;
         this.updateVolume();
     }
 
     private updateVolume(rampTime: Tone.Unit.Time = 0.05) {
-        if (!this.currentSynth || this.currentInstrument === 'none') return;
+        if (!this.currentSynth) return;
         
-        const isAudible = this.currentSynth.volume.value > -Infinity;
-        if (!isAudible) return;
-        
+        if (this.currentInstrument === 'none') {
+            this.fxBus.bassInput.volume.rampTo(-Infinity, rampTime);
+            return;
+        }
+
         const userVolumeDb = Tone.gainToDb(this.userVolume);
-        const targetVolume = this.currentBaseVolumeDb + userVolumeDb;
-        console.log(`BASS_TRACE: updateVolume -> UserVol: ${this.userVolume} (${userVolumeDb.toFixed(2)} dB), BaseVol: ${this.currentBaseVolumeDb} dB, Target: ${targetVolume.toFixed(2)} dB`);
+        const targetVolume = MOBILE_VOLUME_DB + userVolumeDb;
 
         try {
             this.currentSynth.volume.rampTo(targetVolume, rampTime);
+            this.fxBus.bassInput.volume.rampTo(0, rampTime); // Keep channel at full volume when active
         } catch (e) {
-            console.error("BASS_TRACE: Error in updateVolume rampTo", e);
+            // Ignore errors
         }
     }
     
     public triggerAttackRelease(note: string, duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
-        this.ensureSynthInitialized();
         if (this.currentSynth && this.currentInstrument !== 'none') {
-            console.log(`BASS_TRACE: triggerAttackRelease -> Note: ${note}, Duration: ${duration}, Time: ${time}, Velocity: ${velocity}`);
             this.currentSynth.triggerAttackRelease(note, duration, time, velocity);
         }
     }
 
     public releaseAll() {
-        if (this.currentSynth) {
-            try {
-                this.currentSynth.triggerRelease();
-            } catch (e) {
-                 // Ignore errors if the context is already closed
-            }
-        }
+        this.currentSynth?.triggerRelease();
     }
     
     public fadeOut(duration: number) {
-        if (this.currentSynth) {
-            try {
-                this.currentSynth.volume.rampTo(-Infinity, duration);
-            } catch (e) {
-                // Ignore errors if the context is already closed
-            }
-        }
+        this.fxBus.bassInput.volume.rampTo(-Infinity, duration);
     }
 
     public fadeIn(duration: number) {
-        if (this.currentSynth && this.currentInstrument !== 'none') {
-           this.updateVolume(duration);
+        if (this.currentInstrument !== 'none') {
+           this.fxBus.bassInput.volume.rampTo(0, duration);
         }
     }
 
     public dispose() {
         if (this.currentSynth) {
-            console.log("BASS_TRACE: Disposing MonoSynth.");
             this.currentSynth.dispose();
             this.currentSynth = null;
             this.isInitialized = false;
