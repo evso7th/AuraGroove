@@ -222,6 +222,10 @@ class MandelbrotEngine {
     private zoom: number;
     private maxIterations = 50;
 
+    private startX: number;
+    private startY: number;
+    private startZoom: number;
+
     private targetX: number;
     private targetY: number;
     private targetZoom: number;
@@ -234,7 +238,9 @@ class MandelbrotEngine {
         { x: -1.749, y: 0.0003, zoom: 1500 },      // A mini-Mandelbrot
         { x: 0.274, y: 0.008, zoom: 250 },        // "Elephant Valley"
         { x: -0.16, y: 1.04, zoom: 400 },         // A spiral region
-        { x: -0.745429, y: 0.113009, zoom: 800 }  // A detailed spiral
+        { x: -0.745429, y: 0.113009, zoom: 800 },  // A detailed spiral
+        { x: -0.8, y: 0.156, zoom: 1200 },         // Another detailed region
+        { x: 0.282, y: 0.01, zoom: 900 }          // Spiral near a cardioid
     ];
 
     constructor(genome: MusicalGenome) {
@@ -246,6 +252,10 @@ class MandelbrotEngine {
         this.y = startPoint.y;
         this.zoom = startPoint.zoom;
         
+        this.startX = this.x;
+        this.startY = this.y;
+        this.startZoom = this.zoom;
+        
         // Set the first target
         this.targetX = this.x;
         this.targetY = this.y;
@@ -254,6 +264,10 @@ class MandelbrotEngine {
     }
 
     private setNewTarget() {
+        this.startX = this.targetX;
+        this.startY = this.targetY;
+        this.startZoom = this.targetZoom;
+        
         const nextPoint = this.INTERESTING_POINTS[Math.floor(Math.random() * this.INTERESTING_POINTS.length)];
         this.targetX = nextPoint.x;
         this.targetY = nextPoint.y;
@@ -265,9 +279,9 @@ class MandelbrotEngine {
         // Ease-in-out curve for smoother transition
         const easeRatio = progressRatio < 0.5 ? 2 * progressRatio * progressRatio : 1 - Math.pow(-2 * progressRatio + 2, 2) / 2;
 
-        this.x += (this.targetX - this.x) * easeRatio * 0.05;
-        this.y += (this.targetY - this.y) * easeRatio * 0.05;
-        this.zoom += (this.targetZoom - this.zoom) * easeRatio * 0.05;
+        this.x = this.startX + (this.targetX - this.startX) * easeRatio;
+        this.y = this.startY + (this.targetY - this.startY) * easeRatio;
+        this.zoom = this.startZoom + (this.targetZoom - this.startZoom) * easeRatio;
     }
 
     private getMandelbrotValue(cx: number, cy: number): number {
@@ -336,13 +350,20 @@ class MandelbrotEngine {
     }
     
     public generateBassScore(bar: number): BassNote[] {
-         const { root } = this.getHarmony(bar);
-         return this.genome.bassAnchorRiff.map(riffPart => ({
-             note: `${root}2`,
-             time: riffPart.time,
-             duration: riffPart.duration,
-             velocity: 0.8
-         }));
+        const harmony = this.getHarmony(bar);
+        const value = this.getMandelbrotValue(this.x, this.y);
+        const activity = value / this.maxIterations;
+
+        const noteName = Math.random() < 0.2 ? harmony.scale[4] : harmony.root;
+
+        if (activity < 0.3) { // Calm region
+             return [{ note: `${noteName}1`, time: 0, duration: '1m', velocity: 0.7 }];
+        } else { // Active region
+            return [
+                { note: `${noteName}1`, time: 0, duration: '2n', velocity: 0.8 },
+                { note: `${noteName}1`, time: 2, duration: '2n', velocity: 0.75 },
+            ];
+        }
     }
     
     public onBarComplete() {
