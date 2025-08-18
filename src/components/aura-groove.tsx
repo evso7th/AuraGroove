@@ -74,10 +74,11 @@ export function AuraGroove() {
   const accompanimentSynthManagerRef = useRef<AccompanimentSynthManager | null>(null);
   const effectsSynthManagerRef = useRef<EffectsSynthManager | null>(null);
   const drumMachineRef = useRef<DrumMachine | null>(null);
+  const tickLoopRef = useRef<Tone.Loop | null>(null);
   
   // Refs for congestion tracking
-  const lastMessageTimeRef = useRef<number>(0);
-  const expectedIntervalRef = useRef<number>(0);
+  const lastWorkerResponseTimeRef = useRef<number>(0);
+  const lastTickRequestTimeRef = useRef<number>(0);
 
 
    useEffect(() => {
@@ -127,32 +128,30 @@ export function AuraGroove() {
              setIsInitializing(false);
              setLoadingText("");
              setIsPlaying(true);
-             expectedIntervalRef.current = (60 / bpm / 4) * 16 * 1000;
-             lastMessageTimeRef.current = performance.now();
              break;
 
         case 'scores':
-            const now = performance.now();
-            if (lastMessageTimeRef.current > 0 && expectedIntervalRef.current > 0) {
-                const actualInterval = now - lastMessageTimeRef.current;
-                const delay = actualInterval - expectedIntervalRef.current;
-                
-                const logMessage = delay > CONGESTION_THRESHOLD_MS
+            const workerResponseTime = performance.now();
+            lastWorkerResponseTimeRef.current = workerResponseTime;
+            const delay = workerResponseTime - lastTickRequestTimeRef.current;
+            
+             const logMessage = delay > CONGESTION_THRESHOLD_MS
                     ? `CONGESTION: +${delay.toFixed(2)}ms`
                     : `OK: ${delay.toFixed(2)}ms`;
 
+            if (showDebugPanel) {
                 setDebugLog(prevLogs => [logMessage, ...prevLogs.slice(0, 4)]);
-
-                if (delay > CONGESTION_THRESHOLD_MS) {
-                    console.warn("[AURA_GROOVE_WORKER_CONGESTION]", {
-                        delay: `${delay.toFixed(2)}ms`,
-                        config: { instrumentSettings, drumSettings, effectsSettings, bpm, score }
-                    });
-                } else {
-                    console.log('[AURA_GROOVE_RECORDER] OK', { delay: `${delay.toFixed(2)}ms` });
-                }
             }
-            lastMessageTimeRef.current = now;
+
+            if (delay > CONGESTION_THRESHOLD_MS) {
+                console.warn("[AURA_GROOVE_WORKER_CONGESTION]", {
+                    delay: `${delay.toFixed(2)}ms`,
+                    config: { instrumentSettings, drumSettings, effectsSettings, bpm, score }
+                });
+            } else {
+                 console.log('[AURA_GROOVE_RECORDER] OK', { delay: `${delay.toFixed(2)}ms` });
+            }
+
 
             const scheduledNow = Tone.now();
             if (data.drums && drumMachineRef.current && drumMachineRef.current.isReady()) {
@@ -185,7 +184,6 @@ export function AuraGroove() {
         case 'stopped':
             setIsPlaying(false);
             setLoadingText("");
-            lastMessageTimeRef.current = 0;
             break;
 
         case 'error':
@@ -205,10 +203,17 @@ export function AuraGroove() {
     
     musicWorkerRef.current?.postMessage({ command: 'init' });
     
+    tickLoopRef.current = new Tone.Loop(time => {
+      lastTickRequestTimeRef.current = performance.now();
+      musicWorkerRef.current?.postMessage({ command: 'tick' });
+    }, '1m').start(0);
+
+
     return () => {
       if (musicWorkerRef.current) {
         musicWorkerRef.current.terminate();
       }
+      tickLoopRef.current?.dispose();
       bassSynthManagerRef.current?.dispose();
       soloSynthManagerRef.current?.dispose();
       accompanimentSynthManagerRef.current?.dispose();
@@ -220,7 +225,8 @@ export function AuraGroove() {
         Tone.Transport.cancel();
       }
     };
-  }, [toast, instrumentSettings, drumSettings, effectsSettings, bpm, score]); 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toast]); 
   
   useEffect(() => {
     if (isReady && isDrumMachineReady) {
@@ -234,15 +240,27 @@ export function AuraGroove() {
             command: 'update_settings',
             data: { instrumentSettings, drumSettings, effectsSettings, bpm, score },
         });
-        expectedIntervalRef.current = (60 / bpm / 4) * 16 * 1000;
     }
   }, [instrumentSettings, drumSettings, effectsSettings, bpm, score]);
+  
+  const updateBpm = useCallback((newBpm: number) => {
+      Tone.Transport.bpm.value = newBpm;
+      if (musicWorkerRef.current) {
+        musicWorkerRef.current.postMessage({ command: 'update_settings', data: { bpm: newBpm } });
+      }
+  }, []);
 
   useEffect(() => {
     if (isReady && isPlaying) { 
       updateWorkerSettings();
     }
-  }, [drumSettings, instrumentSettings, effectsSettings, bpm, score, isReady, isPlaying, updateWorkerSettings]);
+  }, [drumSettings, instrumentSettings, effectsSettings, score, isReady, isPlaying, updateWorkerSettings]);
+  
+  useEffect(() => {
+      if (isReady) {
+          updateBpm(bpm);
+      }
+  }, [bpm, isReady, updateBpm]);
 
     useEffect(() => {
         if (!isReady || !fxBusRef.current?.soloDistortion) return;
@@ -307,6 +325,11 @@ export function AuraGroove() {
         
         setLoadingText("Starting playback...");
 
+        musicWorkerRef.current?.postMessage({ 
+            command: 'start',
+            data: { drumSettings, instrumentSettings, effectsSettings, bpm, score }
+        });
+
         if (Tone.Transport.state !== 'started') {
             Tone.Transport.start();
         }
@@ -315,10 +338,6 @@ export function AuraGroove() {
         accompanimentSynthManagerRef.current?.fadeIn(0.5);
         bassSynthManagerRef.current?.fadeIn(0.5);
         
-        musicWorkerRef.current?.postMessage({ 
-            command: 'start',
-            data: { drumSettings, instrumentSettings, effectsSettings, bpm, score }
-        });
 
     } catch (error) {
         console.error("Failed to prepare audio:", error);
@@ -339,7 +358,6 @@ export function AuraGroove() {
     
     if (Tone.Transport.state !== 'stopped') {
         Tone.Transport.stop();
-        Tone.Transport.cancel();
     }
     musicWorkerRef.current?.postMessage({ command: 'stop' });
     
@@ -398,7 +416,7 @@ export function AuraGroove() {
                     step={5}
                     onValueChange={(v) => setBpm(v[0])}
                     className="col-span-2"
-                    disabled={isBusy || isPlaying}
+                    disabled={isBusy}
                 />
             </div>
             <div className="grid grid-cols-3 items-center gap-4 pt-2">
@@ -602,7 +620,7 @@ export function AuraGroove() {
               Playing at {bpm} BPM...
             </p>
         )}
-        {showDebugPanel && isPlaying && (
+        {showDebugPanel && (
             <div className="bg-muted/50 rounded-lg p-3 space-y-1 min-h-[40px]">
                 <p className="text-sm font-medium text-center">Real-time Worker Delay</p>
                 {debugLog.map((log, index) => (
@@ -610,6 +628,9 @@ export function AuraGroove() {
                         {log}
                     </p>
                 ))}
+                 {debugLog.length === 0 && isPlaying && (
+                    <p className="font-mono text-xs text-center text-muted-foreground">Awaiting first tick...</p>
+                )}
             </div>
         )}
       </CardContent>

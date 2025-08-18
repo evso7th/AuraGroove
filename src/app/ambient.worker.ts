@@ -448,7 +448,6 @@ class EffectsGenerator {
 
 // --- 3. Scheduler (The Conductor) ---
 const Scheduler = {
-    timeoutId: null as any,
     isRunning: false,
     barCount: 0,
     compositionEngine: null as EvolveEngine | MandelbrotEngine | null,
@@ -468,7 +467,6 @@ const Scheduler = {
     // Calculated properties
     get beatsPerBar() { return 4; },
     get secondsPerBeat() { return 60 / this.bpm; },
-    get barDuration() { return this.beatsPerBar * this.secondsPerBeat; },
     
     start() {
         if (this.isRunning) return;
@@ -485,17 +483,11 @@ const Scheduler = {
             this.compositionEngine = null; // for promenade
         }
         
-        this.tick();
-        
         self.postMessage({ type: 'started' });
     },
 
     stop() {
         if (!this.isRunning) return;
-        if (this.timeoutId) {
-            clearTimeout(this.timeoutId);
-            this.timeoutId = null;
-        }
         this.isRunning = false;
         this.compositionEngine = null;
         self.postMessage({ type: 'stopped' });
@@ -588,8 +580,6 @@ const Scheduler = {
         }
         
         this.barCount++;
-        
-        this.timeoutId = setTimeout(() => this.tick(), this.barDuration * 1000);
     }
 };
 
@@ -616,10 +606,13 @@ self.onmessage = async (event: MessageEvent) => {
             case 'update_settings':
                 Scheduler.updateSettings(data);
                 break;
+            
+            case 'tick':
+                Scheduler.tick();
+                break;
         }
     } catch (e) {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
 
-    
