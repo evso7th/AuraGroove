@@ -63,7 +63,7 @@ export function AuraGroove() {
   
   // Debug Panel State
   const [debugLog, setDebugLog] = useState<string[]>([]);
-  const [showDebugPanel, setShowDebugPanel] = useState(false);
+  const [showDebugPanel, setShowDebugPanel] = useState(true);
 
   const { toast } = useToast();
 
@@ -625,13 +625,14 @@ export function AuraGroove() {
         {showDebugPanel && (
             <div className="bg-muted/50 rounded-lg p-3 space-y-1 min-h-[40px]">
                 <p className="text-sm font-medium text-center">Real-time Worker Delay</p>
-                {debugLog.map((log, index) => (
-                    <p key={index} className={`font-mono text-xs text-center ${log.startsWith('CONGESTION') ? 'text-destructive' : 'text-muted-foreground'}`}>
-                        {log}
-                    </p>
-                ))}
-                 {debugLog.length === 0 && isPlaying && (
+                {debugLog.length === 0 && isPlaying ? (
                     <p className="font-mono text-xs text-center text-muted-foreground">Awaiting first tick...</p>
+                ) : (
+                    debugLog.map((log, index) => (
+                        <p key={index} className={`font-mono text-xs text-center ${log.startsWith('CONGESTION') ? 'text-destructive' : 'text-muted-foreground'}`}>
+                            {log}
+                        </p>
+                    ))
                 )}
             </div>
         )}
@@ -658,5 +659,3 @@ export function AuraGroove() {
     </Card>
   );
 }
-
-    
