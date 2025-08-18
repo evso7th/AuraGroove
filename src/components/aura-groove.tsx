@@ -33,6 +33,8 @@ import type { EffectsSynthManager } from "@/lib/effects-synth-manager";
 import { DrumMachine } from "@/lib/drum-machine";
 import { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote, DrumSettings, EffectsSettings, InstrumentSettings, ScoreName } from '@/types/music';
 
+const CONGESTION_THRESHOLD_MS = 50;
+
 export function AuraGroove() {
   const [isReady, setIsReady] = useState(false);
   const [isDrumMachineReady, setIsDrumMachineReady] = useState(false);
@@ -69,6 +71,10 @@ export function AuraGroove() {
   const accompanimentSynthManagerRef = useRef<AccompanimentSynthManager | null>(null);
   const effectsSynthManagerRef = useRef<EffectsSynthManager | null>(null);
   const drumMachineRef = useRef<DrumMachine | null>(null);
+  
+  // Refs for congestion tracking
+  const lastMessageTimeRef = useRef<number>(0);
+  const expectedIntervalRef = useRef<number>(0);
 
 
    useEffect(() => {
@@ -105,12 +111,23 @@ export function AuraGroove() {
         });
     });
 
-    const JITTER_INCREMENT = 0.0001; // 0.1ms increment
-
     const handleMessage = (event: MessageEvent) => {
       const { type, data, error } = event.data;
-      
-      let jitterOffset = 0;
+
+      // --- Congestion Detection Logic ---
+      const now = performance.now();
+      if (lastMessageTimeRef.current > 0 && expectedIntervalRef.current > 0) {
+          const actualInterval = now - lastMessageTimeRef.current;
+          const delay = actualInterval - expectedIntervalRef.current;
+          if (delay > CONGESTION_THRESHOLD_MS) {
+              console.warn("[AURA_GROOVE_WORKER_CONGESTION]", {
+                  delay: `${delay.toFixed(2)}ms`,
+                  config: { instrumentSettings, drumSettings, effectsSettings, bpm, score }
+              });
+          }
+      }
+      lastMessageTimeRef.current = now;
+      // --- End of Congestion Detection Logic ---
 
       switch(type) {
         case 'initialized':
@@ -122,14 +139,16 @@ export function AuraGroove() {
              setIsInitializing(false);
              setLoadingText("");
              setIsPlaying(true);
+             // Set the expected interval once the worker starts playing
+             expectedIntervalRef.current = (60 / bpm / 4) * 16 * 1000;
+             lastMessageTimeRef.current = performance.now(); // Start tracking time
              break;
 
         case 'drum_score':
             if (drumMachineRef.current && drumMachineRef.current.isReady() && data && data.score) {
-                 const now = Tone.now();
-                 data.score.forEach((note: DrumNote) => {
-                    jitterOffset += JITTER_INCREMENT;
-                    drumMachineRef.current!.trigger(note, now + note.time + jitterOffset);
+                const now = Tone.now();
+                data.score.forEach((note: DrumNote) => {
+                    drumMachineRef.current!.trigger(note, now + note.time);
                 });
             }
             break;
@@ -138,11 +157,10 @@ export function AuraGroove() {
              if (bassSynthManagerRef.current && data.score && data.score.length > 0) {
                 const now = Tone.now();
                 data.score.forEach((note: BassNote) => {
-                    jitterOffset += JITTER_INCREMENT;
                     bassSynthManagerRef.current?.triggerAttackRelease(
                         note.note,
                         note.duration,
-                        now + note.time + jitterOffset,
+                        now + note.time,
                         note.velocity
                     );
                 });
@@ -153,11 +171,10 @@ export function AuraGroove() {
             if (soloSynthManagerRef.current && data.score && data.score.length > 0) {
                 const now = Tone.now();
                 data.score.forEach((note: SoloNote) => {
-                    jitterOffset += JITTER_INCREMENT;
                     soloSynthManagerRef.current?.triggerAttackRelease(
                         note.notes,
                         note.duration,
-                        now + note.time + jitterOffset
+                        now + note.time
                     );
                 });
             }
@@ -167,11 +184,10 @@ export function AuraGroove() {
             if (accompanimentSynthManagerRef.current && data.score && data.score.length > 0) {
                 const now = Tone.now();
                 data.score.forEach((note: AccompanimentNote) => {
-                    jitterOffset += JITTER_INCREMENT;
                     accompanimentSynthManagerRef.current?.triggerAttackRelease(
                         note.notes,
                         note.duration,
-                        now + note.time + jitterOffset
+                        now + note.time
                     );
                 });
             }
@@ -181,10 +197,9 @@ export function AuraGroove() {
             if (effectsSynthManagerRef.current && data.score && data.score.length > 0) {
                 const now = Tone.now();
                 data.score.forEach((note: EffectNote) => {
-                    jitterOffset += JITTER_INCREMENT;
                     effectsSynthManagerRef.current?.trigger(
                         note,
-                        now + note.time + jitterOffset
+                        now + note.time
                     );
                 });
             }
@@ -193,6 +208,7 @@ export function AuraGroove() {
         case 'stopped':
             setIsPlaying(false);
             setLoadingText("");
+            lastMessageTimeRef.current = 0; // Stop tracking time
             break;
 
         case 'error':
@@ -227,7 +243,7 @@ export function AuraGroove() {
         Tone.Transport.cancel();
       }
     };
-  }, [toast]); 
+  }, [toast, instrumentSettings, drumSettings, effectsSettings, bpm, score]); 
   
   useEffect(() => {
     if (isReady && isDrumMachineReady) {
@@ -241,6 +257,8 @@ export function AuraGroove() {
             command: 'update_settings',
             data: { instrumentSettings, drumSettings, effectsSettings, bpm, score },
         });
+        // Update expected interval when settings that affect it change
+        expectedIntervalRef.current = (60 / bpm / 4) * 16 * 1000;
     }
   }, [instrumentSettings, drumSettings, effectsSettings, bpm, score]);
 
@@ -625,11 +643,3 @@ export function AuraGroove() {
     </Card>
   );
 }
-
-    
-
-    
-
-    
-
-    
