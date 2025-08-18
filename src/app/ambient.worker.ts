@@ -157,7 +157,7 @@ class EvolveEngine {
         }
 
         return phrase.map((note, i) => ({
-            notes: note,
+            notes: [note, note], // Create a richer sound by doubling the note
             time: i,
             duration: '4n.'
         }));
@@ -315,7 +315,7 @@ class MandelbrotEngine {
                 const durationValue = (this.maxIterations - value) / this.maxIterations;
                 const duration = durationValue > 0.5 ? '4n' : '8n';
                 score.push({
-                    notes: note,
+                    notes: [note, note], // Create a richer sound by doubling the note
                     time: i * 0.5,
                     duration: duration,
                 });
