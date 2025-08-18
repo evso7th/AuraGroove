@@ -516,6 +516,8 @@ const Scheduler = {
     tick() {
         if (!this.isRunning) return;
 
+        const scores: Record<string, any[]> = {};
+
         if (this.compositionEngine) {
             const engine = this.compositionEngine;
             const isAnchorPhase = (engine instanceof EvolveEngine) && (engine as any).isAnchorPhase;
@@ -524,36 +526,35 @@ const Scheduler = {
                  const drumScore = DrumGenerator.createScore(this.drumSettings.pattern, this.barCount, isAnchorPhase)
                     .map(note => ({ ...note, time: note.time * this.secondsPerBeat }));
                 if (drumScore.length > 0) {
-                    self.postMessage({ type: 'drum_score', data: { score: drumScore } });
+                    scores.drums = drumScore;
                 }
             }
             if (this.instrumentSettings.bass.name !== 'none') {
                 const bassScore = engine.generateBassScore(this.barCount)
                     .map(note => ({...note, time: note.time * this.secondsPerBeat }));
-                if (bassScore.length > 0) self.postMessage({ type: 'bass_score', data: { score: bassScore } });
+                if (bassScore.length > 0) scores.bass = bassScore;
             }
             if (this.instrumentSettings.solo.name !== 'none') {
                 const soloScore = engine.generateSoloScore(this.barCount)
                     .map(note => ({...note, time: (note.time as number) * this.secondsPerBeat}));
-                if (soloScore.length > 0) self.postMessage({ type: 'solo_score', data: { score: soloScore } });
+                if (soloScore.length > 0) scores.solo = soloScore;
             }
             if (this.instrumentSettings.accompaniment.name !== 'none') {
                 const accompanimentScore = engine.generateAccompanimentScore(this.barCount)
                     .map(note => ({...note, time: (note.time as number) * this.secondsPerBeat}));
-                if(accompanimentScore.length > 0) self.postMessage({ type: 'accompaniment_score', data: { score: accompanimentScore } });
+                if(accompanimentScore.length > 0) scores.accompaniment = accompanimentScore;
             }
             if(this.effectsSettings.mode !== 'none') {
                 const effectsScore = EffectsGenerator.createScore(this.effectsSettings.mode, this.barCount, this.beatsPerBar, isAnchorPhase)
                     .map(note => ({ ...note, time: note.time * this.secondsPerBeat }));
                 if (effectsScore.length > 0) {
-                    self.postMessage({ type: 'effects_score', data: { score: effectsScore } });
+                    scores.effects = effectsScore;
                 }
             }
             
             engine.onBarComplete();
 
         } else if (this.score === 'promenade') {
-            // Keep promenade as is
             const getNotesForBar = <T extends { time: number | string }>(notes: T[]): T[] => {
                 const barStartBeats = this.barCount * this.beatsPerBar;
                 const barEndBeats = (this.barCount + 1) * this.beatsPerBar;
@@ -566,20 +567,24 @@ const Scheduler = {
             };
             if (this.drumSettings.pattern !== 'none') {
                 const barDrumNotes = getNotesForBar(promenadeScore.drums);
-                if (barDrumNotes.length > 0) self.postMessage({ type: 'drum_score', data: { score: barDrumNotes } });
+                if (barDrumNotes.length > 0) scores.drums = barDrumNotes;
             }
             if (this.instrumentSettings.bass.name !== 'none') {
                 const barBassNotes = getNotesForBar(promenadeScore.bass);
-                if (barBassNotes.length > 0) self.postMessage({ type: 'bass_score', data: { score: barBassNotes } });
+                if (barBassNotes.length > 0) scores.bass = barBassNotes;
             }
             if (this.instrumentSettings.solo.name !== 'none') {
                  const barSoloNotes = getNotesForBar(promenadeScore.solo as any[]);
-                 if (barSoloNotes.length > 0) self.postMessage({ type: 'solo_score', data: { score: barSoloNotes } });
+                 if (barSoloNotes.length > 0) scores.solo = barSoloNotes;
             }
             if (this.instrumentSettings.accompaniment.name !== 'none') {
                  const barAccompanimentNotes = getNotesForBar(promenadeScore.accompaniment as any[]);
-                 if (barAccompanimentNotes.length > 0) self.postMessage({ type: 'accompaniment_score', data: { score: barAccompanimentNotes } });
+                 if (barAccompanimentNotes.length > 0) scores.accompaniment = barAccompanimentNotes;
             }
+        }
+        
+        if (Object.keys(scores).length > 0) {
+            self.postMessage({ type: 'scores', data: scores });
         }
         
         this.barCount++;
@@ -616,3 +621,5 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
+
+    
