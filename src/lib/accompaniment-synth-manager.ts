@@ -11,17 +11,22 @@ const NUM_VOICES = 4; // 4 voices for accompaniment chords
 
 const instrumentPresets: Record<Exclude<InstrumentName, 'none'>, Tone.SynthOptions> = {
     'organ': {
-        oscillator: { type: 'sawtooth' },
+        oscillator: { type: 'fatsawtooth', count: 3, spread: 20 },
         envelope: {
-            attack: 0.16,
-            decay: 0.15,
+            attack: 0.3,
+            decay: 0.5,
             sustain: 0.9,
-            release: 0.4,
+            release: 2.5,
         },
     },
     'synthesizer': {
-        oscillator: { type: 'triangle' },
-        envelope: { attack: 0.02, decay: 0.1, sustain: 0.3, release: 1 },
+        oscillator: { type: 'fatsine', count: 4, spread: 40 },
+        envelope: { 
+            attack: 0.2, 
+            decay: 0.3, 
+            sustain: 0.8, 
+            release: 2.8 
+        },
     },
     'piano': { // Example preset, as it's disabled in UI
         oscillator: { type: 'sine' },

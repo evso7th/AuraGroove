@@ -10,7 +10,7 @@ import type { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote, DrumS
 /**
  * Generates and holds the unique musical identity for a session.
  * This is the "DNA" of the composition, created once per session.
- * Now based on the harmony of "Gyöngyhajú lány" by Omega.
+ * Now based on the harmony of "Gammapolis" by Omega.
  */
 class MusicalGenome {
     public readonly harmony: { root: string; scale: string[] }[];
@@ -19,39 +19,37 @@ class MusicalGenome {
     public readonly bassAnchorRiff: { time: number; duration: string }[];
 
     constructor() {
-        // Harmony derived from "Gyöngyhajú lány" (Am - G - C - G ...)
+        // Harmony derived from "Gammapolis" (Dm - C - G - Dm ...)
         this.harmony = [
-            { root: 'A', scale: ['A', 'B', 'C', 'D', 'E', 'F', 'G'] },    // A minor
-            { root: 'G', scale: ['G', 'A', 'B', 'C', 'D', 'E', 'F#'] },   // G major
+            { root: 'D', scale: ['D', 'E', 'F', 'G', 'A', 'Bb', 'C'] },    // D minor
             { root: 'C', scale: ['C', 'D', 'E', 'F', 'G', 'A', 'B'] },    // C major
-            { root: 'E', scale: ['E', 'F#', 'G', 'A', 'B', 'C', 'D'] }     // E minor (relative to G)
+            { root: 'G', scale: ['G', 'A', 'B', 'C', 'D', 'E', 'F#'] },   // G major
+            { root: 'A', scale: ['A', 'B', 'C', 'D', 'E', 'F', 'G'] },     // A minor
         ];
         
         this.soloAnchor = this.generateAnchorMelody();
         this.accompanimentAnchor = this.generateAnchorAccompaniment();
 
-        // A more static, drone-like bass riff suitable for the song's feel
         this.bassAnchorRiff = [
             { time: 0, duration: '1m' },
         ];
     }
     
     private generateAnchorMelody(): string[] {
-        // A simple melodic fragment inspired by the original vocal line
-        const baseScale = this.harmony[0].scale; // A minor
+        // A simple melodic fragment inspired by the main synth theme of Gammapolis
+        const baseScale = this.harmony[0].scale; // D minor
         return [
-            `${baseScale[4]}3`, `${baseScale[5]}3`, `${baseScale[6]}3`, `${baseScale[4]}3`,
-            `${baseScale[2]}4`, `${baseScale[1]}4`, `${baseScale[0]}4`, `${baseScale[1]}4`,
-            `${baseScale[4]}3`, `${baseScale[5]}3`, `${baseScale[6]}3`, `${baseScale[4]}3`,
+            `${baseScale[4]}4`, `${baseScale[5]}4`, `${baseScale[3]}4`, `${baseScale[4]}4`,
+            `${baseScale[2]}4`, `${baseScale[1]}4`, `${baseScale[0]}4`, `${baseScale[6]}3`,
         ];
     }
 
     private generateAnchorAccompaniment(): string[][] {
-       // Based on the core chords of the song
-       const chord1 = ['A2', 'C3', 'E3']; // Am
-       const chord2 = ['G2', 'B2', 'D3']; // G
-       const chord3 = ['C3', 'E3', 'G3']; // C
-       const chord4 = ['E2', 'G2', 'B2']; // Em
+       // Based on the core chords of "Gammapolis"
+       const chord1 = ['D2', 'F3', 'A3']; // Dm
+       const chord2 = ['C3', 'E3', 'G3']; // C
+       const chord3 = ['G2', 'B2', 'D3']; // G
+       const chord4 = ['A2', 'C3', 'E3']; // Am
        return [chord1, chord2, chord3, chord4];
     }
 }
@@ -626,9 +624,3 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
-
-    
-
-    
-
-    

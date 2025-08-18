@@ -12,15 +12,20 @@ const instrumentPresets: Record<Exclude<InstrumentName, 'none'>, Tone.SynthOptio
     'organ': {
         oscillator: { type: 'sawtooth' },
         envelope: {
-            attack: 0.16,
-            decay: 0.15,
-            sustain: 0.9,
-            release: 0.4,
+            attack: 0.2,
+            decay: 0.4,
+            sustain: 0.8,
+            release: 2.8,
         },
     },
     'synthesizer': {
-        oscillator: { type: 'sine' },
-        envelope: { attack: 0.01, decay: 0.2, sustain: 0.7, release: 0.8 },
+        oscillator: { type: 'triangle' },
+        envelope: { 
+            attack: 0.1, 
+            decay: 0.5, 
+            sustain: 0.7, 
+            release: 3.0 
+        },
     },
     'piano': { // Example preset, as it's disabled in UI
          oscillator: { type: 'sine' }, // Simplified
