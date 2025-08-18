@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import * as Tone from 'tone';
-import { Drum, Loader2, Music, Pause, Speaker, FileMusic, Waves, ChevronsRight, Sparkles } from "lucide-react";
+import { Drum, Loader2, Music, Pause, Speaker, FileMusic, Waves, ChevronsRight, Sparkles, SlidersHorizontal } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -61,6 +61,9 @@ export function AuraGroove() {
   const [soloFx, setSoloFx] = useState({ distortion: { enabled: false, wet: 0.5 } });
   const [accompanimentFx, setAccompanimentFx] = useState({ chorus: { enabled: false, wet: 0.4, frequency: 1.5, depth: 0.7 } });
   
+  // Debug Panel State
+  const [debugLog, setDebugLog] = useState<string[]>([]);
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
 
   const { toast } = useToast();
 
@@ -133,6 +136,13 @@ export function AuraGroove() {
             if (lastMessageTimeRef.current > 0 && expectedIntervalRef.current > 0) {
                 const actualInterval = now - lastMessageTimeRef.current;
                 const delay = actualInterval - expectedIntervalRef.current;
+                
+                const logMessage = delay > CONGESTION_THRESHOLD_MS
+                    ? `CONGESTION: +${delay.toFixed(2)}ms`
+                    : `OK: ${delay.toFixed(2)}ms`;
+
+                setDebugLog(prevLogs => [logMessage, ...prevLogs.slice(0, 4)]);
+
                 if (delay > CONGESTION_THRESHOLD_MS) {
                     console.warn("[AURA_GROOVE_WORKER_CONGESTION]", {
                         delay: `${delay.toFixed(2)}ms`,
@@ -391,6 +401,12 @@ export function AuraGroove() {
                     disabled={isBusy || isPlaying}
                 />
             </div>
+            <div className="grid grid-cols-3 items-center gap-4 pt-2">
+                <Label htmlFor="debug-panel-switch" className="text-right flex items-center gap-1.5"><SlidersHorizontal className="h-4 w-4"/> Debug Panel</Label>
+                <div className="col-span-2 flex items-center">
+                    <Switch id="debug-panel-switch" checked={showDebugPanel} onCheckedChange={setShowDebugPanel} />
+                </div>
+            </div>
         </div>
         
         <div className="space-y-4 rounded-lg border p-4">
@@ -581,10 +597,20 @@ export function AuraGroove() {
               Press play to start the music.
             </p>
         )}
-        {!isBusy && isPlaying && (
+        {!isBusy && isPlaying && !showDebugPanel && (
              <p className="text-muted-foreground text-center min-h-[40px] flex items-center justify-center px-4">
               Playing at {bpm} BPM...
             </p>
+        )}
+        {showDebugPanel && isPlaying && (
+            <div className="bg-muted/50 rounded-lg p-3 space-y-1 min-h-[40px]">
+                <p className="text-sm font-medium text-center">Real-time Worker Delay</p>
+                {debugLog.map((log, index) => (
+                    <p key={index} className={`font-mono text-xs text-center ${log.startsWith('CONGESTION') ? 'text-destructive' : 'text-muted-foreground'}`}>
+                        {log}
+                    </p>
+                ))}
+            </div>
         )}
       </CardContent>
       <CardFooter className="flex-col gap-4">
@@ -609,5 +635,3 @@ export function AuraGroove() {
     </Card>
   );
 }
-
-    
