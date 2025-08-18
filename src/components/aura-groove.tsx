@@ -124,6 +124,8 @@ export function AuraGroove() {
                   delay: `${delay.toFixed(2)}ms`,
                   config: { instrumentSettings, drumSettings, effectsSettings, bpm, score }
               });
+          } else {
+              console.log('[AURA_GROOVE_RECORDER] OK', { delay: `${delay.toFixed(2)}ms` });
           }
       }
       lastMessageTimeRef.current = now;
