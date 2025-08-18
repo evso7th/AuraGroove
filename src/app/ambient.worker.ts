@@ -19,7 +19,7 @@ class MusicalGenome {
     public readonly bassAnchorRiff: { time: number; duration: string }[];
 
     constructor() {
-        // Harmony derived from "Gammapolis" (Dm - C - G - Dm ...)
+        // Harmony derived from "Gammapolis" (Dm - C - G - Am ...)
         this.harmony = [
             { root: 'D', scale: ['D', 'E', 'F', 'G', 'A', 'Bb', 'C'] },    // D minor
             { root: 'C', scale: ['C', 'D', 'E', 'F', 'G', 'A', 'B'] },    // C major
