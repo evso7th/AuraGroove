@@ -56,6 +56,7 @@ export class AccompanimentSynthManager {
     }
 
     public setInstrument(name: InstrumentName) {
+        console.log("[ACCOMP_SYNTH_TRACE] setInstrument called with:", name);
         this.ensureSynthsInitialized();
 
         if (name === 'none') {
@@ -80,6 +81,7 @@ export class AccompanimentSynthManager {
     }
 
     private updateVolume(rampTime: Tone.Unit.Time = 0.05) {
+        console.log("[ACCOMP_SYNTH_TRACE] updateVolume called. User volume:", this.userVolume, "Instrument:", this.currentInstrument);
         if (!this.isInitialized || this.currentInstrument === 'none') return;
         
         const userVolumeDb = Tone.gainToDb(this.userVolume);
@@ -93,11 +95,13 @@ export class AccompanimentSynthManager {
             }
         });
         
-        // Also control the channel volume for master fade
-        this.fxBus.accompanimentInput.volume.rampTo(this.currentInstrument === 'none' ? -Infinity : 0, rampTime);
+        const targetFxVolume = this.currentInstrument === 'none' ? -Infinity : 0;
+        this.fxBus.accompanimentInput.volume.rampTo(targetFxVolume, rampTime);
+        console.log("[ACCOMP_SYNTH_TRACE] Setting Synth Volume to:", targetVolume, "FX Bus Channel Volume to:", targetFxVolume);
     }
 
     public triggerAttackRelease(notes: string | string[], duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
+        console.log("[ACCOMP_SYNTH_TRACE] triggerAttackRelease called. Current FX Bus Volume:", this.fxBus.accompanimentInput.volume.value);
         if (this.currentInstrument === 'none' || !this.voices.length) return;
 
         const notesToPlay = Array.isArray(notes) ? notes : [notes];

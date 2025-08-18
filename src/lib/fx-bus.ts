@@ -40,7 +40,7 @@ export class FxBus {
         // We will manage effects on the synth managers themselves for more clarity.
         // This class now primarily serves as the final mixing stage.
         
-        console.log("FXBUS_TRACE: Instrument channels created.");
+        console.log(`FXBUS_TRACE: Instrument channels created. Initial volumes: solo=${this.soloInput.volume.value}, accomp=${this.accompanimentInput.volume.value}, bass=${this.bassInput.volume.value}`);
     }
     
     public dispose() {

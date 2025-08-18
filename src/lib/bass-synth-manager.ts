@@ -57,6 +57,7 @@ export class BassSynthManager {
     }
 
     public setInstrument(name: InstrumentName) {
+        console.log("[BASS_SYNTH_TRACE] setInstrument called with:", name);
         this.ensureSynthInitialized();
         if (!this.currentSynth) return;
 
@@ -79,25 +80,33 @@ export class BassSynthManager {
     }
 
     private updateVolume(rampTime: Tone.Unit.Time = 0.05) {
+        console.log("[BASS_SYNTH_TRACE] updateVolume called. User volume:", this.userVolume, "Instrument:", this.currentInstrument);
         if (!this.currentSynth) return;
         
+        let targetFxVolume;
+
         if (this.currentInstrument === 'none') {
-            this.fxBus.bassInput.volume.rampTo(-Infinity, rampTime);
+            targetFxVolume = -Infinity;
+            this.fxBus.bassInput.volume.rampTo(targetFxVolume, rampTime);
+            console.log("[BASS_SYNTH_TRACE] Setting FX Bus Channel Volume to:", targetFxVolume);
             return;
         }
 
         const userVolumeDb = Tone.gainToDb(this.userVolume);
         const targetVolume = MOBILE_VOLUME_DB + userVolumeDb;
+        targetFxVolume = 0; // Keep channel at full volume when active
 
         try {
             this.currentSynth.volume.rampTo(targetVolume, rampTime);
-            this.fxBus.bassInput.volume.rampTo(0, rampTime); // Keep channel at full volume when active
+            this.fxBus.bassInput.volume.rampTo(targetFxVolume, rampTime);
+            console.log("[BASS_SYNTH_TRACE] Setting Synth Volume to:", targetVolume, "FX Bus Channel Volume to:", targetFxVolume);
         } catch (e) {
             // Ignore errors
         }
     }
     
     public triggerAttackRelease(note: string, duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
+        console.log("[BASS_SYNTH_TRACE] triggerAttackRelease called. Current FX Bus Volume:", this.fxBus.bassInput.volume.value);
         if (this.currentSynth && this.currentInstrument !== 'none') {
             this.currentSynth.triggerAttackRelease(note, duration, time, velocity);
         }

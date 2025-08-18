@@ -55,6 +55,7 @@ export class SoloSynthManager {
     }
 
     public setInstrument(name: InstrumentName) {
+        console.log("[SOLO_SYNTH_TRACE] setInstrument called with:", name);
         this.ensureSynthsInitialized();
 
         if (name === 'none') {
@@ -80,15 +81,21 @@ export class SoloSynthManager {
     }
 
     private updateVolume(rampTime: Tone.Unit.Time = 0.05) {
+        console.log("[SOLO_SYNTH_TRACE] updateVolume called. User volume:", this.userVolume, "Instrument:", this.currentInstrument);
         if (!this.isInitialized) return;
         
+        let targetFxVolume;
+
         if (this.currentInstrument === 'none') {
-            this.fxBus.soloInput.volume.rampTo(-Infinity, rampTime);
+            targetFxVolume = -Infinity;
+            this.fxBus.soloInput.volume.rampTo(targetFxVolume, rampTime);
+            console.log("[SOLO_SYNTH_TRACE] Setting FX Bus Channel Volume to:", targetFxVolume);
             return;
         }
 
         const userVolumeDb = Tone.gainToDb(this.userVolume);
         const targetVolume = MOBILE_VOLUME_DB + userVolumeDb;
+        targetFxVolume = 0;
         
         this.voices.forEach(voice => {
             try {
@@ -97,10 +104,12 @@ export class SoloSynthManager {
                 // Ignore error if context is already closed
             }
         });
-        this.fxBus.soloInput.volume.rampTo(0, rampTime);
+        this.fxBus.soloInput.volume.rampTo(targetFxVolume, rampTime);
+        console.log("[SOLO_SYNTH_TRACE] Setting Synth Volume to:", targetVolume, "FX Bus Channel Volume to:", targetFxVolume);
     }
 
     public triggerAttackRelease(notes: string | string[], duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
+        console.log("[SOLO_SYNTH_TRACE] triggerAttackRelease called. Current FX Bus Volume:", this.fxBus.soloInput.volume.value);
         if (this.currentInstrument === 'none' || !this.voices.length) return;
 
         const notesToPlay = Array.isArray(notes) ? notes : [notes];
