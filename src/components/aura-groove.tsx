@@ -75,6 +75,7 @@ export function AuraGroove() {
   const effectsSynthManagerRef = useRef<EffectsSynthManager | null>(null);
   const drumMachineRef = useRef<DrumMachine | null>(null);
   const tickLoopRef = useRef<Tone.Loop | null>(null);
+  const currentBarRef = useRef<number>(0);
   
   // Refs for congestion tracking
   const lastWorkerResponseTimeRef = useRef<number>(0);
@@ -116,7 +117,27 @@ export function AuraGroove() {
     });
 
     const handleMessage = (event: MessageEvent) => {
-      const { type, data, error } = event.data;
+      const { type, data, bar, error } = event.data;
+
+      const scheduledNow = Tone.now();
+
+      const validateAndSchedule = (receivedBar: number, scoreData: any[], manager: any, triggerFn: string) => {
+        if (receivedBar < currentBarRef.current) {
+          console.warn(`[AURA_GROOVE_STALE_SCORE] Discarding stale score for bar ${receivedBar}. Current is ${currentBarRef.current}`);
+          return;
+        }
+        if (manager && manager[triggerFn]) {
+          scoreData.forEach((note: any) => {
+            const timeToPlay = scheduledNow + note.time;
+            if (triggerFn === 'trigger') {
+              manager.trigger(note, timeToPlay);
+            } else {
+              const notesArg = note.notes || note.note;
+              manager.triggerAttackRelease(notesArg, note.duration, timeToPlay, note.velocity);
+            }
+          });
+        }
+      };
 
       switch(type) {
         case 'initialized':
@@ -128,58 +149,26 @@ export function AuraGroove() {
              setIsInitializing(false);
              setLoadingText("");
              setIsPlaying(true);
+             currentBarRef.current = 0;
              break;
 
-        case 'scores':
-            const workerResponseTime = performance.now();
-            lastWorkerResponseTimeRef.current = workerResponseTime;
-            const delay = workerResponseTime - lastTickRequestTimeRef.current;
-            
-             const logMessage = delay > CONGESTION_THRESHOLD_MS
-                    ? `CONGESTION: +${delay.toFixed(2)}ms`
-                    : `OK: ${delay.toFixed(2)}ms`;
-
-            if (showDebugPanel) {
-                setDebugLog(prevLogs => [logMessage, ...prevLogs.slice(0, 4)]);
-            }
-
-            if (delay > CONGESTION_THRESHOLD_MS) {
-                console.warn("[AURA_GROOVE_WORKER_CONGESTION]", {
-                    delay: `${delay.toFixed(2)}ms`,
-                    config: { instrumentSettings, drumSettings, effectsSettings, bpm, score }
-                });
-            } else {
-                 console.log('[AURA_GROOVE_RECORDER] OK', { delay: `${delay.toFixed(2)}ms` });
-            }
-
-
-            const scheduledNow = Tone.now();
-            if (data.drums && drumMachineRef.current && drumMachineRef.current.isReady()) {
-                data.drums.forEach((note: DrumNote) => {
-                    drumMachineRef.current!.trigger(note, scheduledNow + note.time);
-                });
-            }
-            if (data.bass && bassSynthManagerRef.current) {
-                data.bass.forEach((note: BassNote) => {
-                    bassSynthManagerRef.current?.triggerAttackRelease(note.note, note.duration, scheduledNow + note.time, note.velocity);
-                });
-            }
-            if (data.solo && soloSynthManagerRef.current) {
-                data.solo.forEach((note: SoloNote) => {
-                    soloSynthManagerRef.current?.triggerAttackRelease(note.notes, note.duration, scheduledNow + note.time);
-                });
-            }
-            if (data.accompaniment && accompanimentSynthManagerRef.current) {
-                data.accompaniment.forEach((note: AccompanimentNote) => {
-                    accompanimentSynthManagerRef.current?.triggerAttackRelease(note.notes, note.duration, scheduledNow + note.time);
-                });
-            }
-            if (data.effects && effectsSynthManagerRef.current) {
-                 data.effects.forEach((note: EffectNote) => {
-                    effectsSynthManagerRef.current?.trigger(note, scheduledNow + note.time);
-                });
-            }
-            break;
+        case 'drum_score':
+          if (drumMachineRef.current?.isReady()) {
+            validateAndSchedule(bar, data, drumMachineRef.current, 'trigger');
+          }
+          break;
+        case 'bass_score':
+          validateAndSchedule(bar, data, bassSynthManagerRef.current, 'triggerAttackRelease');
+          break;
+        case 'solo_score':
+          validateAndSchedule(bar, data, soloSynthManagerRef.current, 'triggerAttackRelease');
+          break;
+        case 'accompaniment_score':
+          validateAndSchedule(bar, data, accompanimentSynthManagerRef.current, 'triggerAttackRelease');
+          break;
+        case 'effects_score':
+           validateAndSchedule(bar, data, effectsSynthManagerRef.current, 'trigger');
+          break;
 
         case 'stopped':
             setIsPlaying(false);
@@ -205,9 +194,9 @@ export function AuraGroove() {
     
     tickLoopRef.current = new Tone.Loop(time => {
       lastTickRequestTimeRef.current = performance.now();
-      musicWorkerRef.current?.postMessage({ command: 'tick' });
+      musicWorkerRef.current?.postMessage({ command: 'tick', data: { time, barCount: currentBarRef.current } });
+      currentBarRef.current++;
     }, '1m');
-
 
     return () => {
       if (musicWorkerRef.current) {
@@ -659,3 +648,5 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    

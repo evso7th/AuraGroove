@@ -505,42 +505,48 @@ const Scheduler = {
         if (settings.score) this.score = settings.score;
     },
 
-    tick() {
+    tick(time: number, barCount: number) {
         if (!this.isRunning) return;
-
-        const scores: Record<string, any[]> = {};
+        
+        this.barCount = barCount;
 
         if (this.compositionEngine) {
             const engine = this.compositionEngine;
             const isAnchorPhase = (engine instanceof EvolveEngine) && (engine as any).isAnchorPhase;
 
             if (this.drumSettings.pattern !== 'none') {
-                 const drumScore = DrumGenerator.createScore(this.drumSettings.pattern, this.barCount, isAnchorPhase)
+                const drumScore = DrumGenerator.createScore(this.drumSettings.pattern, this.barCount, isAnchorPhase)
                     .map(note => ({ ...note, time: note.time * this.secondsPerBeat }));
                 if (drumScore.length > 0) {
-                    scores.drums = drumScore;
+                    self.postMessage({ type: 'drum_score', bar: this.barCount, data: drumScore });
                 }
             }
             if (this.instrumentSettings.bass.name !== 'none') {
                 const bassScore = engine.generateBassScore(this.barCount)
                     .map(note => ({...note, time: note.time * this.secondsPerBeat }));
-                if (bassScore.length > 0) scores.bass = bassScore;
+                if (bassScore.length > 0) {
+                    self.postMessage({ type: 'bass_score', bar: this.barCount, data: bassScore });
+                }
             }
             if (this.instrumentSettings.solo.name !== 'none') {
                 const soloScore = engine.generateSoloScore(this.barCount)
                     .map(note => ({...note, time: (note.time as number) * this.secondsPerBeat}));
-                if (soloScore.length > 0) scores.solo = soloScore;
+                if (soloScore.length > 0) {
+                    self.postMessage({ type: 'solo_score', bar: this.barCount, data: soloScore });
+                }
             }
             if (this.instrumentSettings.accompaniment.name !== 'none') {
                 const accompanimentScore = engine.generateAccompanimentScore(this.barCount)
                     .map(note => ({...note, time: (note.time as number) * this.secondsPerBeat}));
-                if(accompanimentScore.length > 0) scores.accompaniment = accompanimentScore;
+                if(accompanimentScore.length > 0) {
+                    self.postMessage({ type: 'accompaniment_score', bar: this.barCount, data: accompanimentScore });
+                }
             }
             if(this.effectsSettings.mode !== 'none') {
                 const effectsScore = EffectsGenerator.createScore(this.effectsSettings.mode, this.barCount, this.beatsPerBar, isAnchorPhase)
                     .map(note => ({ ...note, time: note.time * this.secondsPerBeat }));
                 if (effectsScore.length > 0) {
-                    scores.effects = effectsScore;
+                    self.postMessage({ type: 'effects_score', bar: this.barCount, data: effectsScore });
                 }
             }
             
@@ -557,29 +563,19 @@ const Scheduler = {
                     })
                     .map(note => ({ ...note, time: (typeof note.time === 'number' ? note.time - barStartBeats : 0) * this.secondsPerBeat }));
             };
-            if (this.drumSettings.pattern !== 'none') {
-                const barDrumNotes = getNotesForBar(promenadeScore.drums);
-                if (barDrumNotes.length > 0) scores.drums = barDrumNotes;
-            }
-            if (this.instrumentSettings.bass.name !== 'none') {
-                const barBassNotes = getNotesForBar(promenadeScore.bass);
-                if (barBassNotes.length > 0) scores.bass = barBassNotes;
-            }
-            if (this.instrumentSettings.solo.name !== 'none') {
-                 const barSoloNotes = getNotesForBar(promenadeScore.solo as any[]);
-                 if (barSoloNotes.length > 0) scores.solo = barSoloNotes;
-            }
-            if (this.instrumentSettings.accompaniment.name !== 'none') {
-                 const barAccompanimentNotes = getNotesForBar(promenadeScore.accompaniment as any[]);
-                 if (barAccompanimentNotes.length > 0) scores.accompaniment = barAccompanimentNotes;
-            }
+
+            const drumScore = getNotesForBar(promenadeScore.drums);
+            if (drumScore.length > 0) self.postMessage({ type: 'drum_score', bar: this.barCount, data: drumScore });
+
+            const bassScore = getNotesForBar(promenadeScore.bass);
+            if (bassScore.length > 0) self.postMessage({ type: 'bass_score', bar: this.barCount, data: bassScore });
+
+            const soloScore = getNotesForBar(promenadeScore.solo as any[]);
+            if (soloScore.length > 0) self.postMessage({ type: 'solo_score', bar: this.barCount, data: soloScore });
+
+            const accompanimentScore = getNotesForBar(promenadeScore.accompaniment as any[]);
+            if (accompanimentScore.length > 0) self.postMessage({ type: 'accompaniment_score', bar: this.barCount, data: accompanimentScore });
         }
-        
-        if (Object.keys(scores).length > 0) {
-            self.postMessage({ type: 'scores', data: scores });
-        }
-        
-        this.barCount++;
     }
 };
 
@@ -608,7 +604,7 @@ self.onmessage = async (event: MessageEvent) => {
                 break;
             
             case 'tick':
-                Scheduler.tick();
+                Scheduler.tick(data.time, data.barCount);
                 break;
         }
     } catch (e) {
@@ -616,3 +612,4 @@ self.onmessage = async (event: MessageEvent) => {
     }
 };
 
+    
