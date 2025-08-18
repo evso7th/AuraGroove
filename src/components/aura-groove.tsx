@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import * as Tone from 'tone';
-import { Drum, Loader2, Music, Pause, Speaker, FileMusic, Waves, ChevronsRight, Sparkles, SlidersHorizontal } from "lucide-react";
+import { Drum, Loader2, Music, Pause, Speaker, FileMusic, Waves, ChevronsRight, Sparkles, SlidersHorizontal, Terminal } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,6 +33,8 @@ import type { EffectsSynthManager } from "@/lib/effects-synth-manager";
 import { DrumMachine } from "@/lib/drum-machine";
 import { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote, DrumSettings, EffectsSettings, InstrumentSettings, ScoreName } from '@/types/music';
 
+const CONGESTION_THRESHOLD_MS = 20;
+
 export function AuraGroove() {
   const [isReady, setIsReady] = useState(false);
   const [isDrumMachineReady, setIsDrumMachineReady] = useState(false);
@@ -59,6 +61,10 @@ export function AuraGroove() {
   const [soloFx, setSoloFx] = useState({ distortion: { enabled: false, wet: 0.5 } });
   const [accompanimentFx, setAccompanimentFx] = useState({ chorus: { enabled: false, wet: 0.4, frequency: 1.5, depth: 0.7 } });
   
+  // Debug State
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
+  const [debugLog, setDebugLog] = useState<string[]>([]);
+  
   const { toast } = useToast();
 
   const musicWorkerRef = useRef<Worker>();
@@ -70,6 +76,7 @@ export function AuraGroove() {
   const drumMachineRef = useRef<DrumMachine | null>(null);
   const tickLoopRef = useRef<Tone.Loop | null>(null);
   const currentBarRef = useRef<number>(0);
+  const lastTickTimeRef = useRef<number>(0);
   
    useEffect(() => {
     setLoadingText("Initializing Worker...");
@@ -106,11 +113,21 @@ export function AuraGroove() {
     });
 
     const handleMessage = (event: MessageEvent) => {
-      const { type, data, bar, error } = event.data;
+      const { type, data, bar: receivedBar, error } = event.data;
+      
+      const now = Tone.now();
+      const delay = now - lastTickTimeRef.current;
+      
+      const logMessage = `Bar ${receivedBar}: Delay ${delay.toFixed(2)}ms`;
+      if (delay > CONGESTION_THRESHOLD_MS) {
+          const congestion = delay - CONGESTION_THRESHOLD_MS;
+          setDebugLog(prev => [`CONGESTION: +${congestion.toFixed(2)}ms`, logMessage, ...prev].slice(0, 10));
+      } else {
+          setDebugLog(prev => [logMessage, ...prev].slice(0, 10));
+      }
 
       const schedule = (scoreData: any[], manager: any, triggerFn: string) => {
         if (manager && manager[triggerFn]) {
-          const now = Tone.now();
           scoreData.forEach((note: any) => {
             const timeToPlay = now + note.time;
             if (triggerFn === 'trigger') {
@@ -134,6 +151,7 @@ export function AuraGroove() {
              setLoadingText("");
              setIsPlaying(true);
              currentBarRef.current = 0;
+             lastTickTimeRef.current = Tone.now();
              break;
 
         case 'drum_score':
@@ -177,6 +195,7 @@ export function AuraGroove() {
     musicWorkerRef.current?.postMessage({ command: 'init' });
     
     tickLoopRef.current = new Tone.Loop(time => {
+      lastTickTimeRef.current = time;
       musicWorkerRef.current?.postMessage({ command: 'tick', data: { time, barCount: currentBarRef.current } });
       currentBarRef.current++;
     }, '1m');
@@ -358,7 +377,22 @@ export function AuraGroove() {
       <CardContent className="space-y-6">
 
         <div className="space-y-4 rounded-lg border p-4">
-            <h3 className="text-lg font-medium text-primary flex items-center gap-2"><FileMusic className="h-5 w-5"/> Composition</h3>
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-medium text-primary flex items-center gap-2"><FileMusic className="h-5 w-5"/> Composition</h3>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="debug-switch" className="text-xs">Debug</Label>
+                <Switch id="debug-switch" checked={showDebugPanel} onCheckedChange={setShowDebugPanel} />
+              </div>
+            </div>
+            {showDebugPanel && (
+              <div className="bg-slate-900/50 p-2 rounded-md border border-slate-700/50 max-h-32 overflow-y-auto">
+                  <h4 className="text-xs font-semibold text-slate-400 flex items-center gap-1.5 mb-1"><Terminal className="h-4 w-4"/> Real-time Worker Delay</h4>
+                  <pre className="text-xs font-mono text-slate-500 overflow-x-auto">
+                      {debugLog.map((line, i) => <div key={i} className={line.startsWith('CONGESTION') ? 'text-red-400' : ''}>{line}</div>)}
+                  </pre>
+              </div>
+            )}
+
             <div className="grid grid-cols-3 items-center gap-4">
                  <Label htmlFor="score-selector" className="text-right">Style</Label>
                  <Select
@@ -606,3 +640,5 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    
