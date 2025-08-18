@@ -57,13 +57,12 @@ export class BassSynthManager {
     }
 
     public setInstrument(name: InstrumentName) {
-        console.log("[BASS_SYNTH_TRACE] setInstrument called with:", name);
         this.ensureSynthInitialized();
         if (!this.currentSynth) return;
 
         if (name === 'none') {
             this.currentInstrument = 'none';
-            this.updateVolume(0.01);
+            this.fadeOut(0.01);
             return;
         }
         
@@ -71,7 +70,8 @@ export class BassSynthManager {
             this.currentSynth.set(instrumentPresets[name]);
         }
         this.currentInstrument = name; 
-        this.updateVolume(0.01);
+        this.updateVolume();
+        this.fadeIn(0.01);
     }
     
     public setVolume(volume: number) {
@@ -80,33 +80,19 @@ export class BassSynthManager {
     }
 
     private updateVolume(rampTime: Tone.Unit.Time = 0.05) {
-        console.log("[BASS_SYNTH_TRACE] updateVolume called. User volume:", this.userVolume, "Instrument:", this.currentInstrument);
-        if (!this.currentSynth) return;
+        if (!this.currentSynth || this.currentInstrument === 'none') return;
         
-        let targetFxVolume;
-
-        if (this.currentInstrument === 'none') {
-            targetFxVolume = -Infinity;
-            this.fxBus.bassInput.volume.rampTo(targetFxVolume, rampTime);
-            console.log("[BASS_SYNTH_TRACE] Setting FX Bus Channel Volume to:", targetFxVolume);
-            return;
-        }
-
         const userVolumeDb = Tone.gainToDb(this.userVolume);
         const targetVolume = MOBILE_VOLUME_DB + userVolumeDb;
-        targetFxVolume = 0; // Keep channel at full volume when active
 
         try {
             this.currentSynth.volume.rampTo(targetVolume, rampTime);
-            this.fxBus.bassInput.volume.rampTo(targetFxVolume, rampTime);
-            console.log("[BASS_SYNTH_TRACE] Setting Synth Volume to:", targetVolume, "FX Bus Channel Volume to:", targetFxVolume);
         } catch (e) {
             // Ignore errors
         }
     }
     
     public triggerAttackRelease(note: string, duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
-        console.log("[BASS_SYNTH_TRACE] triggerAttackRelease called. Current FX Bus Volume:", this.fxBus.bassInput.volume.value);
         if (this.currentSynth && this.currentInstrument !== 'none') {
             this.currentSynth.triggerAttackRelease(note, duration, time, velocity);
         }

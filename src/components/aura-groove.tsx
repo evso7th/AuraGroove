@@ -33,8 +33,6 @@ import type { EffectsSynthManager } from "@/lib/effects-synth-manager";
 import { DrumMachine } from "@/lib/drum-machine";
 import { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote, DrumSettings, EffectsSettings, InstrumentSettings, ScoreName } from '@/types/music';
 
-const CONGESTION_THRESHOLD_MS = 50;
-
 export function AuraGroove() {
   const [isReady, setIsReady] = useState(false);
   const [isDrumMachineReady, setIsDrumMachineReady] = useState(false);
@@ -61,10 +59,6 @@ export function AuraGroove() {
   const [soloFx, setSoloFx] = useState({ distortion: { enabled: false, wet: 0.5 } });
   const [accompanimentFx, setAccompanimentFx] = useState({ chorus: { enabled: false, wet: 0.4, frequency: 1.5, depth: 0.7 } });
   
-  // Debug Panel State
-  const [debugLog, setDebugLog] = useState<string[]>([]);
-  const [showDebugPanel, setShowDebugPanel] = useState(true);
-
   const { toast } = useToast();
 
   const musicWorkerRef = useRef<Worker>();
@@ -77,11 +71,6 @@ export function AuraGroove() {
   const tickLoopRef = useRef<Tone.Loop | null>(null);
   const currentBarRef = useRef<number>(0);
   
-  // Refs for congestion tracking
-  const lastWorkerResponseTimeRef = useRef<number>(0);
-  const lastTickRequestTimeRef = useRef<number>(0);
-
-
    useEffect(() => {
     setLoadingText("Initializing Worker...");
     
@@ -118,30 +107,12 @@ export function AuraGroove() {
 
     const handleMessage = (event: MessageEvent) => {
       const { type, data, bar, error } = event.data;
-      
-      const responseTime = performance.now();
-      const delay = responseTime - lastTickRequestTimeRef.current;
-      if (lastTickRequestTimeRef.current > 0) {
-          const logMessage = `Worker response '${type}' received. Delay: ${delay.toFixed(2)}ms`;
-           if (delay > CONGESTION_THRESHOLD_MS) {
-              setDebugLog(prev => [`CONGESTION: +${delay.toFixed(2)}ms`, ...prev].slice(0, 5));
-           } else {
-              setDebugLog(prev => [logMessage, ...prev].slice(0, 5));
-           }
-      }
-      lastWorkerResponseTimeRef.current = responseTime;
 
-
-      const scheduledNow = Tone.now();
-
-      const validateAndSchedule = (receivedBar: number, scoreData: any[], manager: any, triggerFn: string) => {
-        if (receivedBar < currentBarRef.current) {
-          console.warn(`[AURA_GROOVE_STALE_SCORE] Discarding stale score for bar ${receivedBar}. Current is ${currentBarRef.current}`);
-          return;
-        }
+      const schedule = (scoreData: any[], manager: any, triggerFn: string) => {
         if (manager && manager[triggerFn]) {
+          const now = Tone.now();
           scoreData.forEach((note: any) => {
-            const timeToPlay = scheduledNow + note.time;
+            const timeToPlay = now + note.time;
             if (triggerFn === 'trigger') {
               manager.trigger(note, timeToPlay);
             } else {
@@ -167,20 +138,20 @@ export function AuraGroove() {
 
         case 'drum_score':
           if (drumMachineRef.current?.isReady()) {
-            validateAndSchedule(bar, data, drumMachineRef.current, 'trigger');
+            schedule(data, drumMachineRef.current, 'trigger');
           }
           break;
         case 'bass_score':
-          validateAndSchedule(bar, data, bassSynthManagerRef.current, 'triggerAttackRelease');
+          schedule(data, bassSynthManagerRef.current, 'triggerAttackRelease');
           break;
         case 'solo_score':
-          validateAndSchedule(bar, data, soloSynthManagerRef.current, 'triggerAttackRelease');
+          schedule(data, soloSynthManagerRef.current, 'triggerAttackRelease');
           break;
         case 'accompaniment_score':
-          validateAndSchedule(bar, data, accompanimentSynthManagerRef.current, 'triggerAttackRelease');
+          schedule(data, accompanimentSynthManagerRef.current, 'triggerAttackRelease');
           break;
         case 'effects_score':
-           validateAndSchedule(bar, data, effectsSynthManagerRef.current, 'trigger');
+           schedule(data, effectsSynthManagerRef.current, 'trigger');
           break;
 
         case 'stopped':
@@ -206,7 +177,6 @@ export function AuraGroove() {
     musicWorkerRef.current?.postMessage({ command: 'init' });
     
     tickLoopRef.current = new Tone.Loop(time => {
-      lastTickRequestTimeRef.current = performance.now();
       musicWorkerRef.current?.postMessage({ command: 'tick', data: { time, barCount: currentBarRef.current } });
       currentBarRef.current++;
     }, '1m');
@@ -418,12 +388,6 @@ export function AuraGroove() {
                     disabled={isBusy}
                 />
             </div>
-            <div className="grid grid-cols-3 items-center gap-4 pt-2">
-                <Label htmlFor="debug-panel-switch" className="text-right flex items-center gap-1.5"><SlidersHorizontal className="h-4 w-4"/> Debug Panel</Label>
-                <div className="col-span-2 flex items-center">
-                    <Switch id="debug-panel-switch" checked={showDebugPanel} onCheckedChange={setShowDebugPanel} />
-                </div>
-            </div>
         </div>
         
         <div className="space-y-4 rounded-lg border p-4">
@@ -614,24 +578,10 @@ export function AuraGroove() {
               Press play to start the music.
             </p>
         )}
-        {!isBusy && isPlaying && !showDebugPanel && (
+        {!isBusy && isPlaying && (
              <p className="text-muted-foreground text-center min-h-[40px] flex items-center justify-center px-4">
               Playing at {bpm} BPM...
             </p>
-        )}
-        {showDebugPanel && (
-            <div className="bg-muted/50 rounded-lg p-3 space-y-1 min-h-[40px]">
-                <p className="text-sm font-medium text-center">Real-time Worker Delay</p>
-                {debugLog.length === 0 && isPlaying ? (
-                    <p className="font-mono text-xs text-center text-muted-foreground">Awaiting first tick...</p>
-                ) : (
-                    debugLog.map((log, index) => (
-                        <p key={index} className={`font-mono text-xs text-center ${log.startsWith('CONGESTION') ? 'text-destructive' : 'text-muted-foreground'}`}>
-                            {log}
-                        </p>
-                    ))
-                )}
-            </div>
         )}
       </CardContent>
       <CardFooter className="flex-col gap-4">

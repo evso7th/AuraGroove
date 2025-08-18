@@ -19,9 +19,7 @@ export class FxBus {
     public effectsInput: Tone.Channel;
 
     constructor() {
-        console.log("FXBUS_TRACE: Constructor called.");
         this.masterChannel = new Tone.Channel({ volume: 0, pan: 0 }).toDestination();
-        console.log("FXBUS_TRACE: Master channel created and connected to destination.");
 
         // Create effects
         this.soloDistortion = new Tone.Distortion({ distortion: 0.4, wet: 0 });
@@ -39,12 +37,9 @@ export class FxBus {
         // For this setup, synths will connect to the channel, and the channel to the master.
         // We will manage effects on the synth managers themselves for more clarity.
         // This class now primarily serves as the final mixing stage.
-        
-        console.log(`FXBUS_TRACE: Instrument channels created. Initial volumes: solo=${this.soloInput.volume.value}, accomp=${this.accompanimentInput.volume.value}, bass=${this.bassInput.volume.value}`);
     }
     
     public dispose() {
-        console.log("FXBUS_TRACE: Dispose called.");
         this.soloDistortion.dispose();
         this.accompanimentChorus.dispose();
         this.bassDistortion.dispose();
@@ -56,6 +51,5 @@ export class FxBus {
         this.effectsInput.dispose();
 
         this.masterChannel.dispose();
-        console.log("FXBUS_TRACE: All nodes disposed.");
     }
 }
