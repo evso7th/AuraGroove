@@ -50,7 +50,7 @@ export function AuraGroove() {
   const [instrumentSettings, setInstrumentSettings] = useState<InstrumentSettings>({
     solo: { name: "synthesizer", volume: 0.8 },
     accompaniment: { name: "synthesizer", volume: 0.7 },
-    bass: { name: "bassGuitar", volume: 0.9 },
+    bass: { name: "bassGuitar", volume: 0.5 },
   });
   const [bpm, setBpm] = useState(75);
   const [score, setScore] = useState<ScoreName>('evolve');
@@ -625,6 +625,8 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    
 
     
 
