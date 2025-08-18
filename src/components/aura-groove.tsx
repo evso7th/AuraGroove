@@ -206,7 +206,7 @@ export function AuraGroove() {
     tickLoopRef.current = new Tone.Loop(time => {
       lastTickRequestTimeRef.current = performance.now();
       musicWorkerRef.current?.postMessage({ command: 'tick' });
-    }, '1m').start(0);
+    }, '1m');
 
 
     return () => {
@@ -332,6 +332,7 @@ export function AuraGroove() {
 
         if (Tone.Transport.state !== 'started') {
             Tone.Transport.start();
+            tickLoopRef.current?.start(0);
         }
         
         soloSynthManagerRef.current?.fadeIn(0.5);
@@ -358,6 +359,7 @@ export function AuraGroove() {
     
     if (Tone.Transport.state !== 'stopped') {
         Tone.Transport.stop();
+        tickLoopRef.current?.stop();
     }
     musicWorkerRef.current?.postMessage({ command: 'stop' });
     
