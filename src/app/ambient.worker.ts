@@ -115,7 +115,7 @@ class EvolveEngine {
             return [];
         }
 
-        const phraseLength = Math.floor(Math.random() * 4) + 3; // 3 to 6 notes
+        const phraseLength = Math.floor(Math.random() * 3) + 2; // 2 to 4 notes (OPTIMIZED)
         const score: SoloNote[] = [];
         let currentNote = this.soloState.lastNote;
 
@@ -142,7 +142,7 @@ class EvolveEngine {
         }
 
         this.soloState.lastNote = currentNote;
-        this.soloState.phraseCooldown = Math.floor(Math.random() * 3) + 2; // Pause for 2-4 beats
+        this.soloState.phraseCooldown = Math.floor(Math.random() * 4) + 3; // Pause for 3-6 beats (OPTIMIZED)
         
         return score;
     }
@@ -155,13 +155,13 @@ class EvolveEngine {
         const chord = chordTones.map(n => `${n}${octave}`);
         
         const arpeggio: AccompanimentNote[] = [];
-        const pattern = [0, 1, 2, 1]; // Classic arpeggio pattern
+        const pattern = [0, 1, 2, 1]; // Classic arpeggio pattern (OPTIMIZED)
 
-        for (let i = 0; i < 8; i++) { // 8th note arpeggio
+        for (let i = 0; i < 4; i++) { // 4th note arpeggio (OPTIMIZED)
             arpeggio.push({
                 notes: [chord[pattern[i % pattern.length]]],
-                time: i * 0.5,
-                duration: '8n'
+                time: i * 1.0, // Plays on the beat
+                duration: '4n'
             });
         }
         return arpeggio;
@@ -188,7 +188,7 @@ class MandelbrotEngine {
     private x: number;
     private y: number;
     private zoom: number;
-    private maxIterations = 50;
+    private maxIterations = 25; // OPTIMIZED from 50
 
     private startX: number;
     private startY: number;
@@ -288,7 +288,7 @@ class MandelbrotEngine {
             return [];
         }
 
-        const phraseLength = 4 + Math.floor(this.getMandelbrotValue(this.x, this.y) / this.maxIterations * 4); // 4-8 notes
+        const phraseLength = 3 + Math.floor(this.getMandelbrotValue(this.x, this.y) / this.maxIterations * 3); // 3-6 notes
         let currentNote = this.soloState.lastNote;
 
         for (let i = 0; i < phraseLength; i++) {
@@ -328,9 +328,9 @@ class MandelbrotEngine {
             return [{ notes: chord, time: 0, duration: '1m' }];
         } else { // Active region -> arpeggio
             const arpeggio: AccompanimentNote[] = [];
-            const pattern = [0, 1, 2, 1, 2, 0, 1, 2];
+            const pattern = [0, 1, 2, 1]; // Simplified pattern
             for (let i = 0; i < pattern.length; i++) {
-                arpeggio.push({ notes: [chord[pattern[i]]], time: i * 0.5, duration: '8n' });
+                arpeggio.push({ notes: [chord[pattern[i]]], time: i * 1.0, duration: '4n' });
             }
             return arpeggio;
         }
@@ -411,7 +411,7 @@ class DrumGenerator {
     private static fillPatterns = ['ambient-fill-1', 'ambient-fill-2', 'ambient-fill-3'];
 
     static createScore(pattern: string, barNumber: number, isAnchorPhase: boolean): DrumNote[] {
-        const isFillBar = (barNumber + 1) % 4 === 0 && !isAnchorPhase;
+        const isFillBar = (barNumber + 1) % 4 === 0 && !isAnchorPhase && Math.random() < 0.5; // OPTIMIZED
         let score;
         if (isFillBar) {
             const randomFill = this.fillPatterns[Math.floor(Math.random() * this.fillPatterns.length)];
