@@ -10,21 +10,21 @@ const NUM_VOICES = 2; // 2 voices for solo instrument
 
 const instrumentPresets: Record<Exclude<InstrumentName, 'none'>, Tone.SynthOptions> = {
     'organ': {
-        oscillator: { type: 'sawtooth' },
+        oscillator: { type: 'fatsawtooth', count: 3, spread: 20 },
         envelope: {
             attack: 0.2,
             decay: 0.4,
             sustain: 0.8,
-            release: 1.5,
+            release: 1.5, // Safe release time
         },
     },
     'synthesizer': {
-        oscillator: { type: 'triangle' },
+        oscillator: { type: 'fatsine', count: 4, spread: 40 },
         envelope: { 
             attack: 0.1, 
             decay: 0.5, 
             sustain: 0.7, 
-            release: 1.8 
+            release: 1.0 // Safe release time
         },
     },
     'piano': { // Example preset, as it's disabled in UI

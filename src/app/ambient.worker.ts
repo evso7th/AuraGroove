@@ -58,8 +58,7 @@ class MusicalGenome {
 
 class EvolveEngine {
     private genome: MusicalGenome;
-    private soloState: { lastPhrase: string[]; };
-    private accompanimentState: { lastPhrase: string[][]; };
+    private soloState: { lastNote: string | null; lastPhrase: string[]; phraseCooldown: number };
     private evolutionLengthInBars: number;
     private anchorLengthInBars: number;
     private isAnchorPhase: boolean;
@@ -67,8 +66,7 @@ class EvolveEngine {
 
     constructor(genome: MusicalGenome) {
         this.genome = genome;
-        this.soloState = { lastPhrase: [...this.genome.soloAnchor] };
-        this.accompanimentState = { lastPhrase: [...this.genome.accompanimentAnchor] };
+        this.soloState = { lastNote: null, lastPhrase: [...this.genome.soloAnchor], phraseCooldown: 0 };
         
         this.anchorLengthInBars = 8;
         this.evolutionLengthInBars = this.calculateNextEvolutionLength();
@@ -92,112 +90,87 @@ class EvolveEngine {
         }
     }
     
-    private isTransitionBar(): boolean {
-        const currentPhaseLength = this.isAnchorPhase ? this.anchorLengthInBars : this.evolutionLengthInBars;
-        return this.barsIntoPhase === currentPhaseLength - 1;
-    }
-
     public getHarmony(bar: number) {
         const chordIndex = Math.floor(bar / 4) % this.genome.harmony.length;
         return this.genome.harmony[chordIndex];
     }
 
-    private evolvePhrase(phrase: string[], harmony: { root: string; scale: string[] }): string[] {
-        const newPhrase = [...phrase];
-        const scale = harmony.scale;
-        
-        for (let i = 0; i < newPhrase.length; i++) {
-             if (Math.random() < 0.4) { 
-                const note = newPhrase[i];
-                const noteName = note.slice(0, -1);
-                const octave = parseInt(note.slice(-1), 10);
-                const currentNoteIndexInScale = scale.indexOf(noteName);
-
-                if (Math.random() < 0.7 && currentNoteIndexInScale !== -1) {
-                     const step = Math.random() < 0.5 ? 1 : -1;
-                     const nextNoteName = scale[(currentNoteIndexInScale + step + scale.length) % scale.length];
-                     newPhrase[i] = `${nextNoteName}${octave}`;
-                } 
-                else if (Math.random() < 0.2) {
-                     const chordTones = [scale[0], scale[2], scale[4]];
-                     const targetTone = chordTones[Math.floor(Math.random() * chordTones.length)];
-                     const targetOctave = Math.random() < 0.7 ? 3 : 4; 
-                     newPhrase[i] = `${targetTone}${targetOctave}`;
-                }
-                else if (i > 0 && Math.random() < 0.1) {
-                    newPhrase[i] = newPhrase[i-1];
-                }
-                else if (Math.random() < 0.05) {
-                    const newOctave = octave === 3 ? 4 : 3;
-                    newPhrase[i] = `${noteName}${newOctave}`;
-                }
-            }
-        }
-        return newPhrase;
+    private getChordTones(root: string, scale: string[]): string[] {
+        const rootIndex = scale.indexOf(root);
+        if (rootIndex === -1) return [root];
+        return [
+            scale[rootIndex],
+            scale[(rootIndex + 2) % scale.length],
+            scale[(rootIndex + 4) % scale.length]
+        ];
     }
-
+    
+    // Legacy solo logic: 80/20 stepwise vs chord tone jump, with phrasing
     public generateSoloScore(bar: number): SoloNote[] {
-        let phrase: string[];
+        const harmony = this.getHarmony(bar);
+        const chordTones = this.getChordTones(harmony.root, harmony.scale);
         
-        if (this.isAnchorPhase) {
-            phrase = this.genome.soloAnchor;
-            if (this.isTransitionBar()) {
-                this.soloState.lastPhrase = this.evolvePhrase(this.genome.soloAnchor, this.getHarmony(bar));
-            }
-        } else {
-            if (this.isTransitionBar()) {
-                const { scale } = this.getHarmony(bar);
-                phrase = [scale[0], scale[2], scale[1], scale[0]].map(n => `${n}3`); 
-            } else {
-                phrase = this.evolvePhrase(this.soloState.lastPhrase, this.getHarmony(bar));
-                this.soloState.lastPhrase = phrase;
-            }
+        if (this.soloState.phraseCooldown > 0) {
+            this.soloState.phraseCooldown--;
+            return [];
         }
 
-        return phrase.map((note, i) => ({
-            notes: [note, note], // Create a richer sound by doubling the note
-            time: i,
-            duration: '4n.'
-        }));
+        const phraseLength = Math.floor(Math.random() * 4) + 3; // 3 to 6 notes
+        const score: SoloNote[] = [];
+        let currentNote = this.soloState.lastNote;
+
+        for (let i = 0; i < phraseLength; i++) {
+            let nextNote: string;
+            const currentOctave = currentNote ? parseInt(currentNote.slice(-1), 10) : 4;
+            const currentNoteName = currentNote ? currentNote.slice(0, -1) : harmony.scale[0];
+            let currentNoteIndex = harmony.scale.indexOf(currentNoteName);
+
+            if (currentNote && Math.random() < 0.8) { // 80% stepwise motion
+                const direction = Math.random() < 0.5 ? 1 : -1;
+                let nextNoteIndex = (currentNoteIndex + direction + harmony.scale.length) % harmony.scale.length;
+                let nextOctave = currentOctave;
+                if (direction === 1 && nextNoteIndex < currentNoteIndex) nextOctave++;
+                if (direction === -1 && nextNoteIndex > currentNoteIndex) nextOctave--;
+                nextOctave = Math.max(3, Math.min(5, nextOctave));
+                nextNote = `${harmony.scale[nextNoteIndex]}${nextOctave}`;
+            } else { // 20% jump to a chord tone
+                nextNote = `${chordTones[Math.floor(Math.random() * chordTones.length)]}${currentOctave}`;
+            }
+            
+            score.push({ notes: [nextNote, nextNote], duration: '8n', time: i * 0.5 });
+            currentNote = nextNote;
+        }
+
+        this.soloState.lastNote = currentNote;
+        this.soloState.phraseCooldown = Math.floor(Math.random() * 3) + 2; // Pause for 2-4 beats
+        
+        return score;
     }
 
+    // Legacy accompaniment logic: arpeggios
     public generateAccompanimentScore(bar: number): AccompanimentNote[] {
-        if (this.isAnchorPhase) {
-             if (this.isTransitionBar()) {
-                 const chord = this.genome.accompanimentAnchor[bar % this.genome.accompanimentAnchor.length];
-                 return [{ notes: [chord[0], chord[2]], time: 0, duration: '2n' }]; 
-             }
-             const chord = this.genome.accompanimentAnchor[bar % this.genome.accompanimentAnchor.length];
-             return [{ notes: chord, time: 0, duration: '1m'}];
-        } else {
-             const { scale } = this.getHarmony(bar);
-             const octave3 = Math.random() < 0.8 ? '3' : '4';
-             const octave4 = Math.random() < 0.2 ? '3' : '4';
-             const chord = [`${scale[0]}${octave3}`, `${scale[2]}${octave3}`, `${scale[4]}${octave4}`];
-             const arpeggio: AccompanimentNote[] = [];
+        const harmony = this.getHarmony(bar);
+        const chordTones = this.getChordTones(harmony.root, harmony.scale);
+        const octave = 3;
+        const chord = chordTones.map(n => `${n}${octave}`);
+        
+        const arpeggio: AccompanimentNote[] = [];
+        const pattern = [0, 1, 2, 1]; // Classic arpeggio pattern
 
-             if (this.isTransitionBar()) {
-                 arpeggio.push({ notes: [chord[0]], time: 0, duration: '2n' });
-                 arpeggio.push({ notes: [chord[1]], time: 2, duration: '2n' });
-                 return arpeggio;
-             }
-             
-             const pattern = [chord[0], chord[1], chord[2], chord[1]]; 
-             for (let i = 0; i < 4; i++) { 
-                arpeggio.push({
-                    notes: [pattern[i]],
-                    time: i, 
-                    duration: '8n'
-                });
-             }
-             return arpeggio;
+        for (let i = 0; i < 8; i++) { // 8th note arpeggio
+            arpeggio.push({
+                notes: [chord[pattern[i % pattern.length]]],
+                time: i * 0.5,
+                duration: '8n'
+            });
         }
+        return arpeggio;
     }
     
     public generateBassScore(bar: number): BassNote[] {
          const { root } = this.getHarmony(bar);
          return this.genome.bassAnchorRiff.map(riffPart => ({
-             note: `${root}1`, // Use octave 1 for bass
+             note: `${root}1`,
              time: riffPart.time,
              duration: riffPart.duration,
              velocity: 0.8
@@ -227,9 +200,11 @@ class MandelbrotEngine {
 
     private cycleLength = 64; // Bars per "journey"
     private cycleProgress = 0;
+    private soloState: { lastNote: string | null; phraseCooldown: number } = { lastNote: null, phraseCooldown: 0 };
+
 
     private readonly INTERESTING_POINTS = [
-        { x: -0.745, y: 0.186, zoom: 200 },       // "Seahorse Valley" - Chosen as a beautiful starting point
+        { x: -0.745, y: 0.186, zoom: 200 },       // "Seahorse Valley"
         { x: -1.749, y: 0.0003, zoom: 1500 },      // A mini-Mandelbrot
         { x: 0.274, y: 0.008, zoom: 250 },        // "Elephant Valley"
         { x: -0.16, y: 1.04, zoom: 400 },         // A spiral region
@@ -241,7 +216,6 @@ class MandelbrotEngine {
     constructor(genome: MusicalGenome) {
         this.genome = genome;
         
-        // Start at a random beautiful location from our curated list
         const startPoint = this.INTERESTING_POINTS[Math.floor(Math.random() * this.INTERESTING_POINTS.length)];
         this.x = startPoint.x;
         this.y = startPoint.y;
@@ -251,7 +225,6 @@ class MandelbrotEngine {
         this.startY = this.y;
         this.startZoom = this.zoom;
         
-        // Set the first target to the start point itself, so the first cycle is stable
         this.targetX = this.x;
         this.targetY = this.y;
         this.targetZoom = this.zoom;
@@ -271,7 +244,6 @@ class MandelbrotEngine {
 
     private updatePosition() {
         const progressRatio = this.cycleProgress / this.cycleLength;
-        // Ease-in-out curve for smoother transition
         const easeRatio = progressRatio < 0.5 ? 2 * progressRatio * progressRatio : 1 - Math.pow(-2 * progressRatio + 2, 2) / 2;
 
         this.x = this.startX + (this.targetX - this.startX) * easeRatio;
@@ -292,6 +264,16 @@ class MandelbrotEngine {
         return i;
     }
 
+    private getChordTones(root: string, scale: string[]): string[] {
+        const rootIndex = scale.indexOf(root);
+        if (rootIndex === -1) return [root];
+        return [
+            scale[rootIndex],
+            scale[(rootIndex + 2) % scale.length],
+            scale[(rootIndex + 4) % scale.length]
+        ];
+    }
+    
     public getHarmony(bar: number) {
         const chordIndex = Math.floor(bar / 4) % this.genome.harmony.length;
         return this.genome.harmony[chordIndex];
@@ -300,25 +282,37 @@ class MandelbrotEngine {
     public generateSoloScore(bar: number): SoloNote[] {
         const harmony = this.getHarmony(bar);
         const score: SoloNote[] = [];
-        for (let i = 0; i < 8; i++) { // 8 notes per bar
+        
+        if (this.soloState.phraseCooldown > 0) {
+            this.soloState.phraseCooldown--;
+            return [];
+        }
+
+        const phraseLength = 4 + Math.floor(this.getMandelbrotValue(this.x, this.y) / this.maxIterations * 4); // 4-8 notes
+        let currentNote = this.soloState.lastNote;
+
+        for (let i = 0; i < phraseLength; i++) {
             const cx = this.x + (i - 4) / (256 * this.zoom);
             const cy = this.y + (Math.sin(bar + i) * 2) / (256 * this.zoom);
-
             const value = this.getMandelbrotValue(cx, cy);
 
-            if (value < this.maxIterations) {
-                const noteIndex = value % harmony.scale.length;
-                const octave = (Math.floor(value / harmony.scale.length) % 2) + 3; // Octaves 3 or 4
-                const note = `${harmony.scale[noteIndex]}${octave}`;
-                const durationValue = (this.maxIterations - value) / this.maxIterations;
-                const duration = durationValue > 0.5 ? '4n' : '8n';
-                score.push({
-                    notes: [note, note], // Create a richer sound by doubling the note
-                    time: i * 0.5,
-                    duration: duration,
-                });
+            let nextNote: string;
+            if (value < this.maxIterations * 0.8) { // Use stepwise for stable regions
+                const octave = currentNote ? parseInt(currentNote.slice(-1), 10) : 4;
+                const noteName = currentNote ? currentNote.slice(0, -1) : harmony.scale[0];
+                const noteIndex = harmony.scale.indexOf(noteName);
+                const direction = value % 2 === 0 ? 1 : -1;
+                nextNote = `${harmony.scale[(noteIndex + direction + harmony.scale.length) % harmony.scale.length]}${octave}`;
+            } else { // Jump to chord tone in chaotic regions
+                const chordTones = this.getChordTones(harmony.root, harmony.scale);
+                nextNote = `${chordTones[value % chordTones.length]}4`;
             }
+            score.push({ notes: [nextNote, nextNote], time: i * 0.5, duration: '8n' });
+            currentNote = nextNote;
         }
+
+        this.soloState.lastNote = currentNote;
+        this.soloState.phraseCooldown = 2; // Short pause
         return score;
     }
 
@@ -326,19 +320,17 @@ class MandelbrotEngine {
         const harmony = this.getHarmony(bar);
         const value = this.getMandelbrotValue(this.x, this.y);
         const density = value / this.maxIterations;
-        const isTransitionBar = this.cycleProgress === this.cycleLength - 1;
 
-        if (isTransitionBar) {
-            return [{ notes: [`${harmony.scale[0]}3`], time: 0, duration: '1m' }];
-        }
+        const chordTones = this.getChordTones(harmony.root, harmony.scale);
+        const chord = chordTones.map(n => `${n}3`);
 
-        if (density < 0.2) { // Stable region -> long chord
-            return [{ notes: [`${harmony.scale[0]}3`, `${harmony.scale[2]}3`, `${harmony.scale[4]}3`], time: 0, duration: '1m' }];
+        if (density < 0.3) { // Stable region -> long chord
+            return [{ notes: chord, time: 0, duration: '1m' }];
         } else { // Active region -> arpeggio
-            const chord = [`${harmony.scale[0]}3`, `${harmony.scale[2]}3`, `${harmony.scale[4]}3`];
             const arpeggio: AccompanimentNote[] = [];
-            for (let i = 0; i < 4; i++) {
-                arpeggio.push({ notes: [chord[i % 3]], time: i, duration: '8n' });
+            const pattern = [0, 1, 2, 1, 2, 0, 1, 2];
+            for (let i = 0; i < pattern.length; i++) {
+                arpeggio.push({ notes: [chord[pattern[i]]], time: i * 0.5, duration: '8n' });
             }
             return arpeggio;
         }
@@ -356,7 +348,7 @@ class MandelbrotEngine {
         } else { // Active region
             return [
                 { note: `${noteName}1`, time: 0, duration: '2n', velocity: 0.8 },
-                { note: `${noteName}1`, time: 2, duration: '2n', velocity: 0.75 },
+                { note: `${noteName}1`, time: 2.5, duration: '4n', velocity: 0.75 },
             ];
         }
     }

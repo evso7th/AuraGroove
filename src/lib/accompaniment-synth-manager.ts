@@ -16,7 +16,7 @@ const instrumentPresets: Record<Exclude<InstrumentName, 'none'>, Tone.SynthOptio
             attack: 0.3,
             decay: 0.5,
             sustain: 0.9,
-            release: 1.5,
+            release: 1.2, // Safe release time
         },
     },
     'synthesizer': {
@@ -25,7 +25,7 @@ const instrumentPresets: Record<Exclude<InstrumentName, 'none'>, Tone.SynthOptio
             attack: 0.2, 
             decay: 0.3, 
             sustain: 0.8, 
-            release: 1.8 
+            release: 1.0 // Safe release time
         },
     },
     'piano': { // Example preset, as it's disabled in UI

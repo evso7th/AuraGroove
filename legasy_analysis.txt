@@ -1,0 +1,1094 @@
+// This file is a template and can be used as a base for new styles.
+// However, it is not directly used by the AutopilotEngine anymore.
+// The engine now dynamically loads workers from the /autopilot-styles/ directory.
+
+import type { MusicKey, MusicScale, AutopilotStyle } from '@/app/page';
+import type { InstrumentType } from '../audio-engine';
+import type { Unit } from 'tone/build/esm/core/type/Units';
+
+// --- TYPE DEFINITIONS ---
+export type AutopilotPart = 'bass' | 'accompaniment' | 'melody' | 'effects';
+
+type NoteEvent = {
+    type: InstrumentType;
+    freq: number;
+    dur: Unit.Time;
+    vel: number;
+};
+
+export type WorkerEvent =
+    | { type: 'start' }
+    | { type: 'stop' }
+    | { type: 'tick', time: number }
+    | { type: 'setHarmony', key: MusicKey, scale: MusicScale }
+    | { type: 'setStyle', style: AutopilotStyle }
+    | { type: 'setTempo', bpm: number }
+    | { type: 'setParts', parts: Record<AutopilotPart, boolean> };
+
+export type WorkerResponse =
+    | { type: 'playNote', note: NoteEvent, time: number };
+
+
+// --- WORKER STATE (EXAMPLE) ---
+let state = {
+    tickCount: 0,
+    currentKey: 'C' as MusicKey,
+    currentScale: 'Major Pentatonic' as MusicScale,
+    currentBpm: 120,
+    scaleIntervals: [] as number[],
+    chordProgression: [0, 4, 5, 3] as number[],
+    lastMelodyDegree: null as number | null,
+    enabledParts: { bass: true, accompaniment: true, melody: true, effects: true } as Record<AutopilotPart, boolean>,
+    scaleFrequencies: {
+        bass: [] as number[],
+        accompaniment: [] as number[],
+        melody: [] as number[],
+    },
+};
+
+// --- WORKER LOGIC (EXAMPLE) ---
+
+// This is just a placeholder. The actual logic is now in the .js files in /public/assets/workers/
+function tick(time: number) {
+    // Generate notes based on state and post them back
+    // self.postMessage({ type: 'playNote', note: { ... }, time });
+    state.tickCount++;
+}
+
+// --- WORKER EVENT HANDLER ---
+self.onmessage = function (event: MessageEvent<WorkerEvent>) {
+    const { type, ...data } = event.data;
+    switch (type) {
+        case 'start':
+            state.tickCount = 0;
+            // Initialize or reset any logic needed for start
+            break;
+        case 'stop':
+            state.tickCount = 0;
+            // Clean up any state on stop
+            break;
+        case 'tick':
+            tick(data.time);
+            break;
+        case 'setHarmony':
+            // @ts-ignore
+            state.currentKey = data.key;
+
+
+            // @ts-ignore
+            state.currentScale = data.scale;
+            // Update internal music theory data
+            break;
+        case 'setTempo':
+            // @ts-ignore
+            state.currentBpm = data.bpm;
+            break;
+        case 'setParts':
+            // @ts-ignore
+            state.enabledParts = data.parts;
+            break;
+    }
+};
+
+
+
+// This file is a template and can be used as a base for new styles.
+// However, it is not directly used by the AutopilotEngine anymore.
+// The engine now dynamically loads workers from the /autopilot-styles/ directory.
+
+import type { MusicKey, MusicScale, AutopilotStyle } from '@/app/page';
+import type { InstrumentType } from './audio-engine';
+import type { Unit } from 'tone/build/esm/core/type/Units';
+
+// --- TYPE DEFINITIONS ---
+export type AutopilotPart = 'bass' | 'accompaniment' | 'melody' | 'effects';
+
+type NoteEvent = {
+    type: InstrumentType;
+    freq: number;
+    dur: Unit.Time;
+    vel: number;
+};
+
+export type WorkerEvent =
+    | { type: 'start' }
+    | { type: 'stop' }
+    | { type: 'setHarmony', key: MusicKey, scale: MusicScale }
+    | { type: 'setStyle', style: AutopilotStyle } // This is kept for potential future use but is managed by engine
+    | { type: 'setTempo', bpm: number }
+    | { type: 'setParts', parts: Record<AutopilotPart, boolean> };
+
+export type WorkerResponse =
+    | { type: 'playNote', note: NoteEvent, time: number };
+
+
+// --- WORKER STATE ---
+let timerId: any = null;
+let tickCount = 0;
+const subdivisions = 16; 
+
+let currentKey: MusicKey = 'C';
+let currentScale: MusicScale = 'Major Pentatonic';
+let currentBpm = 120;
+let scaleIntervals: number[] = [];
+let chordProgression: number[] = [0, 4, 5, 3]; 
+
+let lastMelodyDegree: number | null = null;
+
+let enabledParts: Record<AutopilotPart, boolean> = {
+    bass: true,
+    accompaniment: true,
+    melody: true,
+    effects: true
+};
+
+let scaleFrequencies: Record<'bass' | 'accompaniment' | 'melody', number[]> = {
+    bass: [],
+    accompaniment: [],
+    melody: [],
+};
+
+const effectTypes: InstrumentType[] = [
+    'autopilot_effect_star', 'autopilot_effect_meteor', 'autopilot_effect_warp', 'autopilot_effect_hole',
+    'autopilot_effect_pulsar', 'autopilot_effect_nebula', 'autopilot_effect_comet', 'autopilot_effect_wind', 'autopilot_effect_echoes'
+];
+
+let nextEffectTime = 0;
+
+
+// --- MUSIC THEORY HELPERS ---
+
+const scaleIntervalMap: { [key in MusicScale]: number[] } = {
+    'Major': [0, 2, 4, 5, 7, 9, 11],
+    'Minor': [0, 2, 3, 5, 7, 8, 10],
+    'Major Pentatonic': [0, 2, 4, 7, 9],
+    'Minor Pentatonic': ['0', '3', '5', '7', '10'].map(Number),
+};
+
+function getNoteFrequency(key: MusicKey, octave: number, interval: number): number {
+    const A4 = 440;
+    const keyMap: {[key in MusicKey]: number} = { 'C': 0, 'C#': 1, 'D': 2, 'D#': 3, 'E': 4, 'F': 5, 'F#': 6, 'G': 7, 'G#': 8, 'A': 9, 'A#': 10, 'B': 11 };
+    const keyIndex = keyMap[key];
+    const midiNote = 12 * (octave + 1) + keyIndex + interval;
+    return Math.pow(2, (midiNote - 69) / 12) * A4;
+}
+
+
+function getScaleFrequenciesForOctaves(key: MusicKey, scale: MusicScale, octaves: number[]): number[] {
+    const intervals = scaleIntervalMap[scale];
+    if (!intervals) return [];
+    let allFrequencies: number[] = [];
+    octaves.forEach(octave => {
+        intervals.forEach(interval => {
+            allFrequencies.push(getNoteFrequency(key, octave, interval));
+        });
+    });
+    return allFrequencies.sort((a,b) => a - b);
+}
+
+function updateMusicContext() {
+    scaleIntervals = scaleIntervalMap[currentScale] || [];
+    
+    scaleFrequencies = {
+        bass: getScaleFrequenciesForOctaves(currentKey, currentScale, [1, 2]),
+        accompaniment: getScaleFrequenciesForOctaves(currentKey, currentScale, [3, 4]),
+        melody: getScaleFrequenciesForOctaves(currentKey, currentScale, [4, 5]),
+    };
+
+    if (currentScale.includes('Major')) {
+        chordProgression = [0, 4, 5, 3]; // I-V-vi-IV
+    } else {
+        chordProgression = [0, 5, 3, 6]; // i-VI-IV-VII
+    }
+    lastMelodyDegree = null;
+}
+
+
+function getFrequencyFromDegree(degree: number, part: keyof typeof scaleFrequencies): number | null {
+    const freqs = scaleFrequencies[part];
+    const scaleLength = scaleIntervals.length;
+
+    if (!freqs || freqs.length === 0 || !scaleLength) return null;
+    
+    const noteIndexInScale = (degree % scaleLength + scaleLength) % scaleLength;
+    const octaveOffset = Math.floor(degree / scaleLength);
+    const finalIndex = noteIndexInScale + (octaveOffset * scaleLength);
+
+    if (finalIndex >= 0 && finalIndex < freqs.length) {
+        return freqs[finalIndex];
+    }
+
+    return null;
+}
+
+
+function getChordTones(rootDegree: number): number[] {
+    const chordTones: number[] = [];
+    if (!scaleIntervals.length) return [];
+    
+    for (let i = 0; i < 3; i++) {
+        const degreeIndex = (rootDegree + i * 2);
+        chordTones.push(degreeIndex);
+    }
+    return chordTones;
+}
+
+
+// --- STYLE-SPECIFIC GENERATORS ---
+function tick(time: number) {
+    const measure = Math.floor(tickCount / subdivisions);
+    const beat = tickCount % subdivisions;
+    
+    const chordIndex = Math.floor(measure / 2) % chordProgression.length;
+    const rootDegree = chordProgression[chordIndex];
+    const chordToneDegrees = getChordTones(rootDegree);
+
+    // Bass
+    if (enabledParts.bass && beat === 0) {
+        const freq = getFrequencyFromDegree(rootDegree, 'bass');
+        if (freq) {
+            self.postMessage({ type: 'playNote', note: { type: 'autopilot_bass', freq, dur: '1m', vel: 0.8 }, time });
+        }
+    }
+
+    // Accompaniment
+    if (enabledParts.accompaniment && (beat % 4 === 0)) {
+         const syncopation = (tickCount % 8 === 0) ? 1 : 0;
+        const arpPattern = [0, 1, 2, 1];
+        const patternIndex = (Math.floor(beat/2) + syncopation) % arpPattern.length;
+        const degree = chordToneDegrees[arpPattern[patternIndex]];
+
+        if (degree !== null) {
+            const freq = getFrequencyFromDegree(degree, 'accompaniment');
+            if (freq) {
+                self.postMessage({ type: 'playNote', note: { type: 'autopilot_accompaniment', freq, dur: '2n', vel: 0.5 }, time });
+            }
+        }
+    }
+
+    // Melody
+    if (enabledParts.melody && beat % 8 === 1 && Math.random() > 0.4) {
+        let nextDegree: number | null = null;
+        
+        if (lastMelodyDegree !== null) {
+            if (Math.random() < 0.8) {
+                const direction = Math.random() < 0.5 ? 1 : -1;
+                nextDegree = lastMelodyDegree + direction;
+            } else {
+                nextDegree = chordToneDegrees[Math.floor(Math.random() * chordToneDegrees.length)];
+            }
+        } else {
+            nextDegree = chordToneDegrees[Math.floor(Math.random() * chordToneDegrees.length)];
+        }
+
+        if (nextDegree !== null) {
+            const freq = getFrequencyFromDegree(nextDegree, 'melody');
+            if (freq) {
+                self.postMessage({ type: 'playNote', note: { type: 'autopilot_melody', freq, dur: '1n', vel: 0.6 }, time });
+                lastMelodyDegree = nextDegree;
+            }
+        }
+    }
+
+    // Effects
+    if (enabledParts.effects && time >= nextEffectTime) {
+        if (Math.random() < 0.15) {
+             const randomRootDegree = chordProgression[Math.floor(Math.random() * chordProgression.length)];
+             const freq = getFrequencyFromDegree(randomRootDegree, 'melody');
+             if (freq) {
+                 const effectType = effectTypes[Math.floor(Math.random() * effectTypes.length)];
+                 const numNotes = Math.floor(Math.random() * 4) + 2;
+                 for(let i=0; i < numNotes; i++){
+                    const effectFreq = freq * Math.pow(1.05946, i*2 + (Math.random() - 0.5) * 4);
+                    self.postMessage({ type: 'playNote', note: { type: effectType, freq: effectFreq, dur: '4n', vel: Math.random() * 0.2 + 0.3 }, time: time + i * 0.15 });
+                 }
+             }
+        }
+        const randomDelay = Math.random() * 2000 + 1000; // 1 to 3 seconds
+        nextEffectTime = time + randomDelay / 1000;
+    }
+
+
+    tickCount++;
+}
+
+
+function start() {
+    stop(); 
+    updateMusicContext();
+    tickCount = 0;
+    const intervalSeconds = (60 / currentBpm) / (subdivisions / 4); // Interval for a 16th note
+
+    let expected = self.performance.now();
+
+    const loop = () => {
+        const now = self.performance.now();
+        const drift = now - expected;
+        if (drift > intervalSeconds * 1000) {
+            console.warn("Autopilot worker drift is high. Resetting expected time.");
+            expected = now;
+        }
+        
+        tick(expected / 1000); // Pass scheduled time in seconds
+
+        expected += intervalSeconds * 1000;
+        timerId = setTimeout(loop, Math.max(0, intervalSeconds * 1000 - drift));
+    }
+    
+    nextEffectTime = self.performance.now() / 1000 + 2; // Schedule first effect 2s from now
+    timerId = setTimeout(loop, intervalSeconds * 1000);
+}
+
+function stop() {
+    if (timerId !== null) {
+        clearTimeout(timerId);
+        timerId = null;
+    }
+}
+
+
+// --- WORKER EVENT HANDLER ---
+self.onmessage = function (event: MessageEvent<WorkerEvent>) {
+    const { type } = event.data;
+    switch (type) {
+        case 'start':
+            start();
+            break;
+        case 'stop':
+            stop();
+            break;
+        case 'setHarmony':
+            currentKey = event.data.key;
+            currentScale = event.data.scale;
+            updateMusicContext();
+            break;
+        case 'setTempo':
+            currentBpm = event.data.bpm;
+            if (timerId !== null) { 
+                start(); // Restart the loop with the new tempo
+            }
+            break;
+        case 'setParts':
+            enabledParts = event.data.parts;
+            break;
+    }
+};
+
+
+
+'use client';
+
+import * as Tone from 'tone';
+import type { MusicKey, MusicScale, AutopilotStyle } from '@/app/page';
+import type { WorkerEvent, WorkerResponse, AutopilotPart, NoteEvent } from './autopilot-worker';
+import type { AudioEngine } from './audio-engine';
+
+const workerCache: Partial<Record<AutopilotStyle, Worker>> = {};
+
+export class AutopilotEngine {
+    private audioEngine: AudioEngine;
+    private activeWorker: Worker | null = null;
+    private currentStyle: AutopilotStyle | null = null;
+    private isAutopilotOn = false;
+    private tickLoop: Tone.Loop | null = null;
+
+    private lastKnownState: {
+        bpm: number;
+        key: MusicKey;
+        scale: MusicScale;
+        parts: Record<AutopilotPart, boolean>;
+    } = {
+        bpm: 90,
+        key: 'C',
+        scale: 'Major Pentatonic',
+        parts: { bass: true, accompaniment: true, melody: true, effects: true },
+    };
+
+    constructor(audioEngine: AudioEngine) {
+        this.audioEngine = audioEngine;
+        this.initialize();
+    }
+
+    private initialize() {
+        this.tickLoop = new Tone.Loop(time => {
+            if (this.isAutopilotOn && this.activeWorker) {
+                 this.postMessageToActiveWorker({ type: 'tick', time });
+            }
+        }, '16n');
+
+        Tone.Transport.on('start', () => this.tickLoop?.start(0));
+        Tone.Transport.on('stop', () => {
+            this.postMessageToActiveWorker({ type: 'stop' });
+            this.tickLoop?.stop();
+        });
+        Tone.Transport.on('pause', () => {
+             this.postMessageToActiveWorker({ type: 'stop' });
+        });
+    }
+    
+    private handleWorkerMessage = (event: MessageEvent<WorkerResponse>) => {
+        if (!this.isAutopilotOn) return;
+        const { type, note, time } = event.data;
+        if (type === 'playNote' && note) {
+            this.audioEngine.playAutopilotEvent(note, time);
+        }
+    }
+
+    private getWorker(style: AutopilotStyle): Worker {
+        if (workerCache[style]) {
+            const worker = workerCache[style]!;
+            // Re-attach the message handler as it might have been cleared
+            worker.onmessage = this.handleWorkerMessage;
+            return worker;
+        }
+
+        let workerFileName: string;
+        switch(style) {
+            case 'Toccata':     workerFileName = 'toccata.worker.js'; break;
+            case 'Promenade':   workerFileName = 'promenade.worker.js'; break;
+            case 'Trance':      workerFileName = 'trance.worker.js'; break;
+            case 'Sequence':    workerFileName = 'sequence.worker.js'; break;
+            case 'Chimes':      workerFileName = 'chimes.worker.js'; break;
+            case 'Drone':       workerFileName = 'drone.worker.js'; break;
+            case 'Space':       workerFileName = 'space.worker.js'; break;
+            case 'Ambient':
+            default:            workerFileName = 'ambient.worker.js'; break;
+        }
+
+        const workerPath = `/assets/workers/${workerFileName}`;
+        try {
+            const worker = new Worker(workerPath, { type: 'module' });
+            worker.onmessage = this.handleWorkerMessage;
+            workerCache[style] = worker;
+            return worker;
+        } catch (e) {
+            console.error(`Failed to load worker for style ${style}:`, e);
+            // Fallback to ambient if the specific worker fails
+            if (style !== 'Ambient') {
+                console.log('Falling back to Ambient worker.');
+                return this.getWorker('Ambient');
+            }
+            throw e;
+        }
+    }
+    
+    private postMessageToActiveWorker(message: WorkerEvent) {
+        try {
+            this.activeWorker?.postMessage(message);
+        } catch (e) {
+            console.error("Failed to post message to worker:", e, "Message:", message);
+        }
+    }
+    
+    public setTempo(bpm: number) {
+        this.lastKnownState.bpm = bpm;
+        this.postMessageToActiveWorker({ type: 'setTempo', bpm: bpm });
+    }
+
+    public setHarmony(key: MusicKey, scale: MusicScale) {
+        this.lastKnownState.key = key;
+        this.lastKnownState.scale = scale;
+        this.postMessageToActiveWorker({ 
+            type: 'setHarmony', 
+            key, 
+            scale,
+            bassOctaves: [2, 3], 
+            melodyOctaves: [3, 4, 5],
+            accompanimentOctaves: [3, 4]
+        });
+    }
+
+    public setAutopilotParts(parts: Record<AutopilotPart, boolean>) {
+        this.lastKnownState.parts = parts;
+        this.postMessageToActiveWorker({ type: 'setParts', parts: parts });
+    }
+    
+    public setAutopilot(isOn: boolean, style: AutopilotStyle) {
+        const styleChanged = this.currentStyle !== style;
+
+        // If turning off, or changing style, stop the current worker
+        if (this.activeWorker && (!isOn || styleChanged)) {
+            this.postMessageToActiveWorker({ type: 'stop' });
+            this.activeWorker.onmessage = null; // Detach listener to prevent memory leaks
+            this.activeWorker = null;
+        }
+
+        this.isAutopilotOn = isOn;
+        this.currentStyle = style;
+
+        if (isOn) {
+            try {
+                this.activeWorker = this.getWorker(style);
+                this.syncWorkerState();
+                
+                // If transport is already running, tell the new worker to start
+                if (Tone.Transport.state === 'started') {
+                    this.postMessageToActiveWorker({ type: 'start' });
+                } else {
+                    // If transport is stopped, let's start it.
+                    // This handles the case where autopilot is turned on before play is pressed.
+                    this.audioEngine.setPlaying(true);
+                }
+
+            } catch (e) {
+                console.error(`Could not set up autopilot for style ${style}`, e);
+                this.isAutopilotOn = false;
+                this.activeWorker = null;
+            }
+        } else if (Tone.Transport.state === 'started' && this.audioEngine.drumMachine.currentBeatPatternName === 'Off'){
+            // If we turn off autopilot and the drum machine is also off, stop the transport
+             this.audioEngine.setPlaying(false);
+        }
+    }
+
+    private syncWorkerState() {
+        if (!this.activeWorker) return;
+        this.setTempo(this.lastKnownState.bpm);
+        this.setHarmony(this.lastKnownState.key, this.lastKnownState.scale);
+        this.setAutopilotParts(this.lastKnownState.parts);
+    }
+
+    public dispose() {
+        this.tickLoop?.dispose();
+        Tone.Transport.off('start');
+        Tone.Transport.off('stop');
+        Tone.Transport.off('pause');
+        Object.values(workerCache).forEach(worker => worker?.terminate());
+        this.activeWorker = null;
+    }
+}
+
+
+import * as Tone from 'tone';
+import type { Instrument, MusicKey, MusicScale } from '@/app/page';
+import { LatchEngine } from './latch-engine';
+import { DrumMachine } from './drum-machine';
+import { OrbManager } from './orb-manager';
+
+export type InstrumentType = 
+    'melody' | 
+    'bass' | 
+    'latch' | 
+    'autopilot_melody' | 
+    'autopilot_accompaniment' | 
+    'autopilot_bass' |
+    'autopilot_effect_star' |
+    'autopilot_effect_meteor' |
+    'autopilot_effect_warp' |
+    'autopilot_effect_hole' |
+    'autopilot_effect_pulsar' |
+    'autopilot_effect_nebula' |
+    'autopilot_effect_comet' |
+    'autopilot_effect_wind' |
+    'autopilot_effect_echoes';
+
+
+// A "Voice" represents a single synthesizer and its current state.
+class Voice {
+    public synth: any; // Can be Tone.Synth or Tone.FMSynth etc.
+    public isBusy = false;
+    public activePointerId: number | null = null;
+    public instrumentType: InstrumentType | null = null;
+    private releaseTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    constructor() {
+        // We start with a generic synth. It will be replaced by configure().
+        this.synth = new Tone.Synth();
+    }
+
+    isAvailable(): boolean {
+        // A voice is available if it's not busy.
+        return !this.isBusy;
+    }
+    
+    // Applies a preset and connects to the correct channel
+    configure(preset: any, channel: Tone.Channel) {
+        // Dispose of the old synth to prevent memory leaks
+        if (this.synth) {
+            this.synth.dispose();
+        }
+
+        if (preset.type === 'FMSynth') {
+            this.synth = new Tone.FMSynth(preset.options).connect(channel);
+        } else if (preset.type === 'AMSynth') {
+            this.synth = new Tone.AMSynth(preset.options).connect(channel);
+        } else { // Default to standard Synth
+            this.synth = new Tone.Synth(preset.options).connect(channel);
+        }
+    }
+    
+    attack(freq: number, vel: number, time: number | undefined, pointerId: number | null, type: InstrumentType) {
+        if (this.releaseTimeoutId) {
+            clearTimeout(this.releaseTimeoutId);
+            this.releaseTimeoutId = null;
+        }
+        this.isBusy = true;
+        this.activePointerId = pointerId;
+        this.instrumentType = type;
+        this.synth.triggerAttack(freq, time, vel);
+    }
+    
+    release(duration: Tone.Unit.Time = 0) {
+        if (this.isBusy) {
+            const releaseStartTime = Tone.now() + new Tone.Time(duration).toSeconds();
+            this.synth.triggerRelease(releaseStartTime);
+
+            if (this.releaseTimeoutId) {
+                clearTimeout(this.releaseTimeoutId);
+            }
+            
+            const releaseTimeMs = new Tone.Time(this.synth.envelope.release).toMilliseconds();
+            
+            this.releaseTimeoutId = setTimeout(() => {
+                this.isBusy = false;
+                this.activePointerId = null;
+                this.instrumentType = null;
+                this.releaseTimeoutId = null;
+            }, releaseTimeMs + 50); // Add 50ms buffer
+        }
+    }
+
+    attackRelease(freq: number, dur: Tone.Unit.Time, time: number, vel: number, type: InstrumentType) {
+        if (this.releaseTimeoutId) {
+            clearTimeout(this.releaseTimeoutId);
+        }
+        this.isBusy = true;
+        this.activePointerId = null; 
+        this.instrumentType = type;
+
+        this.synth.triggerAttackRelease(freq, dur, time, vel);
+        
+        const totalDurationMs = (new Tone.Time(dur).toMilliseconds() + new Tone.Time(this.synth.envelope.release).toMilliseconds());
+        
+        const scheduledReleaseTime = (time - Tone.now()) * 1000;
+
+        this.releaseTimeoutId = setTimeout(() => {
+            this.isBusy = false;
+            this.instrumentType = null;
+            this.releaseTimeoutId = null;
+        }, scheduledReleaseTime + totalDurationMs + 50);
+    }
+    
+    dispose() {
+        if (this.releaseTimeoutId) {
+            clearTimeout(this.releaseTimeoutId);
+        }
+        this.synth.dispose();
+    }
+}
+
+
+export class AudioEngine {
+    public isInitialized = false;
+    private orbManager: OrbManager;
+    public drumMachine!: DrumMachine;
+    private latchEngine!: LatchEngine;
+
+    public channels!: {
+        [key: string]: Tone.Channel
+    };
+    public fx!: { reverb: Tone.Reverb, delay: Tone.FeedbackDelay };
+    
+    // --- The Unified Voice Pool ---
+    private voicePool: Voice[] = [];
+    private readonly MAX_VOICES = 18; // Total voices for the entire app
+    private presets: { [key: string]: any } = {};
+
+    private allowedFrequencies = { bass: [] as number[], melody: [] as number[] };
+    private isBassLatchOn = false;
+    private currentMelodyInstrument: Instrument = 'theremin';
+    private currentBassInstrument: Instrument = 'synth';
+    
+    constructor(orbManager: OrbManager) {
+        this.orbManager = orbManager;
+    }
+
+    public async initialize() {
+        if (this.isInitialized) return;
+        await Tone.start();
+
+        // Master FX
+        this.fx = {
+            reverb: new Tone.Reverb({ decay: 8, wet: 1 }).toDestination(),
+            delay: new Tone.FeedbackDelay("8n", 0.5).toDestination(),
+        };
+
+        // Master Channels
+        this.channels = {
+            melody: new Tone.Channel(-6),
+            manualBass: new Tone.Channel(-6),
+            latch: new Tone.Channel(-15),
+            drums: new Tone.Channel(-9),
+            autopilot: new Tone.Channel(-10),
+            effects: new Tone.Channel(-6),
+            ebass: new Tone.Channel(-6),
+        };
+        
+        for (const [key, channel] of Object.entries(this.channels)) {
+            channel.connect(this.fx.reverb);
+            channel.connect(this.fx.delay);
+            channel.toDestination();
+        }
+
+        this.createPresets();
+        
+        // --- Create the Unified Voice Pool ---
+        for (let i = 0; i < this.MAX_VOICES; i++) {
+            this.voicePool.push(new Voice());
+        }
+        
+        this.latchEngine = new LatchEngine(this, this.orbManager);
+        
+        this.drumMachine = new DrumMachine(this.channels.drums);
+        await this.drumMachine.initialize();
+        
+        const recorder = new Tone.Recorder();
+        Tone.getDestination().connect(recorder);
+        
+        this.isInitialized = true;
+        console.log(`AudioEngine initialized with a unified pool of ${this.MAX_VOICES} voices.`);
+    }
+
+    // --- Core Voice Management ---
+    private getVoice(pointerId: number | null = null): Voice | null {
+        // First, check for a voice with the same pointerId (for note updates)
+        if (pointerId !== null) {
+            const existing = this.voicePool.find(v => v.activePointerId === pointerId);
+            if (existing) return existing;
+        }
+
+        // Find the first available voice
+        let voice = this.voicePool.find(v => v.isAvailable());
+        if (voice) {
+            return voice;
+        }
+        
+        // Voice stealing could be implemented here if needed, but for now, we just return null.
+        console.warn("No available voices in the pool.");
+        return null;
+    }
+    
+    // --- Theremin Interaction ---
+
+    public startNote(type: 'melody' | 'bass', pointerId: number, freq: number, vol: number, pos: {x: number, y: number}) {
+        if (!this.isInitialized) return;
+        const quantizedFreq = this.getClosestFrequency(freq, type);
+        
+        if (type === 'bass' && this.isBassLatchOn) {
+            this.latchEngine.handleInteraction(pos, vol, quantizedFreq);
+            return;
+        }
+        
+        const voice = this.getVoice();
+        if (voice) {
+            const time = Tone.now();
+            const instrumentName = type === 'melody' ? this.currentMelodyInstrument : this.currentBassInstrument;
+            
+            // Special channel handling for e-bass
+            const channel = (instrumentName === 'ebass') 
+                ? this.channels.ebass 
+                : (type === 'melody' ? this.channels.melody : this.channels.manualBass);
+
+            let presetKey: string;
+            if (instrumentName === 'E-Bells') {
+                presetKey = `E-Bells_${type}`;
+            } else {
+                 presetKey = instrumentName;
+            }
+            
+            const preset = this.presets[presetKey];
+            
+            if (preset) {
+                voice.configure(preset, channel);
+                voice.attack(quantizedFreq, vol*vol, time, pointerId, type);
+                this.orbManager.addOrb(pointerId, type, pos.x, pos.y);
+            }
+        }
+    }
+
+    public updateNote(type: 'melody' | 'bass', pointerId: number, freq: number, vol: number, pos: {x: number, y: number}) {
+        if (!this.isInitialized) return;
+        const voice = this.getVoice(pointerId);
+        if (voice) {
+            const quantizedFreq = this.getClosestFrequency(freq, type);
+            if (voice.synth.frequency) {
+                voice.synth.frequency.value = quantizedFreq;
+            }
+            if (voice.synth.volume) {
+                 voice.synth.volume.value = Tone.gainToDb(vol * vol);
+            }
+            this.orbManager.updateOrb(pointerId, pos.x, pos.y);
+        }
+    }
+
+    public stopNote(type: 'melody' | 'bass', pointerId: number) {
+        if (!this.isInitialized) return;
+        if (this.isBassLatchOn && type === 'bass') return;
+
+        const voice = this.getVoice(pointerId);
+        if (voice) {
+            voice.release(0.1); // Give a short release for manual notes
+            this.orbManager.removeOrb(pointerId);
+        }
+    }
+    
+    public playAutopilotEvent(note: {type: InstrumentType, freq: number, dur: Tone.Unit.Time, vel: number}, time: number) {
+         if (!this.isInitialized || note.freq === null || note.freq === undefined) {
+             return;
+        }
+
+        const voice = this.getVoice();
+        if (!voice) {
+            return; 
+        }
+
+        // Determine the preset based on the autopilot part
+        let preset;
+        if (note.type === 'autopilot_melody' || note.type === 'autopilot_accompaniment') {
+             if (this.currentMelodyInstrument === 'E-Bells') {
+                preset = this.presets['E-Bells_melody'];
+            } else {
+                preset = this.presets[this.currentMelodyInstrument];
+            }
+        } else {
+             preset = this.presets[note.type];
+        }
+
+        if (!preset) {
+            console.warn(`AudioEngine: No preset for instrument type "${note.type}"`);
+            return;
+        }
+        
+        const channel = note.type.startsWith('autopilot_effect') ? this.channels.effects : this.channels.autopilot;
+        
+        voice.configure(preset, channel);
+        voice.attackRelease(note.freq, note.dur, time, note.vel, note.type);
+    }
+
+    public stopAllSounds() {
+        this.voicePool.forEach(voice => voice.release(0.1));
+        this.orbManager.removeAllOrbs('melody');
+        this.orbManager.removeAllOrbs('bass');
+        this.latchEngine.stopAll();
+        this.drumMachine.stop();
+    }
+    
+    // --- Setters ---
+    
+    public setTempo(bpm: number) {
+        Tone.Transport.bpm.value = bpm;
+    }
+
+    public setVolumes(volumes: Record<string, number>) {
+        this.channels.melody.volume.value = volumes.melody;
+        this.channels.manualBass.volume.value = volumes.manualBass;
+        this.channels.latch.volume.value = volumes.latch;
+        this.channels.drums.volume.value = volumes.drums;
+        this.channels.autopilot.volume.value = volumes.autopilot;
+        this.channels.effects.volume.value = volumes.effects;
+        this.channels.ebass.volume.value = volumes.manualBass; // E-Bass uses manualBass volume
+    }
+
+    public setEffects(effects: Record<string, any>) {
+        for (const key in this.channels) {
+            if (effects[key]) {
+                this.channels[key].send('reverb', effects[key].reverb);
+                this.channels[key].send('delay', effects[key].delay);
+            }
+        }
+    }
+    
+    public setBeatPattern(patternName: string) {
+        this.drumMachine.setBeatPattern(patternName);
+    }
+    
+    public setMelodyInstrument(instrument: Instrument) {
+        this.currentMelodyInstrument = instrument;
+    }
+
+    public setBassInstrument(instrument: Instrument) {
+        this.currentBassInstrument = instrument;
+    }
+
+    public setHarmony(key: MusicKey, scale: MusicScale) {
+        this.allowedFrequencies = {
+            bass: this.getScaleFrequencies(key, scale, [2, 3]),
+            melody: this.getScaleFrequencies(key, scale, [3, 4, 5]),
+        };
+        this.latchEngine.setAllowedFrequencies(this.allowedFrequencies.bass);
+    }
+
+    public setBassLatch(isLatchOn: boolean) {
+        this.isBassLatchOn = isLatchOn;
+        this.latchEngine.setLatch(isLatchOn);
+    }
+    
+    // --- Latch specific methods ---
+    public getLatchVoice(freq: number, vol: number): Voice | null {
+        const voice = this.getVoice();
+        if (voice) {
+            const time = Tone.now();
+            const instrumentName = this.currentBassInstrument;
+            
+            let presetKey: string;
+            if (instrumentName === 'E-Bells') {
+                presetKey = 'E-Bells_bass';
+            } else {
+                 presetKey = instrumentName;
+            }
+            const preset = this.presets[presetKey];
+            
+            // Special channel handling for e-bass
+            const channel = (instrumentName === 'ebass') ? this.channels.ebass : this.channels.latch;
+
+            if (preset) {
+                voice.configure(preset, channel);
+                voice.attack(freq, vol, time, null, 'latch');
+            }
+        }
+        return voice;
+    }
+    
+    public releaseLatchVoice(voice: Voice) {
+        voice.release(0.5); // Give a gentle release for latched notes
+    }
+
+
+    // --- Private Helpers ---
+    private createPresets() {
+        this.presets = {
+            synth: { type: 'Synth', options: { oscillator: { type: 'fatsine4', spread: 40, count: 4 }, envelope: { attack: 0.04, decay: 0.5, sustain: 0.8, release: 0.7 } } },
+            organ: {
+                type: 'Synth',
+                options: {
+                    oscillator: { type: 'fatsawtooth', count: 3, spread: 20 },
+                    envelope: { attack: 0.05, decay: 0.2, sustain: 0.7, release: 1.2 }
+                }
+            },
+            theremin: { type: 'Synth', options: { oscillator: { type: 'sine' }, envelope: { attack: 0.1, decay: 0.1, sustain: 0.9, release: 0.3 } } },
+            mellotron: {
+                type: 'FMSynth',
+                options: {
+                    harmonicity: 3,
+                    modulationIndex: 0.5,
+                    oscillator: { type: "sine" },
+                    envelope: { attack: 0.1, decay: 0.2, sustain: 0.4, release: 0.8 },
+                    modulation: { type: "sine" },
+                    modulationEnvelope: { attack: 0.2, decay: 0.5, sustain: 0.1, release: 0.8 }
+                }
+            },
+            ebass: {
+                type: 'FMSynth',
+                options: {
+                    harmonicity: 1,
+                    modulationIndex: 3.5,
+                    oscillator: { type: 'sine' },
+                    envelope: { attack: 0.01, decay: 0.3, sustain: 0.1, release: 0.5 },
+                    modulation: { type: 'square' },
+                    modulationEnvelope: { attack: 0.01, decay: 0.2, sustain: 0.1, release: 0.2 }
+                }
+            },
+            'E-Bells_melody': {
+                type: 'FMSynth',
+                options: {
+                    harmonicity: 1.4,
+                    modulationIndex: 20,
+                    oscillator: { type: 'sine' },
+                    envelope: { attack: 0.001, decay: 1.6, sustain: 0, release: 1.6 },
+                    modulation: { type: 'square' },
+                    modulationEnvelope: { attack: 0.002, decay: 0.4, sustain: 0, release: 0.4 }
+                }
+            },
+            'E-Bells_bass': {
+                type: 'FMSynth',
+                options: {
+                    harmonicity: 1.4,
+                    modulationIndex: 15,
+                    oscillator: { type: 'sine' },
+                    envelope: { attack: 0.01, decay: 1.5, sustain: 0, release: 2.5 },
+                    modulation: { type: 'square' },
+                    modulationEnvelope: { attack: 0.01, decay: 1.0, sustain: 0, release: 1.0 }
+                }
+            },
+            'G-Drops': {
+                type: 'FMSynth',
+                options: {
+                    harmonicity: 0.5,
+                    modulationIndex: 3.5,
+                    oscillator: { type: 'sine' },
+                    envelope: { attack: 0.01, decay: 0.7, sustain: 0.1, release: 0.4 },
+                    modulation: { type: 'triangle' },
+                    modulationEnvelope: { attack: 0.01, decay: 0.5, sustain: 0, release: 0.2 }
+                }
+            },
+            // Autopilot presets
+            autopilot_bass: {
+                type: 'Synth',
+                options: {
+                    oscillator: { type: "fmsine", harmonicity: 0.5 },
+                    filter: { Q: 1, type: 'lowpass', rolloff: -12 },
+                    envelope: { attack: 0.1, decay: 0.3, sustain: 0.4, release: 1.2 },
+                    filterEnvelope: { attack: 0.05, decay: 0.2, sustain: 0.1, release: 1, baseFrequency: 200, octaves: 1.5 }
+                }
+            },
+            // Effect presets
+            autopilot_effect_star: { type: 'FMSynth', options: { oscillator: { type: 'fmsine', modulationType: 'sine', harmonicity: 0.8 }, envelope: { attack: 0.01, decay: 0.8, sustain: 0, release: 0.5 } } },
+            autopilot_effect_meteor: { type: 'NoiseSynth', options: { noise: { type: 'white' }, filter: { type: 'bandpass', Q: 15 }, envelope: { attack: 0.01, decay: 0.3, sustain: 0, release: 0.2, attackCurve: 'exponential' } } },
+            autopilot_effect_warp: { type: 'NoiseSynth', options: { noise: { type: 'pink', playbackRate: 0.2 }, filter: { type: 'lowpass', Q: 2 }, envelope: { attack: 0.5, decay: 0.8, sustain: 0.1, release: 1 } } },
+            autopilot_effect_hole: { type: 'AMSynth', options: { oscillator: { type: 'amsine', harmonicity: 0.2 }, envelope: { attack: 2, decay: 2, sustain: 0, release: 1 } } },
+            autopilot_effect_pulsar: { type: 'Synth', options: { oscillator: { type: 'pwm', modulationFrequency: 0.2 }, envelope: { attack: 0.01, decay: 0.1, sustain: 0, release: 0.2 } } },
+            autopilot_effect_nebula: { type: 'Synth', options: { oscillator: { type: 'fatsawtooth', count: 5, spread: 80 }, envelope: { attack: 1.5, decay: 2, sustain: 0.5, release: 2 } } },
+            autopilot_effect_comet: { type: 'Synth', options: { oscillator: { type: 'pulse', width: 0.1 }, envelope: { attack: 0.01, decay: 0.5, sustain: 0, release: 0.8 } } },
+            autopilot_effect_wind: { type: 'NoiseSynth', options: { noise: { type: 'brown' }, filter: { type: 'bandpass', Q: 8 }, envelope: { attack: 2, decay: 5, sustain: 0.1, release: 3 } } },
+            autopilot_effect_echoes: { type: 'Synth', options: { oscillator: { type: 'triangle' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.5 } } },
+        };
+    }
+
+    private getScaleFrequencies = (key: MusicKey, scale: MusicScale, octaves: number[]): number[] => {
+        const scaleIntervals: { [key in MusicScale]: string[] } = {
+            'Major': ['0', '2', '4', '5', '7', '9', '11'], 'Minor': ['0', '2', '3', '5', '7', '8', '10'],
+            'Major Pentatonic': ['0', '2', '4', '7', '9'], 'Minor Pentatonic': ['0', '3', '5', '7', '10'],
+        };
+        let allFrequencies: number[] = [];
+        const intervals = scaleIntervals[scale];
+        octaves.forEach(octave => {
+            intervals.forEach(interval => {
+                const note = Tone.Frequency(key + octave).transpose(interval);
+                allFrequencies.push(note.toFrequency());
+            });
+        });
+        return allFrequencies.sort((a,b) => a - b);
+    };
+
+    private getClosestFrequency(targetFreq: number, type: 'bass' | 'melody'): number {
+        const freqs = type === 'bass' ? this.allowedFrequencies.bass : this.allowedFrequencies.melody;
+        if (freqs.length === 0) return targetFreq;
+        return freqs.reduce((prev, curr) => (Math.abs(curr - targetFreq) < Math.abs(prev - targetFreq) ? curr : prev));
+    }
+    
+    public async setPlaying(isPlaying: boolean) {
+        if (!this.isInitialized) return;
+        
+        if (isPlaying) {
+            if (Tone.Transport.state !== 'started') {
+                await Tone.start(); // Ensure context is running
+                Tone.Transport.start();
+                this.latchEngine.startAll();
+            }
+        } else {
+            if (Tone.Transport.state === 'started') {
+                Tone.Transport.pause();
+                this.latchEngine.pauseAll();
+            }
+        }
+    }
+
+    public stop() {
+        if (this.isInitialized) {
+            this.stopAllSounds();
+            if (Tone.Transport.state !== 'stopped') {
+                Tone.Transport.stop();
+            }
+        }
+    }
+}
