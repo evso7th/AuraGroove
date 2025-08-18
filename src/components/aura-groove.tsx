@@ -118,6 +118,20 @@ export function AuraGroove() {
 
     const handleMessage = (event: MessageEvent) => {
       const { type, data, bar, error } = event.data;
+      
+      // DIAG: Worker Response Received
+      const responseTime = performance.now();
+      const delay = responseTime - lastTickRequestTimeRef.current;
+      if (lastTickRequestTimeRef.current > 0) { // Avoid logging on first message
+          const logMessage = `Worker response '${type}' received. Delay: ${delay.toFixed(2)}ms`;
+           if (delay > CONGESTION_THRESHOLD_MS) {
+              setDebugLog(prev => [`CONGESTION: +${delay.toFixed(2)}ms`, ...prev].slice(0, 5));
+           } else {
+              setDebugLog(prev => [logMessage, ...prev].slice(0, 5));
+           }
+      }
+      lastWorkerResponseTimeRef.current = responseTime;
+
 
       const scheduledNow = Tone.now();
 
@@ -294,6 +308,8 @@ export function AuraGroove() {
   
   const handlePlay = useCallback(async () => {
     try {
+        console.log('[DIAG] handlePlay called.');
+
         if (Tone.context.state !== 'running') {
             await Tone.start();
         }
@@ -321,13 +337,14 @@ export function AuraGroove() {
 
         if (Tone.Transport.state !== 'started') {
             Tone.Transport.start();
+            console.log(`[DIAG] Tone.Transport.start() called. State: ${Tone.Transport.state}`);
         }
-        tickLoopRef.current?.start(0);
         
-        soloSynthManagerRef.current?.fadeIn(0.5);
-        accompanimentSynthManagerRef.current?.fadeIn(0.5);
-        bassSynthManagerRef.current?.fadeIn(0.5);
-        
+        console.log('[DIAG] Before tickLoopRef.current?.start(0)');
+        // This is where the potential error is. Let's see if the log appears.
+        // tickLoopRef.current?.start(0); 
+        console.log(`[DIAG] tickLoopRef exists: ${!!tickLoopRef.current}. Is it started? This log won't tell us, but lack of the next one will.`);
+
 
     } catch (error) {
         console.error("Failed to prepare audio:", error);
@@ -648,5 +665,3 @@ export function AuraGroove() {
     </Card>
   );
 }
-
-    
