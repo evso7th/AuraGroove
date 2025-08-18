@@ -105,14 +105,13 @@ export function AuraGroove() {
         });
     });
 
-
-    // This will hold the monotonically increasing jitter offset for a single message batch
-    let jitterOffset = 0;
     const JITTER_INCREMENT = 0.0001; // 0.1ms increment
 
     const handleMessage = (event: MessageEvent) => {
       const { type, data, error } = event.data;
       
+      let jitterOffset = 0;
+
       switch(type) {
         case 'initialized':
            setIsReady(true);
@@ -126,8 +125,6 @@ export function AuraGroove() {
              break;
 
         case 'drum_score':
-             // Reset jitter offset at the start of a new batch of scores
-            jitterOffset = 0;
             if (drumMachineRef.current && drumMachineRef.current.isReady() && data && data.score) {
                  const now = Tone.now();
                  data.score.forEach((note: DrumNote) => {
@@ -628,6 +625,8 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    
 
     
 
