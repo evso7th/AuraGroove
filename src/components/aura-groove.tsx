@@ -332,8 +332,8 @@ export function AuraGroove() {
 
         if (Tone.Transport.state !== 'started') {
             Tone.Transport.start();
-            tickLoopRef.current?.start(0);
         }
+        tickLoopRef.current?.start(0);
         
         soloSynthManagerRef.current?.fadeIn(0.5);
         accompanimentSynthManagerRef.current?.fadeIn(0.5);
@@ -357,9 +357,9 @@ export function AuraGroove() {
     accompanimentSynthManagerRef.current?.fadeOut(1);
     bassSynthManagerRef.current?.fadeOut(1);
     
+    tickLoopRef.current?.stop();
     if (Tone.Transport.state !== 'stopped') {
         Tone.Transport.stop();
-        tickLoopRef.current?.stop();
     }
     musicWorkerRef.current?.postMessage({ command: 'stop' });
     
@@ -658,3 +658,5 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    
