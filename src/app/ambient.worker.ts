@@ -188,7 +188,7 @@ class MandelbrotEngine {
     private x: number;
     private y: number;
     private zoom: number;
-    private maxIterations = 25; // OPTIMIZED from 50
+    private maxIterations = 15; // OPTIMIZED from 25
 
     private startX: number;
     private startY: number;
@@ -611,5 +611,7 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
+
+    
 
     
