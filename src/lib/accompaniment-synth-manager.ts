@@ -108,11 +108,7 @@ export class AccompanimentSynthManager {
 
         notesToPlay.forEach(note => {
             const voice = this.voices[this.nextVoiceIndex];
-            voice.triggerAttack(note, scheduledTime, velocity);
-            
-            const releaseTime = scheduledTime + Tone.Time(duration).toSeconds();
-            voice.triggerRelease(releaseTime);
-            
+            voice.triggerAttackRelease(note, duration, scheduledTime, velocity);
             this.nextVoiceIndex = (this.nextVoiceIndex + 1) % this.voices.length;
         });
     }
