@@ -141,7 +141,7 @@ class EvolveEngine {
             currentNote = nextNote;
         }
 
-        this.soloState.lastNote = currentNote;
+        this.soloState.lastNote = null; // Reset to force new phrase generation
         this.soloState.phraseCooldown = Math.floor(Math.random() * 4) + 3; // Pause for 3-6 beats (OPTIMIZED)
         
         return score;
@@ -611,6 +611,8 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
+
+    
 
     
 
