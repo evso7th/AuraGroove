@@ -60,9 +60,9 @@ class EvolveEngine {
     private genome: MusicalGenome;
     private soloState: { lastNote: string | null; lastPhrase: string[] };
     private evolutionLengthInBars: number;
-    private anchorLengthInBars: number;
+    public readonly anchorLengthInBars: number;
     public isAnchorPhase: boolean;
-    private barsIntoPhase: number;
+    public barsIntoPhase: number;
 
     constructor(genome: MusicalGenome) {
         this.genome = genome;
@@ -405,6 +405,17 @@ const PatternProvider = {
             { sample: 'snare', time: 3.5, velocity: 0.4 },
             { sample: 'snare', time: 3.75, velocity: 0.5 },
         ],
+        'ambient-fill-4': [
+            { sample: 'kick', time: 3.0, velocity: 0.6 },
+            { sample: 'kick', time: 3.5, velocity: 0.7 },
+            { sample: 'crash', time: 3.5, velocity: 0.4 },
+        ],
+        'ambient-fill-5': [
+            { sample: 'ride', time: 3.0, velocity: 0.3 },
+            { sample: 'ride', time: 3.25, velocity: 0.35 },
+            { sample: 'ride', time: 3.5, velocity: 0.4 },
+            { sample: 'ride', time: 3.75, velocity: 0.45 },
+        ],
         basic: [ { sample: 'kick', time: 0 }, { sample: 'hat', time: 0.5 }, { sample: 'snare', time: 1 }, { sample: 'hat', time: 1.5 }, { sample: 'kick', time: 2 }, { sample: 'hat', time: 2.5 }, { sample: 'snare', time: 3 }, { sample: 'hat', time: 3.5 }, ],
         breakbeat: [ { sample: 'kick', time: 0 }, { sample: 'hat', time: 0.5 }, { sample: 'kick', time: 0.75 }, { sample: 'snare', time: 1 }, { sample: 'hat', time: 1.5 }, { sample: 'kick', time: 2 }, { sample: 'snare', time: 2.5 }, { sample: 'hat', time: 3 }, { sample: 'snare', time: 3.25 }, { sample: 'hat', time: 3.5 }, ],
         slow: [ { sample: 'kick', time: 0 }, { sample: 'hat', time: 1 }, { sample: 'snare', time: 2 }, { sample: 'hat', time: 3 }, ],
@@ -419,16 +430,36 @@ const PatternProvider = {
 // --- Drum and Effects Generators (Modified for new logic) ---
 
 class DrumGenerator {
-    private static fillPatterns = ['ambient-fill-1', 'ambient-fill-2', 'ambient-fill-3'];
+    private static fillPatterns = ['ambient-fill-1', 'ambient-fill-2', 'ambient-fill-3', 'ambient-fill-4', 'ambient-fill-5'];
 
-    static createScore(pattern: string, barNumber: number, isAnchorPhase: boolean): DrumNote[] {
-        const isFillBar = (barNumber + 1) % 4 === 0 && !isAnchorPhase && Math.random() < 0.5;
-        let score;
-        if (isFillBar) {
+    static createScore(
+        pattern: string, 
+        isAnchorPhase: boolean, 
+        barsIntoPhase: number, 
+        anchorLengthInBars: number
+    ): DrumNote[] {
+        let score: DrumNote[] = [];
+        const playFill = () => {
             const randomFill = this.fillPatterns[Math.floor(Math.random() * this.fillPatterns.length)];
             score = PatternProvider.getDrumPattern(randomFill);
-        } else {
-            score = PatternProvider.getDrumPattern(pattern);
+        };
+
+        if (isAnchorPhase) {
+            const isFirstBar = barsIntoPhase === 0;
+            const isLastBar = barsIntoPhase === anchorLengthInBars - 1;
+
+            if ((isFirstBar || isLastBar) && Math.random() < 0.7) {
+                playFill();
+            } else {
+                score = PatternProvider.getDrumPattern(pattern);
+            }
+        } else { // Evolution Phase
+            const isFillBar = (barsIntoPhase + 1) % 2 === 0 && Math.random() < 0.6;
+            if (isFillBar) {
+                playFill();
+            } else {
+                score = PatternProvider.getDrumPattern(pattern);
+            }
         }
         return score;
     }
@@ -523,11 +554,15 @@ const Scheduler = {
 
         if (this.compositionEngine) {
             const engine = this.compositionEngine;
-            const isAnchorPhase = (engine instanceof EvolveEngine) && engine.isAnchorPhase;
-
+            
             if (this.drumSettings.pattern !== 'none') {
-                const drumScore = DrumGenerator.createScore(this.drumSettings.pattern, this.barCount, isAnchorPhase)
-                    .map(note => ({ ...note, time: note.time * this.secondsPerBeat }));
+                const drumScore = DrumGenerator.createScore(
+                    this.drumSettings.pattern, 
+                    engine.isAnchorPhase, 
+                    engine.barsIntoPhase, 
+                    engine instanceof EvolveEngine ? engine.anchorLengthInBars : 0 // Pass length for EvolveEngine
+                ).map(note => ({ ...note, time: note.time * this.secondsPerBeat }));
+
                 if (drumScore.length > 0) {
                     self.postMessage({ type: 'drum_score', bar: this.barCount, data: drumScore });
                 }
@@ -554,7 +589,7 @@ const Scheduler = {
                 }
             }
             if(this.effectsSettings.mode !== 'none') {
-                const effectsScore = EffectsGenerator.createScore(this.effectsSettings.mode, this.barCount, this.beatsPerBar, isAnchorPhase)
+                const effectsScore = EffectsGenerator.createScore(this.effectsSettings.mode, this.barCount, this.beatsPerBar, engine.isAnchorPhase)
                     .map(note => ({ ...note, time: note.time * this.secondsPerBeat }));
                 if (effectsScore.length > 0) {
                     self.postMessage({ type: 'effects_score', bar: this.barCount, data: effectsScore });
@@ -622,3 +657,5 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
+
+    
