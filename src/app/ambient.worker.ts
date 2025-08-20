@@ -105,19 +105,20 @@ class EvolveEngine {
         ];
     }
     
-    // Legacy solo logic: 80/20 stepwise vs chord tone jump, with phrasing
     public generateSoloScore(bar: number): SoloNote[] {
+        console.log(`[SOLO_WORKER_TRACE] Bar ${bar}: generateSoloScore called. Cooldown: ${this.soloState.phraseCooldown}`);
         const harmony = this.getHarmony(bar);
         const chordTones = this.getChordTones(harmony.root, harmony.scale);
-        
+
         if (this.soloState.phraseCooldown > 0) {
             this.soloState.phraseCooldown--;
+            console.log(`[SOLO_WORKER_TRACE] Bar ${bar}: In cooldown. New cooldown: ${this.soloState.phraseCooldown}. Returning empty score.`);
             return [];
         }
 
+        console.log(`[SOLO_WORKER_TRACE] Bar ${bar}: Generating new phrase. Last note was: ${this.soloState.lastNote}`);
         const phraseLength = Math.floor(Math.random() * 3) + 2; // 2 to 4 notes
         const score: SoloNote[] = [];
-        // Initialize currentNote from state, or with a random chord tone if state is null
         let currentNote = this.soloState.lastNote || `${chordTones[Math.floor(Math.random() * chordTones.length)]}4`;
 
         for (let i = 0; i < phraseLength; i++) {
@@ -143,8 +144,9 @@ class EvolveEngine {
         }
 
         this.soloState.lastNote = currentNote; // Save the last note for the next phrase
-        this.soloState.phraseCooldown = Math.floor(Math.random() * 4) + 3; 
+        this.soloState.phraseCooldown = Math.floor(Math.random() * 4) + 3;
         
+        console.log(`[SOLO_WORKER_TRACE] Bar ${bar}: Generated phrase with ${score.length} notes. New cooldown: ${this.soloState.phraseCooldown}.`);
         return score;
     }
 
@@ -618,3 +620,4 @@ self.onmessage = async (event: MessageEvent) => {
     
 
     
+
