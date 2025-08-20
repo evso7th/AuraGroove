@@ -74,7 +74,9 @@ export function AuraGroove() {
   const accompanimentSynthManagerRef = useRef<AccompanimentSynthManager | null>(null);
   const effectsSynthManagerRef = useRef<EffectsSynthManager | null>(null);
   const drumMachineRef = useRef<DrumMachine | null>(null);
-  const tickLoopRef = useRef<Tone.Loop | null>(null);
+  
+  // --- Refs for simplified timing ---
+  const transportLoopRef = useRef<Tone.Loop | null>(null);
   const currentBarRef = useRef<number>(0);
   const lastTickTimeRef = useRef<number>(0);
   
@@ -128,23 +130,24 @@ export function AuraGroove() {
         }
       }
 
+      // Simplified scheduling function
       const schedule = (scoreData: any[], manager: any, triggerFn: string) => {
-        if (manager && manager[triggerFn]) {
-          scoreData.forEach((note: any) => {
-            const now = Tone.now(); // Recalculate 'now' for accuracy per note
-            const timeToPlay_current = now + note.time;
-            const timeToPlay_proposed = lastTickTimeRef.current + note.time;
+        if (!manager || !manager[triggerFn]) return;
+        
+        // lastTickTimeRef.current now holds the exact scheduled time for the start of the bar
+        const barStartTime = lastTickTimeRef.current;
+        
+        scoreData.forEach((note: any) => {
+          // Note time is now an offset in seconds from the start of the bar
+          const timeToPlay = barStartTime + note.time;
 
-            console.log(`[TIME_TRACE] Note: ${note.notes || note.note || note.sample}, Current Time: ${timeToPlay_current.toFixed(4)}, Proposed Time: ${timeToPlay_proposed.toFixed(4)}, Tone.now(): ${now.toFixed(4)}`);
-
-            if (triggerFn === 'trigger') {
-              manager.trigger(note, timeToPlay_current); // Using current logic
-            } else {
+          if (triggerFn === 'trigger') {
+              manager.trigger(note, timeToPlay);
+          } else {
               const notesArg = note.notes || note.note;
-              manager.triggerAttackRelease(notesArg, note.duration, timeToPlay_current, note.velocity); // Using current logic
-            }
-          });
-        }
+              manager.triggerAttackRelease(notesArg, note.duration, timeToPlay, note.velocity);
+          }
+        });
       };
 
       switch(type) {
@@ -201,17 +204,24 @@ export function AuraGroove() {
     
     musicWorkerRef.current?.postMessage({ command: 'init' });
     
-    tickLoopRef.current = new Tone.Loop(time => {
+    // Create a single loop synchronized with Tone.Transport
+    transportLoopRef.current = new Tone.Loop(time => {
+      // 'time' is the exact, scheduled time of the loop's execution from Tone.Transport
       lastTickTimeRef.current = time;
       musicWorkerRef.current?.postMessage({ command: 'tick', data: { time, barCount: currentBarRef.current } });
-      currentBarRef.current++;
-    }, '1m');
+      
+      // Schedule UI update on the draw callback to be in sync with the audio thread
+      Tone.Draw.schedule(() => {
+        currentBarRef.current++;
+      }, time);
+
+    }, '1m').start(0);
 
     return () => {
       if (musicWorkerRef.current) {
         musicWorkerRef.current.terminate();
       }
-      tickLoopRef.current?.dispose();
+      transportLoopRef.current?.dispose();
       bassSynthManagerRef.current?.dispose();
       soloSynthManagerRef.current?.dispose();
       accompanimentSynthManagerRef.current?.dispose();
@@ -327,11 +337,11 @@ export function AuraGroove() {
             command: 'start',
             data: { drumSettings, instrumentSettings, effectsSettings, bpm, score }
         });
-
+        
+        // The transport loop is already running, just start the transport
         if (Tone.Transport.state !== 'started') {
             Tone.Transport.start();
         }
-        tickLoopRef.current?.start(0);
 
     } catch (error) {
         console.error("Failed to prepare audio:", error);
@@ -346,15 +356,19 @@ export function AuraGroove() {
   }, [drumSettings, instrumentSettings, effectsSettings, bpm, score, toast]);
 
   const handleStop = useCallback(() => {
-    soloSynthManagerRef.current?.fadeOut(1);
-    accompanimentSynthManagerRef.current?.fadeOut(1);
-    bassSynthManagerRef.current?.fadeOut(1);
+    // Fade out synths for a smoother stop
+    soloSynthManagerRef.current?.fadeOut(0.5);
+    accompanimentSynthManagerRef.current?.fadeOut(0.5);
+    bassSynthManagerRef.current?.fadeOut(0.5);
     
-    tickLoopRef.current?.stop();
     if (Tone.Transport.state !== 'stopped') {
+        // Stop the transport, which also stops the loop
         Tone.Transport.stop();
+        // Cancel any scheduled events to be clean
+        Tone.Transport.cancel(0);
     }
     musicWorkerRef.current?.postMessage({ command: 'stop' });
+    setIsPlaying(false); // Explicitly set playing state to false
     
   }, []);
   
@@ -647,3 +661,4 @@ export function AuraGroove() {
     </Card>
   );
 }
+
