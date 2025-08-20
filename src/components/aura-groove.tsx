@@ -118,12 +118,14 @@ export function AuraGroove() {
       const now = Tone.now();
       const delay = now - lastTickTimeRef.current;
       
-      const logMessage = `Bar ${receivedBar}: Delay ${delay.toFixed(2)}ms`;
-      if (delay > CONGESTION_THRESHOLD_MS) {
-          const congestion = delay - CONGESTION_THRESHOLD_MS;
-          setDebugLog(prev => [`CONGESTION: +${congestion.toFixed(2)}ms`, logMessage, ...prev].slice(0, 10));
-      } else {
-          setDebugLog(prev => [logMessage, ...prev].slice(0, 10));
+      if (receivedBar !== undefined) {
+        const logMessage = `Bar ${receivedBar}: Delay ${delay.toFixed(2)}ms`;
+        if (delay > CONGESTION_THRESHOLD_MS) {
+            const congestion = delay - CONGESTION_THRESHOLD_MS;
+            setDebugLog(prev => [`CONGESTION: +${congestion.toFixed(2)}ms`, logMessage, ...prev].slice(0, 10));
+        } else {
+            setDebugLog(prev => [logMessage, ...prev].slice(0, 10));
+        }
       }
 
       const schedule = (scoreData: any[], manager: any, triggerFn: string) => {
