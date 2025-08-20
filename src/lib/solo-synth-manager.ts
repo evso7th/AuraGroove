@@ -107,6 +107,8 @@ export class SoloSynthManager {
 
         notesToPlay.forEach(note => {
             const voice = this.voices[this.nextVoiceIndex];
+            // We use triggerAttack followed by a scheduled triggerRelease 
+            // to handle fast passages correctly within a voice pool.
             voice.triggerAttack(note, scheduledTime, velocity);
 
             const releaseTime = scheduledTime + Tone.Time(duration).toSeconds();
