@@ -115,17 +115,18 @@ class EvolveEngine {
             return [];
         }
 
-        const phraseLength = Math.floor(Math.random() * 3) + 2; // 2 to 4 notes (OPTIMIZED)
+        const phraseLength = Math.floor(Math.random() * 3) + 2; // 2 to 4 notes
         const score: SoloNote[] = [];
-        let currentNote = this.soloState.lastNote;
+        // Initialize currentNote from state, or with a random chord tone if state is null
+        let currentNote = this.soloState.lastNote || `${chordTones[Math.floor(Math.random() * chordTones.length)]}4`;
 
         for (let i = 0; i < phraseLength; i++) {
             let nextNote: string;
-            const currentOctave = currentNote ? parseInt(currentNote.slice(-1), 10) : 4;
-            const currentNoteName = currentNote ? currentNote.slice(0, -1) : harmony.scale[0];
+            const currentOctave = parseInt(currentNote.slice(-1), 10);
+            const currentNoteName = currentNote.slice(0, -1);
             let currentNoteIndex = harmony.scale.indexOf(currentNoteName);
 
-            if (currentNote && Math.random() < 0.8) { // 80% stepwise motion
+            if (currentNoteIndex !== -1 && Math.random() < 0.8) { // 80% stepwise motion
                 const direction = Math.random() < 0.5 ? 1 : -1;
                 let nextNoteIndex = (currentNoteIndex + direction + harmony.scale.length) % harmony.scale.length;
                 let nextOctave = currentOctave;
@@ -138,11 +139,11 @@ class EvolveEngine {
             }
             
             score.push({ notes: [nextNote, nextNote], duration: '8n', time: i * 0.5 });
-            currentNote = nextNote;
+            currentNote = nextNote; // CRITICAL FIX: update currentNote for the next iteration
         }
 
-        this.soloState.lastNote = null; // Reset to force new phrase generation
-        this.soloState.phraseCooldown = Math.floor(Math.random() * 4) + 3; // Pause for 3-6 beats (OPTIMIZED)
+        this.soloState.lastNote = currentNote; // Save the last note for the next phrase
+        this.soloState.phraseCooldown = Math.floor(Math.random() * 4) + 3; 
         
         return score;
     }
