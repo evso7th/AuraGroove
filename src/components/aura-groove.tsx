@@ -131,12 +131,17 @@ export function AuraGroove() {
       const schedule = (scoreData: any[], manager: any, triggerFn: string) => {
         if (manager && manager[triggerFn]) {
           scoreData.forEach((note: any) => {
-            const timeToPlay = now + note.time;
+            const now = Tone.now(); // Recalculate 'now' for accuracy per note
+            const timeToPlay_current = now + note.time;
+            const timeToPlay_proposed = lastTickTimeRef.current + note.time;
+
+            console.log(`[TIME_TRACE] Note: ${note.notes || note.note || note.sample}, Current Time: ${timeToPlay_current.toFixed(4)}, Proposed Time: ${timeToPlay_proposed.toFixed(4)}, Tone.now(): ${now.toFixed(4)}`);
+
             if (triggerFn === 'trigger') {
-              manager.trigger(note, timeToPlay);
+              manager.trigger(note, timeToPlay_current); // Using current logic
             } else {
               const notesArg = note.notes || note.note;
-              manager.triggerAttackRelease(notesArg, note.duration, timeToPlay, note.velocity);
+              manager.triggerAttackRelease(notesArg, note.duration, timeToPlay_current, note.velocity); // Using current logic
             }
           });
         }
