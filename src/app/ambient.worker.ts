@@ -61,7 +61,7 @@ class EvolveEngine {
     private soloState: { lastNote: string | null; lastPhrase: string[] };
     private evolutionLengthInBars: number;
     private anchorLengthInBars: number;
-    private isAnchorPhase: boolean;
+    public isAnchorPhase: boolean;
     private barsIntoPhase: number;
 
     constructor(genome: MusicalGenome) {
@@ -75,6 +75,7 @@ class EvolveEngine {
     }
 
     private calculateNextEvolutionLength(): number {
+        // Each evolution phase will last between 40 and 60 bars
         return 40 + Math.floor(Math.random() * 21);
     }
     
@@ -82,9 +83,10 @@ class EvolveEngine {
         this.barsIntoPhase++;
         const currentPhaseLength = this.isAnchorPhase ? this.anchorLengthInBars : this.evolutionLengthInBars;
         if(this.barsIntoPhase >= currentPhaseLength) {
-            this.isAnchorPhase = !this.isAnchorPhase;
+            this.isAnchorPhase = !this.isAnchorPhase; // Flip the phase
             this.barsIntoPhase = 0;
             if(!this.isAnchorPhase) {
+                 // Calculate a new length for the next evolution phase
                  this.evolutionLengthInBars = this.calculateNextEvolutionLength();
             }
         }
@@ -106,7 +108,15 @@ class EvolveEngine {
     }
     
     public generateSoloScore(bar: number): SoloNote[] {
-        console.log(`[SOLO_WORKER_TRACE] Bar ${bar}: Generating new phrase. Last note was: ${this.soloState.lastNote}`);
+        if (this.isAnchorPhase) {
+            // During the anchor phase, play a part of the anchor melody
+            const anchorNoteIndex = bar % this.genome.soloAnchor.length;
+            const note = this.genome.soloAnchor[anchorNoteIndex];
+            this.soloState.lastNote = note; // Keep state consistent
+            return [{ notes: [note, note], duration: '4n', time: 0 }];
+        }
+
+        // Evolution Phase: Generate a new, mutated phrase
         const harmony = this.getHarmony(bar);
         const chordTones = this.getChordTones(harmony.root, harmony.scale);
 
@@ -133,29 +143,35 @@ class EvolveEngine {
             }
             
             score.push({ notes: [nextNote, nextNote], duration: '8n', time: i * 0.5 });
-            currentNote = nextNote; // CRITICAL FIX: update currentNote for the next iteration
+            currentNote = nextNote;
         }
 
-        this.soloState.lastNote = currentNote; // Save the last note for the next phrase
-        
-        console.log(`[SOLO_WORKER_TRACE] Bar ${bar}: Generated phrase with ${score.length} notes.`);
+        this.soloState.lastNote = currentNote;
         return score;
     }
 
-    // Legacy accompaniment logic: arpeggios
     public generateAccompanimentScore(bar: number): AccompanimentNote[] {
         const harmony = this.getHarmony(bar);
-        const chordTones = this.getChordTones(harmony.root, harmony.scale);
         const octave = 3;
+
+        if (this.isAnchorPhase) {
+            // Play the anchor chords
+            const chordIndex = Math.floor(bar / 2) % this.genome.accompanimentAnchor.length;
+            const chord = this.genome.accompanimentAnchor[chordIndex];
+            return [{ notes: chord, time: 0, duration: '2n'}];
+        }
+
+        // Evolution Phase: Play arpeggios
+        const chordTones = this.getChordTones(harmony.root, harmony.scale);
         const chord = chordTones.map(n => `${n}${octave}`);
         
         const arpeggio: AccompanimentNote[] = [];
-        const pattern = [0, 1, 2, 1]; // Classic arpeggio pattern (OPTIMIZED)
+        const pattern = [0, 1, 2, 1];
 
-        for (let i = 0; i < 4; i++) { // 4th note arpeggio (OPTIMIZED)
+        for (let i = 0; i < 4; i++) {
             arpeggio.push({
                 notes: [chord[pattern[i % pattern.length]]],
-                time: i * 1.0, // Plays on the beat
+                time: i * 1.0, 
                 duration: '4n'
             });
         }
@@ -183,7 +199,7 @@ class MandelbrotEngine {
     private x: number;
     private y: number;
     private zoom: number;
-    private maxIterations = 15; // OPTIMIZED from 25
+    private maxIterations = 15;
 
     private startX: number;
     private startY: number;
@@ -323,7 +339,7 @@ class MandelbrotEngine {
             return [{ notes: chord, time: 0, duration: '1m' }];
         } else { // Active region -> arpeggio
             const arpeggio: AccompanimentNote[] = [];
-            const pattern = [0, 1, 2, 1]; // Simplified pattern
+            const pattern = [0, 1, 2, 1];
             for (let i = 0; i < pattern.length; i++) {
                 arpeggio.push({ notes: [chord[pattern[i]]], time: i * 1.0, duration: '4n' });
             }
@@ -406,7 +422,7 @@ class DrumGenerator {
     private static fillPatterns = ['ambient-fill-1', 'ambient-fill-2', 'ambient-fill-3'];
 
     static createScore(pattern: string, barNumber: number, isAnchorPhase: boolean): DrumNote[] {
-        const isFillBar = (barNumber + 1) % 4 === 0 && !isAnchorPhase && Math.random() < 0.5; // OPTIMIZED
+        const isFillBar = (barNumber + 1) % 4 === 0 && !isAnchorPhase && Math.random() < 0.5;
         let score;
         if (isFillBar) {
             const randomFill = this.fillPatterns[Math.floor(Math.random() * this.fillPatterns.length)];
@@ -507,7 +523,7 @@ const Scheduler = {
 
         if (this.compositionEngine) {
             const engine = this.compositionEngine;
-            const isAnchorPhase = (engine instanceof EvolveEngine) && (engine as any).isAnchorPhase;
+            const isAnchorPhase = (engine instanceof EvolveEngine) && engine.isAnchorPhase;
 
             if (this.drumSettings.pattern !== 'none') {
                 const drumScore = DrumGenerator.createScore(this.drumSettings.pattern, this.barCount, isAnchorPhase)
@@ -606,11 +622,3 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
-
-    
-
-    
-
-    
-
-    
