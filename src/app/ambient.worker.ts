@@ -58,7 +58,7 @@ class MusicalGenome {
 
 class EvolveEngine {
     private genome: MusicalGenome;
-    private soloState: { lastNote: string | null; lastPhrase: string[]; phraseCooldown: number };
+    private soloState: { lastNote: string | null; lastPhrase: string[] };
     private evolutionLengthInBars: number;
     private anchorLengthInBars: number;
     private isAnchorPhase: boolean;
@@ -66,7 +66,7 @@ class EvolveEngine {
 
     constructor(genome: MusicalGenome) {
         this.genome = genome;
-        this.soloState = { lastNote: null, lastPhrase: [...this.genome.soloAnchor], phraseCooldown: 0 };
+        this.soloState = { lastNote: null, lastPhrase: [...this.genome.soloAnchor] };
         
         this.anchorLengthInBars = 8;
         this.evolutionLengthInBars = this.calculateNextEvolutionLength();
@@ -106,17 +106,10 @@ class EvolveEngine {
     }
     
     public generateSoloScore(bar: number): SoloNote[] {
-        console.log(`[SOLO_WORKER_TRACE] Bar ${bar}: generateSoloScore called. Cooldown: ${this.soloState.phraseCooldown}`);
+        console.log(`[SOLO_WORKER_TRACE] Bar ${bar}: Generating new phrase. Last note was: ${this.soloState.lastNote}`);
         const harmony = this.getHarmony(bar);
         const chordTones = this.getChordTones(harmony.root, harmony.scale);
 
-        if (this.soloState.phraseCooldown > 0) {
-            this.soloState.phraseCooldown--;
-            console.log(`[SOLO_WORKER_TRACE] Bar ${bar}: In cooldown. New cooldown: ${this.soloState.phraseCooldown}. Returning empty score.`);
-            return [];
-        }
-
-        console.log(`[SOLO_WORKER_TRACE] Bar ${bar}: Generating new phrase. Last note was: ${this.soloState.lastNote}`);
         const phraseLength = Math.floor(Math.random() * 3) + 2; // 2 to 4 notes
         const score: SoloNote[] = [];
         let currentNote = this.soloState.lastNote || `${chordTones[Math.floor(Math.random() * chordTones.length)]}4`;
@@ -144,9 +137,8 @@ class EvolveEngine {
         }
 
         this.soloState.lastNote = currentNote; // Save the last note for the next phrase
-        this.soloState.phraseCooldown = Math.floor(Math.random() * 4) + 3;
         
-        console.log(`[SOLO_WORKER_TRACE] Bar ${bar}: Generated phrase with ${score.length} notes. New cooldown: ${this.soloState.phraseCooldown}.`);
+        console.log(`[SOLO_WORKER_TRACE] Bar ${bar}: Generated phrase with ${score.length} notes.`);
         return score;
     }
 
@@ -621,3 +613,4 @@ self.onmessage = async (event: MessageEvent) => {
 
     
 
+    
