@@ -519,6 +519,7 @@ const Scheduler = {
     get secondsPerBeat() { return 60 / this.bpm; },
     
     start() {
+        console.log(`[WORKER_TRACE] Scheduler starting. Score: ${this.score}`);
         if (this.isRunning) return;
         
         this.reset();
@@ -532,6 +533,7 @@ const Scheduler = {
         } else {
             this.compositionEngine = null; // for promenade
         }
+        console.log('[WORKER_TRACE] Composition engine initialized:', this.compositionEngine?.constructor.name);
         
         self.postMessage({ type: 'started' });
     },
@@ -558,8 +560,10 @@ const Scheduler = {
                 this.score = settings.score;
                 const genome = new MusicalGenome();
                 if (this.score === 'evolve') {
+                    console.log('[WORKER_TRACE] Switched engine to: EvolveEngine');
                     this.compositionEngine = new EvolveEngine(genome);
                 } else if (this.score === 'omega') {
+                     console.log('[WORKER_TRACE] Switched engine to: MandelbrotEngine');
                     this.compositionEngine = new MandelbrotEngine(genome);
                 } else {
                     this.compositionEngine = null;
@@ -570,6 +574,7 @@ const Scheduler = {
 
     tick(time: number, barCount: number) {
         if (!this.isRunning) return;
+        console.log(`[WORKER_TRACE] Tick received for bar ${barCount}.`);
         
         this.barCount = barCount;
 
@@ -585,6 +590,7 @@ const Scheduler = {
                 ).map(note => ({ ...note, time: note.time * this.secondsPerBeat }));
 
                 if (drumScore.length > 0) {
+                     console.log(`[WORKER_TRACE] Posting drum_score for bar ${this.barCount}`);
                     self.postMessage({ type: 'drum_score', bar: this.barCount, data: drumScore });
                 }
             }
@@ -592,6 +598,7 @@ const Scheduler = {
                 const bassScore = engine.generateBassScore(this.barCount)
                     .map(note => ({...note, time: note.time * this.secondsPerBeat }));
                 if (bassScore.length > 0) {
+                    console.log(`[WORKER_TRACE] Posting bass_score for bar ${this.barCount}`);
                     self.postMessage({ type: 'bass_score', bar: this.barCount, data: bassScore });
                 }
             }
@@ -599,6 +606,7 @@ const Scheduler = {
                 const soloScore = engine.generateSoloScore(this.barCount)
                     .map(note => ({...note, time: (note.time as number) * this.secondsPerBeat}));
                 if (soloScore.length > 0) {
+                    console.log(`[WORKER_TRACE] Posting solo_score for bar ${this.barCount}`);
                     self.postMessage({ type: 'solo_score', bar: this.barCount, data: soloScore });
                 }
             }
@@ -606,6 +614,7 @@ const Scheduler = {
                 const accompanimentScore = engine.generateAccompanimentScore(this.barCount)
                     .map(note => ({...note, time: (note.time as number) * this.secondsPerBeat}));
                 if(accompanimentScore.length > 0) {
+                    console.log(`[WORKER_TRACE] Posting accompaniment_score for bar ${this.barCount}`);
                     self.postMessage({ type: 'accompaniment_score', bar: this.barCount, data: accompanimentScore });
                 }
             }
@@ -613,6 +622,7 @@ const Scheduler = {
                 const effectsScore = EffectsGenerator.createScore(this.effectsSettings.mode, this.barCount, this.beatsPerBar, engine.isAnchorPhase)
                     .map(note => ({ ...note, time: note.time * this.secondsPerBeat }));
                 if (effectsScore.length > 0) {
+                    console.log(`[WORKER_TRACE] Posting effects_score for bar ${this.barCount}`);
                     self.postMessage({ type: 'effects_score', bar: this.barCount, data: effectsScore });
                 }
             }
@@ -643,6 +653,7 @@ const Scheduler = {
             const accompanimentScore = getNotesForBar(promenadeScore.accompaniment as any[]);
             if (accompanimentScore.length > 0) self.postMessage({ type: 'accompaniment_score', bar: this.barCount, data: accompanimentScore });
         }
+        console.log(`[WORKER_TRACE] Tick finished for bar ${barCount}.`);
     }
 };
 
@@ -650,6 +661,7 @@ const Scheduler = {
 // --- MessageBus (The "Kafka" entry point) ---
 self.onmessage = async (event: MessageEvent) => {
     const { command, data } = event.data;
+    console.log('[WORKER_TRACE] Received command:', command, data);
 
     try {
         switch (command) {
