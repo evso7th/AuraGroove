@@ -310,18 +310,24 @@ class MandelbrotEngine {
         const phraseLength = 3 + Math.floor(this.getMandelbrotValue(this.x, this.y) / this.maxIterations * 3); // 3-6 notes
         let currentNote = this.soloState.lastNote;
 
+        if (!currentNote) {
+            const chordTones = this.getChordTones(harmony.root, harmony.scale);
+            currentNote = `${chordTones[0]}4`;
+        }
+
         for (let i = 0; i < phraseLength; i++) {
             const cx = this.x + (i - 4) / (256 * this.zoom);
             const cy = this.y + (Math.sin(bar + i) * 2) / (256 * this.zoom);
             const value = this.getMandelbrotValue(cx, cy);
 
             let nextNote: string;
-            if (value < this.maxIterations * 0.8) { // Use stepwise for stable regions
-                const octave = currentNote ? parseInt(currentNote.slice(-1), 10) : 4;
-                const noteName = currentNote ? currentNote.slice(0, -1) : harmony.scale[0];
-                const noteIndex = harmony.scale.indexOf(noteName);
+            const currentOctave = parseInt(currentNote.slice(-1), 10);
+            const currentNoteName = currentNote.slice(0, -1);
+            const currentNoteIndex = harmony.scale.indexOf(currentNoteName);
+            
+            if (value < this.maxIterations * 0.8 && currentNoteIndex !== -1) { // Use stepwise for stable regions
                 const direction = value % 2 === 0 ? 1 : -1;
-                nextNote = `${harmony.scale[(noteIndex + direction + harmony.scale.length) % harmony.scale.length]}${octave}`;
+                nextNote = `${harmony.scale[(currentNoteIndex + direction + harmony.scale.length) % harmony.scale.length]}${currentOctave}`;
             } else { // Jump to chord tone in chaotic regions
                 const chordTones = this.getChordTones(harmony.root, harmony.scale);
                 nextNote = `${chordTones[value % chordTones.length]}4`;
@@ -690,5 +696,7 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
+
+    
 
     
