@@ -80,7 +80,6 @@ export function AuraGroove() {
   const lastTickTimeRef = useRef<number>(0);
   
    useEffect(() => {
-    console.log('[AURA_TRACE] Main useEffect initializing.');
     setLoadingText("Initializing Worker...");
     
     const worker = new Worker(new URL('../app/ambient.worker.ts', import.meta.url));
@@ -120,7 +119,7 @@ export function AuraGroove() {
       const now = Tone.now();
       const delay = now - lastTickTimeRef.current;
       
-      if (receivedBar !== undefined) {
+      if (receivedBar !== undefined && showDebugPanel) {
         const logMessage = `Bar ${receivedBar}: Delay ${delay.toFixed(2)}ms`;
         if (delay > CONGESTION_THRESHOLD_MS) {
             const congestion = delay - CONGESTION_THRESHOLD_MS;
@@ -131,7 +130,7 @@ export function AuraGroove() {
       }
 
       const schedule = (scoreData: any[], manager: any, triggerFn: string) => {
-        if (!manager || !manager[triggerFn]) return;
+        if (!manager || !manager[triggerFn] || !isPlaying) return;
         const barStartTime = lastTickTimeRef.current;
         scoreData.forEach((note: any) => {
           const timeToPlay = Math.max(barStartTime, now) + note.time;
@@ -192,12 +191,10 @@ export function AuraGroove() {
 
     worker.onmessage = handleMessage;
     
-    console.log('[AURA_TRACE] Sending command from Main useEffect: init');
     musicWorkerRef.current?.postMessage({ command: 'init' });
     
 
     return () => {
-      console.log('[AURA_TRACE] Main useEffect cleanup.');
       if (musicWorkerRef.current) {
         musicWorkerRef.current.terminate();
       }
@@ -214,7 +211,7 @@ export function AuraGroove() {
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [toast]); 
+  }, []); 
   
   useEffect(() => {
     if (isReady && isDrumMachineReady) {
@@ -223,9 +220,7 @@ export function AuraGroove() {
   }, [isReady, isDrumMachineReady]);
 
   const updateWorkerSettings = useCallback(() => {
-    console.log('[AURA_TRACE] updateWorkerSettings called.');
     if (musicWorkerRef.current) {
-        console.log('[AURA_TRACE] Sending command from updateWorkerSettings: update_settings');
         musicWorkerRef.current?.postMessage({
             command: 'update_settings',
             data: { instrumentSettings, drumSettings, effectsSettings, bpm, score },
@@ -234,72 +229,62 @@ export function AuraGroove() {
   }, [instrumentSettings, drumSettings, effectsSettings, bpm, score]);
   
   const updateBpm = useCallback((newBpm: number) => {
+      setBpm(newBpm);
       Tone.Transport.bpm.value = newBpm;
-      if (musicWorkerRef.current) {
-        console.log('[AURA_TRACE] Sending command from updateBpm: update_settings');
+      if (musicWorkerRef.current && isPlaying) {
         musicWorkerRef.current.postMessage({ command: 'update_settings', data: { bpm: newBpm } });
       }
-  }, []);
+  }, [isPlaying]);
 
   useEffect(() => {
-    console.log('[AURA_TRACE] Settings useEffect triggered. isReady:', isReady, 'isPlaying:', isPlaying);
-    // This effect is now only for reacting to changes while playing.
-    // Starting/stopping is handled explicitly by user actions.
     if (isReady && isPlaying) { 
       updateWorkerSettings();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drumSettings, instrumentSettings, effectsSettings, score, isReady, isPlaying]);
+
+  useEffect(() => {
+      if (!isReady || !fxBusRef.current?.soloDistortion) return;
+      const fx = fxBusRef.current.soloDistortion;
+      fx.wet.value = soloFx.distortion.enabled ? soloFx.distortion.wet : 0;
+  }, [soloFx.distortion, isReady]);
   
   useEffect(() => {
-      if (isReady) {
-          updateBpm(bpm);
-      }
-  }, [bpm, isReady, updateBpm]);
+      if (!isReady || !soloSynthManagerRef.current) return;
+      soloSynthManagerRef.current.setVolume(instrumentSettings.solo.volume);
+  }, [instrumentSettings.solo.volume, isReady]);
 
-    useEffect(() => {
-        if (!isReady || !fxBusRef.current?.soloDistortion) return;
-        const fx = fxBusRef.current.soloDistortion;
-        fx.wet.value = soloFx.distortion.enabled ? soloFx.distortion.wet : 0;
-    }, [soloFx.distortion, isReady]);
-    
-    useEffect(() => {
-        if (!isReady || !soloSynthManagerRef.current) return;
-        soloSynthManagerRef.current.setVolume(instrumentSettings.solo.volume);
-    }, [instrumentSettings.solo.volume, isReady]);
+  useEffect(() => {
+      if (!isReady || !accompanimentSynthManagerRef.current) return;
+      accompanimentSynthManagerRef.current.setVolume(instrumentSettings.accompaniment.volume);
+  }, [instrumentSettings.accompaniment.volume, isReady]);
 
-    useEffect(() => {
-        if (!isReady || !accompanimentSynthManagerRef.current) return;
-        accompanimentSynthManagerRef.current.setVolume(instrumentSettings.accompaniment.volume);
-    }, [instrumentSettings.accompaniment.volume, isReady]);
+  useEffect(() => {
+      if (!isReady || !bassSynthManagerRef.current) return;
+      bassSynthManagerRef.current.setVolume(instrumentSettings.bass.volume);
+  }, [instrumentSettings.bass.volume, isReady]);
 
-    useEffect(() => {
-        if (!isReady || !bassSynthManagerRef.current) return;
-        bassSynthManagerRef.current.setVolume(instrumentSettings.bass.volume);
-    }, [instrumentSettings.bass.volume, isReady]);
+  useEffect(() => {
+      if (!isReady || !fxBusRef.current?.accompanimentChorus) return;
+      const fx = fxBusRef.current.accompanimentChorus;
+      fx.wet.value = accompanimentFx.chorus.enabled ? accompanimentFx.chorus.wet : 0;
+      fx.frequency.value = accompanimentFx.chorus.frequency;
+      fx.depth = accompanimentFx.chorus.depth;
+  }, [accompanimentFx.chorus, isReady]);
 
-    useEffect(() => {
-        if (!isReady || !fxBusRef.current?.accompanimentChorus) return;
-        const fx = fxBusRef.current.accompanimentChorus;
-        fx.wet.value = accompanimentFx.chorus.enabled ? accompanimentFx.chorus.wet : 0;
-        fx.frequency.value = accompanimentFx.chorus.frequency;
-        fx.depth = accompanimentFx.chorus.depth;
-    }, [accompanimentFx.chorus, isReady]);
+   useEffect(() => {
+      if (!isReady || !effectsSynthManagerRef.current) return;
+      effectsSynthManagerRef.current.setVolume(effectsSettings.volume);
+      effectsSynthManagerRef.current.setMode(effectsSettings.mode);
+  }, [effectsSettings, isReady]);
 
-     useEffect(() => {
-        if (!isReady || !effectsSynthManagerRef.current) return;
-        effectsSynthManagerRef.current.setVolume(effectsSettings.volume);
-        effectsSynthManagerRef.current.setMode(effectsSettings.mode);
-    }, [effectsSettings, isReady]);
-
-    useEffect(() => {
-        if (!isReady || !drumMachineRef.current) return;
-        drumMachineRef.current.setVolume(drumSettings.volume);
-    }, [drumSettings.volume, isReady]);
+  useEffect(() => {
+      if (!isReady || !drumMachineRef.current) return;
+      drumMachineRef.current.setVolume(drumSettings.volume);
+  }, [drumSettings.volume, isReady]);
 
   
   const handlePlay = useCallback(async () => {
-    console.log('[AURA_TRACE] handlePlay called.');
     try {
         if (Tone.context.state !== 'running') {
             await Tone.start();
@@ -314,7 +299,8 @@ export function AuraGroove() {
             return;
         }
         
-        handleStop(); // Ensure a clean state before starting
+        // Ensure a clean state before starting
+        handleStop(); 
         
         soloSynthManagerRef.current?.setInstrument(instrumentSettings.solo.name);
         accompanimentSynthManagerRef.current?.setInstrument(instrumentSettings.accompaniment.name);
@@ -323,16 +309,17 @@ export function AuraGroove() {
         
         setLoadingText("Starting playback...");
         
-        console.log('[AURA_TRACE] Sending command from handlePlay: start');
         musicWorkerRef.current?.postMessage({ 
             command: 'start',
             data: { drumSettings, instrumentSettings, effectsSettings, bpm, score }
         });
         
-        // Create a new loop every time we play
+        if (transportLoopRef.current) {
+          transportLoopRef.current.dispose();
+        }
+        
         transportLoopRef.current = new Tone.Loop(time => {
           lastTickTimeRef.current = time;
-          console.log(`[AURA_TRACE] Transport Loop: Sending command: tick for bar ${currentBarRef.current}`);
           musicWorkerRef.current?.postMessage({ command: 'tick', data: { time, barCount: currentBarRef.current } });
           Tone.Draw.schedule(() => {
             currentBarRef.current++;
@@ -356,12 +343,10 @@ export function AuraGroove() {
   }, [drumSettings, instrumentSettings, effectsSettings, bpm, score, toast]);
 
   const handleStop = useCallback(() => {
-    console.log('[AURA_TRACE] handleStop called.');
     soloSynthManagerRef.current?.fadeOut(0.5);
     accompanimentSynthManagerRef.current?.fadeOut(0.5);
     bassSynthManagerRef.current?.fadeOut(0.5);
     
-    // Dispose the loop to prevent duplicates
     if (transportLoopRef.current) {
       transportLoopRef.current.dispose();
       transportLoopRef.current = null;
@@ -371,7 +356,6 @@ export function AuraGroove() {
         Tone.Transport.stop();
         Tone.Transport.cancel(0);
     }
-    console.log('[AURA_TRACE] Sending command from handleStop: stop');
     musicWorkerRef.current?.postMessage({ command: 'stop' });
     setIsPlaying(false);
     currentBarRef.current = 0; // Reset bar count
@@ -379,7 +363,6 @@ export function AuraGroove() {
   }, []);
   
   const handleTogglePlay = useCallback(() => {
-    console.log(`[AURA_TRACE] handleTogglePlay called. Current isPlaying state: ${isPlaying}`);
     if (isPlaying) {
       handleStop();
     } else {
@@ -445,7 +428,7 @@ export function AuraGroove() {
                     min={60}
                     max={160}
                     step={5}
-                    onValueChange={(v) => setBpm(v[0])}
+                    onValueChange={(v) => updateBpm(v[0])}
                     className="col-span-2"
                     disabled={isBusy}
                 />
@@ -453,7 +436,7 @@ export function AuraGroove() {
         </div>
         
         <div className="space-y-4 rounded-lg border p-4">
-           <h3 className="text-lg font-medium text-primary flex items-center gap-2"><Music className="h-5 w-5" /> Instrument Channels</h3>
+           <h3 className="text-lg font-medium text-primary flex items-center gap-2"><SlidersHorizontal className="h-5 w-5" /> Instrument Channels</h3>
 
            {/* Solo Channel */}
             <div className="space-y-3 rounded-md border p-3">

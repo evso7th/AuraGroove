@@ -448,19 +448,23 @@ class DrumGenerator {
 
     static createScore(
         pattern: string, 
-        isAnchorPhase: boolean, 
-        barsIntoPhase: number, 
-        anchorLengthInBars: number
+        engine: EvolveEngine | MandelbrotEngine | null
     ): DrumNote[] {
+        if (!engine) return []; // Should not happen for generative scores
+
         let score: DrumNote[] = [];
         const playFill = () => {
             const randomFill = this.fillPatterns[Math.floor(Math.random() * this.fillPatterns.length)];
             score = PatternProvider.getDrumPattern(randomFill);
         };
+        
+        const { isAnchorPhase, barsIntoPhase } = engine;
+        const anchorLength = engine instanceof EvolveEngine ? engine.anchorLengthInBars : 0;
+
 
         if (isAnchorPhase) {
             const isFirstBar = barsIntoPhase === 0;
-            const isLastBar = barsIntoPhase === anchorLengthInBars - 1;
+            const isLastBar = barsIntoPhase === anchorLength - 1;
 
             if ((isFirstBar || isLastBar) && Math.random() < 0.7) {
                 playFill();
@@ -480,8 +484,9 @@ class DrumGenerator {
 }
 
 class EffectsGenerator {
-    static createScore(mode: EffectsSettings['mode'], bar: number, beatsPerBar = 4, isAnchorPhase: boolean): EffectNote[] {
-        if (mode === 'none' || isAnchorPhase) return [];
+    static createScore(mode: EffectsSettings['mode'], engine: EvolveEngine | MandelbrotEngine | null, beatsPerBar = 4): EffectNote[] {
+        if (mode === 'none' || !engine || engine.isAnchorPhase) return [];
+        
         const score: EffectNote[] = [];
         let effectType: 'piu' | 'bell' | null = Math.random() > 0.5 ? 'bell' : 'piu';
         if (mode !== 'mixed') effectType = mode;
@@ -524,22 +529,22 @@ const Scheduler = {
     get beatsPerBar() { return 4; },
     get secondsPerBeat() { return 60 / this.bpm; },
     
+    setCompositionEngine(score: ScoreName) {
+        if (score === 'evolve') {
+            this.compositionEngine = new EvolveEngine(new MusicalGenome());
+        } else if (score === 'omega') {
+            this.compositionEngine = new MandelbrotEngine(new MusicalGenome());
+        } else {
+            this.compositionEngine = null; // For 'promenade'
+        }
+    },
+    
     start() {
-        console.log(`[WORKER_TRACE] Scheduler starting. Score: ${this.score}`);
         if (this.isRunning) return;
         
         this.reset();
         this.isRunning = true;
-        
-        const genome = new MusicalGenome();
-        if (this.score === 'evolve') {
-            this.compositionEngine = new EvolveEngine(genome);
-        } else if (this.score === 'omega') {
-            this.compositionEngine = new MandelbrotEngine(genome);
-        } else {
-            this.compositionEngine = null; // for promenade
-        }
-        console.log('[WORKER_TRACE] Composition engine initialized:', this.compositionEngine?.constructor.name);
+        this.setCompositionEngine(this.score);
         
         self.postMessage({ type: 'started' });
     },
@@ -560,27 +565,14 @@ const Scheduler = {
         if (settings.drumSettings) this.drumSettings = settings.drumSettings;
         if (settings.effectsSettings) this.effectsSettings = settings.effectsSettings;
         if (settings.bpm) this.bpm = settings.bpm;
-        if (settings.score) {
-            // If score changes, we need to re-initialize the engine on the next start/tick
-            if(this.score !== settings.score) {
-                this.score = settings.score;
-                const genome = new MusicalGenome();
-                if (this.score === 'evolve') {
-                    console.log('[WORKER_TRACE] Switched engine to: EvolveEngine');
-                    this.compositionEngine = new EvolveEngine(genome);
-                } else if (this.score === 'omega') {
-                     console.log('[WORKER_TRACE] Switched engine to: MandelbrotEngine');
-                    this.compositionEngine = new MandelbrotEngine(genome);
-                } else {
-                    this.compositionEngine = null;
-                }
-            }
+        if (settings.score && this.score !== settings.score) {
+            this.score = settings.score;
+            this.setCompositionEngine(this.score);
         }
     },
 
     tick(time: number, barCount: number) {
         if (!this.isRunning) return;
-        console.log(`[WORKER_TRACE] Tick received for bar ${barCount}.`);
         
         this.barCount = barCount;
 
@@ -590,13 +582,10 @@ const Scheduler = {
             if (this.drumSettings.pattern !== 'none') {
                 const drumScore = DrumGenerator.createScore(
                     this.drumSettings.pattern, 
-                    engine.isAnchorPhase, 
-                    engine.barsIntoPhase, 
-                    engine instanceof EvolveEngine ? engine.anchorLengthInBars : 0 // Pass length for EvolveEngine
+                    engine
                 ).map(note => ({ ...note, time: note.time * this.secondsPerBeat }));
 
                 if (drumScore.length > 0) {
-                     console.log(`[WORKER_TRACE] Posting drum_score for bar ${this.barCount}`);
                     self.postMessage({ type: 'drum_score', bar: this.barCount, data: drumScore });
                 }
             }
@@ -604,7 +593,6 @@ const Scheduler = {
                 const bassScore = engine.generateBassScore(this.barCount)
                     .map(note => ({...note, time: note.time * this.secondsPerBeat }));
                 if (bassScore.length > 0) {
-                    console.log(`[WORKER_TRACE] Posting bass_score for bar ${this.barCount}`);
                     self.postMessage({ type: 'bass_score', bar: this.barCount, data: bassScore });
                 }
             }
@@ -612,7 +600,6 @@ const Scheduler = {
                 const soloScore = engine.generateSoloScore(this.barCount)
                     .map(note => ({...note, time: (note.time as number) * this.secondsPerBeat}));
                 if (soloScore.length > 0) {
-                    console.log(`[WORKER_TRACE] Posting solo_score for bar ${this.barCount}`);
                     self.postMessage({ type: 'solo_score', bar: this.barCount, data: soloScore });
                 }
             }
@@ -620,15 +607,13 @@ const Scheduler = {
                 const accompanimentScore = engine.generateAccompanimentScore(this.barCount)
                     .map(note => ({...note, time: (note.time as number) * this.secondsPerBeat}));
                 if(accompanimentScore.length > 0) {
-                    console.log(`[WORKER_TRACE] Posting accompaniment_score for bar ${this.barCount}`);
                     self.postMessage({ type: 'accompaniment_score', bar: this.barCount, data: accompanimentScore });
                 }
             }
             if(this.effectsSettings.mode !== 'none') {
-                const effectsScore = EffectsGenerator.createScore(this.effectsSettings.mode, this.barCount, this.beatsPerBar, engine.isAnchorPhase)
+                const effectsScore = EffectsGenerator.createScore(this.effectsSettings.mode, engine, this.beatsPerBar)
                     .map(note => ({ ...note, time: note.time * this.secondsPerBeat }));
                 if (effectsScore.length > 0) {
-                    console.log(`[WORKER_TRACE] Posting effects_score for bar ${this.barCount}`);
                     self.postMessage({ type: 'effects_score', bar: this.barCount, data: effectsScore });
                 }
             }
@@ -646,20 +631,24 @@ const Scheduler = {
                     })
                     .map(note => ({ ...note, time: (typeof note.time === 'number' ? note.time - barStartBeats : 0) * this.secondsPerBeat }));
             };
-
-            const drumScore = getNotesForBar(promenadeScore.drums);
-            if (drumScore.length > 0) self.postMessage({ type: 'drum_score', bar: this.barCount, data: drumScore });
-
-            const bassScore = getNotesForBar(promenadeScore.bass);
-            if (bassScore.length > 0) self.postMessage({ type: 'bass_score', bar: this.barCount, data: bassScore });
-
-            const soloScore = getNotesForBar(promenadeScore.solo as any[]);
-            if (soloScore.length > 0) self.postMessage({ type: 'solo_score', bar: this.barCount, data: soloScore });
-
-            const accompanimentScore = getNotesForBar(promenadeScore.accompaniment as any[]);
-            if (accompanimentScore.length > 0) self.postMessage({ type: 'accompaniment_score', bar: this.barCount, data: accompanimentScore });
+            
+            if (this.drumSettings.pattern !== 'none') {
+                const drumScore = getNotesForBar(promenadeScore.drums);
+                if (drumScore.length > 0) self.postMessage({ type: 'drum_score', bar: this.barCount, data: drumScore });
+            }
+            if(this.instrumentSettings.bass.name !== 'none') {
+                const bassScore = getNotesForBar(promenadeScore.bass);
+                if (bassScore.length > 0) self.postMessage({ type: 'bass_score', bar: this.barCount, data: bassScore });
+            }
+            if (this.instrumentSettings.solo.name !== 'none') {
+                const soloScore = getNotesForBar(promenadeScore.solo as any[]);
+                if (soloScore.length > 0) self.postMessage({ type: 'solo_score', bar: this.barCount, data: soloScore });
+            }
+            if (this.instrumentSettings.accompaniment.name !== 'none') {
+                const accompanimentScore = getNotesForBar(promenadeScore.accompaniment as any[]);
+                if (accompanimentScore.length > 0) self.postMessage({ type: 'accompaniment_score', bar: this.barCount, data: accompanimentScore });
+            }
         }
-        console.log(`[WORKER_TRACE] Tick finished for bar ${barCount}.`);
     }
 };
 
@@ -667,7 +656,6 @@ const Scheduler = {
 // --- MessageBus (The "Kafka" entry point) ---
 self.onmessage = async (event: MessageEvent) => {
     const { command, data } = event.data;
-    console.log('[WORKER_TRACE] Received command:', command, data);
 
     try {
         switch (command) {
@@ -696,7 +684,5 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
-
-    
 
     
