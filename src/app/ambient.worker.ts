@@ -214,13 +214,14 @@ class MandelbrotEngine {
     private soloState: { lastNote: string | null; phraseCooldown: number } = { lastNote: null, phraseCooldown: 0 };
 
 
+    // SAFETY: Reduced some of the extreme zoom levels to prevent mathematical instability
     private readonly INTERESTING_POINTS = [
         { x: -0.745, y: 0.186, zoom: 200 },       // "Seahorse Valley"
-        { x: -1.749, y: 0.0003, zoom: 1500 },      // A mini-Mandelbrot
+        { x: -1.749, y: 0.0003, zoom: 500 },      // A mini-Mandelbrot (Zoom reduced from 1500)
         { x: 0.274, y: 0.008, zoom: 250 },        // "Elephant Valley"
         { x: -0.16, y: 1.04, zoom: 400 },         // A spiral region
         { x: -0.745429, y: 0.113009, zoom: 800 },  // A detailed spiral
-        { x: -0.8, y: 0.156, zoom: 1200 },         // Another detailed region
+        { x: -0.8, y: 0.156, zoom: 450 },         // Another detailed region (Zoom reduced from 1200)
         { x: 0.282, y: 0.01, zoom: 900 }          // Spiral near a cardioid
     ];
 
@@ -230,7 +231,9 @@ class MandelbrotEngine {
         const startPoint = this.INTERESTING_POINTS[Math.floor(Math.random() * this.INTERESTING_POINTS.length)];
         this.x = startPoint.x;
         this.y = startPoint.y;
-        this.zoom = startPoint.zoom;
+        
+        // SAFETY: Ensure zoom is always a positive, non-zero number.
+        this.zoom = Math.max(1, Math.abs(startPoint.zoom));
         
         this.startX = this.x;
         this.startY = this.y;
@@ -250,7 +253,8 @@ class MandelbrotEngine {
         const nextPoint = this.INTERESTING_POINTS[Math.floor(Math.random() * this.INTERESTING_POINTS.length)];
         this.targetX = nextPoint.x;
         this.targetY = nextPoint.y;
-        this.targetZoom = nextPoint.zoom;
+        // SAFETY: Ensure new target zoom is also safe.
+        this.targetZoom = Math.max(1, Math.abs(nextPoint.zoom));
     }
 
     private updatePosition() {
@@ -271,6 +275,10 @@ class MandelbrotEngine {
             zy = 2 * zx * zy + cy;
             zx = tmp;
             i++;
+            // SAFETY: Prevent infinite loops from NaN or Infinity values
+            if (!Number.isFinite(zx) || !Number.isFinite(zy)) {
+                return this.maxIterations;
+            }
         }
         return i;
     }
@@ -512,7 +520,6 @@ const Scheduler = {
     
     start() {
         if (this.isRunning) return;
-        console.log(`[WORKER_TRACE] Scheduler starting. Score: ${this.score}`);
         
         this.reset();
         this.isRunning = true;
@@ -525,7 +532,6 @@ const Scheduler = {
         } else {
             this.compositionEngine = null; // for promenade
         }
-        console.log(`[WORKER_TRACE] Composition engine initialized: ${this.compositionEngine?.constructor.name}`);
         
         self.postMessage({ type: 'started' });
     },
@@ -558,14 +564,12 @@ const Scheduler = {
                 } else {
                     this.compositionEngine = null;
                 }
-                console.log(`[WORKER_TRACE] Switched engine to: ${this.compositionEngine?.constructor.name}`);
             }
         }
     },
 
     tick(time: number, barCount: number) {
         if (!this.isRunning) return;
-        console.log(`[WORKER_TRACE] Tick Start - Bar: ${barCount}, Time: ${time}, Engine: ${this.compositionEngine?.constructor.name}`);
         
         this.barCount = barCount;
 
@@ -581,7 +585,6 @@ const Scheduler = {
                 ).map(note => ({ ...note, time: note.time * this.secondsPerBeat }));
 
                 if (drumScore.length > 0) {
-                    console.log(`[WORKER_TRACE] Posting drum_score for bar ${this.barCount}`);
                     self.postMessage({ type: 'drum_score', bar: this.barCount, data: drumScore });
                 }
             }
@@ -589,7 +592,6 @@ const Scheduler = {
                 const bassScore = engine.generateBassScore(this.barCount)
                     .map(note => ({...note, time: note.time * this.secondsPerBeat }));
                 if (bassScore.length > 0) {
-                    console.log(`[WORKER_TRACE] Posting bass_score for bar ${this.barCount}`);
                     self.postMessage({ type: 'bass_score', bar: this.barCount, data: bassScore });
                 }
             }
@@ -597,7 +599,6 @@ const Scheduler = {
                 const soloScore = engine.generateSoloScore(this.barCount)
                     .map(note => ({...note, time: (note.time as number) * this.secondsPerBeat}));
                 if (soloScore.length > 0) {
-                     console.log(`[WORKER_TRACE] Posting solo_score for bar ${this.barCount}`);
                     self.postMessage({ type: 'solo_score', bar: this.barCount, data: soloScore });
                 }
             }
@@ -605,7 +606,6 @@ const Scheduler = {
                 const accompanimentScore = engine.generateAccompanimentScore(this.barCount)
                     .map(note => ({...note, time: (note.time as number) * this.secondsPerBeat}));
                 if(accompanimentScore.length > 0) {
-                     console.log(`[WORKER_TRACE] Posting accompaniment_score for bar ${this.barCount}`);
                     self.postMessage({ type: 'accompaniment_score', bar: this.barCount, data: accompanimentScore });
                 }
             }
@@ -613,7 +613,6 @@ const Scheduler = {
                 const effectsScore = EffectsGenerator.createScore(this.effectsSettings.mode, this.barCount, this.beatsPerBar, engine.isAnchorPhase)
                     .map(note => ({ ...note, time: note.time * this.secondsPerBeat }));
                 if (effectsScore.length > 0) {
-                    console.log(`[WORKER_TRACE] Posting effects_score for bar ${this.barCount}`);
                     self.postMessage({ type: 'effects_score', bar: this.barCount, data: effectsScore });
                 }
             }
@@ -644,7 +643,6 @@ const Scheduler = {
             const accompanimentScore = getNotesForBar(promenadeScore.accompaniment as any[]);
             if (accompanimentScore.length > 0) self.postMessage({ type: 'accompaniment_score', bar: this.barCount, data: accompanimentScore });
         }
-        console.log(`[WORKER_TRACE] Tick End - Bar: ${barCount}`);
     }
 };
 
@@ -652,7 +650,6 @@ const Scheduler = {
 // --- MessageBus (The "Kafka" entry point) ---
 self.onmessage = async (event: MessageEvent) => {
     const { command, data } = event.data;
-    console.log(`[WORKER_TRACE] Received command: ${command}`, data);
 
     try {
         switch (command) {
