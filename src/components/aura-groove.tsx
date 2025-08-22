@@ -134,7 +134,7 @@ export function AuraGroove() {
         if (!manager || !manager[triggerFn]) return;
         const barStartTime = lastTickTimeRef.current;
         scoreData.forEach((note: any) => {
-          const timeToPlay = Math.max(barStartTime, Tone.now()) + note.time;
+          const timeToPlay = Math.max(barStartTime, now) + note.time;
           if (triggerFn === 'trigger') {
               manager.trigger(note, timeToPlay);
           } else {
@@ -195,15 +195,6 @@ export function AuraGroove() {
     console.log('[AURA_TRACE] Sending command from Main useEffect: init');
     musicWorkerRef.current?.postMessage({ command: 'init' });
     
-    transportLoopRef.current = new Tone.Loop(time => {
-      lastTickTimeRef.current = time;
-      console.log(`[AURA_TRACE] Transport Loop: Sending command: tick for bar ${currentBarRef.current}`);
-      musicWorkerRef.current?.postMessage({ command: 'tick', data: { time, barCount: currentBarRef.current } });
-      Tone.Draw.schedule(() => {
-        currentBarRef.current++;
-      }, time);
-
-    }, '1m').start(0);
 
     return () => {
       console.log('[AURA_TRACE] Main useEffect cleanup.');
@@ -252,11 +243,13 @@ export function AuraGroove() {
 
   useEffect(() => {
     console.log('[AURA_TRACE] Settings useEffect triggered. isReady:', isReady, 'isPlaying:', isPlaying);
+    // This effect is now only for reacting to changes while playing.
+    // Starting/stopping is handled explicitly by user actions.
     if (isReady && isPlaying) { 
       updateWorkerSettings();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drumSettings, instrumentSettings, effectsSettings, score, isReady]);
+  }, [drumSettings, instrumentSettings, effectsSettings, score, isReady, isPlaying]);
   
   useEffect(() => {
       if (isReady) {
@@ -322,8 +315,7 @@ export function AuraGroove() {
         }
         
         handleStop(); // Ensure a clean state before starting
-        currentBarRef.current = 0;
-
+        
         soloSynthManagerRef.current?.setInstrument(instrumentSettings.solo.name);
         accompanimentSynthManagerRef.current?.setInstrument(instrumentSettings.accompaniment.name);
         bassSynthManagerRef.current?.setInstrument(instrumentSettings.bass.name);
@@ -337,6 +329,16 @@ export function AuraGroove() {
             data: { drumSettings, instrumentSettings, effectsSettings, bpm, score }
         });
         
+        // Create a new loop every time we play
+        transportLoopRef.current = new Tone.Loop(time => {
+          lastTickTimeRef.current = time;
+          console.log(`[AURA_TRACE] Transport Loop: Sending command: tick for bar ${currentBarRef.current}`);
+          musicWorkerRef.current?.postMessage({ command: 'tick', data: { time, barCount: currentBarRef.current } });
+          Tone.Draw.schedule(() => {
+            currentBarRef.current++;
+          }, time);
+        }, '1m').start(0);
+
         if (Tone.Transport.state !== 'started') {
             Tone.Transport.start();
         }
@@ -359,6 +361,12 @@ export function AuraGroove() {
     accompanimentSynthManagerRef.current?.fadeOut(0.5);
     bassSynthManagerRef.current?.fadeOut(0.5);
     
+    // Dispose the loop to prevent duplicates
+    if (transportLoopRef.current) {
+      transportLoopRef.current.dispose();
+      transportLoopRef.current = null;
+    }
+    
     if (Tone.Transport.state !== 'stopped') {
         Tone.Transport.stop();
         Tone.Transport.cancel(0);
@@ -366,6 +374,7 @@ export function AuraGroove() {
     console.log('[AURA_TRACE] Sending command from handleStop: stop');
     musicWorkerRef.current?.postMessage({ command: 'stop' });
     setIsPlaying(false);
+    currentBarRef.current = 0; // Reset bar count
     
   }, []);
   
@@ -658,3 +667,5 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    
