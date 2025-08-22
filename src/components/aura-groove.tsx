@@ -262,7 +262,8 @@ export function AuraGroove() {
     if (isReady && isPlaying) { 
       updateWorkerSettings();
     }
-  }, [drumSettings, instrumentSettings, effectsSettings, score, isReady, isPlaying, updateWorkerSettings]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drumSettings, instrumentSettings, effectsSettings, score, isReady]);
   
   useEffect(() => {
       if (isReady) {
@@ -338,7 +339,6 @@ export function AuraGroove() {
             data: { drumSettings, instrumentSettings, effectsSettings, bpm, score }
         });
         
-        // The transport loop is already running, just start the transport
         if (Tone.Transport.state !== 'started') {
             Tone.Transport.start();
         }
@@ -362,13 +362,11 @@ export function AuraGroove() {
     bassSynthManagerRef.current?.fadeOut(0.5);
     
     if (Tone.Transport.state !== 'stopped') {
-        // Stop the transport, which also stops the loop
         Tone.Transport.stop();
-        // Cancel any scheduled events to be clean
         Tone.Transport.cancel(0);
     }
     musicWorkerRef.current?.postMessage({ command: 'stop' });
-    setIsPlaying(false); // Explicitly set playing state to false
+    setIsPlaying(false);
     
   }, []);
   
@@ -660,3 +658,5 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    
