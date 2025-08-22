@@ -52,7 +52,7 @@ export function AuraGroove() {
   const [instrumentSettings, setInstrumentSettings] = useState<InstrumentSettings>({
     solo: { name: "synthesizer", volume: 0.8 },
     accompaniment: { name: "synthesizer", volume: 0.7 },
-    bass: { name: "bassGuitar", volume: 0.5 },
+    bass: { name: "bass synth", volume: 0.9 },
   });
   const [bpm, setBpm] = useState(75);
   const [score, setScore] = useState<ScoreName>('evolve');
@@ -139,7 +139,7 @@ export function AuraGroove() {
         
         scoreData.forEach((note: any) => {
           // Note time is now an offset in seconds from the start of the bar
-          const timeToPlay = barStartTime + note.time;
+          const timeToPlay = Math.max(barStartTime, Tone.now()) + note.time;
 
           if (triggerFn === 'trigger') {
               manager.trigger(note, timeToPlay);
@@ -534,7 +534,6 @@ export function AuraGroove() {
                         <SelectContent>
                             <SelectItem value="none">None</SelectItem>
                             <SelectItem value="bass synth">Bass Synth</SelectItem>
-                            <SelectItem value="bassGuitar">Bass Guitar</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
@@ -661,4 +660,3 @@ export function AuraGroove() {
     </Card>
   );
 }
-
