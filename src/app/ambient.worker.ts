@@ -522,7 +522,7 @@ const Scheduler = {
     } as InstrumentSettings,
     drumSettings: { pattern: 'ambient-beat', volume: 0.7 } as DrumSettings,
     effectsSettings: { mode: 'none', volume: 0.7 } as EffectsSettings,
-    score: 'evolve' as ScoreName,
+    score: 'promenade' as ScoreName,
 
 
     // Calculated properties
