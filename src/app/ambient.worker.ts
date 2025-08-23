@@ -463,7 +463,7 @@ class DrumGenerator {
             score = PatternProvider.getDrumPattern(randomFill);
         };
         
-        const { isAnchorPhase, barsIntoPhase } = engine;
+        const { isAnchorPhase, barsIntoPhase } = engine as EvolveEngine;
         const anchorLength = engine instanceof EvolveEngine ? engine.anchorLengthInBars : 0;
 
 
@@ -490,7 +490,7 @@ class DrumGenerator {
 
 class EffectsGenerator {
     static createScore(mode: EffectsSettings['mode'], engine: EvolveEngine | MandelbrotEngine | null, beatsPerBar = 4): EffectNote[] {
-        if (mode === 'none' || !engine || engine.isAnchorPhase) return [];
+        if (mode === 'none' || !engine || (engine instanceof EvolveEngine && engine.isAnchorPhase)) return [];
         
         const score: EffectNote[] = [];
         let effectType: 'piu' | 'bell' | null = Math.random() > 0.5 ? 'bell' : 'piu';
