@@ -233,7 +233,6 @@ export function AuraGroove() {
   }, []);
 
   useEffect(() => {
-    console.log("[AURA_TRACE] Settings useEffect triggered. isReady:", isReady, "isPlaying:", isPlaying);
     if (isReady && isPlaying) { 
       updateWorkerSettings();
     }
@@ -360,6 +359,8 @@ export function AuraGroove() {
     }
   }, [isReady, drumSettings, instrumentSettings, effectsSettings, bpm, score, toast, handleStop]);
   
+  const isBusy = isInitializing;
+
   const handleTogglePlay = useCallback(() => {
     console.log("[AURA_TRACE] handleTogglePlay called. Current isPlaying state:", isPlaying);
     if (isBusy) {
@@ -374,7 +375,6 @@ export function AuraGroove() {
     }
   }, [isBusy, isPlaying, handleStop, handlePlay]);
 
-  const isBusy = isInitializing;
   const drumsEnabled = drumSettings.pattern !== 'none';
   const effectsEnabled = effectsSettings.mode !== 'none';
 
