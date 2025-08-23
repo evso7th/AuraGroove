@@ -327,7 +327,12 @@ class MandelbrotEngine {
             
             if (value < this.maxIterations * 0.8 && currentNoteIndex !== -1) { // Use stepwise for stable regions
                 const direction = value % 2 === 0 ? 1 : -1;
-                nextNote = `${harmony.scale[(currentNoteIndex + direction + harmony.scale.length) % harmony.scale.length]}${currentOctave}`;
+                let nextOctave = currentOctave;
+                const nextNoteIndex = (currentNoteIndex + direction + harmony.scale.length) % harmony.scale.length;
+                if (direction === 1 && nextNoteIndex < currentNoteIndex) nextOctave++;
+                if (direction === -1 && nextNoteIndex > currentNoteIndex) nextOctave--;
+                nextOctave = Math.max(3, Math.min(5, nextOctave));
+                nextNote = `${harmony.scale[nextNoteIndex]}${nextOctave}`;
             } else { // Jump to chord tone in chaotic regions
                 const chordTones = this.getChordTones(harmony.root, harmony.scale);
                 nextNote = `${chordTones[value % chordTones.length]}4`;
@@ -684,3 +689,5 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
+
+    
