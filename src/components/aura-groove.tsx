@@ -33,8 +33,6 @@ import type { EffectsSynthManager } from "@/lib/effects-synth-manager";
 import { DrumMachine } from "@/lib/drum-machine";
 import { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote, DrumSettings, EffectsSettings, InstrumentSettings, ScoreName } from '@/types/music';
 
-const CONGESTION_THRESHOLD_MS = 20;
-
 export function AuraGroove() {
   const [isReady, setIsReady] = useState(false);
   const [isDrumMachineReady, setIsDrumMachineReady] = useState(false);
@@ -80,8 +78,7 @@ export function AuraGroove() {
   const lastTickTimeRef = useRef<number>(0);
   const initializedRef = useRef(false);
 
-  
-   useEffect(() => {
+  useEffect(() => {
     if (initializedRef.current) return;
     initializedRef.current = true;
     
@@ -90,48 +87,45 @@ export function AuraGroove() {
         setLoadingText("Creating Audio Worker...");
         const worker = new Worker(new URL('../app/ambient.worker.ts', import.meta.url));
         musicWorkerRef.current = worker;
+        console.log("[AURA_TRACE] Worker object created.");
 
         setLoadingText("Building FX Bus...");
         const { FxBus } = await import('@/lib/fx-bus');
         fxBusRef.current = new FxBus();
+        console.log("[AURA_TRACE] FxBus created.");
         
-        setLoadingText("Loading Drum Samples...");
-        drumMachineRef.current = new DrumMachine(fxBusRef.current, () => {
-            console.log("[AURA_TRACE] Drum machine ready.");
-            setIsDrumMachineReady(true);
-        });
-
         setLoadingText("Warming up Synthesizers...");
         const { BassSynthManager } = await import('@/lib/bass-synth-manager');
         bassSynthManagerRef.current = new BassSynthManager(fxBusRef.current!);
-        
         const { SoloSynthManager } = await import('@/lib/solo-synth-manager');
         soloSynthManagerRef.current = new SoloSynthManager(fxBusRef.current!);
-
         const { AccompanimentSynthManager } = await import('@/lib/accompaniment-synth-manager');
         accompanimentSynthManagerRef.current = new AccompanimentSynthManager(fxBusRef.current!);
-
         const { EffectsSynthManager } = await import('@/lib/effects-synth-manager');
         effectsSynthManagerRef.current = new EffectsSynthManager(fxBusRef.current!);
+        console.log("[AURA_TRACE] Synth managers created.");
+
+        setLoadingText("Loading Drum Samples...");
+        drumMachineRef.current = new DrumMachine(fxBusRef.current, () => {
+            console.log("[AURA_TRACE] Drum machine samples loaded callback fired.");
+            setIsDrumMachineReady(true);
+        });
        
         worker.onmessage = (event: MessageEvent) => {
             const { type, data, bar: receivedBar, error } = event.data;
             
-            if (showDebugPanel) {
-                const now = Tone.now();
-                const delay = now - lastTickTimeRef.current;
-                if (receivedBar !== undefined) {
-                    const logMessage = `Bar ${receivedBar}: Delay ${delay.toFixed(2)}ms`;
-                     setDebugLog(prev => [logMessage, ...prev].slice(0, 20));
-                }
+            if (showDebugPanel && type !== 'initialized') {
+                const now = Tone.now().toFixed(3);
+                const logMessage = `[${now}] Received '${type}' for bar ${receivedBar}`;
+                setDebugLog(prev => [logMessage, ...prev].slice(0, 20));
             }
-           
 
-            const schedule = (scoreData: any[], manager: any, triggerFn: string) => {
-                if (!manager || (manager.isReady && !manager.isReady()) || !isPlaying) return;
+            const schedule = (scoreData: any[], manager: any, triggerFn: string, managerName: string) => {
+                if (!manager || !isPlaying) return;
                 const barStartTime = lastTickTimeRef.current;
                 scoreData.forEach((note: any) => {
                     const timeToPlay = Math.max(barStartTime, Tone.now()) + note.time;
+                    console.log(`[AURA_TRACE] Scheduling for ${managerName}: note time ${note.time}, scheduled for ${timeToPlay.toFixed(3)}`);
                     if (triggerFn === 'trigger') {
                         manager.trigger(note, timeToPlay);
                     } else {
@@ -143,37 +137,32 @@ export function AuraGroove() {
 
             switch(type) {
                 case 'initialized':
-                   console.log("[AURA_TRACE] Worker initialized.");
+                   console.log("[AURA_TRACE] Worker reported: initialized.");
                    setIsReady(true);
                    setLoadingText("");
                    break;
                 case 'started':
-                    console.log("[AURA_TRACE] Worker started.");
-                    setIsInitializing(false);
-                    setLoadingText("");
+                    console.log("[AURA_TRACE] Worker reported: started.");
                     setIsPlaying(true);
-                    currentBarRef.current = 0;
-                    lastTickTimeRef.current = Tone.now();
                     break;
                 case 'drum_score':
-                    schedule(data, drumMachineRef.current, 'trigger');
+                    schedule(data, drumMachineRef.current, 'trigger', 'DrumMachine');
                     break;
                 case 'bass_score':
-                    schedule(data, bassSynthManagerRef.current, 'triggerAttackRelease');
+                    schedule(data, bassSynthManagerRef.current, 'triggerAttackRelease', 'BassSynth');
                     break;
                 case 'solo_score':
-                    schedule(data, soloSynthManagerRef.current, 'triggerAttackRelease');
+                    schedule(data, soloSynthManagerRef.current, 'triggerAttackRelease', 'SoloSynth');
                     break;
                 case 'accompaniment_score':
-                    schedule(data, accompanimentSynthManagerRef.current, 'triggerAttackRelease');
+                    schedule(data, accompanimentSynthManagerRef.current, 'triggerAttackRelease', 'AccompSynth');
                     break;
                 case 'effects_score':
-                    schedule(data, effectsSynthManagerRef.current, 'trigger');
+                    schedule(data, effectsSynthManagerRef.current, 'trigger', 'EffectsSynth');
                     break;
                 case 'stopped':
-                    console.log("[AURA_TRACE] Worker stopped.");
+                    console.log("[AURA_TRACE] Worker reported: stopped.");
                     setIsPlaying(false);
-                    setLoadingText("");
                     break;
                 case 'error':
                     toast({
@@ -182,13 +171,12 @@ export function AuraGroove() {
                         description: error,
                     });
                     setIsPlaying(false);
-                    setIsInitializing(false);
                     setLoadingText("");
                     break;
             }
         };
 
-        console.log("[AURA_TRACE] Sending init command to worker.");
+        console.log("[AURA_TRACE] Sending 'init' command to worker.");
         musicWorkerRef.current?.postMessage({ command: 'init' });
     }
 
@@ -234,18 +222,17 @@ export function AuraGroove() {
   const updateBpm = useCallback((newBpm: number) => {
       setBpm(newBpm);
       Tone.Transport.bpm.value = newBpm;
-      if (musicWorkerRef.current) {
+      if (musicWorkerRef.current && isPlaying) {
           console.log("[AURA_TRACE] Sending command from updateBpm: update_settings");
           musicWorkerRef.current.postMessage({ command: 'update_settings', data: { bpm: newBpm } });
       }
-  }, []);
+  }, [isPlaying]);
 
   useEffect(() => {
     if (isReady && isPlaying) { 
       updateWorkerSettings();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drumSettings, instrumentSettings, effectsSettings, score]);
+  }, [drumSettings, instrumentSettings, effectsSettings, score, isReady, isPlaying, updateWorkerSettings]);
 
   useEffect(() => {
       if (!isReady || !fxBusRef.current?.soloDistortion) return;
@@ -296,8 +283,8 @@ export function AuraGroove() {
     if (Tone.Transport.state !== 'stopped') {
         Tone.Transport.stop();
         Tone.Transport.cancel(0);
+        console.log("[AURA_TRACE] Tone.Transport stopped and cancelled.");
     }
-    console.log("[AURA_TRACE] Sending command from handleStop: stop");
     musicWorkerRef.current?.postMessage({ command: 'stop' });
     setIsPlaying(false);
     currentBarRef.current = 0;
@@ -306,26 +293,20 @@ export function AuraGroove() {
   const handlePlay = useCallback(async () => {
     console.log("[AURA_TRACE] handlePlay called.");
     if (!isReady) {
-        console.warn("[AURA_TRACE] handlePlay called before ready. Aborting.");
-        toast({ variant: "destructive", title: "Audio engine not ready", description: "Please wait a moment and try again."});
+        console.warn("[AURA_TRACE] handlePlay called but not ready. Aborting.");
         return;
     }
 
     try {
         if (Tone.context.state !== 'running') {
             await Tone.start();
+            console.log(`[AURA_TRACE] Tone.context.state is now '${Tone.context.state}'.`);
         }
         
-        setIsInitializing(true);
-        setLoadingText("Preparing audio...");
-        
-        // Ensure any previous instances are fully stopped.
         handleStop(); 
         
-        // This check is a safeguard against race conditions during initialization.
         if (!musicWorkerRef.current || !fxBusRef.current || !bassSynthManagerRef.current || !soloSynthManagerRef.current || !accompanimentSynthManagerRef.current || !effectsSynthManagerRef.current || !drumMachineRef.current) {
             toast({ variant: "destructive", title: "Audio Error", description: "Audio engine not fully initialized. Please refresh."});
-            setIsInitializing(false);
             return;
         }
         
@@ -334,9 +315,7 @@ export function AuraGroove() {
         bassSynthManagerRef.current?.setInstrument(instrumentSettings.bass.name);
         effectsSynthManagerRef.current?.setMode(effectsSettings.mode);
         
-        setLoadingText("Starting playback...");
-        
-        console.log("[AURA_TRACE] Sending command from handlePlay: start");
+        console.log("[AURA_TRACE] Sending 'start' command from handlePlay.");
         musicWorkerRef.current?.postMessage({ 
             command: 'start',
             data: { drumSettings, instrumentSettings, effectsSettings, bpm, score }
@@ -345,6 +324,7 @@ export function AuraGroove() {
         currentBarRef.current = 0;
         transportLoopRef.current = new Tone.Loop(time => {
           lastTickTimeRef.current = time;
+          console.log(`[AURA_TRACE] Transport Loop: Sending 'tick' for bar ${currentBarRef.current} at time ${time.toFixed(3)}`);
           musicWorkerRef.current?.postMessage({ command: 'tick', data: { time, barCount: currentBarRef.current } });
           Tone.Draw.schedule(() => {
             currentBarRef.current++;
@@ -353,6 +333,7 @@ export function AuraGroove() {
 
         if (Tone.Transport.state !== 'started') {
             Tone.Transport.start();
+            console.log("[AURA_TRACE] Tone.Transport started.");
         }
         
     } catch (error) {
@@ -362,17 +343,15 @@ export function AuraGroove() {
             title: "Audio Error",
             description: `Could not start audio. ${error instanceof Error ? error.message : ''}`,
         });
-        setIsInitializing(false);
-        setLoadingText("");
     }
   }, [isReady, drumSettings, instrumentSettings, effectsSettings, bpm, score, toast, handleStop]);
   
   const isBusy = isInitializing;
 
   const handleTogglePlay = useCallback(() => {
-    console.log("[AURA_TRACE] handleTogglePlay called. Current isPlaying state:", isPlaying);
+    console.log(`[AURA_TRACE] handleTogglePlay called. isPlaying: ${isPlaying}, isBusy: ${isBusy}`);
     if (isBusy) {
-        console.warn("[AURA_TRACE] handleTogglePlay called while busy. Aborting.");
+        console.warn("[AURA_TRACE] Toggle play called while busy. Aborting.");
         return;
     };
 
@@ -407,9 +386,9 @@ export function AuraGroove() {
             </div>
             {showDebugPanel && (
               <div className="bg-slate-900/50 p-2 rounded-md border border-slate-700/50 max-h-32 overflow-y-auto">
-                  <h4 className="text-xs font-semibold text-slate-400 flex items-center gap-1.5 mb-1"><Terminal className="h-4 w-4"/> Real-time Worker Delay</h4>
+                  <h4 className="text-xs font-semibold text-slate-400 flex items-center gap-1.5 mb-1"><Terminal className="h-4 w-4"/> Worker Messages</h4>
                   <pre className="text-xs font-mono text-slate-500 overflow-x-auto">
-                      {debugLog.map((line, i) => <div key={i} className={line.includes('CONGESTION') ? 'text-red-400' : ''}>{line}</div>)}
+                      {debugLog.map((line, i) => <div key={i}>{line}</div>)}
                   </pre>
               </div>
             )}
@@ -661,3 +640,5 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    
