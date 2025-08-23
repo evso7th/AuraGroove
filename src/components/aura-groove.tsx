@@ -78,22 +78,30 @@ export function AuraGroove() {
   const transportLoopRef = useRef<Tone.Loop | null>(null);
   const currentBarRef = useRef<number>(0);
   const lastTickTimeRef = useRef<number>(0);
+  const initializedRef = useRef(false);
+
   
    useEffect(() => {
+    if (initializedRef.current) return;
+    initializedRef.current = true;
     
     const initializeAudio = async () => {
         console.log("[AURA_TRACE] Initializing audio components...");
+        setLoadingText("Creating Audio Worker...");
         const worker = new Worker(new URL('../app/ambient.worker.ts', import.meta.url));
         musicWorkerRef.current = worker;
 
+        setLoadingText("Building FX Bus...");
         const { FxBus } = await import('@/lib/fx-bus');
         fxBusRef.current = new FxBus();
         
+        setLoadingText("Loading Drum Samples...");
         drumMachineRef.current = new DrumMachine(fxBusRef.current, () => {
             console.log("[AURA_TRACE] Drum machine ready.");
             setIsDrumMachineReady(true);
         });
 
+        setLoadingText("Warming up Synthesizers...");
         const { BassSynthManager } = await import('@/lib/bass-synth-manager');
         bassSynthManagerRef.current = new BassSynthManager(fxBusRef.current!);
         
@@ -109,21 +117,21 @@ export function AuraGroove() {
         worker.onmessage = (event: MessageEvent) => {
             const { type, data, bar: receivedBar, error } = event.data;
             
-            const now = Tone.now();
-            const delay = now - lastTickTimeRef.current;
-            
-            if (receivedBar !== undefined && showDebugPanel) {
-                const logMessage = `Bar ${receivedBar}: Delay ${delay.toFixed(2)}ms`;
-                if (delay > CONGESTION_THRESHOLD_MS) {
-                    // CONGESTION LOGIC
+            if (showDebugPanel) {
+                const now = Tone.now();
+                const delay = now - lastTickTimeRef.current;
+                if (receivedBar !== undefined) {
+                    const logMessage = `Bar ${receivedBar}: Delay ${delay.toFixed(2)}ms`;
+                     setDebugLog(prev => [logMessage, ...prev].slice(0, 20));
                 }
             }
+           
 
             const schedule = (scoreData: any[], manager: any, triggerFn: string) => {
                 if (!manager || (manager.isReady && !manager.isReady()) || !isPlaying) return;
                 const barStartTime = lastTickTimeRef.current;
                 scoreData.forEach((note: any) => {
-                    const timeToPlay = Math.max(barStartTime, now) + note.time;
+                    const timeToPlay = Math.max(barStartTime, Tone.now()) + note.time;
                     if (triggerFn === 'trigger') {
                         manager.trigger(note, timeToPlay);
                     } else {
@@ -281,9 +289,6 @@ export function AuraGroove() {
   
   const handleStop = useCallback(() => {
     console.log("[AURA_TRACE] handleStop called.");
-    soloSynthManagerRef.current?.fadeOut(0.5);
-    accompanimentSynthManagerRef.current?.fadeOut(0.5);
-    bassSynthManagerRef.current?.fadeOut(0.5);
     
     transportLoopRef.current?.dispose();
     transportLoopRef.current = null;
@@ -297,11 +302,12 @@ export function AuraGroove() {
     setIsPlaying(false);
     currentBarRef.current = 0;
   }, []);
-
+  
   const handlePlay = useCallback(async () => {
     console.log("[AURA_TRACE] handlePlay called.");
     if (!isReady) {
         console.warn("[AURA_TRACE] handlePlay called before ready. Aborting.");
+        toast({ variant: "destructive", title: "Audio engine not ready", description: "Please wait a moment and try again."});
         return;
     }
 
@@ -313,10 +319,12 @@ export function AuraGroove() {
         setIsInitializing(true);
         setLoadingText("Preparing audio...");
         
+        // Ensure any previous instances are fully stopped.
         handleStop(); 
         
+        // This check is a safeguard against race conditions during initialization.
         if (!musicWorkerRef.current || !fxBusRef.current || !bassSynthManagerRef.current || !soloSynthManagerRef.current || !accompanimentSynthManagerRef.current || !effectsSynthManagerRef.current || !drumMachineRef.current) {
-            toast({ variant: "destructive", title: "Audio Error", description: "Audio engine not ready. Please refresh."});
+            toast({ variant: "destructive", title: "Audio Error", description: "Audio engine not fully initialized. Please refresh."});
             setIsInitializing(false);
             return;
         }
@@ -401,7 +409,7 @@ export function AuraGroove() {
               <div className="bg-slate-900/50 p-2 rounded-md border border-slate-700/50 max-h-32 overflow-y-auto">
                   <h4 className="text-xs font-semibold text-slate-400 flex items-center gap-1.5 mb-1"><Terminal className="h-4 w-4"/> Real-time Worker Delay</h4>
                   <pre className="text-xs font-mono text-slate-500 overflow-x-auto">
-                      {debugLog.map((line, i) => <div key={i} className={line.startsWith('CONGESTION') ? 'text-red-400' : ''}>{line}</div>)}
+                      {debugLog.map((line, i) => <div key={i} className={line.includes('CONGESTION') ? 'text-red-400' : ''}>{line}</div>)}
                   </pre>
               </div>
             )}
