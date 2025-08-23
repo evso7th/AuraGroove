@@ -119,7 +119,7 @@ export function AuraGroove() {
       }
 
       const schedule = (scoreData: any[], manager: any, triggerFn: string) => {
-        if (!manager || !manager[triggerFn] || !isPlaying) return;
+        if (!manager || (manager.isReady && !manager.isReady()) || !isPlaying) return;
         const barStartTime = lastTickTimeRef.current;
         scoreData.forEach((note: any) => {
           const timeToPlay = Math.max(barStartTime, now) + note.time;
@@ -145,9 +145,7 @@ export function AuraGroove() {
              lastTickTimeRef.current = Tone.now();
              break;
         case 'drum_score':
-          if (drumMachineRef.current?.isReady()) {
-            schedule(data, drumMachineRef.current, 'trigger');
-          }
+          schedule(data, drumMachineRef.current, 'trigger');
           break;
         case 'bass_score':
           schedule(data, bassSynthManagerRef.current, 'triggerAttackRelease');
@@ -182,7 +180,6 @@ export function AuraGroove() {
     
     musicWorkerRef.current?.postMessage({ command: 'init' });
     
-
     return () => {
       if (musicWorkerRef.current) {
         musicWorkerRef.current.terminate();
@@ -220,7 +217,8 @@ export function AuraGroove() {
   const updateBpm = useCallback((newBpm: number) => {
       setBpm(newBpm);
       Tone.Transport.bpm.value = newBpm;
-  }, []);
+      updateWorkerSettings();
+  }, [updateWorkerSettings]);
 
   useEffect(() => {
     if (isReady && isPlaying) { 
@@ -269,12 +267,6 @@ export function AuraGroove() {
       drumMachineRef.current.setVolume(drumSettings.volume);
   }, [drumSettings.volume, isReady]);
   
-  useEffect(() => {
-    if (isPlaying) {
-      updateWorkerSettings();
-    }
-  }, [isPlaying, updateWorkerSettings]);
-
   const handleStop = useCallback(() => {
     soloSynthManagerRef.current?.fadeOut(0.5);
     accompanimentSynthManagerRef.current?.fadeOut(0.5);
@@ -289,17 +281,19 @@ export function AuraGroove() {
     }
     musicWorkerRef.current?.postMessage({ command: 'stop' });
     setIsPlaying(false);
-    currentBarRef.current = 0; // Reset bar count
+    currentBarRef.current = 0;
   }, []);
-  
+
   const handlePlay = useCallback(async () => {
+    if (!isReady) return;
+
     try {
         if (Tone.context.state !== 'running') {
             await Tone.start();
         }
         
         setIsInitializing(true);
-        setLoadingText("Waiting for audio engine...");
+        setLoadingText("Preparing audio...");
         
         handleStop(); 
         
@@ -321,6 +315,7 @@ export function AuraGroove() {
             data: { drumSettings, instrumentSettings, effectsSettings, bpm, score }
         });
         
+        currentBarRef.current = 0;
         transportLoopRef.current = new Tone.Loop(time => {
           lastTickTimeRef.current = time;
           musicWorkerRef.current?.postMessage({ command: 'tick', data: { time, barCount: currentBarRef.current } });
@@ -344,8 +339,8 @@ export function AuraGroove() {
         setIsInitializing(false);
         setLoadingText("");
     }
-  }, [drumSettings, instrumentSettings, effectsSettings, bpm, score, toast, handleStop]);
-
+  }, [isReady, drumSettings, instrumentSettings, effectsSettings, bpm, score, toast, handleStop]);
+  
   const handleTogglePlay = useCallback(() => {
     if (isPlaying) {
       handleStop();
@@ -353,7 +348,6 @@ export function AuraGroove() {
       handlePlay();
     }
   }, [isPlaying, handleStop, handlePlay]);
-  
 
   const isBusy = isInitializing;
   const isGenerative = score === 'evolve' || score === 'omega';
