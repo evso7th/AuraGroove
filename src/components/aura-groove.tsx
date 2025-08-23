@@ -231,10 +231,8 @@ export function AuraGroove() {
   const updateBpm = useCallback((newBpm: number) => {
       setBpm(newBpm);
       Tone.Transport.bpm.value = newBpm;
-      if (musicWorkerRef.current && isPlaying) {
-        musicWorkerRef.current.postMessage({ command: 'update_settings', data: { bpm: newBpm } });
-      }
-  }, [isPlaying]);
+      updateWorkerSettings();
+  }, [updateWorkerSettings]);
 
   useEffect(() => {
     if (isReady && isPlaying) { 
@@ -314,10 +312,6 @@ export function AuraGroove() {
             data: { drumSettings, instrumentSettings, effectsSettings, bpm, score }
         });
         
-        if (transportLoopRef.current) {
-          transportLoopRef.current.dispose();
-        }
-        
         transportLoopRef.current = new Tone.Loop(time => {
           lastTickTimeRef.current = time;
           musicWorkerRef.current?.postMessage({ command: 'tick', data: { time, barCount: currentBarRef.current } });
@@ -329,6 +323,7 @@ export function AuraGroove() {
         if (Tone.Transport.state !== 'started') {
             Tone.Transport.start();
         }
+        setIsPlaying(true);
 
     } catch (error) {
         console.error("Failed to prepare audio:", error);
@@ -340,7 +335,7 @@ export function AuraGroove() {
         setIsInitializing(false);
         setLoadingText("");
     }
-  }, [drumSettings, instrumentSettings, effectsSettings, bpm, score, toast]);
+  }, [drumSettings, instrumentSettings, effectsSettings, bpm, score, toast, handleStop]);
 
   const handleStop = useCallback(() => {
     soloSynthManagerRef.current?.fadeOut(0.5);
@@ -543,7 +538,7 @@ export function AuraGroove() {
                     <Select
                         value={drumSettings.pattern}
                         onValueChange={(v) => setDrumSettings(d => ({ ...d, pattern: v as DrumSettings['pattern'] }))}
-                        disabled={isBusy || isPlaying || !isGenerative}
+                        disabled={isBusy || isPlaying}
                     >
                         <SelectTrigger className="w-[150px]">
                             <SelectValue placeholder="Select pattern" />
@@ -650,5 +645,3 @@ export function AuraGroove() {
     </Card>
   );
 }
-
-    
