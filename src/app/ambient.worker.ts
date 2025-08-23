@@ -535,10 +535,11 @@ const Scheduler = {
     get secondsPerBeat() { return 60 / this.bpm; },
     
     setCompositionEngine(score: ScoreName) {
+        const genome = new MusicalGenome();
         if (score === 'evolve') {
-            this.compositionEngine = new EvolveEngine(new MusicalGenome());
+            this.compositionEngine = new EvolveEngine(genome);
         } else if (score === 'omega') {
-            this.compositionEngine = new MandelbrotEngine(new MusicalGenome());
+            this.compositionEngine = new MandelbrotEngine(genome);
         } else {
             this.compositionEngine = null; // For 'promenade'
         }
@@ -660,7 +661,7 @@ const Scheduler = {
 
 // --- MessageBus (The "Kafka" entry point) ---
 self.onmessage = async (event: MessageEvent) => {
-    const { command, data } = event.data;
+    const { command, data, barCount } = event.data;
 
     try {
         switch (command) {
@@ -689,5 +690,3 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
-
-    

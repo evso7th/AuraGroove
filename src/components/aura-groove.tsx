@@ -114,10 +114,10 @@ export function AuraGroove() {
         worker.onmessage = (event: MessageEvent) => {
             const { type, data, bar: receivedBar, error } = event.data;
             
-            if (showDebugPanel && type !== 'initialized') {
+            if (showDebugPanel) {
                 const now = Tone.now().toFixed(3);
                 const logMessage = `[${now}] Received '${type}' for bar ${receivedBar}`;
-                setDebugLog(prev => [logMessage, ...prev].slice(0, 20));
+                 setDebugLog(prev => [logMessage, ...prev].slice(0, 20));
             }
 
             const schedule = (scoreData: any[], manager: any, triggerFn: string, managerName: string) => {
@@ -125,7 +125,9 @@ export function AuraGroove() {
                 const barStartTime = lastTickTimeRef.current;
                 scoreData.forEach((note: any) => {
                     const timeToPlay = Math.max(barStartTime, Tone.now()) + note.time;
-                    console.log(`[AURA_TRACE] Scheduling for ${managerName}: note time ${note.time}, scheduled for ${timeToPlay.toFixed(3)}`);
+                     if (showDebugPanel) {
+                        console.log(`[AURA_TRACE] Scheduling for ${managerName}: note time ${note.time}, scheduled for ${timeToPlay.toFixed(3)}`);
+                    }
                     if (triggerFn === 'trigger') {
                         manager.trigger(note, timeToPlay);
                     } else {
@@ -223,7 +225,6 @@ export function AuraGroove() {
       setBpm(newBpm);
       Tone.Transport.bpm.value = newBpm;
       if (musicWorkerRef.current && isPlaying) {
-          console.log("[AURA_TRACE] Sending command from updateBpm: update_settings");
           musicWorkerRef.current.postMessage({ command: 'update_settings', data: { bpm: newBpm } });
       }
   }, [isPlaying]);
@@ -300,8 +301,8 @@ export function AuraGroove() {
     try {
         if (Tone.context.state !== 'running') {
             await Tone.start();
-            console.log(`[AURA_TRACE] Tone.context.state is now '${Tone.context.state}'.`);
         }
+        console.log(`[AURA_TRACE] Tone.context.state is now '${Tone.context.state}'.`);
         
         handleStop(); 
         
@@ -324,8 +325,8 @@ export function AuraGroove() {
         currentBarRef.current = 0;
         transportLoopRef.current = new Tone.Loop(time => {
           lastTickTimeRef.current = time;
-          console.log(`[AURA_TRACE] Transport Loop: Sending 'tick' for bar ${currentBarRef.current} at time ${time.toFixed(3)}`);
           musicWorkerRef.current?.postMessage({ command: 'tick', data: { time, barCount: currentBarRef.current } });
+          console.log(`[AURA_TRACE] Transport Loop: Sending 'tick' for bar ${currentBarRef.current} at time ${time.toFixed(3)}`);
           Tone.Draw.schedule(() => {
             currentBarRef.current++;
           }, time);
@@ -640,5 +641,3 @@ export function AuraGroove() {
     </Card>
   );
 }
-
-    
