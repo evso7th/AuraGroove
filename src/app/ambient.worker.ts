@@ -2,7 +2,7 @@
 /// <reference lib="webworker" />
 
 import { promenadeScore } from '@/lib/scores/promenade';
-import type { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote, DrumSettings, EffectsSettings, ScoreName, InstrumentSettings } from '@/types/music';
+import type { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote, DrumSettings, EffectsSettings, InstrumentSettings, ScoreName } from '@/types/music';
 
 
 // --- NEW INTELLIGENT COMPOSITION ENGINES ---
@@ -537,6 +537,7 @@ const Scheduler = {
     get secondsPerBeat() { return 60 / this.bpm; },
     
     setCompositionEngine(score: ScoreName) {
+        console.log(`[WORKER_TRACE] Setting composition engine to: ${score}`);
         const genome = new MusicalGenome();
         if (score === 'evolve') {
             this.compositionEngine = new EvolveEngine(genome);
@@ -548,6 +549,7 @@ const Scheduler = {
     },
     
     start() {
+        console.log("[WORKER_TRACE] Scheduler start called.");
         if (this.isRunning) return;
         
         this.reset();
@@ -558,6 +560,7 @@ const Scheduler = {
     },
 
     stop() {
+        console.log("[WORKER_TRACE] Scheduler stop called.");
         if (!this.isRunning) return;
         this.isRunning = false;
         this.compositionEngine = null;
@@ -565,10 +568,12 @@ const Scheduler = {
     },
 
     reset() {
+        console.log("[WORKER_TRACE] Scheduler reset.");
         this.barCount = 0;
     },
     
     updateSettings(settings: any) {
+        console.log("[WORKER_TRACE] Scheduler updateSettings called with: ", settings);
         if (settings.instrumentSettings) this.instrumentSettings = settings.instrumentSettings;
         if (settings.drumSettings) this.drumSettings = settings.drumSettings;
         if (settings.effectsSettings) this.effectsSettings = settings.effectsSettings;
@@ -580,6 +585,7 @@ const Scheduler = {
     },
 
     tick(time: number, barCount: number) {
+        console.log(`[WORKER_TRACE] Scheduler tick for bar ${barCount} at time ${time}`);
         if (!this.isRunning) return;
         
         this.barCount = barCount;
@@ -594,6 +600,7 @@ const Scheduler = {
                 ).map(note => ({ ...note, time: note.time * this.secondsPerBeat }));
 
                 if (drumScore.length > 0) {
+                    console.log(`[WORKER_TRACE] Posting drum_score for bar ${this.barCount}`);
                     self.postMessage({ type: 'drum_score', bar: this.barCount, data: drumScore });
                 }
             }
@@ -601,6 +608,7 @@ const Scheduler = {
                 const bassScore = engine.generateBassScore(this.barCount)
                     .map(note => ({...note, time: note.time * this.secondsPerBeat }));
                 if (bassScore.length > 0) {
+                     console.log(`[WORKER_TRACE] Posting bass_score for bar ${this.barCount}`);
                     self.postMessage({ type: 'bass_score', bar: this.barCount, data: bassScore });
                 }
             }
@@ -608,6 +616,7 @@ const Scheduler = {
                 const soloScore = engine.generateSoloScore(this.barCount)
                     .map(note => ({...note, time: (note.time as number) * this.secondsPerBeat}));
                 if (soloScore.length > 0) {
+                    console.log(`[WORKER_TRACE] Posting solo_score for bar ${this.barCount}`);
                     self.postMessage({ type: 'solo_score', bar: this.barCount, data: soloScore });
                 }
             }
@@ -615,6 +624,7 @@ const Scheduler = {
                 const accompanimentScore = engine.generateAccompanimentScore(this.barCount)
                     .map(note => ({...note, time: (note.time as number) * this.secondsPerBeat}));
                 if(accompanimentScore.length > 0) {
+                    console.log(`[WORKER_TRACE] Posting accompaniment_score for bar ${this.barCount}`);
                     self.postMessage({ type: 'accompaniment_score', bar: this.barCount, data: accompanimentScore });
                 }
             }
@@ -622,6 +632,7 @@ const Scheduler = {
                 const effectsScore = EffectsGenerator.createScore(this.effectsSettings.mode, engine, this.beatsPerBar)
                     .map(note => ({ ...note, time: note.time * this.secondsPerBeat }));
                 if (effectsScore.length > 0) {
+                     console.log(`[WORKER_TRACE] Posting effects_score for bar ${this.barCount}`);
                     self.postMessage({ type: 'effects_score', bar: this.barCount, data: effectsScore });
                 }
             }
@@ -643,24 +654,28 @@ const Scheduler = {
             if (this.drumSettings.pattern !== 'none') {
                 const drumScore = getNotesForBar(promenadeScore.drums);
                 if (drumScore.length > 0) {
+                    console.log(`[WORKER_TRACE] Posting drum_score for bar ${this.barCount}`);
                     self.postMessage({ type: 'drum_score', bar: this.barCount, data: drumScore });
                 }
             }
             if(this.instrumentSettings.bass.name !== 'none') {
                 const bassScore = getNotesForBar(promenadeScore.bass);
                 if (bassScore.length > 0) {
+                    console.log(`[WORKER_TRACE] Posting bass_score for bar ${this.barCount}`);
                     self.postMessage({ type: 'bass_score', bar: this.barCount, data: bassScore });
                 }
             }
             if (this.instrumentSettings.solo.name !== 'none') {
                 const soloScore = getNotesForBar(promenadeScore.solo as any[]);
                 if (soloScore.length > 0) {
+                    console.log(`[WORKER_TRACE] Posting solo_score for bar ${this.barCount}`);
                     self.postMessage({ type: 'solo_score', bar: this.barCount, data: soloScore });
                 }
             }
             if (this.instrumentSettings.accompaniment.name !== 'none') {
                 const accompanimentScore = getNotesForBar(promenadeScore.accompaniment as any[]);
                 if (accompanimentScore.length > 0) {
+                    console.log(`[WORKER_TRACE] Posting accompaniment_score for bar ${this.barCount}`);
                     self.postMessage({ type: 'accompaniment_score', bar: this.barCount, data: accompanimentScore });
                 }
             }
@@ -672,32 +687,39 @@ const Scheduler = {
 // --- MessageBus (The "Kafka" entry point) ---
 self.onmessage = async (event: MessageEvent) => {
     const { command, data, time, barCount } = event.data;
+    console.log(`[WORKER_TRACE] Received command: ${command}`, event.data);
 
     try {
         switch (command) {
             case 'init':
+                console.log("[WORKER_TRACE] Case: init");
                 self.postMessage({ type: 'initialized' });
                 break;
             
             case 'start':
+                console.log("[WORKER_TRACE] Case: start");
                 Scheduler.updateSettings(data);
                 Scheduler.start();
                 break;
 
             case 'stop':
+                 console.log("[WORKER_TRACE] Case: stop");
                 Scheduler.stop();
                 break;
             
             case 'update_settings':
+                console.log("[WORKER_TRACE] Case: update_settings");
                 Scheduler.updateSettings(data);
                 break;
             
             case 'tick':
+                 console.log("[WORKER_TRACE] Case: tick");
                 Scheduler.tick(time, barCount);
                 break;
         }
     } catch (e) {
         const error = e instanceof Error ? e.message : String(e);
+        console.error("[WORKER_TRACE] Error in worker:", error);
         self.postMessage({ type: 'error', error });
     }
 };

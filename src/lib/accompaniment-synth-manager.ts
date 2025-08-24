@@ -43,12 +43,14 @@ export class AccompanimentSynthManager {
     private nextVoiceIndex = 0;
 
     constructor(fxBus: FxBus) {
+        console.log("[ACCOMP_SYNTH_TRACE] Constructor called.");
         this.fxBus = fxBus;
     }
 
     private ensureSynthsInitialized() {
         if (this.isInitialized) return;
         
+        console.log("[ACCOMP_SYNTH_TRACE] Initializing synths.");
         this.voices = Array.from({ length: NUM_VOICES }, () => 
             new Tone.Synth({ volume: -Infinity }).connect(this.fxBus.accompanimentInput)
         );
@@ -56,6 +58,7 @@ export class AccompanimentSynthManager {
     }
 
     public setInstrument(name: InstrumentName) {
+        console.log(`[ACCOMP_SYNTH_TRACE] setInstrument called with: ${name}`);
         this.ensureSynthsInitialized();
 
         if (name === 'none') {
@@ -69,7 +72,7 @@ export class AccompanimentSynthManager {
         const preset = instrumentPresets[name];
         this.voices.forEach(voice => {
             voice.set(preset);
-            voice.volume.value = MOBILE_VOLUME_DB; // Set base volume directly
+            voice.volume.value = MOBILE_VOLUME_DB;
         });
         
         this.currentInstrument = name;
@@ -78,6 +81,7 @@ export class AccompanimentSynthManager {
     }
 
     public setVolume(volume: number) { // volume is linear 0-1
+        console.log(`[ACCOMP_SYNTH_TRACE] setVolume called with: ${volume}`);
         this.userVolume = volume;
         this.updateVolume();
     }
@@ -87,6 +91,7 @@ export class AccompanimentSynthManager {
         
         const userVolumeDb = Tone.gainToDb(this.userVolume);
         const targetVolume = MOBILE_VOLUME_DB + userVolumeDb;
+        console.log(`[ACCOMP_SYNTH_TRACE] Ramping synth volume to ${targetVolume} dB.`);
         this.voices.forEach(voice => {
             try {
                 voice.volume.rampTo(targetVolume, rampTime);
@@ -101,6 +106,7 @@ export class AccompanimentSynthManager {
 
         const notesToPlay = Array.isArray(notes) ? notes : [notes];
         const scheduledTime = time || Tone.now();
+        console.log(`[ACCOMP_SYNTH_TRACE] Triggering ${notesToPlay.join(', ')} at time ${scheduledTime}`);
 
         notesToPlay.forEach(note => {
             const voice = this.voices[this.nextVoiceIndex];

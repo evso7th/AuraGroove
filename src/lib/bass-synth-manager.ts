@@ -46,17 +46,20 @@ export class BassSynthManager {
     private userVolume: number = 0.9;
 
     constructor(fxBus: FxBus) {
+        console.log("[BASS_SYNTH_TRACE] Constructor called.");
         this.fxBus = fxBus;
     }
 
     private ensureSynthInitialized() {
         if (this.isInitialized) return;
         
+        console.log("[BASS_SYNTH_TRACE] Initializing synth.");
         this.currentSynth = new Tone.MonoSynth({ volume: -Infinity }).connect(this.fxBus.bassInput);
         this.isInitialized = true;
     }
 
     public setInstrument(name: InstrumentName) {
+        console.log(`[BASS_SYNTH_TRACE] setInstrument called with: ${name}`);
         this.ensureSynthInitialized();
         if (!this.currentSynth) return;
 
@@ -76,6 +79,7 @@ export class BassSynthManager {
     }
     
     public setVolume(volume: number) {
+        console.log(`[BASS_SYNTH_TRACE] setVolume called with: ${volume}`);
         this.userVolume = volume;
         this.updateVolume();
     }
@@ -85,6 +89,7 @@ export class BassSynthManager {
         
         const userVolumeDb = Tone.gainToDb(this.userVolume);
         const targetVolume = MOBILE_VOLUME_DB + userVolumeDb;
+        console.log(`[BASS_SYNTH_TRACE] Ramping synth volume to ${targetVolume} dB.`);
         try {
             this.currentSynth.volume.rampTo(targetVolume, rampTime);
         } catch (e) {
@@ -94,6 +99,7 @@ export class BassSynthManager {
     
     public triggerAttackRelease(note: string, duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
         if (this.currentSynth && this.currentInstrument !== 'none') {
+            console.log(`[BASS_SYNTH_TRACE] Triggering ${note} at time ${time}`);
             this.currentSynth.triggerAttackRelease(note, duration, time, velocity);
         }
     }

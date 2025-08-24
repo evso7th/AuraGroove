@@ -42,12 +42,14 @@ export class SoloSynthManager {
     private nextVoiceIndex = 0;
 
     constructor(fxBus: FxBus) {
+        console.log("[SOLO_SYNTH_TRACE] Constructor called.");
         this.fxBus = fxBus;
     }
 
     private ensureSynthsInitialized() {
         if (this.isInitialized) return;
         
+        console.log("[SOLO_SYNTH_TRACE] Initializing synths.");
         this.voices = Array.from({ length: NUM_VOICES }, () => 
             new Tone.Synth({ volume: -Infinity }).connect(this.fxBus.soloInput)
         );
@@ -55,6 +57,7 @@ export class SoloSynthManager {
     }
 
     public setInstrument(name: InstrumentName) {
+        console.log(`[SOLO_SYNTH_TRACE] setInstrument called with: ${name}`);
         this.ensureSynthsInitialized();
 
         if (name === 'none') {
@@ -77,6 +80,7 @@ export class SoloSynthManager {
     }
     
     public setVolume(volume: number) { // volume is linear 0-1
+        console.log(`[SOLO_SYNTH_TRACE] setVolume called with: ${volume}`);
         this.userVolume = volume;
         this.updateVolume();
     }
@@ -86,6 +90,7 @@ export class SoloSynthManager {
         
         const userVolumeDb = Tone.gainToDb(this.userVolume);
         const targetVolume = MOBILE_VOLUME_DB + userVolumeDb;
+        console.log(`[SOLO_SYNTH_TRACE] Ramping synth volume to ${targetVolume} dB.`);
         this.voices.forEach(voice => {
             try {
                 voice.volume.rampTo(targetVolume, rampTime);
@@ -100,6 +105,7 @@ export class SoloSynthManager {
 
         const notesToPlay = Array.isArray(notes) ? notes : [notes];
         const scheduledTime = time || Tone.now();
+        console.log(`[SOLO_SYNTH_TRACE] Triggering ${notesToPlay.join(', ')} at time ${scheduledTime}`);
 
         notesToPlay.forEach(note => {
             const voice = this.voices[this.nextVoiceIndex];
