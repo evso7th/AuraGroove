@@ -1,5 +1,7 @@
 
 import type {NextConfig} from 'next';
+const CopyWebpackPlugin = require('copy-webpack-plugin');
+const path = require('path');
 
 const nextConfig: NextConfig = {
   typescript: {
@@ -17,6 +19,19 @@ const nextConfig: NextConfig = {
         pathname: '/**',
       },
     ],
+  },
+  webpack: (config, { isServer }) => {
+    config.plugins.push(
+        new CopyWebpackPlugin({
+            patterns: [
+                {
+                    from: path.join(__dirname, 'src/lib/synth.worklet.ts'),
+                    to: path.join(__dirname, 'public/workers/synth.worklet.js'),
+                },
+            ],
+        })
+    );
+    return config;
   },
   async headers() {
     return [
@@ -40,4 +55,3 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
-
