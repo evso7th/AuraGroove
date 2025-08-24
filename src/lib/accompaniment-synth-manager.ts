@@ -89,7 +89,6 @@ export class AccompanimentSynthManager {
         
         const userVolumeDb = Tone.gainToDb(this.userVolume);
         const targetVolume = MOBILE_VOLUME_DB + userVolumeDb;
-        console.log(`[ACCOMP_SYNTH_TRACE] Ramping synth volume to ${targetVolume} dB.`);
         this.voices.forEach(voice => {
             try {
                 voice.volume.rampTo(targetVolume, rampTime);

@@ -87,7 +87,6 @@ export class BassSynthManager {
         
         const userVolumeDb = Tone.gainToDb(this.userVolume);
         const targetVolume = MOBILE_VOLUME_DB + userVolumeDb;
-        console.log(`[BASS_SYNTH_TRACE] Ramping synth volume to ${targetVolume} dB.`);
         try {
             this.currentSynth.volume.rampTo(targetVolume, rampTime);
         } catch (e) {
