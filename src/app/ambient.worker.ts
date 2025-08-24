@@ -41,7 +41,7 @@ const Composer = {
     instrumentSettings: {
         solo: { name: 'synthesizer', volume: 0.8 },
         accompaniment: { name: 'synthesizer', volume: 0.7 },
-        bass: { name: 'bass synth', volume: 0.9 },
+        bass: { name: 'bass_synth', volume: 0.9 },
     } as InstrumentSettings,
     drumSettings: { pattern: 'ambient-beat', volume: 0.7 } as DrumSettings,
     effectsSettings: { mode: 'none', volume: 0.7 } as EffectsSettings,
@@ -89,54 +89,63 @@ const Composer = {
         // --- Bass ---
         if (this.instrumentSettings.bass.name !== 'none') {
             const presetKey = `${this.instrumentSettings.bass.name}_bass` as keyof typeof PRESETS;
-            bassNotes.push({
-                part: 'bass',
-                freq: noteToFreq('E1'),
-                attack: PRESETS[presetKey].attack,
-                decay: PRESETS[presetKey].decay,
-                sustain: PRESETS[presetKey].sustain,
-                release: PRESETS[presetKey].release,
-                oscType: PRESETS[presetKey].oscType,
-                startTime: 0,
-                duration: secondsPerBar,
-                velocity: this.instrumentSettings.bass.volume
-            });
+            const preset = PRESETS[presetKey];
+            if (preset) {
+                bassNotes.push({
+                    part: 'bass',
+                    freq: noteToFreq('E1'),
+                    attack: preset.attack,
+                    decay: preset.decay,
+                    sustain: preset.sustain,
+                    release: preset.release,
+                    oscType: preset.oscType,
+                    startTime: 0,
+                    duration: secondsPerBar,
+                    velocity: this.instrumentSettings.bass.volume
+                });
+            }
         }
         
         // --- Accompaniment ---
         if (this.instrumentSettings.accompaniment.name !== 'none') {
              const presetKey = `${this.instrumentSettings.accompaniment.name}_accompaniment` as keyof typeof PRESETS;
-             ['E3', 'G3', 'B3'].forEach((note, index) => {
-                 accompanimentNotes.push({
-                    part: 'accompaniment',
-                    freq: noteToFreq(note),
-                    attack: PRESETS[presetKey].attack,
-                    decay: PRESETS[presetKey].decay,
-                    sustain: PRESETS[presetKey].sustain,
-                    release: PRESETS[presetKey].release,
-                    oscType: PRESETS[presetKey].oscType,
-                    startTime: index * 0.1, // Strumming effect
-                    duration: secondsPerBar,
-                    velocity: this.instrumentSettings.accompaniment.volume
+             const preset = PRESETS[presetKey];
+             if (preset) {
+                ['E3', 'G3', 'B3'].forEach((note, index) => {
+                     accompanimentNotes.push({
+                        part: 'accompaniment',
+                        freq: noteToFreq(note),
+                        attack: preset.attack,
+                        decay: preset.decay,
+                        sustain: preset.sustain,
+                        release: preset.release,
+                        oscType: preset.oscType,
+                        startTime: index * 0.1, // Strumming effect
+                        duration: secondsPerBar,
+                        velocity: this.instrumentSettings.accompaniment.volume
+                    });
                 });
-             });
+             }
         }
         
         // --- Solo ---
         if (this.instrumentSettings.solo.name !== 'none' && bar % 2 === 0) { // Play every other bar
             const presetKey = `${this.instrumentSettings.solo.name}_solo` as keyof typeof PRESETS;
-            soloNotes.push({
-                part: 'solo',
-                freq: noteToFreq('B4'),
-                attack: PRESETS[presetKey].attack,
-                decay: PRESETS[presetKey].decay,
-                sustain: PRESETS[presetKey].sustain,
-                release: PRESETS[presetKey].release,
-                oscType: PRESETS[presetKey].oscType,
-                startTime: secondsPerBar * 0.5,
-                duration: secondsPerBar * 0.5,
-                velocity: this.instrumentSettings.solo.volume
-            });
+            const preset = PRESETS[presetKey];
+            if (preset) {
+                soloNotes.push({
+                    part: 'solo',
+                    freq: noteToFreq('B4'),
+                    attack: preset.attack,
+                    decay: preset.decay,
+                    sustain: preset.sustain,
+                    release: preset.release,
+                    oscType: preset.oscType,
+                    startTime: secondsPerBar * 0.5,
+                    duration: secondsPerBar * 0.5,
+                    velocity: this.instrumentSettings.solo.volume
+                });
+            }
         }
 
         return { solo: soloNotes, accompaniment: accompanimentNotes, bass: bassNotes };

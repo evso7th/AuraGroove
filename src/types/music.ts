@@ -29,7 +29,7 @@ export type InstrumentSettings = {
       volume: number; // 0-1
   };
   bass: {
-      name: 'bass synth' | 'bassGuitar' | 'none';
+      name: 'bass_synth' | 'bassGuitar' | 'none';
       volume: number; // 0-1
   };
 };
