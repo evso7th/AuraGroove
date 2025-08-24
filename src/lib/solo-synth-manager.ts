@@ -8,14 +8,14 @@ type InstrumentName = InstrumentSettings['solo']['name'];
 const MOBILE_VOLUME_DB = -8; // Base volume for all devices
 const NUM_VOICES = 2; // 2 voices for solo instrument
 
-const instrumentPresets: Record<Exclude<InstrumentName, 'none'>, Tone.SynthOptions> = {
+const instrumentPresets: Record<Exclude<InstrumentName, 'none'>, Omit<Tone.SynthOptions, 'volume'>> = {
     'organ': {
         oscillator: { type: 'fatsawtooth', count: 3, spread: 20 },
         envelope: {
             attack: 0.2,
             decay: 0.4,
             sustain: 0.8,
-            release: 1.5, // Safe release time
+            release: 1.5,
         },
     },
     'synthesizer': {
@@ -24,11 +24,11 @@ const instrumentPresets: Record<Exclude<InstrumentName, 'none'>, Tone.SynthOptio
             attack: 0.1, 
             decay: 0.5, 
             sustain: 0.7, 
-            release: 1.0 // Safe release time
+            release: 1.0
         },
     },
-    'piano': { // Example preset, as it's disabled in UI
-         oscillator: { type: 'sine' }, // Simplified
+    'piano': {
+         oscillator: { type: 'sine' },
          envelope: { attack: 0.01, decay: 0.5, sustain: 0.1, release: 0.8 },
     }
 };
@@ -42,7 +42,6 @@ export class SoloSynthManager {
     private nextVoiceIndex = 0;
 
     constructor(fxBus: FxBus) {
-        console.log('[SOLO_SYNTH_TRACE] Constructor called.');
         this.fxBus = fxBus;
     }
 
@@ -50,13 +49,12 @@ export class SoloSynthManager {
         if (this.isInitialized) return;
         
         this.voices = Array.from({ length: NUM_VOICES }, () => 
-            new Tone.Synth({ volume: MOBILE_VOLUME_DB }).connect(this.fxBus.soloInput)
+            new Tone.Synth({ volume: -Infinity }).connect(this.fxBus.soloInput)
         );
         this.isInitialized = true;
     }
 
     public setInstrument(name: InstrumentName) {
-        console.log(`[SOLO_SYNTH_TRACE] setInstrument called with: ${name}`);
         this.ensureSynthsInitialized();
 
         if (name === 'none') {
@@ -70,6 +68,7 @@ export class SoloSynthManager {
         const preset = instrumentPresets[name];
         this.voices.forEach(voice => {
             voice.set(preset);
+            voice.volume.value = MOBILE_VOLUME_DB;
         });
 
         this.currentInstrument = name;
@@ -78,7 +77,6 @@ export class SoloSynthManager {
     }
     
     public setVolume(volume: number) { // volume is linear 0-1
-        console.log(`[SOLO_SYNTH_TRACE] setVolume called with: ${volume}`);
         this.userVolume = volume;
         this.updateVolume();
     }
@@ -98,7 +96,6 @@ export class SoloSynthManager {
     }
 
     public triggerAttackRelease(notes: string | string[], duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
-        console.log(`[SOLO_SYNTH_TRACE] triggerAttackRelease: notes=${notes}, duration=${duration}, time=${time}, velocity=${velocity}`);
         if (this.currentInstrument === 'none' || !this.voices.length) return;
 
         const notesToPlay = Array.isArray(notes) ? notes : [notes];

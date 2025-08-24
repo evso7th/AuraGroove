@@ -9,26 +9,26 @@ const MOBILE_VOLUME_DB = -14; // Base volume for all devices
 
 const NUM_VOICES = 4; // 4 voices for accompaniment chords
 
-const instrumentPresets: Record<Exclude<InstrumentName, 'none'>, Tone.SynthOptions> = {
+const instrumentPresets: Record<Exclude<InstrumentName, 'none'>, Omit<Tone.SynthOptions, 'volume'>> = {
     'organ': {
-        oscillator: { type: 'fatsawtooth', count: 2, spread: 20 }, // Optimization: count reduced from 3 to 2
+        oscillator: { type: 'fatsawtooth', count: 2, spread: 20 },
         envelope: {
             attack: 0.3,
             decay: 0.5,
             sustain: 0.9,
-            release: 1.0, // Optimization: release reduced from 1.2
+            release: 1.0,
         },
     },
     'synthesizer': {
-        oscillator: { type: 'fatsine', count: 3, spread: 40 }, // Optimization: count reduced from 4 to 3
+        oscillator: { type: 'fatsine', count: 3, spread: 40 },
         envelope: { 
             attack: 0.2, 
             decay: 0.3, 
             sustain: 0.8, 
-            release: 0.8 // Optimization: release reduced from 1.0
+            release: 0.8
         },
     },
-    'piano': { // Example preset, as it's disabled in UI
+    'piano': {
         oscillator: { type: 'sine' },
         envelope: { attack: 0.01, decay: 0.5, sustain: 0.1, release: 0.8 },
     }
@@ -43,7 +43,6 @@ export class AccompanimentSynthManager {
     private nextVoiceIndex = 0;
 
     constructor(fxBus: FxBus) {
-        console.log('[ACCOMP_SYNTH_TRACE] Constructor called.');
         this.fxBus = fxBus;
     }
 
@@ -51,13 +50,12 @@ export class AccompanimentSynthManager {
         if (this.isInitialized) return;
         
         this.voices = Array.from({ length: NUM_VOICES }, () => 
-            new Tone.Synth({ volume: MOBILE_VOLUME_DB }).connect(this.fxBus.accompanimentInput)
+            new Tone.Synth({ volume: -Infinity }).connect(this.fxBus.accompanimentInput)
         );
         this.isInitialized = true;
     }
 
     public setInstrument(name: InstrumentName) {
-        console.log(`[ACCOMP_SYNTH_TRACE] setInstrument called with: ${name}`);
         this.ensureSynthsInitialized();
 
         if (name === 'none') {
@@ -71,6 +69,7 @@ export class AccompanimentSynthManager {
         const preset = instrumentPresets[name];
         this.voices.forEach(voice => {
             voice.set(preset);
+            voice.volume.value = MOBILE_VOLUME_DB; // Set base volume directly
         });
         
         this.currentInstrument = name;
@@ -79,7 +78,6 @@ export class AccompanimentSynthManager {
     }
 
     public setVolume(volume: number) { // volume is linear 0-1
-        console.log(`[ACCOMP_SYNTH_TRACE] setVolume called with: ${volume}`);
         this.userVolume = volume;
         this.updateVolume();
     }
@@ -99,7 +97,6 @@ export class AccompanimentSynthManager {
     }
 
     public triggerAttackRelease(notes: string | string[], duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
-        console.log(`[ACCOMP_SYNTH_TRACE] triggerAttackRelease: notes=${notes}, duration=${duration}, time=${time}, velocity=${velocity}`);
         if (this.currentInstrument === 'none' || !this.voices.length) return;
 
         const notesToPlay = Array.isArray(notes) ? notes : [notes];

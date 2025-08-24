@@ -6,7 +6,7 @@ import type { FxBus } from './fx-bus';
 type InstrumentName = InstrumentSettings['bass']['name'];
 const MOBILE_VOLUME_DB = -12;
 
-const mobilePreset: Tone.MonoSynthOptions = {
+const mobilePreset: Omit<Tone.MonoSynthOptions, 'volume'> = {
     oscillator: {
         type: 'sawtooth' 
     },
@@ -33,7 +33,7 @@ const mobilePreset: Tone.MonoSynthOptions = {
 };
 
 
-const instrumentPresets: Record<Exclude<InstrumentName, 'none'>, Tone.MonoSynthOptions> = {
+const instrumentPresets: Record<Exclude<InstrumentName, 'none'>, Omit<Tone.MonoSynthOptions, 'volume'>> = {
     'bass synth': mobilePreset,
     'bassGuitar': mobilePreset
 };
@@ -46,19 +46,17 @@ export class BassSynthManager {
     private userVolume: number = 0.9;
 
     constructor(fxBus: FxBus) {
-        console.log('[BASS_SYNTH_TRACE] Constructor called.');
         this.fxBus = fxBus;
     }
 
     private ensureSynthInitialized() {
         if (this.isInitialized) return;
         
-        this.currentSynth = new Tone.MonoSynth({ volume: MOBILE_VOLUME_DB }).connect(this.fxBus.bassInput);
+        this.currentSynth = new Tone.MonoSynth({ volume: -Infinity }).connect(this.fxBus.bassInput);
         this.isInitialized = true;
     }
 
     public setInstrument(name: InstrumentName) {
-        console.log(`[BASS_SYNTH_TRACE] setInstrument called with: ${name}`);
         this.ensureSynthInitialized();
         if (!this.currentSynth) return;
 
@@ -70,6 +68,7 @@ export class BassSynthManager {
         
         if (name !== this.currentInstrument) {
             this.currentSynth.set(instrumentPresets[name]);
+            this.currentSynth.volume.value = MOBILE_VOLUME_DB;
         }
         this.currentInstrument = name; 
         this.updateVolume();
@@ -77,7 +76,6 @@ export class BassSynthManager {
     }
     
     public setVolume(volume: number) {
-        console.log(`[BASS_SYNTH_TRACE] setVolume called with: ${volume}`);
         this.userVolume = volume;
         this.updateVolume();
     }
@@ -95,7 +93,6 @@ export class BassSynthManager {
     }
     
     public triggerAttackRelease(note: string, duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
-        console.log(`[BASS_SYNTH_TRACE] triggerAttackRelease: note=${note}, duration=${duration}, time=${time}, velocity=${velocity}`);
         if (this.currentSynth && this.currentInstrument !== 'none') {
             this.currentSynth.triggerAttackRelease(note, duration, time, velocity);
         }

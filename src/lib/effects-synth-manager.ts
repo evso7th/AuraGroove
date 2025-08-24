@@ -18,7 +18,6 @@ export class EffectsSynthManager {
     private currentMode: EffectMode = 'none';
 
     constructor(fxBus: FxBus) {
-        console.log('[EFFECTS_SYNTH_TRACE] Constructor called.');
         this.fxBus = fxBus;
 
         // Configure the "piu" synth
@@ -51,12 +50,10 @@ export class EffectsSynthManager {
     }
     
     public setMode(mode: EffectMode) {
-        console.log(`[EFFECTS_SYNTH_TRACE] setMode called with: ${mode}`);
         this.currentMode = mode;
     }
 
     public setVolume(volume: number) { // volume is linear 0-1
-        console.log(`[EFFECTS_SYNTH_TRACE] setVolume called with: ${volume}`);
         if (this.currentMode === 'none' || volume < 0.01) {
             this.fxBus.effectsInput.volume.value = -Infinity;
         } else {
@@ -66,7 +63,6 @@ export class EffectsSynthManager {
     }
 
     public trigger(effect: EffectNote, time: Tone.Unit.Time) {
-        console.log(`[EFFECTS_SYNTH_TRACE] trigger called: type=${effect.type}, note=${effect.note}, time=${time}`);
         if (this.currentMode === 'none') return;
         
         switch (effect.type) {

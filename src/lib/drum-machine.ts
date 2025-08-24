@@ -30,14 +30,12 @@ export class DrumMachine {
     private fxBus: FxBus;
     
     constructor(fxBus: FxBus, onLoad: () => void) {
-        console.log('[DRUM_TRACE] Constructor called.');
         this.fxBus = fxBus;
         this.sampler = new Tone.Sampler({
             urls: samplePaths,
             baseUrl: '',
             volume: 0, 
             onload: () => {
-                console.log('[DRUM_TRACE] Samples loaded.');
                 this.isLoaded = true;
                 onLoad();
             },
@@ -49,7 +47,6 @@ export class DrumMachine {
     }
 
     public setVolume(volume: number) { // volume is linear 0-1
-        console.log(`[DRUM_TRACE] setVolume called with: ${volume}`);
         if (volume < 0.01) {
             this.fxBus.drumInput.volume.value = -Infinity;
         } else {
@@ -67,7 +64,6 @@ export class DrumMachine {
             return;
         }
         
-        console.log(`[DRUM_TRACE] trigger called: note=${note.sample}, time=${time}, velocity=${note.velocity}`);
         this.sampler.triggerAttackRelease(noteToPlay, '16n', time, note.velocity);
     }
     
