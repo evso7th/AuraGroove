@@ -464,11 +464,12 @@ class DrumGenerator {
             score = PatternProvider.getDrumPattern(randomFill);
         };
         
-        const { isAnchorPhase, barsIntoPhase } = engine as EvolveEngine;
-        const anchorLength = engine instanceof EvolveEngine ? engine.anchorLengthInBars : 0;
+        const isEvolveEngine = engine instanceof EvolveEngine;
+        const { barsIntoPhase, isAnchorPhase } = isEvolveEngine ? engine : { barsIntoPhase: 0, isAnchorPhase: false };
+        const anchorLength = isEvolveEngine ? engine.anchorLengthInBars : 0;
 
 
-        if (isAnchorPhase) {
+        if (isEvolveEngine && isAnchorPhase) {
             const isFirstBar = barsIntoPhase === 0;
             const isLastBar = barsIntoPhase === anchorLength - 1;
 
@@ -477,8 +478,8 @@ class DrumGenerator {
             } else {
                 score = PatternProvider.getDrumPattern(pattern);
             }
-        } else { // Evolution Phase
-            const isFillBar = (barsIntoPhase + 1) % 2 === 0 && Math.random() < 0.6;
+        } else { // Evolution Phase or Mandelbrot
+            const isFillBar = (engine.barsIntoPhase + 1) % 2 === 0 && Math.random() < 0.6;
             if (isFillBar) {
                 playFill();
             } else {
@@ -662,7 +663,7 @@ const Scheduler = {
 
 // --- MessageBus (The "Kafka" entry point) ---
 self.onmessage = async (event: MessageEvent) => {
-    const { command, data, barCount } = event.data;
+    const { command, data, time, barCount } = event.data;
 
     try {
         switch (command) {
@@ -684,7 +685,7 @@ self.onmessage = async (event: MessageEvent) => {
                 break;
             
             case 'tick':
-                Scheduler.tick(data.time, barCount);
+                Scheduler.tick(time, barCount);
                 break;
         }
     } catch (e) {
