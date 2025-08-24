@@ -35,9 +35,14 @@ export class FxBus {
         this.effectsInput = new Tone.Channel({ volume: -Infinity });
 
         // Connect channels WITH dedicated effects through their effects chain
-        this.soloInput.chain(this.soloDistortion, this.masterChannel);
-        this.accompanimentInput.chain(this.accompanimentChorus, this.masterChannel);
-        this.bassInput.chain(this.bassDistortion, this.masterChannel);
+        this.soloInput.connect(this.soloDistortion);
+        this.soloDistortion.connect(this.masterChannel);
+        
+        this.accompanimentInput.connect(this.accompanimentChorus);
+        this.accompanimentChorus.connect(this.masterChannel);
+        
+        this.bassInput.connect(this.bassDistortion);
+        this.bassDistortion.connect(this.masterChannel);
         
         // Connect channels WITHOUT dedicated effects directly to the master
         this.drumInput.connect(this.masterChannel);
