@@ -57,6 +57,7 @@ export class DrumMachine {
     }
 
     public trigger(note: DrumNote, time: number) {
+        console.log(`[DRUM_TRACE] FINAL_LINK_CHECK. Note: ${JSON.stringify(note)}, Time: ${time}, Sampler Volume: ${this.sampler.volume.value}`);
         if (!this.isLoaded) return;
         
         const noteToPlay = sampleNoteMapping[note.sample];

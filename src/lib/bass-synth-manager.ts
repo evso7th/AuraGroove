@@ -85,6 +85,7 @@ export class BassSynthManager {
     }
     
     public triggerAttackRelease(note: string, duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
+        console.log(`[BASS_SYNTH_TRACE] FINAL_LINK_CHECK. Instrument: ${this.currentInstrument}. Note: ${note}, Duration: ${duration}, Time: ${time}, Velocity: ${velocity}, Synth Volume: ${this.currentSynth?.volume.value}`);
         if (this.currentSynth && this.currentInstrument !== 'none') {
             this.currentSynth.triggerAttackRelease(note, duration, time, velocity);
         }

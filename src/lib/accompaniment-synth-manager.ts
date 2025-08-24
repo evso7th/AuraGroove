@@ -88,6 +88,7 @@ export class AccompanimentSynthManager {
     }
 
     public triggerAttackRelease(notes: string | string[], duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
+        console.log(`[ACCOMP_SYNTH_TRACE] FINAL_LINK_CHECK. Instrument: ${this.currentInstrument}. Notes: ${JSON.stringify(notes)}, Duration: ${duration}, Time: ${time}, Velocity: ${velocity}`);
         if (this.currentInstrument === 'none' || !this.voices.length) return;
 
         const notesToPlay = Array.isArray(notes) ? notes : [notes];
@@ -95,6 +96,7 @@ export class AccompanimentSynthManager {
         
         notesToPlay.forEach(note => {
             const voice = this.voices[this.nextVoiceIndex];
+            console.log(`[ACCOMP_SYNTH_TRACE] Voice ${this.nextVoiceIndex} volume: ${voice.volume.value}`);
             voice.triggerAttackRelease(note, duration, scheduledTime, velocity);
             this.nextVoiceIndex = (this.nextVoiceIndex + 1) % this.voices.length;
         });
