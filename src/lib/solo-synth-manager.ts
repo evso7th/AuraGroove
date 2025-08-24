@@ -49,10 +49,14 @@ export class SoloSynthManager {
     private ensureSynthsInitialized() {
         if (this.isInitialized) return;
         
-        console.log("[SOLO_SYNTH_TRACE] Initializing synths.");
-        this.voices = Array.from({ length: NUM_VOICES }, () => 
-            new Tone.Synth({ volume: -Infinity }).connect(this.fxBus.soloInput)
-        );
+        console.log("[SOLO_SYNTH_TRACE] HYPOTHESIS_CHECK: Entering ensureSynthsInitialized. Current Tone.context.state:", Tone.context.state);
+
+        this.voices = Array.from({ length: NUM_VOICES }, (_, i) => {
+            const voice = new Tone.Synth({ volume: -Infinity }).connect(this.fxBus.soloInput);
+            console.log(`[SOLO_SYNTH_TRACE] HYPOTHESIS_CHECK: Created voice ${i}. State after creation:`, Tone.context.state, "Voice object:", voice);
+            return voice;
+        });
+
         this.isInitialized = true;
     }
 
