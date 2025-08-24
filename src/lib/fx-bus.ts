@@ -28,12 +28,20 @@ export class FxBus {
         this.bassDistortion = new Tone.Distortion({ distortion: 0.3, wet: 0 }); 
         
         // Create dedicated channels for each instrument type
-        // Set a baseline volume to allow sound to pass through.
-        this.soloInput = new Tone.Channel({ volume: -6 }).connect(this.masterChannel);
-        this.accompanimentInput = new Tone.Channel({ volume: -6 }).connect(this.masterChannel);
-        this.bassInput = new Tone.Channel({ volume: -6 }).connect(this.masterChannel);
-        this.drumInput = new Tone.Channel({ volume: -Infinity }).connect(this.masterChannel); // Controlled from UI
-        this.effectsInput = new Tone.Channel({ volume: -Infinity }).connect(this.masterChannel); // Controlled from UI
+        this.soloInput = new Tone.Channel({ volume: -6 });
+        this.accompanimentInput = new Tone.Channel({ volume: -6 });
+        this.bassInput = new Tone.Channel({ volume: -6 });
+        this.drumInput = new Tone.Channel({ volume: -Infinity });
+        this.effectsInput = new Tone.Channel({ volume: -Infinity });
+
+        // Connect channels through their effects to the master channel
+        this.soloInput.chain(this.soloDistortion, this.masterChannel);
+        this.accompanimentInput.chain(this.accompanimentChorus, this.masterChannel);
+        this.bassInput.chain(this.bassDistortion, this.masterChannel);
+        
+        // Connect channels without dedicated effects directly to the master
+        this.drumInput.connect(this.masterChannel);
+        this.effectsInput.connect(this.masterChannel);
     }
     
     public dispose() {
