@@ -34,8 +34,8 @@ import { DrumMachine } from "@/lib/drum-machine";
 import { DrumNote, BassNote, SoloNote, AccompanimentNote, EffectNote, DrumSettings, EffectsSettings, InstrumentSettings, ScoreName } from '@/types/music';
 
 // Architectural constants
-const CHUNK_DURATION_IN_BARS = 16; // Generate 16 bars of music at a time
-const NOTE_BUFFER_LOW_WATER_MARK_IN_BARS = 8; // Request new chunk when < 8 bars are left
+const CHUNK_DURATION_IN_BARS = 16;
+const NOTE_BUFFER_LOW_WATER_MARK_IN_SECONDS = 30; // Request new chunk when < 30 seconds of music is left in buffer
 
 export function AuraGroove() {
   const [isAudioReady, setIsAudioReady] = useState(false);
@@ -72,21 +72,22 @@ export function AuraGroove() {
 
   // --- Refs for Worker, Audio components, and Music Logic ---
   const musicWorkerRef = useRef<Worker | null>(null);
-  const noteBufferRef = useRef<any[]>([]); // Stores notes from worker to be scheduled
-  const scheduleLoopRef = useRef<Tone.Loop | null>(null); // Main loop for scheduling from buffer
+  const noteBufferRef = useRef<any[]>([]);
+  const scheduleLoopRef = useRef<Tone.Loop | null>(null);
   const isRequestingChunkRef = useRef(false);
+  const nextNoteTimeRef = useRef(0); // <-- Key state for scheduling
 
-  // Use refs for audio components to prevent re-creation on re-renders
-  const fxBusRef = useRef<FxBus | null>(null);
-  const bassSynthManagerRef = useRef<BassSynthManager | null>(null);
-  const soloSynthManagerRef = useRef<SoloSynthManager | null>(null);
-  const accompanimentSynthManagerRef = useRef<AccompanimentSynthManager | null>(null);
-  const effectsSynthManagerRef = useRef<EffectsSynthManager | null>(null);
-  const drumMachineRef = useRef<DrumMachine | null>(null);
+  const [fxBus, setFxBus] = useState<FxBus | null>(null);
+  const [bassSynthManager, setBassSynthManager] = useState<BassSynthManager | null>(null);
+  const [soloSynthManager, setSoloSynthManager] = useState<SoloSynthManager | null>(null);
+  const [accompanimentSynthManager, setAccompanimentSynthManager] = useState<AccompanimentSynthManager | null>(null);
+  const [effectsSynthManager, setEffectsSynthManager] = useState<EffectsSynthManager | null>(null);
+  const [drumMachine, setDrumMachine] = useState<DrumMachine | null>(null);
 
   // --- Main Initialization Effect ---
   useEffect(() => {
     const initAudio = async () => {
+      try {
         setIsInitializing(true);
         setLoadingText("Initializing Audio Context...");
         await Tone.start();
@@ -94,20 +95,21 @@ export function AuraGroove() {
         
         setLoadingText("Creating Audio Buses...");
         const bus = new FxBus();
-        fxBusRef.current = bus;
+        setFxBus(bus);
 
         setLoadingText("Creating Synthesizers...");
-        bassSynthManagerRef.current = new BassSynthManager(bus);
-        soloSynthManagerRef.current = new SoloSynthManager(bus);
-        accompanimentSynthManagerRef.current = new AccompanimentSynthManager(bus);
-        effectsSynthManagerRef.current = new EffectsSynthManager(bus);
+        setBassSynthManager(new BassSynthManager(bus));
+        setSoloSynthManager(new SoloSynthManager(bus));
+        setAccompanimentSynthManager(new AccompanimentSynthManager(bus));
+        setEffectsSynthManager(new EffectsSynthManager(bus));
         
         setLoadingText("Loading Drum Samples...");
-        drumMachineRef.current = new DrumMachine(bus, () => {
-            setLoadingText("");
-            setIsAudioReady(true);
-            setIsInitializing(false);
+        const newDrumMachine = new DrumMachine(bus, () => {
+          setLoadingText("");
+          setIsAudioReady(true);
+          setIsInitializing(false);
         });
+        setDrumMachine(newDrumMachine);
 
         // Setup Worker
         const worker = new Worker(new URL('../app/ambient.worker.ts', import.meta.url));
@@ -140,13 +142,18 @@ export function AuraGroove() {
 
                 noteBufferRef.current.push(...newNotes);
                 console.log(`[AURA_TRACE] Received chunk_ready. Added ${newNotes.length} notes. Buffer size: ${noteBufferRef.current.length}`);
-                isRequestingChunkRef.current = false; // Allow new requests
+                isRequestingChunkRef.current = false;
             } else if (type === 'error') {
                 toast({ variant: "destructive", title: "Worker Error", description: error });
                 setIsPlaying(false);
                 setLoadingText("");
             }
         };
+      } catch (e) {
+          const errorMsg = e instanceof Error ? e.message : String(e);
+          toast({ variant: "destructive", title: "Initialization Failed", description: errorMsg });
+          setIsInitializing(false);
+      }
     };
 
     initAudio();
@@ -154,12 +161,12 @@ export function AuraGroove() {
     return () => {
       musicWorkerRef.current?.terminate();
       scheduleLoopRef.current?.dispose();
-      fxBusRef.current?.dispose();
-      bassSynthManagerRef.current?.dispose();
-      soloSynthManagerRef.current?.dispose();
-      accompanimentSynthManagerRef.current?.dispose();
-      effectsSynthManagerRef.current?.dispose();
-      drumMachineRef.current?.dispose();
+      fxBus?.dispose();
+      bassSynthManager?.dispose();
+      soloSynthManager?.dispose();
+      accompanimentSynthManager?.dispose();
+      effectsSynthManager?.dispose();
+      drumMachine?.dispose();
       if (Tone.Transport.state !== 'stopped') {
         Tone.Transport.stop();
         Tone.Transport.cancel();
@@ -198,23 +205,23 @@ export function AuraGroove() {
   useEffect(() => { updateWorkerSettings() }, [drumSettings, instrumentSettings, effectsSettings, score, updateWorkerSettings]);
   
   useEffect(() => {
-      if (!isAudioReady || !fxBusRef.current?.soloDistortion) return;
-      fxBusRef.current.soloDistortion.wet.value = soloFx.distortion.enabled ? soloFx.distortion.wet : 0;
-  }, [soloFx.distortion, isAudioReady]);
+      if (!isAudioReady || !fxBus?.soloDistortion) return;
+      fxBus.soloDistortion.wet.value = soloFx.distortion.enabled ? soloFx.distortion.wet : 0;
+  }, [soloFx.distortion, isAudioReady, fxBus]);
   
   useEffect(() => {
-      if (!isAudioReady || !fxBusRef.current?.accompanimentChorus) return;
-      const fx = fxBusRef.current.accompanimentChorus;
+      if (!isAudioReady || !fxBus?.accompanimentChorus) return;
+      const fx = fxBus.accompanimentChorus;
       fx.wet.value = accompanimentFx.chorus.enabled ? accompanimentFx.chorus.wet : 0;
       fx.frequency.value = accompanimentFx.chorus.frequency;
       fx.depth = accompanimentFx.chorus.depth;
-  }, [accompanimentFx.chorus, isAudioReady]);
+  }, [accompanimentFx.chorus, isAudioReady, fxBus]);
 
-  useEffect(() => { soloSynthManagerRef.current?.setVolume(instrumentSettings.solo.volume) }, [instrumentSettings.solo.volume]);
-  useEffect(() => { accompanimentSynthManagerRef.current?.setVolume(instrumentSettings.accompaniment.volume) }, [instrumentSettings.accompaniment.volume]);
-  useEffect(() => { bassSynthManagerRef.current?.setVolume(instrumentSettings.bass.volume) }, [instrumentSettings.bass.volume]);
-  useEffect(() => { effectsSynthManagerRef.current?.setVolume(effectsSettings.volume) }, [effectsSettings.volume]);
-  useEffect(() => { drumMachineRef.current?.setVolume(drumSettings.volume) }, [drumSettings.volume]);
+  useEffect(() => { soloSynthManager?.setVolume(instrumentSettings.solo.volume) }, [instrumentSettings.solo.volume, soloSynthManager]);
+  useEffect(() => { accompanimentSynthManager?.setVolume(instrumentSettings.accompaniment.volume) }, [instrumentSettings.accompaniment.volume, accompanimentSynthManager]);
+  useEffect(() => { bassSynthManager?.setVolume(instrumentSettings.bass.volume) }, [instrumentSettings.bass.volume, bassSynthManager]);
+  useEffect(() => { effectsSynthManager?.setVolume(effectsSettings.volume) }, [effectsSettings.volume, effectsSynthManager]);
+  useEffect(() => { drumMachine?.setVolume(drumSettings.volume) }, [drumSettings.volume, drumMachine]);
 
   // --- Play/Stop Logic ---
   const handleStop = useCallback(() => {
@@ -234,62 +241,72 @@ export function AuraGroove() {
   }, []);
 
   const handlePlay = useCallback(async () => {
-    if (isInitializing || !isAudioReady) return;
+    if (isInitializing || !isAudioReady || !soloSynthManager || !accompanimentSynthManager || !bassSynthManager || !effectsSynthManager || !drumMachine) return;
 
     await Tone.start();
     if (Tone.context.state !== 'running') await Tone.context.resume();
     
-    soloSynthManagerRef.current?.setInstrument(instrumentSettings.solo.name);
-    accompanimentSynthManagerRef.current?.setInstrument(instrumentSettings.accompaniment.name);
-    bassSynthManagerRef.current?.setInstrument(instrumentSettings.bass.name);
-    effectsSynthManagerRef.current?.setMode(effectsSettings.mode);
+    soloSynthManager.setInstrument(instrumentSettings.solo.name);
+    accompanimentSynthManager.setInstrument(instrumentSettings.accompaniment.name);
+    bassSynthManager.setInstrument(instrumentSettings.bass.name);
+    effectsSynthManager.setMode(effectsSettings.mode);
 
     musicWorkerRef.current?.postMessage({ command: 'start', data: { drumSettings, instrumentSettings, effectsSettings, bpm, score } });
     
     requestNewChunkFromWorker();
 
-    let scheduledTime = Tone.now();
+    nextNoteTimeRef.current = Tone.now() + 0.5; // Start scheduling 0.5s in the future
 
     scheduleLoopRef.current = new Tone.Loop(loopTime => {
-        let notesProcessed = 0;
-        console.log(`[AURA_TRACE] Scheduler loop running. Buffer size: ${noteBufferRef.current.length}. Transport time: ${Tone.Transport.seconds}`);
+        let notesProcessedInLoop = 0;
+        const lookaheadTime = 0.2; // How far ahead to schedule in seconds
+        const scheduleUntil = Tone.Transport.seconds + lookaheadTime;
 
-        while(noteBufferRef.current.length > 0 && noteBufferRef.current[0].time < (Tone.Transport.seconds - scheduledTime) + 0.1) {
-            const note = noteBufferRef.current.shift();
-            if (!note) continue;
+        while (noteBufferRef.current.length > 0) {
+            const note = noteBufferRef.current[0];
+            const absoluteNoteTime = nextNoteTimeRef.current + note.time;
 
-            const timeToPlay = scheduledTime + note.time;
+            if (absoluteNoteTime < scheduleUntil) {
+                const scheduledNote = noteBufferRef.current.shift();
+                if (!scheduledNote) continue;
 
-            switch(note.part) {
-                case 'drums': drumMachineRef.current?.trigger(note, timeToPlay); break;
-                case 'bass': bassSynthManagerRef.current?.triggerAttackRelease(note.note, note.duration, timeToPlay, note.velocity); break;
-                case 'solo': soloSynthManagerRef.current?.triggerAttackRelease(note.notes, note.duration, timeToPlay, note.velocity); break;
-                case 'accompaniment': accompanimentSynthManagerRef.current?.triggerAttackRelease(note.notes, note.duration, timeToPlay, note.velocity); break;
-                case 'effects': effectsSynthManagerRef.current?.trigger(note, timeToPlay); break;
+                const timeToPlay = nextNoteTimeRef.current + scheduledNote.time;
+                
+                switch(scheduledNote.part) {
+                    case 'drums': drumMachine.trigger(scheduledNote, timeToPlay); break;
+                    case 'bass': bassSynthManager.triggerAttackRelease(scheduledNote.note, scheduledNote.duration, timeToPlay, scheduledNote.velocity); break;
+                    case 'solo': soloSynthManager.triggerAttackRelease(scheduledNote.notes, scheduledNote.duration, timeToPlay, scheduledNote.velocity); break;
+                    case 'accompaniment': accompanimentSynthManager.triggerAttackRelease(scheduledNote.notes, scheduledNote.duration, timeToPlay, scheduledNote.velocity); break;
+                    case 'effects': effectsSynthManager.trigger(scheduledNote, timeToPlay); break;
+                }
+                notesProcessedInLoop++;
+            } else {
+                break; 
             }
-            notesProcessed++;
         }
         
-        if (notesProcessed > 0) {
-            console.log(`[AURA_TRACE] Processed ${notesProcessed} notes in this loop.`);
+        if (notesProcessedInLoop > 0) {
+          console.log(`[AURA_TRACE_SCHEDULER] Scheduled ${notesProcessedInLoop} notes. Current buffer size: ${noteBufferRef.current.length}`);
         }
-        
-        setNoteBufferCount(noteBufferRef.current.length);
 
-        const secondsPerBar = (60 / bpm) * 4;
-        const remainingBufferDuration = noteBufferRef.current.length > 0 ? (noteBufferRef.current[noteBufferRef.current.length - 1].time - (Tone.Transport.seconds - scheduledTime)) : 0;
-        const remainingBars = remainingBufferDuration / secondsPerBar;
+        setNoteBufferCount(noteBufferRef.current.length);
         
-        if (remainingBars < NOTE_BUFFER_LOW_WATER_MARK_IN_BARS) {
+        const lastNote = noteBufferRef.current[noteBufferRef.current.length - 1];
+        const bufferDuration = lastNote ? (lastNote.time + new Tone.Time(lastNote.duration || 0).toSeconds()) : 0;
+        
+        if (bufferDuration < NOTE_BUFFER_LOW_WATER_MARK_IN_SECONDS && noteBufferRef.current.length > 0) {
+            nextNoteTimeRef.current += lastNote.time + new Tone.Time(lastNote.duration || '16n').toSeconds();
+            requestNewChunkFromWorker();
+        } else if (noteBufferRef.current.length === 0) {
             requestNewChunkFromWorker();
         }
 
-    }, '16n').start(0);
+    }, '1s').start(0); // Run the scheduling check frequently
 
     Tone.Transport.start();
     setIsPlaying(true);
 
-  }, [isInitializing, isAudioReady, drumSettings, instrumentSettings, effectsSettings, bpm, score, requestNewChunkFromWorker]);
+  }, [isInitializing, isAudioReady, drumSettings, instrumentSettings, effectsSettings, bpm, score, requestNewChunkFromWorker, soloSynthManager, accompanimentSynthManager, bassSynthManager, effectsSynthManager, drumMachine]);
 
   const handleTogglePlay = useCallback(() => {
     if (isInitializing) return;
@@ -571,3 +588,5 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    
