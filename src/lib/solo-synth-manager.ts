@@ -35,7 +35,6 @@ const instrumentPresets: Record<Exclude<InstrumentName, 'none'>, Omit<Tone.Synth
 
 export class SoloSynthManager {
     private voices: Tone.Synth[] = [];
-    private isInitialized = false;
     private currentInstrument: InstrumentName = 'none';
     private fxBus: FxBus;
     private userVolume: number = 0.7; // Linear gain (0-1)
@@ -44,25 +43,14 @@ export class SoloSynthManager {
     constructor(fxBus: FxBus) {
         console.log("[SOLO_SYNTH_TRACE] Constructor called.");
         this.fxBus = fxBus;
-    }
-
-    private ensureSynthsInitialized() {
-        if (this.isInitialized) return;
-        
-        console.log("[SOLO_SYNTH_TRACE] HYPOTHESIS_CHECK: Entering ensureSynthsInitialized. Current Tone.context.state:", Tone.context.state);
-
         this.voices = Array.from({ length: NUM_VOICES }, (_, i) => {
             const voice = new Tone.Synth({ volume: -Infinity }).connect(this.fxBus.soloInput);
-            console.log(`[SOLO_SYNTH_TRACE] HYPOTHESIS_CHECK: Created voice ${i}. State after creation:`, Tone.context.state, "Voice object:", voice);
             return voice;
         });
-
-        this.isInitialized = true;
     }
 
     public setInstrument(name: InstrumentName) {
         console.log(`[SOLO_SYNTH_TRACE] setInstrument called with: ${name}`);
-        this.ensureSynthsInitialized();
 
         if (name === 'none') {
             this.currentInstrument = 'none';
@@ -90,7 +78,7 @@ export class SoloSynthManager {
     }
 
     private updateVolume(rampTime: Tone.Unit.Time = 0.05) {
-        if (!this.isInitialized || this.currentInstrument === 'none') return;
+        if (this.currentInstrument === 'none') return;
         
         const userVolumeDb = Tone.gainToDb(this.userVolume);
         const targetVolume = MOBILE_VOLUME_DB + userVolumeDb;
@@ -109,17 +97,16 @@ export class SoloSynthManager {
 
         const notesToPlay = Array.isArray(notes) ? notes : [notes];
         const scheduledTime = time || Tone.now();
-        console.log(`[SOLO_SYNTH_TRACE] Triggering ${notesToPlay.join(', ')} at time ${scheduledTime}`);
 
         notesToPlay.forEach(note => {
             const voice = this.voices[this.nextVoiceIndex];
+            console.log(`[SOLO_SYNTH_TRACE] FINAL_LINK_CHECK: manager=Solo, instrument=${this.currentInstrument}, voiceVolume=${voice.volume.value}, notes=${note}, duration=${duration}, time=${scheduledTime}, velocity=${velocity}`);
             voice.triggerAttackRelease(note, duration, scheduledTime, velocity);
             this.nextVoiceIndex = (this.nextVoiceIndex + 1) % this.voices.length;
         });
     }
 
     public releaseAll() {
-        if (!this.isInitialized) return;
         this.voices.forEach(voice => voice.triggerRelease());
     }
 
@@ -137,7 +124,6 @@ export class SoloSynthManager {
         if (this.voices.length > 0) {
             this.voices.forEach(voice => voice.dispose());
             this.voices = [];
-            this.isInitialized = false;
         }
     }
 }

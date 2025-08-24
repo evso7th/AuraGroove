@@ -68,7 +68,7 @@ export class DrumMachine {
             return;
         }
         
-        console.log(`[DRUM_TRACE] Triggering ${note.sample} at time ${time}`);
+        console.log(`[DRUM_TRACE] FINAL_LINK_CHECK: manager=Drums, isLoaded=${this.isLoaded}, channelVolume=${this.fxBus.drumInput.volume.value}, note=${note.sample}, time=${time}, velocity=${note.velocity}`);
         this.sampler.triggerAttackRelease(noteToPlay, '16n', time, note.velocity);
     }
     

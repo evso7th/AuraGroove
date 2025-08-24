@@ -40,7 +40,6 @@ const instrumentPresets: Record<Exclude<InstrumentName, 'none'>, Omit<Tone.MonoS
 
 export class BassSynthManager {
     private currentSynth: Tone.MonoSynth | null = null;
-    private isInitialized = false;
     private currentInstrument: InstrumentName = 'none';
     private fxBus: FxBus;
     private userVolume: number = 0.9;
@@ -48,19 +47,11 @@ export class BassSynthManager {
     constructor(fxBus: FxBus) {
         console.log("[BASS_SYNTH_TRACE] Constructor called.");
         this.fxBus = fxBus;
-    }
-
-    private ensureSynthInitialized() {
-        if (this.isInitialized) return;
-        
-        console.log("[BASS_SYNTH_TRACE] Initializing synth.");
         this.currentSynth = new Tone.MonoSynth({ volume: -Infinity }).connect(this.fxBus.bassInput);
-        this.isInitialized = true;
     }
 
     public setInstrument(name: InstrumentName) {
         console.log(`[BASS_SYNTH_TRACE] setInstrument called with: ${name}`);
-        this.ensureSynthInitialized();
         if (!this.currentSynth) return;
 
         if (name === 'none') {
@@ -99,7 +90,7 @@ export class BassSynthManager {
     
     public triggerAttackRelease(note: string, duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) {
         if (this.currentSynth && this.currentInstrument !== 'none') {
-            console.log(`[BASS_SYNTH_TRACE] Triggering ${note} at time ${time}`);
+            console.log(`[BASS_SYNTH_TRACE] FINAL_LINK_CHECK: manager=Bass, instrument=${this.currentInstrument}, synthVolume=${this.currentSynth.volume.value}, note=${note}, duration=${duration}, time=${time}, velocity=${velocity}`);
             this.currentSynth.triggerAttackRelease(note, duration, time, velocity);
         }
     }
@@ -122,7 +113,6 @@ export class BassSynthManager {
         if (this.currentSynth) {
             this.currentSynth.dispose();
             this.currentSynth = null;
-            this.isInitialized = false;
         }
     }
 }
