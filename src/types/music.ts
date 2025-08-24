@@ -1,5 +1,5 @@
 
-export type InstrumentPart = 'solo' | 'accompaniment' | 'bass' | 'effects';
+export type InstrumentPart = 'solo' | 'accompaniment' | 'bass' | 'effects' | 'drums';
 export type OscillatorType = 'sine' | 'square' | 'sawtooth' | 'fatsine' | 'fatsawtooth' | 'fmsquare';
 
 export type WorkletNote = {
@@ -16,6 +16,12 @@ export type WorkletNote = {
     duration: number; // in seconds
     // Sound
     oscType: OscillatorType;
+};
+
+export type DrumNote = {
+    sample: 'kick' | 'snare' | 'hat' | 'crash' | 'ride';
+    time: number; // in seconds, relative to the start of the score chunk
+    velocity: number;
 };
 
 
@@ -35,7 +41,7 @@ export type InstrumentSettings = {
 };
 
 export type DrumSettings = {
-    pattern: 'basic' | 'breakbeat' | 'slow' | 'heavy' | 'none' | 'ambient-beat';
+    pattern: 'ambient_beat' | 'none';
     volume: number;
 };
 

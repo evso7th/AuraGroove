@@ -2,7 +2,7 @@
 /// <reference lib="webworker" />
 
 import { promenadeScore } from '@/lib/scores/promenade';
-import type { DrumSettings, EffectsSettings, InstrumentSettings, ScoreName, WorkletNote } from '@/types/music';
+import type { DrumSettings, EffectsSettings, InstrumentSettings, ScoreName, WorkletNote, DrumNote } from '@/types/music';
 
 // Presets define the sound characteristics for our synth worklet
 const PRESETS = {
@@ -31,6 +31,19 @@ function noteToFreq(note: string) {
     return A4 * Math.pow(2, semitone / 12);
 }
 
+const DrumPatterns: Record<string, DrumNote[]> = {
+    'ambient_beat': [
+        { sample: 'kick', time: 0, velocity: 1.0 },
+        { sample: 'hat', time: 0.5, velocity: 0.3 },
+        { sample: 'snare', time: 1.0, velocity: 0.8 },
+        { sample: 'hat', time: 1.5, velocity: 0.3 },
+        { sample: 'kick', time: 2.0, velocity: 0.9 },
+        { sample: 'hat', time: 2.5, velocity: 0.3 },
+        { sample: 'snare', time: 3.0, velocity: 0.7 },
+        { sample: 'hat', time: 3.5, velocity: 0.3 },
+    ]
+};
+
 // --- The main composer logic ---
 const Composer = {
     isRunning: false,
@@ -43,7 +56,7 @@ const Composer = {
         accompaniment: { name: 'synthesizer', volume: 0.7 },
         bass: { name: 'bass_synth', volume: 0.9 },
     } as InstrumentSettings,
-    drumSettings: { pattern: 'ambient-beat', volume: 0.7 } as DrumSettings,
+    drumSettings: { pattern: 'none', volume: 0.7 } as DrumSettings,
     effectsSettings: { mode: 'none', volume: 0.7 } as EffectsSettings,
     score: 'promenade' as ScoreName,
 
@@ -75,6 +88,19 @@ const Composer = {
         if (settings.bpm) this.bpm = settings.bpm;
         if (settings.score) this.score = settings.score;
         console.log("[WORKER_TRACE] Settings updated:", { settings });
+    },
+
+    generateDrumScoreForBar(bar: number): DrumNote[] {
+        if (this.drumSettings.pattern === 'none' || !DrumPatterns[this.drumSettings.pattern]) {
+            return [];
+        }
+        const pattern = DrumPatterns[this.drumSettings.pattern];
+        
+        return pattern.map(note => ({
+            ...note,
+            time: note.time * this.secondsPerBeat, // Convert beat time to seconds
+            velocity: note.velocity * this.drumSettings.volume,
+        }));
     },
 
     // --- Note Generation ---
@@ -155,7 +181,8 @@ const Composer = {
         if (!this.isRunning) return;
         console.log(`[WORKER_TRACE] Generating chunk for ${chunkDurationInBars} bars.`);
 
-        let score: { solo: WorkletNote[], accompaniment: WorkletNote[], bass: WorkletNote[], effects: WorkletNote[] } = { solo: [], accompaniment: [], bass: [], effects: [] };
+        let synthScore: { solo: WorkletNote[], accompaniment: WorkletNote[], bass: WorkletNote[], effects: WorkletNote[] } = { solo: [], accompaniment: [], bass: [], effects: [] };
+        let drumScore: DrumNote[] = [];
         
         const barDuration = this.beatsPerBar * this.secondsPerBeat;
 
@@ -165,15 +192,18 @@ const Composer = {
 
             const { solo, accompaniment, bass } = this.generateNotesForBar(currentBar);
             
-            solo.forEach(n => { n.startTime += barStartTime; score.solo.push(n); });
-            accompaniment.forEach(n => { n.startTime += barStartTime; score.accompaniment.push(n); });
-            bass.forEach(n => { n.startTime += barStartTime; score.bass.push(n); });
+            solo.forEach(n => { n.startTime += barStartTime; synthScore.solo.push(n); });
+            accompaniment.forEach(n => { n.startTime += barStartTime; synthScore.accompaniment.push(n); });
+            bass.forEach(n => { n.startTime += barStartTime; synthScore.bass.push(n); });
+
+            const barDrumNotes = this.generateDrumScoreForBar(currentBar);
+            barDrumNotes.forEach(d => { d.time += barStartTime; drumScore.push(d); });
         }
         
         this.barCount += chunkDurationInBars;
 
-        self.postMessage({ type: 'score_ready', score });
-        console.log("[WORKER_TRACE] Dispatched 'score_ready' with new score.", score);
+        self.postMessage({ type: 'score_ready', synthScore, drumScore });
+        console.log("[WORKER_TRACE] Dispatched 'score_ready' with new score.", {synthScore, drumScore});
     }
 };
 
