@@ -19,7 +19,6 @@ export class FxBus {
     public effectsInput: Tone.Channel;
 
     constructor() {
-        console.log("[AURA_TRACE] FxBus created.");
         this.masterChannel = new Tone.Channel({ volume: 0, pan: 0 }).toDestination();
 
         // Create effects
@@ -34,12 +33,17 @@ export class FxBus {
         this.drumInput = new Tone.Channel({ volume: -Infinity });
         this.effectsInput = new Tone.Channel({ volume: -Infinity });
 
-        // Connect channels through their effects to the master channel
-        this.soloInput.chain(this.soloDistortion, this.masterChannel);
-        this.accompanimentInput.chain(this.accompanimentChorus, this.masterChannel);
-        this.bassInput.chain(this.bassDistortion, this.masterChannel);
+        // Connect channels WITH dedicated effects through their effects chain
+        this.soloInput.connect(this.soloDistortion);
+        this.soloDistortion.connect(this.masterChannel);
         
-        // Connect channels without dedicated effects directly to the master
+        this.accompanimentInput.connect(this.accompanimentChorus);
+        this.accompanimentChorus.connect(this.masterChannel);
+
+        this.bassInput.connect(this.bassDistortion);
+        this.bassDistortion.connect(this.masterChannel);
+        
+        // Connect channels WITHOUT dedicated effects directly to the master
         this.drumInput.connect(this.masterChannel);
         this.effectsInput.connect(this.masterChannel);
     }
