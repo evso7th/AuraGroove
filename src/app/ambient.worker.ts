@@ -310,10 +310,11 @@ class MandelbrotEngine {
         const phraseLength = 3 + Math.floor(this.getMandelbrotValue(this.x, this.y) / this.maxIterations * 3); // 3-6 notes
         let currentNote = this.soloState.lastNote;
 
-        if (!currentNote) {
+        if (!currentNote || typeof currentNote !== 'string') {
             const chordTones = this.getChordTones(harmony.root, harmony.scale);
             currentNote = `${chordTones[0]}4`;
         }
+
 
         for (let i = 0; i < phraseLength; i++) {
             const cx = this.x + (i - 4) / (256 * this.zoom);
@@ -683,10 +684,13 @@ self.onmessage = async (event: MessageEvent) => {
                 break;
             
             case 'tick':
-                Scheduler.tick(data.time, data.barCount);
+                Scheduler.tick(data.time, barCount);
                 break;
         }
     } catch (e) {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
+
+
+    
