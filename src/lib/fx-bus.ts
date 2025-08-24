@@ -19,6 +19,7 @@ export class FxBus {
     public effectsInput: Tone.Channel;
 
     constructor() {
+        console.log("[AURA_TRACE] FxBus created.");
         this.masterChannel = new Tone.Channel({ volume: 0, pan: 0 }).toDestination();
 
         // Create effects
@@ -27,16 +28,12 @@ export class FxBus {
         this.bassDistortion = new Tone.Distortion({ distortion: 0.3, wet: 0 }); 
         
         // Create dedicated channels for each instrument type
-        this.soloInput = new Tone.Channel({ volume: 0 }).connect(this.masterChannel);
-        this.accompanimentInput = new Tone.Channel({ volume: 0 }).connect(this.masterChannel);
-        this.bassInput = new Tone.Channel({ volume: 0 }).connect(this.masterChannel);
-        this.drumInput = new Tone.Channel({ volume: -Infinity }).connect(this.masterChannel);
-        this.effectsInput = new Tone.Channel({ volume: -Infinity }).connect(this.masterChannel);
-
-        // Chain effects within their respective channels if needed (though direct connection is simpler here)
-        // For this setup, synths will connect to the channel, and the channel to the master.
-        // We will manage effects on the synth managers themselves for more clarity.
-        // This class now primarily serves as the final mixing stage.
+        // Set a baseline volume to allow sound to pass through.
+        this.soloInput = new Tone.Channel({ volume: -6 }).connect(this.masterChannel);
+        this.accompanimentInput = new Tone.Channel({ volume: -6 }).connect(this.masterChannel);
+        this.bassInput = new Tone.Channel({ volume: -6 }).connect(this.masterChannel);
+        this.drumInput = new Tone.Channel({ volume: -Infinity }).connect(this.masterChannel); // Controlled from UI
+        this.effectsInput = new Tone.Channel({ volume: -Infinity }).connect(this.masterChannel); // Controlled from UI
     }
     
     public dispose() {
