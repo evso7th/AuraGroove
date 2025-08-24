@@ -125,12 +125,13 @@ export function AuraGroove() {
                     if (!manager || !isPlaying) return;
                     const barStartTime = lastTickTimeRef.current;
                     scoreData.forEach((note: any) => {
-                        // Ensure the note is always scheduled slightly in the future.
                         const timeToPlay = Math.max(barStartTime + note.time, Tone.now() + 0.01);
                         
                         if (triggerFn === 'trigger') {
+                            console.log(`[AURA_TRACE] Branch: trigger for ${managerName}`);
                             manager.trigger(note, timeToPlay);
                         } else {
+                            console.log(`[AURA_TRACE] Branch: triggerAttackRelease for ${managerName}`);
                             const notesArg = note.notes || note.note;
                             manager.triggerAttackRelease(notesArg, note.duration, timeToPlay, note.velocity);
                         }
