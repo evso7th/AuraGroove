@@ -86,6 +86,7 @@ export function AuraGroove() {
     musicWorkerRef.current?.postMessage({ command: 'stop' });
     workletNodeRef.current?.port.postMessage({ type: 'clear' }); // Clear any pending notes in the worklet
     drumMachineRef.current?.stopAll();
+    Tone.Transport.cancel(0);
     Tone.Transport.stop();
     setIsPlaying(false);
   }, []);
