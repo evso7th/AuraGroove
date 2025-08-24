@@ -125,11 +125,9 @@ export function AuraGroove() {
                     if (!manager || !isPlaying) return;
                     const barStartTime = lastTickTimeRef.current;
                     scoreData.forEach((note: any) => {
-                        const timeToPlay = barStartTime + note.time;
-                        if (timeToPlay < Tone.now()) {
-                             console.warn(`[AURA_TRACE] Skipping note for ${managerName} - time is in the past. Time to play: ${timeToPlay}, Tone.now(): ${Tone.now()}`);
-                            return;
-                        }
+                        // Ensure the note is always scheduled slightly in the future.
+                        const timeToPlay = Math.max(barStartTime + note.time, Tone.now() + 0.01);
+                        
                         if (triggerFn === 'trigger') {
                             manager.trigger(note, timeToPlay);
                         } else {
