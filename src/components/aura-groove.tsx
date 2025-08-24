@@ -66,7 +66,6 @@ export function AuraGroove() {
   
   // --- State for Debugging & Architecture ---
   const [showDebugPanel, setShowDebugPanel] = useState(false);
-  const [debugLog, setDebugLog] = useState<string[]>([]);
   const [noteBufferCount, setNoteBufferCount] = useState(0);
 
   const { toast } = useToast();
@@ -75,6 +74,7 @@ export function AuraGroove() {
   const musicWorkerRef = useRef<Worker | null>(null);
   const noteBufferRef = useRef<any[]>([]); // Stores notes from worker to be scheduled
   const scheduleLoopRef = useRef<Tone.Loop | null>(null); // Main loop for scheduling from buffer
+  const isRequestingChunkRef = useRef(false);
 
   // Use refs for audio components to prevent re-creation on re-renders
   const fxBusRef = useRef<FxBus | null>(null);
@@ -93,16 +93,17 @@ export function AuraGroove() {
         Tone.Transport.bpm.value = bpm;
         
         setLoadingText("Creating Audio Buses...");
-        fxBusRef.current = new FxBus();
+        const bus = new FxBus();
+        fxBusRef.current = bus;
 
         setLoadingText("Creating Synthesizers...");
-        bassSynthManagerRef.current = new BassSynthManager(fxBusRef.current);
-        soloSynthManagerRef.current = new SoloSynthManager(fxBusRef.current);
-        accompanimentSynthManagerRef.current = new AccompanimentSynthManager(fxBusRef.current);
-        effectsSynthManagerRef.current = new EffectsSynthManager(fxBusRef.current);
+        bassSynthManagerRef.current = new BassSynthManager(bus);
+        soloSynthManagerRef.current = new SoloSynthManager(bus);
+        accompanimentSynthManagerRef.current = new AccompanimentSynthManager(bus);
+        effectsSynthManagerRef.current = new EffectsSynthManager(bus);
         
         setLoadingText("Loading Drum Samples...");
-        drumMachineRef.current = new DrumMachine(fxBusRef.current, () => {
+        drumMachineRef.current = new DrumMachine(bus, () => {
             setLoadingText("");
             setIsAudioReady(true);
             setIsInitializing(false);
@@ -119,12 +120,11 @@ export function AuraGroove() {
             if (type === 'chunk_ready') {
                 const { drums, bass, solo, accompaniment, effects, chunkDurationInBars, secondsPerBeat } = data;
                 
-                // Convert bar-based scores into a single, time-sorted buffer
                 const processScore = (scoreArr: any[], part: string) => {
                     return scoreArr.flatMap((barNotes, barIndex) => 
                         barNotes.map((note: any) => ({
                             ...note,
-                            time: barIndex * 4 * secondsPerBeat + (note.time * secondsPerBeat), // Absolute time within the chunk
+                            time: barIndex * 4 * secondsPerBeat + (note.time * secondsPerBeat),
                             part,
                         }))
                     );
@@ -139,7 +139,8 @@ export function AuraGroove() {
                 ].sort((a, b) => a.time - b.time);
 
                 noteBufferRef.current.push(...newNotes);
-
+                console.log(`[AURA_TRACE] Received chunk_ready. Added ${newNotes.length} notes. Buffer size: ${noteBufferRef.current.length}`);
+                isRequestingChunkRef.current = false; // Allow new requests
             } else if (type === 'error') {
                 toast({ variant: "destructive", title: "Worker Error", description: error });
                 setIsPlaying(false);
@@ -178,7 +179,9 @@ export function AuraGroove() {
   }, [instrumentSettings, drumSettings, effectsSettings, bpm, score]);
 
   const requestNewChunkFromWorker = useCallback(() => {
-    if (musicWorkerRef.current) {
+    if (musicWorkerRef.current && !isRequestingChunkRef.current) {
+        console.log("[AURA_TRACE] Requesting new chunk from worker.");
+        isRequestingChunkRef.current = true;
         musicWorkerRef.current.postMessage({ 
             command: 'request_new_chunk', 
             data: { chunkDurationInBars: CHUNK_DURATION_IN_BARS } 
@@ -217,6 +220,7 @@ export function AuraGroove() {
   const handleStop = useCallback(() => {
     setIsPlaying(false);
     if (scheduleLoopRef.current) {
+        scheduleLoopRef.current.stop(0);
         scheduleLoopRef.current.dispose();
         scheduleLoopRef.current = null;
     }
@@ -235,23 +239,21 @@ export function AuraGroove() {
     await Tone.start();
     if (Tone.context.state !== 'running') await Tone.context.resume();
     
-    // Set instruments before starting
     soloSynthManagerRef.current?.setInstrument(instrumentSettings.solo.name);
     accompanimentSynthManagerRef.current?.setInstrument(instrumentSettings.accompaniment.name);
     bassSynthManagerRef.current?.setInstrument(instrumentSettings.bass.name);
     effectsSynthManagerRef.current?.setMode(effectsSettings.mode);
 
-    // Tell worker to start composing
     musicWorkerRef.current?.postMessage({ command: 'start', data: { drumSettings, instrumentSettings, effectsSettings, bpm, score } });
     
-    // Request first chunk immediately
     requestNewChunkFromWorker();
 
     let scheduledTime = Tone.now();
 
-    // The main loop for scheduling notes from the buffer
     scheduleLoopRef.current = new Tone.Loop(loopTime => {
-        let notesPlayedInLoop = 0;
+        let notesProcessed = 0;
+        console.log(`[AURA_TRACE] Scheduler loop running. Buffer size: ${noteBufferRef.current.length}. Transport time: ${Tone.Transport.seconds}`);
+
         while(noteBufferRef.current.length > 0 && noteBufferRef.current[0].time < (Tone.Transport.seconds - scheduledTime) + 0.1) {
             const note = noteBufferRef.current.shift();
             if (!note) continue;
@@ -265,17 +267,20 @@ export function AuraGroove() {
                 case 'accompaniment': accompanimentSynthManagerRef.current?.triggerAttackRelease(note.notes, note.duration, timeToPlay, note.velocity); break;
                 case 'effects': effectsSynthManagerRef.current?.trigger(note, timeToPlay); break;
             }
-            notesPlayedInLoop++;
+            notesProcessed++;
         }
         
-        // Update debug counter
+        if (notesProcessed > 0) {
+            console.log(`[AURA_TRACE] Processed ${notesProcessed} notes in this loop.`);
+        }
+        
         setNoteBufferCount(noteBufferRef.current.length);
 
-        // Check if we need more music
         const secondsPerBar = (60 / bpm) * 4;
-        const bufferDuration = noteBufferRef.current.length > 0 ? noteBufferRef.current[noteBufferRef.current.length - 1].time : 0;
+        const remainingBufferDuration = noteBufferRef.current.length > 0 ? (noteBufferRef.current[noteBufferRef.current.length - 1].time - (Tone.Transport.seconds - scheduledTime)) : 0;
+        const remainingBars = remainingBufferDuration / secondsPerBar;
         
-        if (bufferDuration < NOTE_BUFFER_LOW_WATER_MARK_IN_BARS * secondsPerBar) {
+        if (remainingBars < NOTE_BUFFER_LOW_WATER_MARK_IN_BARS) {
             requestNewChunkFromWorker();
         }
 
