@@ -1,0 +1,22 @@
+List of drum samples:
+public/assets/drums/closed_hi_hat_accented.wav
+public/assets/drums/closed_hi_hat_ghost.wav
+public/assets/drums/crash1.wav
+public/assets/drums/crash2.wav
+public/assets/drums/cymbal1.wav
+public/assets/drums/cymbal2.wav
+public/assets/drums/cymbal3.wav
+public/assets/drums/cymbal4.wav
+public/assets/drums/cymbal_bell1.wav
+public/assets/drums/cymbal_bell2.wav
+public/assets/drums/hh_bark_short.wav
+public/assets/drums/hightom.wav
+public/assets/drums/kick_drum6.wav
+public/assets/drums/lowtom.wav
+public/assets/assets/drums/midtom.wav
+public/assets/drums/open_hh_bottom2.wav
+public/assets/drums/open_hh_top2.wav
+public/assets/drums/snare.wav
+public/assets/drums/snare_ghost_note.wav
+public/assets/drums/snare_off.wav
+public/assets/drums/snarepress.wav

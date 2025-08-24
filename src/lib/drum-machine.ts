@@ -3,11 +3,11 @@ import * as Tone from 'tone';
 import type { DrumNote } from '@/types/music';
 
 const DRUM_SAMPLES = {
-    'kick': '/assets/drums/kick.wav',
+    'kick': '/assets/drums/kick_drum6.wav',
     'snare': '/assets/drums/snare.wav',
-    'hat': '/assets/drums/hat.wav',
-    'crash': '/assets/drums/crash.wav',
-    'ride': '/assets/drums/ride.wav',
+    'hat': '/assets/drums/closed_hi_hat_accented.wav',
+    'crash': '/assets/drums/crash1.wav',
+    'ride': '/assets/drums/cymbal1.wav', // Using cymbal1 as a ride substitute
 };
 
 export class DrumMachine {
