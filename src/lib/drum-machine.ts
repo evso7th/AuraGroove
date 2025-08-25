@@ -14,17 +14,28 @@ export class DrumMachine {
     private players: Tone.Players;
     private isInitialized = false;
     private drumChannel: Tone.Channel;
+    private readyPromise: Promise<void>;
+    private resolveReady!: () => void;
 
     constructor(channel: Tone.Channel) {
         this.drumChannel = channel;
+        this.readyPromise = new Promise(resolve => {
+            this.resolveReady = resolve;
+        });
+
         this.players = new Tone.Players({
             urls: DRUM_SAMPLES,
             onload: () => {
                 console.log('[DRUM_TRACE] Drum samples loaded.');
                 this.isInitialized = true;
+                this.resolveReady();
             },
             onerror: (error) => console.error('[DRUM_TRACE] Error loading drum samples:', error),
         }).connect(this.drumChannel);
+    }
+    
+    public async waitForReady(): Promise<void> {
+        return this.readyPromise;
     }
 
     public isReady(): boolean {
@@ -52,7 +63,9 @@ export class DrumMachine {
     public stopAll() {
         if (this.isReady()) {
             Object.keys(DRUM_SAMPLES).forEach(sample => {
-                this.players.player(sample).stop();
+                if (this.players.player(sample).state === 'started') {
+                    this.players.player(sample).stop();
+                }
             });
             console.log('[DRUM_TRACE] All drum sounds stopped.');
         }
