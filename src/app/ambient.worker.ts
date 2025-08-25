@@ -31,16 +31,16 @@ function noteToFreq(note: string) {
     return A4 * Math.pow(2, semitone / 12);
 }
 
-const DrumPatterns: Record<string, DrumNote[]> = {
+const DrumPatterns: Record<string, Omit<DrumNote, 'time'>[]> = {
     'ambient_beat': [
-        { sample: 'kick', time: 0, velocity: 1.0 },
-        { sample: 'hat', time: 0.5, velocity: 0.3 },
-        { sample: 'snare', time: 1.0, velocity: 0.8 },
-        { sample: 'hat', time: 1.5, velocity: 0.3 },
-        { sample: 'kick', time: 2.0, velocity: 0.9 },
-        { sample: 'hat', time: 2.5, velocity: 0.3 },
-        { sample: 'snare', time: 3.0, velocity: 0.7 },
-        { sample: 'hat', time: 3.5, velocity: 0.3 },
+        { sample: 'kick', velocity: 1.0, beat: 0 },
+        { sample: 'hat', velocity: 0.3, beat: 0.5 },
+        { sample: 'snare', velocity: 0.8, beat: 1.0 },
+        { sample: 'hat', velocity: 0.3, beat: 1.5 },
+        { sample: 'kick', velocity: 0.9, beat: 2.0 },
+        { sample: 'hat', velocity: 0.3, beat: 2.5 },
+        { sample: 'snare', velocity: 0.7, beat: 3.0 },
+        { sample: 'hat', velocity: 0.3, beat: 3.5 },
     ]
 };
 
@@ -90,7 +90,7 @@ const Composer = {
         console.log("[WORKER_TRACE] Settings updated:", { settings });
     },
 
-    generateDrumScoreForBar(bar: number): DrumNote[] {
+    generateDrumScoreForBar(): DrumNote[] {
         if (this.drumSettings.pattern === 'none' || !DrumPatterns[this.drumSettings.pattern]) {
             return [];
         }
@@ -98,7 +98,7 @@ const Composer = {
         
         return pattern.map(note => ({
             ...note,
-            time: note.time * this.secondsPerBeat, // Convert beat time to seconds
+            time: note.beat * this.secondsPerBeat, // Convert beat time to seconds
             velocity: note.velocity * this.drumSettings.volume,
         }));
     },
@@ -156,6 +156,14 @@ const Composer = {
             
             accompaniment.forEach(n => { n.startTime += barStartTime; synthScore.accompaniment.push(n); });
             // solo and bass are intentionally left empty for this test
+
+            if (this.drumSettings.pattern !== 'none') {
+                const barDrumNotes = this.generateDrumScoreForBar();
+                barDrumNotes.forEach(n => { 
+                    n.time += barStartTime; 
+                    drumScore.push(n); 
+                });
+            }
         }
         
         this.barCount += chunkDurationInBars;

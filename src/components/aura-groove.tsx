@@ -150,16 +150,18 @@ export function AuraGroove() {
                 console.log("[AURA_TRACE] UI: Received 'score_ready' from worker.");
                 if (workletNodeRef.current && synthScore) {
                     console.log("[AURA_TRACE] UI: Sending synth score to worklet.");
-                    workletNodeRef.current.port.postMessage({ type: 'schedule', score: synthScore, bpm });
+                    workletNodeRef.current.port.postMessage({ type: 'schedule', score: synthScore });
                 }
                 if (drumMachineRef.current && drumScore) {
                     console.log("[AURA_TRACE] UI: Scheduling drum score with DrumMachine.");
                     drumMachineRef.current.scheduleDrumScore(drumScore, scoreStartTimeRef.current);
-                    if (audioContextRef.current) {
-                        const chunkDuration = (SCORE_CHUNK_DURATION_IN_BARS * 4 * 60) / bpm;
-                        scoreStartTimeRef.current += chunkDuration;
-                    }
                 }
+
+                if (audioContextRef.current) {
+                    const chunkDuration = (SCORE_CHUNK_DURATION_IN_BARS * 4 * 60) / bpm;
+                    scoreStartTimeRef.current += chunkDuration;
+                }
+
             } else if (type === 'error') {
                 toast({ variant: "destructive", title: "Worker Error", description: error });
                 setIsPlaying(false);

@@ -18,10 +18,13 @@ export type WorkletNote = {
     oscType: OscillatorType;
 };
 
+export type DrumSample = 'kick' | 'snare' | 'hat' | 'crash' | 'ride';
+
 export type DrumNote = {
-    sample: 'kick' | 'snare' | 'hat' | 'crash' | 'ride';
+    sample: DrumSample;
     time: number; // in seconds, relative to the start of the score chunk
     velocity: number;
+    beat: number; // beat position within the bar
 };
 
 
