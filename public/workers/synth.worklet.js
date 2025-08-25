@@ -1,23 +1,24 @@
 
 // synth.worklet.ts
-console.log("[WORKLET_TRACE] synth.worklet.ts script loading.");
+console.log("[WORKLET_TRACE] synth.worklet.ts script loading. ARCH: FINITE_AUTOMATA");
 
 // --- ADSR Envelope ---
 class ADSREnvelope {
-    constructor(options, sampleRate) {
-        this.attackTime = options.attack || 0.01;
-        this.decayTime = options.decay || 0.1;
-        this.sustainLevel = options.sustain || 0.5;
-        this.releaseTime = options.release || 0.2;
-        this.sampleRate = sampleRate;
+    private state: 'idle' | 'attack' | 'decay' | 'sustain' | 'release' = 'idle';
+    private value = 0.0;
+    private samplesProcessed = 0;
+    
+    private attackSamples: number;
+    private decaySamples: number;
+    private releaseSamples: number;
 
-        this.attackSamples = this.attackTime * this.sampleRate;
-        this.decaySamples = this.decayTime * this.sampleRate;
-        this.releaseSamples = this.releaseTime * this.sampleRate;
-        
-        this.state = 'idle';
-        this.value = 0.0;
-        this.samplesProcessed = 0;
+    constructor(
+        private options: { attack?: number; decay?: number; sustain?: number; release?: number },
+        private sampleRate: number
+    ) {
+        this.attackSamples = (this.options.attack || 0.01) * this.sampleRate;
+        this.decaySamples = (this.options.decay || 0.1) * this.sampleRate;
+        this.releaseSamples = (this.options.release || 0.2) * this.sampleRate;
     }
 
     triggerAttack() {
@@ -30,7 +31,7 @@ class ADSREnvelope {
         this.samplesProcessed = 0;
     }
 
-    process() {
+    process(): number {
         switch (this.state) {
             case 'attack':
                 this.value = this.samplesProcessed / this.attackSamples;
@@ -40,16 +41,16 @@ class ADSREnvelope {
                 }
                 break;
             case 'decay':
-                this.value = 1.0 - (1.0 - this.sustainLevel) * (this.samplesProcessed / this.decaySamples);
+                this.value = 1.0 - (1.0 - (this.options.sustain ?? 0.5)) * (this.samplesProcessed / this.decaySamples);
                 if (this.samplesProcessed >= this.decaySamples) {
                     this.state = 'sustain';
                 }
                 break;
             case 'sustain':
-                this.value = this.sustainLevel;
+                this.value = this.options.sustain ?? 0.5;
                 break;
             case 'release':
-                this.value = this.sustainLevel * (1.0 - this.samplesProcessed / this.releaseSamples);
+                this.value = (this.options.sustain ?? 0.5) * (1.0 - this.samplesProcessed / this.releaseSamples);
                 if (this.samplesProcessed >= this.releaseSamples) {
                     this.state = 'idle';
                     this.value = 0.0;
@@ -61,24 +62,26 @@ class ADSREnvelope {
         }
         
         this.samplesProcessed++;
-        return Math.max(0, this.value); // Ensure value is not negative
+        return Math.max(0, this.value);
+    }
+
+    isActive(): boolean {
+        return this.state !== 'idle';
     }
 }
 
 // --- Oscillator ---
 class Oscillator {
-    constructor(type, sampleRate) {
-        this.type = type;
-        this.sampleRate = sampleRate;
-        this.phase = 0;
-        this.phaseIncrement = 0;
-    }
+    private phase = 0;
+    private phaseIncrement = 0;
 
-    setFrequency(freq) {
+    constructor(private type: string, private sampleRate: number) {}
+
+    setFrequency(freq: number) {
         this.phaseIncrement = (2 * Math.PI * freq) / this.sampleRate;
     }
 
-    process() {
+    process(): number {
         let value = 0;
         switch (this.type) {
             case 'sine':
@@ -90,48 +93,46 @@ class Oscillator {
             case 'square':
                 value = Math.sign(Math.sin(this.phase));
                 break;
-            // Simplified "fat" oscillators for performance
             case 'fatsine':
                 value = (Math.sin(this.phase) + Math.sin(this.phase * 1.01) + Math.sin(this.phase * 0.99)) / 3;
                 break;
             case 'fatsawtooth':
                 value = (((this.phase / Math.PI) - 1) + (((this.phase * 1.01) / Math.PI) - 1) + (((this.phase * 0.99) / Math.PI) - 1)) / 3;
                 break;
-            // Simple FM for metallic sounds
             case 'fmsquare': {
-                const modulatorFreq = this.phaseIncrement * 5; // Modulator is 5x carrier
-                const modulator = Math.sin(modulatorFreq) * 2.0; // Modulation depth
+                const modulatorFreq = this.phaseIncrement * 5;
+                const modulator = Math.sin(modulatorFreq) * 2.0;
                 value = Math.sign(Math.sin(this.phase + modulator));
                 break;
             }
             default:
                 value = Math.sin(this.phase);
         }
+        
         this.phase += this.phaseIncrement;
-        if (this.phase > 2 * Math.PI) {
+        while (this.phase >= 2 * Math.PI) {
             this.phase -= 2 * Math.PI;
         }
         return value;
     }
 }
 
-// --- Voice (Synth) ---
-let voiceIdCounter = 0; // To give each voice a unique ID for logging
-
+// --- Voice (A single mono-synth automaton) ---
 class Voice {
-    constructor(sampleRate) {
-        this.id = voiceIdCounter++;
+    private oscillator: Oscillator;
+    private envelope: ADSREnvelope;
+    public note: any = null; // Storing the note for stealing logic
+    public startTime = 0;
+
+    constructor(private sampleRate: number) {
         this.oscillator = new Oscillator('sine', sampleRate);
         this.envelope = new ADSREnvelope({}, sampleRate);
-        this.isActive = false;
-        this.note = null;
-        this.sampleRate = sampleRate;
-        this.processCount = 0; // For logging frequency
     }
 
-    play(note, currentTime) {
+    play(note: any, currentTime: number) {
         this.note = note;
-        this.oscillator.type = note.oscType || 'sine';
+        this.startTime = currentTime;
+        this.oscillator = new Oscillator(note.oscType || 'sine', this.sampleRate);
         this.oscillator.setFrequency(note.freq);
         this.envelope = new ADSREnvelope({
             attack: note.attack,
@@ -140,84 +141,92 @@ class Voice {
             release: note.release
         }, this.sampleRate);
         this.envelope.triggerAttack();
-        this.isActive = true;
-        this.startTime = currentTime;
-        this.endTime = currentTime + note.duration;
-        this.processCount = 0; // Reset for new note
     }
 
-    process(currentTime) {
-        if (!this.isActive) return 0.0;
-
-        // Log the phase periodically
-        if (this.processCount % 50000 === 0) {
-            console.log(`[WORKLET_PHASE_TRACE] Voice ${this.id} (${this.note.part}): phase = ${this.oscillator.phase.toFixed(3)}`);
-        }
-        this.processCount++;
-
-
-        if (currentTime >= this.endTime && this.envelope.state !== 'release') {
-            this.envelope.triggerRelease();
-        }
-
-        const envValue = this.envelope.process();
-        if (this.envelope.state === 'idle') {
-            this.isActive = false;
-            return 0.0;
-        }
+    process(): number {
+        if (!this.envelope.isActive()) return 0.0;
         
+        const envValue = this.envelope.process();
         const oscValue = this.oscillator.process();
         return oscValue * envValue * this.note.velocity;
     }
+
+    isActive(): boolean {
+        return this.envelope.isActive();
+    }
 }
 
+
+// --- Main Processor (The Metronome and Mixer) ---
 class SynthProcessor extends AudioWorkletProcessor {
+    private voicePools: Record<string, Voice[]> = {
+        solo: [],
+        accompaniment: [],
+        bass: [],
+        effects: []
+    };
+    private poolConfig = {
+        solo: { size: 4 },
+        accompaniment: { size: 8 },
+        bass: { size: 4 },
+        effects: { size: 4 }
+    };
+
+    private noteQueue: any[] = [];
+    private scoreStartTime = 0;
+    private isPlaying = false;
+
+    private lastRequestTime = -Infinity;
+    private scoreBufferTime = 10; // seconds
+
     constructor() {
         super();
-        this.voices = [];
-        this.noteQueue = [];
-        this.bpm = 120;
-        this.scoreStartTime = 0;
-        this.isPlaying = false;
-        this.lastRequestTime = -Infinity;
-        this.scoreBufferTime = 10; // seconds
-
         console.log("[WORKLET_TRACE] SynthProcessor constructor called.");
 
         this.port.onmessage = (event) => {
             const { type, score, bpm } = event.data;
             if (type === 'schedule') {
-                console.log("[WORKLET_TRACE] Received 'schedule' command with score.", { score, bpm });
-                this.bpm = bpm;
-                
-                // If the queue is empty, reset the start time.
                 if (this.noteQueue.length === 0) {
-                    this.scoreStartTime = currentTime; // currentTime is a global from AudioWorkletProcessor
+                    this.scoreStartTime = currentTime;
                     this.lastRequestTime = currentTime;
-                    console.log(`[WORKLET_TRACE] Note queue was empty. Resetting scoreStartTime to ${this.scoreStartTime}`);
                 }
                 
-                const processNotes = (partNotes) => {
-                    if (partNotes) {
-                       partNotes.forEach(note => this.noteQueue.push(note));
-                    }
-                };
-
-                processNotes(score.solo);
-                processNotes(score.accompaniment);
-                processNotes(score.bass);
-                processNotes(score.effects);
-
+                const allNotes = [...(score.solo || []), ...(score.accompaniment || []), ...(score.bass || []), ...(score.effects || [])];
+                this.noteQueue.push(...allNotes);
                 this.noteQueue.sort((a, b) => a.startTime - b.startTime);
                 this.isPlaying = true;
-
             } else if (type === 'clear') {
-                console.log("[WORKLET_TRACE] Received 'clear' command. Clearing voices and queue.");
-                this.voices = [];
+                this.voicePools = { solo: [], accompaniment: [], bass: [], effects: [] };
                 this.noteQueue = [];
                 this.isPlaying = false;
             }
         };
+    }
+
+    getVoiceForNote(note: any): Voice {
+        const poolName = note.part;
+        if (!this.voicePools[poolName]) {
+            this.voicePools[poolName] = [];
+        }
+
+        let pool = this.voicePools[poolName];
+        let voice = pool.find(v => !v.isActive());
+
+        if (voice) {
+            return voice;
+        }
+
+        const poolMaxSize = this.poolConfig[poolName as keyof typeof this.poolConfig]?.size || 4;
+        if (pool.length < poolMaxSize) {
+            voice = new Voice(sampleRate);
+            pool.push(voice);
+            return voice;
+        }
+
+        // Voice stealing
+        return pool.reduce((oldest, current) => {
+            return current.startTime < oldest.startTime ? current : oldest;
+        });
     }
 
     process(inputs, outputs, parameters) {
@@ -225,48 +234,38 @@ class SynthProcessor extends AudioWorkletProcessor {
         const channel = output[0];
 
         if (!this.isPlaying) {
-             for (let i = 0; i < channel.length; i++) {
-                channel[i] = 0;
-            }
+            channel.fill(0);
             return true;
         }
 
         const timeToScheduleUntil = currentTime + channel.length / sampleRate;
 
-        // Activate notes from the queue
         while (this.noteQueue.length > 0 && this.scoreStartTime + this.noteQueue[0].startTime < timeToScheduleUntil) {
             const note = this.noteQueue.shift();
-            let voice = this.voices.find(v => !v.isActive);
-            if (!voice) {
-                voice = new Voice(sampleRate);
-                this.voices.push(voice);
+            const voice = this.getVoiceForNote(note);
+            if (voice) {
+                voice.play(note, this.scoreStartTime + note.startTime);
             }
-            voice.play(note, this.scoreStartTime + note.startTime);
         }
 
-        // Process all active voices
+        channel.fill(0);
         for (let i = 0; i < channel.length; i++) {
-            const time = currentTime + i / sampleRate;
             let sample = 0;
-            for (const voice of this.voices) {
-                if (voice.isActive) {
-                    sample += voice.process(time);
+            for (const poolName in this.voicePools) {
+                for (const voice of this.voicePools[poolName]) {
+                    if (voice.isActive()) {
+                        sample += voice.process();
+                    }
                 }
             }
             channel[i] = sample * 0.2; // Master volume
         }
 
-        // Clean up idle voices
-        this.voices = this.voices.filter(v => v.isActive);
-
-        // Request new score if buffer is running low
-        const remainingBuffer = (this.scoreStartTime + (this.noteQueue.length > 0 ? this.noteQueue[this.noteQueue.length - 1].startTime : 0)) - currentTime;
+        const remainingBuffer = this.noteQueue.length > 0 ? (this.scoreStartTime + this.noteQueue[this.noteQueue.length - 1].startTime) - currentTime : 0;
         if (remainingBuffer < this.scoreBufferTime && currentTime > this.lastRequestTime + 1) {
-            console.log(`[WORKLET_TRACE] Buffer low (${remainingBuffer.toFixed(2)}s). Requesting new score.`);
             this.port.postMessage({ type: 'request_new_score' });
             this.lastRequestTime = currentTime;
         }
-
 
         return true;
     }
