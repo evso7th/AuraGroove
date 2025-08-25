@@ -1,3 +1,4 @@
+
 // synth.worklet.js
 console.log("[WORKLET_TRACE] synth.worklet.ts script loading. ARCH: FINITE_AUTOMATA");
 
@@ -161,6 +162,13 @@ class Voice {
       release: note.release
     }, this.sampleRate);
     this.envelope.triggerAttack();
+
+    const releaseTime = this.startTime + note.duration;
+    setTimeout(() => {
+        if (this.noteId === note.id && this.envelope.state !== 'idle') {
+            this.stop();
+        }
+    }, (releaseTime - currentTime) * 1000);
   }
 
   stop() {
@@ -173,7 +181,6 @@ class Voice {
       }
       const envValue = this.envelope.process(this.noteVelocity);
       const oscValue = this.oscillator.process();
-      // Apply velocity inside the voice process, not in the main mixer loop
       return oscValue * envValue;
   }
 
@@ -300,13 +307,11 @@ class SynthProcessor extends AudioWorkletProcessor {
       for (const poolName in this.voicePools) {
         for (const voice of this.voicePools[poolName]) {
           if (voice.isActive()) {
-            // Velocity is now applied inside the voice's process method
             sample += voice.process();
           }
         }
       }
-      // Master volume adjustment
-      channel[i] = Math.max(-1, Math.min(1, sample * 0.7)); // Adjusted master volume slightly
+      channel[i] = Math.max(-1, Math.min(1, sample * 0.3));
     }
 
     const remainingBuffer = this.noteQueue.length > 0
