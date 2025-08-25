@@ -23,13 +23,11 @@ class ADSREnvelope {
     triggerAttack() {
         this.state = 'attack';
         this.samplesProcessed = 0;
-        // console.log(`[WORKLET_VOICE_TRACE] Envelope Attack Triggered. Attack Time: ${this.attackTime}s`);
     }
 
     triggerRelease() {
         this.state = 'release';
         this.samplesProcessed = 0;
-        // console.log(`[WORKLET_VOICE_TRACE] Envelope Release Triggered. Release Time: ${this.releaseTime}s`);
     }
 
     process() {
@@ -117,15 +115,18 @@ class Oscillator {
     }
 }
 
-
 // --- Voice (Synth) ---
+let voiceIdCounter = 0; // To give each voice a unique ID for logging
+
 class Voice {
     constructor(sampleRate) {
+        this.id = voiceIdCounter++;
         this.oscillator = new Oscillator('sine', sampleRate);
         this.envelope = new ADSREnvelope({}, sampleRate);
         this.isActive = false;
         this.note = null;
         this.sampleRate = sampleRate;
+        this.processCount = 0; // For logging frequency
     }
 
     play(note, currentTime) {
@@ -142,10 +143,18 @@ class Voice {
         this.isActive = true;
         this.startTime = currentTime;
         this.endTime = currentTime + note.duration;
+        this.processCount = 0; // Reset for new note
     }
 
     process(currentTime) {
         if (!this.isActive) return 0.0;
+
+        // Log the phase periodically
+        if (this.processCount % 50000 === 0) {
+            console.log(`[WORKLET_PHASE_TRACE] Voice ${this.id} (${this.note.part}): phase = ${this.oscillator.phase.toFixed(3)}`);
+        }
+        this.processCount++;
+
 
         if (currentTime >= this.endTime && this.envelope.state !== 'release') {
             this.envelope.triggerRelease();
