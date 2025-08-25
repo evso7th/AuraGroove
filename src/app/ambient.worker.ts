@@ -10,7 +10,7 @@ const PRESETS = {
     'piano_solo': { attack: 0.01, decay: 0.5, sustain: 0.1, release: 0.8, oscType: 'sine' },
     'organ_solo': { attack: 0.2, decay: 0.4, sustain: 0.8, release: 1.5, oscType: 'fatsawtooth' },
     
-    'synthesizer_accompaniment': { attack: 0.8, decay: 0.5, sustain: 0.8, release: 1.5, oscType: 'fatsine' },
+    'synthesizer_accompaniment': { attack: 0.2, decay: 0.3, sustain: 0.8, release: 0.8, oscType: 'fatsine' },
     'piano_accompaniment': { attack: 0.01, decay: 0.5, sustain: 0.1, release: 0.8, oscType: 'sine' },
     'organ_accompaniment': { attack: 0.3, decay: 0.5, sustain: 0.9, release: 1.0, oscType: 'fatsawtooth' },
 
@@ -52,9 +52,9 @@ const Composer = {
     // Settings from main thread
     bpm: 75,
     instrumentSettings: {
-        solo: { name: 'synthesizer', volume: 0.8 },
+        solo: { name: 'none', volume: 0.8 },
         accompaniment: { name: 'synthesizer', volume: 0.7 },
-        bass: { name: 'bass_synth', volume: 0.9 },
+        bass: { name: 'none', volume: 0.9 },
     } as InstrumentSettings,
     drumSettings: { pattern: 'none', volume: 0.7 } as DrumSettings,
     effectsSettings: { mode: 'none', volume: 0.7 } as EffectsSettings,
@@ -127,7 +127,7 @@ const Composer = {
                             sustain: preset.sustain,
                             release: preset.release,
                             oscType: preset.oscType,
-                            startTime: 0,
+                            startTime: 0 + (index * 0.05),
                             duration: this.secondsPerBeat * 4, // 1 bar duration
                             velocity: this.instrumentSettings.accompaniment.volume / 3 // Prevent clipping
                         });

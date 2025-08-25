@@ -141,8 +141,8 @@ class Oscillator {
 // --- Voice (A single mono-synth automaton) ---
 class Voice {
   constructor(sampleRate) {
-    this.noteId = -1;
     this.startTime = 0;
+    this.releaseTime = Infinity;
     this.noteVelocity = 0;
     this.sampleRate = sampleRate;
     this.oscillator = new Oscillator('sine', sampleRate);
@@ -150,8 +150,8 @@ class Voice {
   }
 
   play(note, currentTime) {
-    this.noteId = note.id;
     this.startTime = currentTime;
+    this.releaseTime = currentTime + note.duration;
     this.noteVelocity = note.velocity;
     this.oscillator = new Oscillator(note.oscType || 'sine', this.sampleRate);
     this.oscillator.setFrequency(note.freq);
@@ -162,23 +162,24 @@ class Voice {
       release: note.release
     }, this.sampleRate);
     this.envelope.triggerAttack();
-
-    const releaseTime = this.startTime + note.duration;
-    setTimeout(() => {
-        if (this.noteId === note.id && this.envelope.state !== 'idle') {
-            this.stop();
-        }
-    }, (releaseTime - currentTime) * 1000);
   }
 
   stop() {
     this.envelope.triggerRelease();
   }
 
-  process() {
+  process(currentTime) {
       if (!this.isActive()) {
           return 0.0;
       }
+
+      // Check if it's time to release the note
+      if (this.envelope.state === 'attack' || this.envelope.state === 'decay' || this.envelope.state === 'sustain') {
+        if (currentTime >= this.releaseTime) {
+            this.stop();
+        }
+      }
+
       const envValue = this.envelope.process(this.noteVelocity);
       const oscValue = this.oscillator.process();
       return oscValue * envValue;
@@ -304,10 +305,11 @@ class SynthProcessor extends AudioWorkletProcessor {
 
     for (let i = 0; i < channel.length; i++) {
       let sample = 0;
+      const currentFrameTime = currentTime + i / sampleRate;
       for (const poolName in this.voicePools) {
         for (const voice of this.voicePools[poolName]) {
           if (voice.isActive()) {
-            sample += voice.process();
+            sample += voice.process(currentFrameTime);
           }
         }
       }
