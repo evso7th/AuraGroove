@@ -1,3 +1,4 @@
+
 // synth.worklet.js
 console.log("[WORKLET_TRACE] synth.worklet.ts script loading. ARCH: FINITE_AUTOMATA");
 
@@ -11,37 +12,50 @@ class ADSREnvelope {
   decaySamples;
   releaseSamples;
   sustainLevel;
+  baseSustainLevel; // Store the original sustain level
+  releaseInitialValue; // Store value when release is triggered
 
   constructor(options, sampleRate) {
       this.attackSamples = (options.attack || 0.01) * sampleRate;
       this.decaySamples = (options.decay || 0.1) * sampleRate;
       this.releaseSamples = (options.release || 0.2) * sampleRate;
       this.sustainLevel = options.sustain ?? 0.5;
+      this.baseSustainLevel = this.sustainLevel;
   }
 
   triggerAttack() {
       this.state = 'attack';
       this.samplesProcessed = 0;
+      this.sustainLevel = this.baseSustainLevel; // Reset sustain level on new attack
   }
 
   triggerRelease() {
       if (this.state !== 'idle') {
           this.state = 'release';
+          this.releaseInitialValue = this.value; // Capture current value
           this.samplesProcessed = 0;
       }
   }
 
-  process() {
+  process(velocity) {
       switch (this.state) {
           case 'attack':
-              this.value = this.samplesProcessed / this.attackSamples;
+              if (this.attackSamples > 0) {
+                  this.value = (this.samplesProcessed / this.attackSamples);
+              } else {
+                  this.value = 1.0;
+              }
               if (this.samplesProcessed >= this.attackSamples) {
                   this.state = 'decay';
                   this.samplesProcessed = 0;
               }
               break;
           case 'decay':
-              this.value = 1.0 - (1.0 - this.sustainLevel) * (this.samplesProcessed / this.decaySamples);
+              if (this.decaySamples > 0) {
+                 this.value = 1.0 - (1.0 - this.sustainLevel) * (this.samplesProcessed / this.decaySamples);
+              } else {
+                 this.value = this.sustainLevel;
+              }
               if (this.samplesProcessed >= this.decaySamples) {
                   this.state = 'sustain';
               }
@@ -50,7 +64,11 @@ class ADSREnvelope {
               this.value = this.sustainLevel;
               break;
           case 'release':
-              this.value = this.sustainLevel * (1.0 - this.samplesProcessed / this.releaseSamples);
+              if (this.releaseSamples > 0) {
+                  this.value = this.releaseInitialValue * (1.0 - this.samplesProcessed / this.releaseSamples);
+              } else {
+                  this.value = 0;
+              }
               if (this.samplesProcessed >= this.releaseSamples) {
                   this.state = 'idle';
                   this.value = 0.0;
@@ -61,13 +79,15 @@ class ADSREnvelope {
               break;
       }
       
-      if (this.value < 0.0001 && this.state === 'release') {
-          this.state = 'idle';
-          this.value = 0.0;
+      if (this.value < 0.0001) {
+        if (this.state === 'release' || this.state === 'decay') {
+           this.state = 'idle';
+           this.value = 0.0;
+        }
       }
 
       this.samplesProcessed++;
-      return this.value;
+      return this.value * velocity;
   }
 
   isActive() {
@@ -133,11 +153,11 @@ class Voice {
   envelope;
   noteId = -1;
   startTime = 0;
+  noteVelocity = 0;
   sampleRate;
 
   constructor(sampleRate) {
       this.sampleRate = sampleRate;
-      // Initialize with placeholder objects
       this.oscillator = new Oscillator('sine', sampleRate);
       this.envelope = new ADSREnvelope({}, sampleRate);
   }
@@ -145,6 +165,7 @@ class Voice {
   play(note, currentTime) {
       this.noteId = note.id; 
       this.startTime = currentTime;
+      this.noteVelocity = note.velocity;
       this.oscillator = new Oscillator(note.oscType || 'sine', this.sampleRate);
       this.oscillator.setFrequency(note.freq);
       this.envelope = new ADSREnvelope({
@@ -161,10 +182,10 @@ class Voice {
   }
 
   process() {
-      if (!this.envelope.isActive()) {
+      if (!this.isActive()) {
           return 0.0;
       }
-      const envValue = this.envelope.process();
+      const envValue = this.envelope.process(this.noteVelocity);
       const oscValue = this.oscillator.process();
       return oscValue * envValue;
   }
@@ -198,7 +219,7 @@ class SynthProcessor extends AudioWorkletProcessor {
       console.log("[WORKLET_TRACE] SynthProcessor constructor called.");
 
       this.port.onmessage = (event) => {
-          const { type, score, bpm } = event.data;
+          const { type, score } = event.data;
           if (type === 'schedule') {
               console.log("[WORKLET_TRACE] Received 'schedule' command with score.", { score });
               if (!this.isPlaying) {
@@ -222,7 +243,9 @@ class SynthProcessor extends AudioWorkletProcessor {
           } else if (type === 'clear') {
               console.log("[WORKLET_TRACE] Received 'clear' command. Clearing voices and queue.");
               for (const poolName in this.voicePools) {
-                this.voicePools[poolName].forEach(voice => voice.stop());
+                if (this.voicePools[poolName]) {
+                    this.voicePools[poolName].forEach(voice => voice.stop());
+                }
               }
               this.noteQueue = [];
               this.isPlaying = false;
@@ -230,22 +253,19 @@ class SynthProcessor extends AudioWorkletProcessor {
       };
   }
 
-  getVoiceForNote(note, currentTime) {
+  getVoiceForNote(note) {
       const poolName = note.part;
-      let pool = this.voicePools[poolName];
-      let voiceIndex = -1;
+      if (!poolName || !this.voicePools.hasOwnProperty(poolName)) return null;
 
-      // Lazy initialization of pools
+      let pool = this.voicePools[poolName];
+
       while (pool.length < this.poolSizes[poolName]) {
           pool.push(new Voice(sampleRate));
       }
 
-      // Find a free voice
-      const freeVoiceIndex = pool.findIndex(v => !v.isActive());
-      if (freeVoiceIndex !== -1) {
-          voiceIndex = freeVoiceIndex;
-      } else {
-          // Voice stealing: find the oldest voice to reuse
+      let voiceIndex = pool.findIndex(v => !v.isActive());
+
+      if (voiceIndex === -1) {
           let oldestVoiceIndex = 0;
           for (let i = 1; i < pool.length; i++) {
               if (pool[i].startTime < pool[oldestVoiceIndex].startTime) {
@@ -253,14 +273,14 @@ class SynthProcessor extends AudioWorkletProcessor {
               }
           }
           voiceIndex = oldestVoiceIndex;
-          console.log(`[WORKLET_VOICE_STEAL] Stealing voice ${voiceIndex} for part ${poolName}`);
       }
+      
+      console.log(`[WORKLET_VOICE_TRACE] Part: ${note.part}, Voice: ${voiceIndex}, Freq: ${note.freq.toFixed(2)}, ADSR: A:${note.attack} D:${note.decay} S:${note.sustain} R:${note.release}`);
 
-      console.log(`[WORKLET_VOICE_TRACE] Part: ${note.part}, Voice: ${voiceIndex}, Freq: ${note.freq.toFixed(2)}`);
       return pool[voiceIndex];
   }
 
-  process(inputs, outputs, parameters) {
+  process(inputs, outputs) {
       const output = outputs[0];
       const channel = output[0];
 
@@ -268,15 +288,13 @@ class SynthProcessor extends AudioWorkletProcessor {
           return true;
       }
 
-      const timeToScheduleUntil = currentTime + channel.length / sampleRate;
+      const timeToScheduleUntil = currentTime + (channel.length / sampleRate);
 
       while (this.noteQueue.length > 0 && this.scoreStartTime + this.noteQueue[0].startTime < timeToScheduleUntil) {
           const note = this.noteQueue.shift();
-          if (this.voicePools[note.part]) {
-              const voice = this.getVoiceForNote(note, this.scoreStartTime + note.startTime);
-              if(voice) {
-                voice.play(note, this.scoreStartTime + note.startTime);
-              }
+          const voice = this.getVoiceForNote(note);
+          if(voice) {
+            voice.play(note, this.scoreStartTime + note.startTime);
           }
       }
 
@@ -289,15 +307,14 @@ class SynthProcessor extends AudioWorkletProcessor {
                   }
               }
           }
-          // Simple limiter to prevent clipping
-          channel[i] = Math.max(-1, Math.min(1, sample * 0.3)); // Master volume
+          channel[i] = Math.max(-1, Math.min(1, sample * 0.7)); // Master volume
       }
 
       const remainingBuffer = this.noteQueue.length > 0 
           ? (this.scoreStartTime + this.noteQueue[this.noteQueue.length - 1].startTime) - currentTime 
           : 0;
 
-      if (remainingBuffer < this.scoreBufferTime && currentTime > this.lastRequestTime + 1) {
+      if (this.isPlaying && remainingBuffer < this.scoreBufferTime && currentTime > this.lastRequestTime + 1) {
           this.port.postMessage({ type: 'request_new_score' });
           this.lastRequestTime = currentTime;
       }

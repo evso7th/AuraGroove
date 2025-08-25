@@ -1,4 +1,4 @@
-// synth.worklet.ts
+// synth.worklet.js
 console.log("[WORKLET_TRACE] synth.worklet.ts script loading. ARCH: FINITE_AUTOMATA");
 
 // --- ADSR Envelope ---
@@ -183,7 +183,7 @@ class SynthProcessor extends AudioWorkletProcessor {
       bass: [],
       effects: [],
   };
-  poolSizes = { solo: 4, accompaniment: 8, bass: 4, effects: 4 };
+  poolSizes = { solo: 4, accompaniment: 12, bass: 4, effects: 4 };
   
   noteQueue = [];
   scoreStartTime = 0;
@@ -256,7 +256,7 @@ class SynthProcessor extends AudioWorkletProcessor {
           console.log(`[WORKLET_VOICE_STEAL] Stealing voice ${voiceIndex} for part ${poolName}`);
       }
 
-      console.log(`[WORKLET_VOICE_TRACE] Part: ${poolName}, Voice: ${voiceIndex}, Freq: ${note.freq.toFixed(2)}`);
+      console.log(`[WORKLET_VOICE_TRACE] Part: ${note.part}, Voice: ${voiceIndex}, Freq: ${note.freq.toFixed(2)}`);
       return pool[voiceIndex];
   }
 
@@ -298,7 +298,6 @@ class SynthProcessor extends AudioWorkletProcessor {
           : 0;
 
       if (remainingBuffer < this.scoreBufferTime && currentTime > this.lastRequestTime + 1) {
-          // console.log(`[WORKLET_TRACE] Buffer low (${remainingBuffer.toFixed(2)}s). Requesting new score.`);
           this.port.postMessage({ type: 'request_new_score' });
           this.lastRequestTime = currentTime;
       }
