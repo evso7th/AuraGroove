@@ -114,7 +114,7 @@ class Oscillator {
         }
         
         this.phase += this.phaseIncrement;
-        if (this.phase >= 2 * Math.PI) {
+        while (this.phase >= 2 * Math.PI) {
             this.phase -= 2 * Math.PI;
         }
         return value;
@@ -125,7 +125,7 @@ class Oscillator {
 class Voice {
     private oscillator: Oscillator;
     private envelope: ADSREnvelope;
-    public noteId: number | null = null;
+    public noteId: number = -1;
     public lastUsedTime = 0;
 
     constructor(private sampleRate: number) {
@@ -149,21 +149,17 @@ class Voice {
 
     process(): number {
         if (!this.envelope.isActive()) {
-            this.noteId = null; // Free up the voice
+            this.noteId = -1; // Free up the voice
             return 0.0;
         }
         
         const envValue = this.envelope.process();
         const oscValue = this.oscillator.process();
-        return oscValue * envValue * (this.noteId ? 1 : 0); // Use noteId to check if it's conceptually "playing"
+        return oscValue * envValue * (this.noteId !== -1 ? 1 : 0);
     }
 
     isActive(): boolean {
-        return this.noteId !== null;
-    }
-
-    steal(note: any, currentTime: number) {
-        this.play(note, currentTime);
+        return this.noteId !== -1;
     }
 }
 
@@ -171,11 +167,12 @@ class Voice {
 // --- Main Processor (The Metronome and Mixer) ---
 class SynthProcessor extends AudioWorkletProcessor {
     private voicePools: Record<string, Voice[]> = {
-        solo: Array.from({ length: 4 }, () => new Voice(sampleRate)),
-        accompaniment: Array.from({ length: 8 }, () => new Voice(sampleRate)),
-        bass: Array.from({ length: 4 }, () => new Voice(sampleRate)),
-        effects: Array.from({ length: 4 }, () => new Voice(sampleRate)),
+        solo: [],
+        accompaniment: [],
+        bass: [],
+        effects: [],
     };
+    private poolSizes = { solo: 4, accompaniment: 8, bass: 4, effects: 4 };
     
     private noteQueue: any[] = [];
     private scoreStartTime = 0;
@@ -192,7 +189,8 @@ class SynthProcessor extends AudioWorkletProcessor {
         this.port.onmessage = (event) => {
             const { type, score } = event.data;
             if (type === 'schedule') {
-                if (this.noteQueue.length === 0) {
+                console.log("[WORKLET_TRACE] Received 'schedule' command with score.", { score });
+                if (!this.isPlaying) {
                     this.scoreStartTime = currentTime;
                     this.lastRequestTime = currentTime;
                     console.log(`[WORKLET_TRACE] Note queue was empty. Resetting scoreStartTime to ${this.scoreStartTime}`);
@@ -208,37 +206,42 @@ class SynthProcessor extends AudioWorkletProcessor {
 
             } else if (type === 'clear') {
                 console.log("[WORKLET_TRACE] Received 'clear' command. Clearing voices and queue.");
-                this.voicePools = {
-                    solo: Array.from({ length: 4 }, () => new Voice(sampleRate)),
-                    accompaniment: Array.from({ length: 8 }, () => new Voice(sampleRate)),
-                    bass: Array.from({ length: 4 }, () => new Voice(sampleRate)),
-                    effects: Array.from({ length: 4 }, () => new Voice(sampleRate)),
-                };
+                this.voicePools = { solo: [], accompaniment: [], bass: [], effects: [] };
                 this.noteQueue = [];
                 this.isPlaying = false;
             }
         };
     }
 
-    getVoiceForNote(note: any): Voice {
-        const pool = this.voicePools[note.part];
-        if (!pool) return new Voice(sampleRate); // Should not happen
+    getVoiceForNote(note: any, currentTime: number): Voice {
+        const poolName = note.part;
+        if (!this.voicePools[poolName]) {
+            this.voicePools[poolName] = [];
+        }
+
+        let pool = this.voicePools[poolName];
+        
+        // Lazy initialization of pools
+        if (pool.length < this.poolSizes[poolName as keyof typeof this.poolSizes]) {
+            const newVoice = new Voice(sampleRate);
+            pool.push(newVoice);
+            return newVoice;
+        }
 
         let voice = pool.find(v => !v.isActive());
         if (voice) return voice;
 
-        // Voice stealing
+        // Voice stealing: find the oldest voice to reuse
         return pool.reduce((oldest, current) => {
             return current.lastUsedTime < oldest.lastUsedTime ? current : oldest;
         });
     }
 
-    process(inputs, outputs, parameters) {
+    process(inputs: any, outputs: any, parameters: any) {
         const output = outputs[0];
         const channel = output[0];
 
-        if (!this.isPlaying) {
-            channel.fill(0);
+        if (!this.isPlaying || !channel) {
             return true;
         }
 
@@ -246,7 +249,7 @@ class SynthProcessor extends AudioWorkletProcessor {
 
         while (this.noteQueue.length > 0 && this.scoreStartTime + this.noteQueue[0].startTime < timeToScheduleUntil) {
             const note = this.noteQueue.shift();
-            const voice = this.getVoiceForNote(note);
+            const voice = this.getVoiceForNote(note, this.scoreStartTime + note.startTime);
             voice.play(note, this.scoreStartTime + note.startTime);
         }
 

@@ -11,6 +11,7 @@ class ADSREnvelope {
     private attackSamples: number;
     private decaySamples: number;
     private releaseSamples: number;
+    private sustainLevel: number;
 
     constructor(
         private options: { attack?: number; decay?: number; sustain?: number; release?: number },
@@ -19,6 +20,7 @@ class ADSREnvelope {
         this.attackSamples = (this.options.attack || 0.01) * this.sampleRate;
         this.decaySamples = (this.options.decay || 0.1) * this.sampleRate;
         this.releaseSamples = (this.options.release || 0.2) * this.sampleRate;
+        this.sustainLevel = this.options.sustain ?? 0.5;
     }
 
     triggerAttack() {
@@ -27,8 +29,10 @@ class ADSREnvelope {
     }
 
     triggerRelease() {
-        this.state = 'release';
-        this.samplesProcessed = 0;
+        if (this.state !== 'idle') {
+            this.state = 'release';
+            this.samplesProcessed = 0;
+        }
     }
 
     process(): number {
@@ -41,16 +45,16 @@ class ADSREnvelope {
                 }
                 break;
             case 'decay':
-                this.value = 1.0 - (1.0 - (this.options.sustain ?? 0.5)) * (this.samplesProcessed / this.decaySamples);
+                this.value = 1.0 - (1.0 - this.sustainLevel) * (this.samplesProcessed / this.decaySamples);
                 if (this.samplesProcessed >= this.decaySamples) {
                     this.state = 'sustain';
                 }
                 break;
             case 'sustain':
-                this.value = this.options.sustain ?? 0.5;
+                this.value = this.sustainLevel;
                 break;
             case 'release':
-                this.value = (this.options.sustain ?? 0.5) * (1.0 - this.samplesProcessed / this.releaseSamples);
+                this.value = this.sustainLevel * (1.0 - this.samplesProcessed / this.releaseSamples);
                 if (this.samplesProcessed >= this.releaseSamples) {
                     this.state = 'idle';
                     this.value = 0.0;
@@ -121,8 +125,8 @@ class Oscillator {
 class Voice {
     private oscillator: Oscillator;
     private envelope: ADSREnvelope;
-    public note: any = null; // Storing the note for stealing logic
-    public startTime = 0;
+    public noteId: number = -1;
+    public lastUsedTime = 0;
 
     constructor(private sampleRate: number) {
         this.oscillator = new Oscillator('sine', sampleRate);
@@ -130,8 +134,8 @@ class Voice {
     }
 
     play(note: any, currentTime: number) {
-        this.note = note;
-        this.startTime = currentTime;
+        this.noteId = note.id; // Assuming notes will have unique IDs
+        this.lastUsedTime = currentTime;
         this.oscillator = new Oscillator(note.oscType || 'sine', this.sampleRate);
         this.oscillator.setFrequency(note.freq);
         this.envelope = new ADSREnvelope({
@@ -144,15 +148,18 @@ class Voice {
     }
 
     process(): number {
-        if (!this.envelope.isActive()) return 0.0;
+        if (!this.envelope.isActive()) {
+            this.noteId = -1; // Free up the voice
+            return 0.0;
+        }
         
         const envValue = this.envelope.process();
         const oscValue = this.oscillator.process();
-        return oscValue * envValue * this.note.velocity;
+        return oscValue * envValue * (this.noteId !== -1 ? 1 : 0);
     }
 
     isActive(): boolean {
-        return this.envelope.isActive();
+        return this.noteId !== -1;
     }
 }
 
@@ -163,18 +170,14 @@ class SynthProcessor extends AudioWorkletProcessor {
         solo: [],
         accompaniment: [],
         bass: [],
-        effects: []
+        effects: [],
     };
-    private poolConfig = {
-        solo: { size: 4 },
-        accompaniment: { size: 8 },
-        bass: { size: 4 },
-        effects: { size: 4 }
-    };
-
+    private poolSizes = { solo: 4, accompaniment: 8, bass: 4, effects: 4 };
+    
     private noteQueue: any[] = [];
     private scoreStartTime = 0;
     private isPlaying = false;
+    private nextNoteId = 0;
 
     private lastRequestTime = -Infinity;
     private scoreBufferTime = 10; // seconds
@@ -184,18 +187,25 @@ class SynthProcessor extends AudioWorkletProcessor {
         console.log("[WORKLET_TRACE] SynthProcessor constructor called.");
 
         this.port.onmessage = (event) => {
-            const { type, score, bpm } = event.data;
+            const { type, score } = event.data;
             if (type === 'schedule') {
-                if (this.noteQueue.length === 0) {
+                console.log("[WORKLET_TRACE] Received 'schedule' command with score.", { score });
+                if (!this.isPlaying) {
                     this.scoreStartTime = currentTime;
                     this.lastRequestTime = currentTime;
+                    console.log(`[WORKLET_TRACE] Note queue was empty. Resetting scoreStartTime to ${this.scoreStartTime}`);
                 }
                 
                 const allNotes = [...(score.solo || []), ...(score.accompaniment || []), ...(score.bass || []), ...(score.effects || [])];
-                this.noteQueue.push(...allNotes);
+                
+                const notesWithIds = allNotes.map(n => ({...n, id: this.nextNoteId++}));
+
+                this.noteQueue.push(...notesWithIds);
                 this.noteQueue.sort((a, b) => a.startTime - b.startTime);
                 this.isPlaying = true;
+
             } else if (type === 'clear') {
+                console.log("[WORKLET_TRACE] Received 'clear' command. Clearing voices and queue.");
                 this.voicePools = { solo: [], accompaniment: [], bass: [], effects: [] };
                 this.noteQueue = [];
                 this.isPlaying = false;
@@ -203,38 +213,35 @@ class SynthProcessor extends AudioWorkletProcessor {
         };
     }
 
-    getVoiceForNote(note: any): Voice {
+    getVoiceForNote(note: any, currentTime: number): Voice {
         const poolName = note.part;
         if (!this.voicePools[poolName]) {
             this.voicePools[poolName] = [];
         }
 
         let pool = this.voicePools[poolName];
+        
+        // Lazy initialization of pools
+        if (pool.length < this.poolSizes[poolName as keyof typeof this.poolSizes]) {
+            const newVoice = new Voice(sampleRate);
+            pool.push(newVoice);
+            return newVoice;
+        }
+
         let voice = pool.find(v => !v.isActive());
+        if (voice) return voice;
 
-        if (voice) {
-            return voice;
-        }
-
-        const poolMaxSize = this.poolConfig[poolName as keyof typeof this.poolConfig]?.size || 4;
-        if (pool.length < poolMaxSize) {
-            voice = new Voice(sampleRate);
-            pool.push(voice);
-            return voice;
-        }
-
-        // Voice stealing
+        // Voice stealing: find the oldest voice to reuse
         return pool.reduce((oldest, current) => {
-            return current.startTime < oldest.startTime ? current : oldest;
+            return current.lastUsedTime < oldest.lastUsedTime ? current : oldest;
         });
     }
 
-    process(inputs, outputs, parameters) {
+    process(inputs: any, outputs: any, parameters: any) {
         const output = outputs[0];
         const channel = output[0];
 
-        if (!this.isPlaying) {
-            channel.fill(0);
+        if (!this.isPlaying || !channel) {
             return true;
         }
 
@@ -242,13 +249,10 @@ class SynthProcessor extends AudioWorkletProcessor {
 
         while (this.noteQueue.length > 0 && this.scoreStartTime + this.noteQueue[0].startTime < timeToScheduleUntil) {
             const note = this.noteQueue.shift();
-            const voice = this.getVoiceForNote(note);
-            if (voice) {
-                voice.play(note, this.scoreStartTime + note.startTime);
-            }
+            const voice = this.getVoiceForNote(note, this.scoreStartTime + note.startTime);
+            voice.play(note, this.scoreStartTime + note.startTime);
         }
 
-        channel.fill(0);
         for (let i = 0; i < channel.length; i++) {
             let sample = 0;
             for (const poolName in this.voicePools) {
@@ -261,8 +265,12 @@ class SynthProcessor extends AudioWorkletProcessor {
             channel[i] = sample * 0.2; // Master volume
         }
 
-        const remainingBuffer = this.noteQueue.length > 0 ? (this.scoreStartTime + this.noteQueue[this.noteQueue.length - 1].startTime) - currentTime : 0;
+        const remainingBuffer = this.noteQueue.length > 0 
+            ? (this.scoreStartTime + this.noteQueue[this.noteQueue.length - 1].startTime) - currentTime 
+            : 0;
+
         if (remainingBuffer < this.scoreBufferTime && currentTime > this.lastRequestTime + 1) {
+            console.log(`[WORKLET_TRACE] Buffer low (${remainingBuffer.toFixed(2)}s). Requesting new score.`);
             this.port.postMessage({ type: 'request_new_score' });
             this.lastRequestTime = currentTime;
         }
