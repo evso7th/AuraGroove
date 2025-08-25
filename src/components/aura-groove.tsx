@@ -28,9 +28,9 @@ export function AuraGroove() {
   const [drumSettings, setDrumSettings] = useState<DrumSettings>({ pattern: 'none', volume: 0.7 });
   const [effectsSettings, setEffectsSettings] = useState<EffectsSettings>({ mode: 'none', volume: 0.7 });
   const [instrumentSettings, setInstrumentSettings] = useState<InstrumentSettings>({
-    solo: { name: "synthesizer", volume: 0.8 },
+    solo: { name: "none", volume: 0.8 },
     accompaniment: { name: "synthesizer", volume: 0.7 },
-    bass: { name: "bass_synth", volume: 0.9 },
+    bass: { name: "none", volume: 0.9 },
   });
   const [bpm, setBpm] = useState(75);
   const [score, setScore] = useState<ScoreName>('evolve');
