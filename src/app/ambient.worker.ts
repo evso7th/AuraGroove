@@ -104,8 +104,6 @@ const Composer = {
     },
 
     // --- Note Generation ---
-    // This is a simplified placeholder for the generative logic.
-    // In a real scenario, this would house EvolveEngine or MandelbrotEngine.
     generateNotesForBar(bar: number): { solo: WorkletNote[], accompaniment: WorkletNote[], bass: WorkletNote[] } {
         const soloNotes: WorkletNote[] = [];
         const accompanimentNotes: WorkletNote[] = [];
@@ -115,24 +113,33 @@ const Composer = {
         if (this.instrumentSettings.accompaniment.name !== 'none') {
              const presetKey = `${this.instrumentSettings.accompaniment.name}_accompaniment` as keyof typeof PRESETS;
              const preset = PRESETS[presetKey];
+
+             // I-V-vi-IV progression in C Major (C, G, Am, F)
+             const chordProgression = [
+                 ['C4', 'E4', 'G4'], // I: C Major
+                 ['G4', 'B4', 'D5'], // V: G Major
+                 ['A4', 'C5', 'E5'], // vi: A Minor
+                 ['F4', 'A4', 'C5']  // IV: F Major
+             ];
+
              if (preset) {
-                // Generate a simple C Major chord every 2 bars
-                if (bar % 2 === 0) {
-                    ['C4', 'E4', 'G4'].forEach((note, index) => {
-                         accompanimentNotes.push({
-                            part: 'accompaniment',
-                            freq: noteToFreq(note),
-                            attack: preset.attack,
-                            decay: preset.decay,
-                            sustain: preset.sustain,
-                            release: preset.release,
-                            oscType: preset.oscType,
-                            startTime: 0 + (index * 0.05),
-                            duration: this.secondsPerBeat * 4, // 1 bar duration
-                            velocity: this.instrumentSettings.accompaniment.volume / 3 // Prevent clipping
-                        });
+                const chordIndex = bar % chordProgression.length;
+                const currentChord = chordProgression[chordIndex];
+
+                currentChord.forEach((note, index) => {
+                     accompanimentNotes.push({
+                        part: 'accompaniment',
+                        freq: noteToFreq(note),
+                        attack: preset.attack,
+                        decay: preset.decay,
+                        sustain: preset.sustain,
+                        release: preset.release,
+                        oscType: preset.oscType,
+                        startTime: 0, // Start at the beginning of the bar
+                        duration: this.secondsPerBeat * this.beatsPerBar, // 1 bar duration
+                        velocity: this.instrumentSettings.accompaniment.volume / 3 // Prevent clipping
                     });
-                }
+                });
              }
         }
         
