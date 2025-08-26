@@ -91,11 +91,20 @@ export function AuraGroove() {
 
   const handleStop = useCallback(() => {
     console.log("[AURA_TRACE] UI: Stopping playback.");
+    // 1. Command worker to stop generating new notes
     musicWorkerRef.current?.postMessage({ command: 'stop' });
-    workletNodeRef.current?.port.postMessage({ type: 'clear' }); // Clear any pending notes in the worklet
+    
+    // 2. Command worklet to clear its queue and stop all synth voices
+    workletNodeRef.current?.port.postMessage({ type: 'clear' });
+    
+    // 3. Command drum machine to stop all playing samples
     drumMachineRef.current?.stopAll();
+    
+    // 4. Cancel all scheduled Tone.js events and stop the transport
     Tone.Transport.cancel(0);
     Tone.Transport.stop();
+    
+    // 5. Update UI state
     setIsPlaying(false);
   }, []);
   
@@ -366,3 +375,5 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    
