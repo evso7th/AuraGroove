@@ -52,6 +52,9 @@ export class DrumMachine {
             return;
         }
         
+        // Unmute the players in case they were stopped previously.
+        this.players.mute = false;
+
         score.forEach(note => {
             if (this.players.has(note.sample)) {
                 this.players.player(note.sample).start(scoreStartTime + note.time).volume.value = Tone.gainToDb(note.velocity);
@@ -62,12 +65,9 @@ export class DrumMachine {
 
     public stopAll() {
         if (this.isReady()) {
-            Object.keys(DRUM_SAMPLES).forEach(sample => {
-                if (this.players.player(sample).state === 'started') {
-                    this.players.player(sample).stop();
-                }
-            });
-            console.log('[DRUM_TRACE] All drum sounds stopped.');
+            // Mute the players object. This is the most reliable way to instantly silence all scheduled and playing sounds.
+            this.players.mute = true;
+            console.log('[DRUM_TRACE] All drum sounds muted via stopAll.');
         }
     }
 }
