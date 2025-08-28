@@ -57,7 +57,7 @@ export function AuraGroove() {
   }, []);
 
   const handlePlay = useCallback(async () => {
-    if (isInitializing || !isAudioReady) return;
+    if (isInitializing || !isAudioReady || isPlaying) return;
 
     if (Tone.context.state !== 'running') {
         await Tone.start();
@@ -69,15 +69,16 @@ export function AuraGroove() {
         Tone.Transport.start();
         setIsPlaying(true);
     }
-  }, [isInitializing, isAudioReady, drumSettings, instrumentSettings, effectsSettings, bpm, score]);
+  }, [isInitializing, isAudioReady, isPlaying, drumSettings, instrumentSettings, effectsSettings, bpm, score]);
 
   const handleStop = useCallback(() => {
     musicWorkerRef.current?.postMessage({ command: 'stop' });
     workletNodeRef.current?.port.postMessage({ type: 'clear' });
     drumMachineRef.current?.stopAll();
     
-    Tone.Transport.cancel(0);
-    Tone.Transport.stop();
+    if (Tone.Transport.state !== 'stopped') {
+        Tone.Transport.stop();
+    }
     nextScheduleTimeRef.current = 0;
     
     setIsPlaying(false);
@@ -149,15 +150,22 @@ export function AuraGroove() {
 
         scoreRequestLoopRef.current = new Tone.Loop(time => {
            if (Tone.Transport.state === 'started' && musicWorkerRef.current) {
-               const lookAheadTime = nextScheduleTimeRef.current - time;
-               if (lookAheadTime < 15) { // Request new score if we have less than 15s of music left
-                  requestNewScoreFromWorker();
+               const lookAheadTime = nextScheduleTimeRef.current - Tone.now();
+               const bufferThreshold = 10;
+               
+               if(workletNodeRef.current) {
+                  workletNodeRef.current.port.postMessage({type: 'get_buffer_status'});
+               }
+
+               if (lookAheadTime < bufferThreshold) { 
+                  // requestNewScoreFromWorker();
                }
            }
         }, '2s').start(0);
 
         Tone.Transport.on('stop', () => {
-            handleStop();
+             setIsPlaying(false);
+             handleStop();
         });
 
 
@@ -358,5 +366,3 @@ export function AuraGroove() {
     </Card>
   );
 }
-
-    
