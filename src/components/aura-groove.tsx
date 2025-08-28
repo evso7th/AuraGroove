@@ -44,11 +44,10 @@ export function AuraGroove() {
   const drumMachineRef = useRef<DrumMachine | null>(null);
   const drumChannelRef = useRef<Tone.Channel | null>(null);
   const nextScheduleTimeRef = useRef<number>(0);
-  const scoreRequestLoopRef = useRef<Tone.Loop | null>(null);
 
 
   const requestNewScoreFromWorker = useCallback(() => {
-    if (musicWorkerRef.current) {
+    if (musicWorkerRef.current && Tone.Transport.state === 'started') {
         musicWorkerRef.current.postMessage({ 
             command: 'request_new_score', 
             data: { chunkDurationInBars: SCORE_CHUNK_DURATION_IN_BARS } 
@@ -63,12 +62,13 @@ export function AuraGroove() {
         await Tone.start();
     }
     
+    const settings = { drumSettings, instrumentSettings, effectsSettings, bpm, score };
+    musicWorkerRef.current?.postMessage({ command: 'start', data: settings });
+
     if (Tone.Transport.state !== 'started') {
-        const settings = { drumSettings, instrumentSettings, effectsSettings, bpm, score };
-        musicWorkerRef.current?.postMessage({ command: 'start', data: settings });
         Tone.Transport.start();
-        setIsPlaying(true);
     }
+    setIsPlaying(true);
   }, [isInitializing, isAudioReady, isPlaying, drumSettings, instrumentSettings, effectsSettings, bpm, score]);
 
   const handleStop = useCallback(() => {
@@ -130,7 +130,9 @@ export function AuraGroove() {
                  requestNewScoreFromWorker();
             }
             else if (type === 'score_ready') {
-                 Tone.Transport.scheduleOnce((time) => {
+                if(Tone.Transport.state !== 'started') return;
+
+                Tone.Transport.scheduleOnce((time) => {
                     if (workletNodeRef.current && synthScore) {
                         workletNodeRef.current.port.postMessage({ type: 'schedule', score: synthScore, startTime: time });
                     }
@@ -141,6 +143,8 @@ export function AuraGroove() {
                 
                 const chunkDuration = (SCORE_CHUNK_DURATION_IN_BARS * 4 * 60) / bpm;
                 nextScheduleTimeRef.current += chunkDuration;
+                
+                requestNewScoreFromWorker();
 
             } else if (type === 'error') {
                 toast({ variant: "destructive", title: "Worker Error", description: error });
@@ -148,24 +152,10 @@ export function AuraGroove() {
             }
         };
 
-        scoreRequestLoopRef.current = new Tone.Loop(time => {
-           if (Tone.Transport.state === 'started' && musicWorkerRef.current) {
-               const lookAheadTime = nextScheduleTimeRef.current - Tone.now();
-               const bufferThreshold = 10;
-               
-               if(workletNodeRef.current) {
-                  workletNodeRef.current.port.postMessage({type: 'get_buffer_status'});
-               }
-
-               if (lookAheadTime < bufferThreshold) { 
-                  // requestNewScoreFromWorker();
-               }
-           }
-        }, '2s').start(0);
-
         Tone.Transport.on('stop', () => {
-             setIsPlaying(false);
-             handleStop();
+             if (isPlaying) {
+                handleStop();
+             }
         });
 
 
@@ -185,7 +175,6 @@ export function AuraGroove() {
     return () => {
       handleStop();
       musicWorkerRef.current?.terminate();
-      scoreRequestLoopRef.current?.dispose();
       workletNodeRef.current?.disconnect();
       drumMachineRef.current?.stopAll();
       drumChannelRef.current?.dispose();
