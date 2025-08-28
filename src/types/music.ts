@@ -44,7 +44,7 @@ export type InstrumentSettings = {
 };
 
 export type DrumSettings = {
-    pattern: 'ambient_beat' | 'none';
+    pattern: 'ambient_beat' | 'composer' | 'none';
     volume: number;
 };
 

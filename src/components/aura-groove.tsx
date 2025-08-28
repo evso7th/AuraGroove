@@ -42,12 +42,12 @@ export function AuraGroove() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const drumMachineRef = useRef<DrumMachine | null>(null);
+  const drumChannelRef = useRef<Tone.Channel | null>(null);
   const scoreStartTimeRef = useRef<number>(0);
 
 
   const requestNewScoreFromWorker = useCallback(() => {
     if (musicWorkerRef.current) {
-        console.log("[AURA_TRACE] UI: Requesting new score from worker.");
         musicWorkerRef.current.postMessage({ 
             command: 'request_new_score', 
             data: { chunkDurationInBars: SCORE_CHUNK_DURATION_IN_BARS } 
@@ -56,21 +56,10 @@ export function AuraGroove() {
   }, []);
 
   const handlePlay = useCallback(async () => {
-    if (isInitializing) return;
+    if (isInitializing || !isAudioReady) return;
 
     if (Tone.context.state !== 'running') {
-        console.log("[AURA_TRACE] UI: Starting Tone.js AudioContext.");
         await Tone.start();
-    }
-    
-    // Lazy initialization of DrumMachine on first play
-    if (!drumMachineRef.current) {
-        setLoadingText("Loading Drum Samples...");
-        const drumChannel = new Tone.Channel().toDestination();
-        const drums = new DrumMachine(drumChannel);
-        await drums.waitForReady(); // Wait for samples to load
-        drumMachineRef.current = drums;
-        setLoadingText("");
     }
     
     if (Tone.Transport.state !== 'started') {
@@ -78,33 +67,19 @@ export function AuraGroove() {
     }
     
     const settings = { drumSettings, instrumentSettings, effectsSettings, bpm, score };
-    console.log("[AURA_TRACE] UI: Sending 'start' command to worker with settings:", settings);
     musicWorkerRef.current?.postMessage({ command: 'start', data: settings });
     
-    if (audioContextRef.current) {
-      scoreStartTimeRef.current = audioContextRef.current.currentTime;
-    }
-    requestNewScoreFromWorker();
-
     setIsPlaying(true);
-  }, [isInitializing, drumSettings, instrumentSettings, effectsSettings, bpm, score, requestNewScoreFromWorker]);
+  }, [isInitializing, isAudioReady, drumSettings, instrumentSettings, effectsSettings, bpm, score]);
 
   const handleStop = useCallback(() => {
-    console.log("[AURA_TRACE] UI: Stopping playback.");
-    // 1. Command worker to stop generating new notes
     musicWorkerRef.current?.postMessage({ command: 'stop' });
-    
-    // 2. Command worklet to clear its queue and stop all synth voices
     workletNodeRef.current?.port.postMessage({ type: 'clear' });
-    
-    // 3. Command drum machine to stop all playing samples
     drumMachineRef.current?.stopAll();
     
-    // 4. Cancel all scheduled Tone.js events and stop the transport
     Tone.Transport.cancel(0);
     Tone.Transport.stop();
     
-    // 5. Update UI state
     setIsPlaying(false);
   }, []);
   
@@ -120,49 +95,52 @@ export function AuraGroove() {
         setIsInitializing(true);
         setLoadingText("Initializing Audio System...");
         
-        // 1. Create AudioContext
         const context = new (window.AudioContext || (window as any).webkitAudioContext)();
         audioContextRef.current = context;
         Tone.setContext(context);
-        console.log("[AURA_TRACE] UI: AudioContext created.");
         
-        // 2. Load the AudioWorklet
         setLoadingText("Loading Synthesis Engine...");
         await context.audioWorklet.addModule('/workers/synth.worklet.js');
-        console.log("[AURA_TRACE] UI: AudioWorklet module loaded.");
         
-        // 3. Create the WorkletNode
         const workletNode = new AudioWorkletNode(context, 'synth-processor', {
-            outputChannelCount: [2] // Stereo output
+            outputChannelCount: [2]
         });
         workletNode.connect(context.destination);
         workletNodeRef.current = workletNode;
-        console.log("[AURA_TRACE] UI: AudioWorkletNode created and connected.");
         
         workletNode.port.onmessage = (event) => {
             if (event.data.type === 'request_new_score') {
-                console.log("[AURA_TRACE] UI: Worklet requested new score.");
                 requestNewScoreFromWorker();
             }
         };
 
-        // 4. Setup Worker
+        setLoadingText("Initializing Drum Machine...");
+        const drumChannel = new Tone.Channel(Tone.gainToDb(drumSettings.volume)).toDestination();
+        drumChannelRef.current = drumChannel;
+        const drums = new DrumMachine(drumChannel);
+        await drums.waitForReady();
+        drumMachineRef.current = drums;
+
+
         setLoadingText("Waking up the Composer...");
         const worker = new Worker(new URL('../app/ambient.worker.ts', import.meta.url));
         musicWorkerRef.current = worker;
         worker.postMessage({ command: 'init' });
-        console.log("[AURA_TRACE] UI: Music worker created.");
 
         worker.onmessage = (event: MessageEvent) => {
             const { type, synthScore, drumScore, error } = event.data;
-            if (type === 'score_ready') {
-                console.log("[AURA_TRACE] UI: Received 'score_ready' from worker.");
+            
+            if (type === 'started') {
+                 if (audioContextRef.current) {
+                    scoreStartTimeRef.current = audioContextRef.current.currentTime;
+                 }
+                 requestNewScoreFromWorker();
+            }
+            else if (type === 'score_ready') {
                 if (workletNodeRef.current && synthScore) {
-                    console.log("[AURA_TRACE] UI: Sending synth score to worklet.");
                     workletNodeRef.current.port.postMessage({ type: 'schedule', score: synthScore });
                 }
                 if (drumMachineRef.current && drumScore) {
-                    console.log("[AURA_TRACE] UI: Scheduling drum score with DrumMachine.");
                     drumMachineRef.current.scheduleDrumScore(drumScore, scoreStartTimeRef.current);
                 }
 
@@ -173,15 +151,13 @@ export function AuraGroove() {
 
             } else if (type === 'error') {
                 toast({ variant: "destructive", title: "Worker Error", description: error });
-                setIsPlaying(false);
-                setLoadingText("");
+                handleStop();
             }
         };
 
         setLoadingText("");
         setIsAudioReady(true);
         setIsInitializing(false);
-        console.log("[AURA_TRACE] UI: Initialization complete.");
 
       } catch (e) {
           const errorMsg = e instanceof Error ? e.message : String(e);
@@ -193,34 +169,27 @@ export function AuraGroove() {
     initAudio();
 
     return () => {
-      console.log("[AURA_TRACE] UI: Cleaning up AuraGroove component.");
       handleStop();
       musicWorkerRef.current?.terminate();
       workletNodeRef.current?.disconnect();
+      drumMachineRef.current?.stopAll();
+      drumChannelRef.current?.dispose();
       audioContextRef.current?.close();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // --- Worker Communication for Settings ---
-  const updateWorkerSettings = useCallback(() => {
-      if (musicWorkerRef.current) {
+  useEffect(() => {
+      if (musicWorkerRef.current && isAudioReady && !isInitializing) {
           const settings = { instrumentSettings, drumSettings, effectsSettings, bpm, score };
-          console.log("[AURA_TRACE] UI: Sending 'update_settings' to worker.", settings);
           musicWorkerRef.current.postMessage({ command: 'update_settings', data: settings });
-          if(isPlaying){
-            requestNewScoreFromWorker(); // Request new score immediately with new settings
-          }
       }
-  }, [instrumentSettings, drumSettings, effectsSettings, bpm, score, isPlaying, requestNewScoreFromWorker]);
+  }, [instrumentSettings, drumSettings, effectsSettings, bpm, score, isAudioReady, isInitializing]);
 
   useEffect(() => {
-    updateWorkerSettings();
-  }, [drumSettings, instrumentSettings, effectsSettings, score, bpm, updateWorkerSettings]);
-
-  useEffect(() => {
-    if (drumMachineRef.current) {
-        drumMachineRef.current.setVolume(Tone.gainToDb(drumSettings.volume));
+    if (drumChannelRef.current) {
+        drumChannelRef.current.volume.value = Tone.gainToDb(drumSettings.volume);
     }
   }, [drumSettings.volume]);
 
@@ -314,7 +283,7 @@ export function AuraGroove() {
                     <Label htmlFor="drum-pattern" className="font-semibold flex items-center gap-2 capitalize">Pattern</Label>
                      <Select
                       value={drumSettings.pattern}
-                      onValueChange={(v) => setDrumSettings(d => ({...d, pattern: v as 'ambient_beat' | 'none'}))}
+                      onValueChange={(v) => setDrumSettings(d => ({...d, pattern: v as 'ambient_beat' | 'composer' | 'none'}))}
                       disabled={isInitializing || isPlaying}
                     >
                       <SelectTrigger id="drum-pattern" className="w-[150px]">
@@ -323,6 +292,7 @@ export function AuraGroove() {
                       <SelectContent>
                         <SelectItem value="none">None</SelectItem>
                         <SelectItem value="ambient_beat">Ambient Beat</SelectItem>
+                        <SelectItem value="composer">Composer</SelectItem>
                       </SelectContent>
                     </Select>
                 </div>

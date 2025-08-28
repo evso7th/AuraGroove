@@ -4,6 +4,55 @@
 import { promenadeScore } from '@/lib/scores/promenade';
 import type { DrumSettings, EffectsSettings, InstrumentSettings, ScoreName, WorkletNote, DrumNote } from '@/types/music';
 
+// --- Evolution Engine (New) ---
+class EvolutionEngine {
+    private barCount: number;
+    private chordProgression: string[][];
+
+    constructor() {
+        this.barCount = 0;
+        // I-V-vi-IV progression in C Major
+        this.chordProgression = [
+            ['C4', 'E4', 'G4'], // I: C Major
+            ['G4', 'B4', 'D5'], // V: G Major
+            ['A4', 'C5', 'E5'], // vi: A Minor
+            ['F4', 'A4', 'C5']  // IV: F Major
+        ];
+    }
+
+    setBar(bar: number) {
+        this.barCount = bar;
+    }
+
+    getCurrentChord(): string[] {
+        const chordIndex = this.barCount % this.chordProgression.length;
+        return this.chordProgression[chordIndex];
+    }
+
+    generateAccompanimentScore(preset: any, volume: number, barDuration: number): WorkletNote[] {
+        const currentChord = this.getCurrentChord();
+        return currentChord.map(note => ({
+            part: 'accompaniment',
+            freq: noteToFreq(note),
+            attack: preset.attack,
+            decay: preset.decay,
+            sustain: preset.sustain,
+            release: preset.release,
+            oscType: preset.oscType,
+            startTime: 0, 
+            duration: barDuration,
+            velocity: volume / 3 
+        }));
+    }
+
+    generateDrumScore(volume: number, secondsPerBeat: number): DrumNote[] {
+       // Placeholder for future generative logic
+       // For now, it returns an empty array for the 'composer' mode
+       return [];
+    }
+}
+
+
 // Presets define the sound characteristics for our synth worklet
 const PRESETS = {
     'synthesizer_solo': { attack: 0.1, decay: 0.5, sustain: 0.7, release: 1.0, oscType: 'fatsine' },
@@ -48,6 +97,7 @@ const DrumPatterns: Record<string, Omit<DrumNote, 'time'>[]> = {
 const Composer = {
     isRunning: false,
     barCount: 0,
+    evolutionEngine: new EvolutionEngine(),
     
     // Settings from main thread
     bpm: 75,
@@ -71,14 +121,12 @@ const Composer = {
         this.barCount = 0;
         this.isRunning = true;
         self.postMessage({ type: 'started' });
-        console.log("[WORKER_TRACE] Composer started.");
     },
 
     stop() {
         if (!this.isRunning) return;
         this.isRunning = false;
         self.postMessage({ type: 'stopped' });
-        console.log("[WORKER_TRACE] Composer stopped.");
     },
     
     updateSettings(settings: any) {
@@ -87,10 +135,9 @@ const Composer = {
         if (settings.effectsSettings) this.effectsSettings = settings.effectsSettings;
         if (settings.bpm) this.bpm = settings.bpm;
         if (settings.score) this.score = settings.score;
-        console.log("[WORKER_TRACE] Settings updated:", { settings });
     },
 
-    generateDrumScoreForBar(): DrumNote[] {
+    generateStaticDrumScoreForBar(): DrumNote[] {
         if (this.drumSettings.pattern === 'none' || !DrumPatterns[this.drumSettings.pattern]) {
             return [];
         }
@@ -98,7 +145,7 @@ const Composer = {
         
         return pattern.map(note => ({
             ...note,
-            time: note.beat * this.secondsPerBeat, // Convert beat time to seconds
+            time: note.beat * this.secondsPerBeat,
             velocity: note.velocity * this.drumSettings.volume,
         }));
     },
@@ -106,40 +153,17 @@ const Composer = {
     // --- Note Generation ---
     generateNotesForBar(bar: number): { solo: WorkletNote[], accompaniment: WorkletNote[], bass: WorkletNote[] } {
         const soloNotes: WorkletNote[] = [];
-        const accompanimentNotes: WorkletNote[] = [];
+        let accompanimentNotes: WorkletNote[] = [];
         const bassNotes: WorkletNote[] = [];
         
-        // --- Accompaniment (The only active musician for now) ---
+        this.evolutionEngine.setBar(bar);
+
         if (this.instrumentSettings.accompaniment.name !== 'none') {
              const presetKey = `${this.instrumentSettings.accompaniment.name}_accompaniment` as keyof typeof PRESETS;
              const preset = PRESETS[presetKey];
-
-             // I-V-vi-IV progression in C Major (C, G, Am, F)
-             const chordProgression = [
-                 ['C4', 'E4', 'G4'], // I: C Major
-                 ['G4', 'B4', 'D5'], // V: G Major
-                 ['A4', 'C5', 'E5'], // vi: A Minor
-                 ['F4', 'A4', 'C5']  // IV: F Major
-             ];
-
              if (preset) {
-                const chordIndex = bar % chordProgression.length;
-                const currentChord = chordProgression[chordIndex];
-
-                currentChord.forEach((note, index) => {
-                     accompanimentNotes.push({
-                        part: 'accompaniment',
-                        freq: noteToFreq(note),
-                        attack: preset.attack,
-                        decay: preset.decay,
-                        sustain: preset.sustain,
-                        release: preset.release,
-                        oscType: preset.oscType,
-                        startTime: 0, // Start at the beginning of the bar
-                        duration: this.secondsPerBeat * this.beatsPerBar, // 1 bar duration
-                        velocity: this.instrumentSettings.accompaniment.volume / 3 // Prevent clipping
-                    });
-                });
+                const barDuration = this.beatsPerBar * this.secondsPerBeat;
+                accompanimentNotes = this.evolutionEngine.generateAccompanimentScore(preset, this.instrumentSettings.accompaniment.volume, barDuration);
              }
         }
         
@@ -148,7 +172,6 @@ const Composer = {
 
     generateChunk(chunkDurationInBars: number) {
         if (!this.isRunning) return;
-        console.log(`[WORKER_TRACE] Generating chunk for ${chunkDurationInBars} bars.`);
 
         let synthScore: { solo: WorkletNote[], accompaniment: WorkletNote[], bass: WorkletNote[], effects: WorkletNote[] } = { solo: [], accompaniment: [], bass: [], effects: [] };
         let drumScore: DrumNote[] = [];
@@ -162,21 +185,25 @@ const Composer = {
             const { solo, accompaniment, bass } = this.generateNotesForBar(currentBar);
             
             accompaniment.forEach(n => { n.startTime += barStartTime; synthScore.accompaniment.push(n); });
-            // solo and bass are intentionally left empty for this test
 
             if (this.drumSettings.pattern !== 'none') {
-                const barDrumNotes = this.generateDrumScoreForBar();
-                barDrumNotes.forEach(n => { 
-                    n.time += barStartTime; 
-                    drumScore.push(n); 
-                });
+                 if (this.drumSettings.pattern === 'composer') {
+                    // Generative drum logic will go here
+                    // const barDrumNotes = this.evolutionEngine.generateDrumScore(...)
+                    // For now, it's empty
+                } else {
+                    const barDrumNotes = this.generateStaticDrumScoreForBar();
+                    barDrumNotes.forEach(n => { 
+                        n.time += barStartTime; 
+                        drumScore.push(n); 
+                    });
+                }
             }
         }
         
         this.barCount += chunkDurationInBars;
 
         self.postMessage({ type: 'score_ready', synthScore, drumScore });
-        console.log("[WORKER_TRACE] Dispatched 'score_ready' with new score.", {synthScore, drumScore});
     }
 };
 
