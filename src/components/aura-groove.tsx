@@ -43,7 +43,8 @@ export function AuraGroove() {
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const drumMachineRef = useRef<DrumMachine | null>(null);
   const drumChannelRef = useRef<Tone.Channel | null>(null);
-  const scoreStartTimeRef = useRef<number>(0);
+  const nextScheduleTimeRef = useRef<number>(0);
+  const scoreRequestLoopRef = useRef<Tone.Loop | null>(null);
 
 
   const requestNewScoreFromWorker = useCallback(() => {
@@ -63,13 +64,11 @@ export function AuraGroove() {
     }
     
     if (Tone.Transport.state !== 'started') {
+        const settings = { drumSettings, instrumentSettings, effectsSettings, bpm, score };
+        musicWorkerRef.current?.postMessage({ command: 'start', data: settings });
         Tone.Transport.start();
+        setIsPlaying(true);
     }
-    
-    const settings = { drumSettings, instrumentSettings, effectsSettings, bpm, score };
-    musicWorkerRef.current?.postMessage({ command: 'start', data: settings });
-    
-    setIsPlaying(true);
   }, [isInitializing, isAudioReady, drumSettings, instrumentSettings, effectsSettings, bpm, score]);
 
   const handleStop = useCallback(() => {
@@ -79,6 +78,7 @@ export function AuraGroove() {
     
     Tone.Transport.cancel(0);
     Tone.Transport.stop();
+    nextScheduleTimeRef.current = 0;
     
     setIsPlaying(false);
   }, []);
@@ -97,7 +97,7 @@ export function AuraGroove() {
         
         const context = new (window.AudioContext || (window as any).webkitAudioContext)();
         audioContextRef.current = context;
-        Tone.setContext(context);
+        await Tone.setContext(context);
         
         setLoadingText("Loading Synthesis Engine...");
         await context.audioWorklet.addModule('/workers/synth.worklet.js');
@@ -108,12 +108,6 @@ export function AuraGroove() {
         workletNode.connect(context.destination);
         workletNodeRef.current = workletNode;
         
-        workletNode.port.onmessage = (event) => {
-            if (event.data.type === 'request_new_score') {
-                requestNewScoreFromWorker();
-            }
-        };
-
         setLoadingText("Initializing Drum Machine...");
         const drumChannel = new Tone.Channel(Tone.gainToDb(drumSettings.volume)).toDestination();
         drumChannelRef.current = drumChannel;
@@ -131,29 +125,41 @@ export function AuraGroove() {
             const { type, synthScore, drumScore, error } = event.data;
             
             if (type === 'started') {
-                 if (audioContextRef.current) {
-                    scoreStartTimeRef.current = audioContextRef.current.currentTime;
-                 }
+                 nextScheduleTimeRef.current = Tone.context.currentTime + 0.1;
                  requestNewScoreFromWorker();
             }
             else if (type === 'score_ready') {
-                if (workletNodeRef.current && synthScore) {
-                    workletNodeRef.current.port.postMessage({ type: 'schedule', score: synthScore });
-                }
-                if (drumMachineRef.current && drumScore) {
-                    drumMachineRef.current.scheduleDrumScore(drumScore, scoreStartTimeRef.current);
-                }
-
-                if (audioContextRef.current) {
-                    const chunkDuration = (SCORE_CHUNK_DURATION_IN_BARS * 4 * 60) / bpm;
-                    scoreStartTimeRef.current += chunkDuration;
-                }
+                 Tone.Transport.scheduleOnce((time) => {
+                    if (workletNodeRef.current && synthScore) {
+                        workletNodeRef.current.port.postMessage({ type: 'schedule', score: synthScore, startTime: time });
+                    }
+                    if (drumMachineRef.current && drumScore) {
+                        drumMachineRef.current.scheduleDrumScore(drumScore, time);
+                    }
+                }, nextScheduleTimeRef.current);
+                
+                const chunkDuration = (SCORE_CHUNK_DURATION_IN_BARS * 4 * 60) / bpm;
+                nextScheduleTimeRef.current += chunkDuration;
 
             } else if (type === 'error') {
                 toast({ variant: "destructive", title: "Worker Error", description: error });
                 handleStop();
             }
         };
+
+        scoreRequestLoopRef.current = new Tone.Loop(time => {
+           if (Tone.Transport.state === 'started' && musicWorkerRef.current) {
+               const lookAheadTime = nextScheduleTimeRef.current - time;
+               if (lookAheadTime < 15) { // Request new score if we have less than 15s of music left
+                  requestNewScoreFromWorker();
+               }
+           }
+        }, '2s').start(0);
+
+        Tone.Transport.on('stop', () => {
+            handleStop();
+        });
+
 
         setLoadingText("");
         setIsAudioReady(true);
@@ -171,6 +177,7 @@ export function AuraGroove() {
     return () => {
       handleStop();
       musicWorkerRef.current?.terminate();
+      scoreRequestLoopRef.current?.dispose();
       workletNodeRef.current?.disconnect();
       drumMachineRef.current?.stopAll();
       drumChannelRef.current?.dispose();
@@ -192,6 +199,12 @@ export function AuraGroove() {
         drumChannelRef.current.volume.value = Tone.gainToDb(drumSettings.volume);
     }
   }, [drumSettings.volume]);
+  
+   useEffect(() => {
+      if (isAudioReady) {
+        Tone.Transport.bpm.value = bpm;
+      }
+  }, [bpm, isAudioReady]);
 
 
   return (
@@ -345,3 +358,5 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+    

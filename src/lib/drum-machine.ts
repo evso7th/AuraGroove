@@ -46,28 +46,32 @@ export class DrumMachine {
         this.drumChannel.volume.value = db;
     }
 
-    public scheduleDrumScore(score: DrumNote[], scoreStartTime: number) {
+    public scheduleDrumScore(score: DrumNote[], startTime: number) {
         if (!this.isReady()) {
             console.warn('[DRUM_TRACE] Drum machine not ready, skipping score.');
             return;
         }
         
-        // Unmute the players in case they were stopped previously.
         this.players.mute = false;
 
         score.forEach(note => {
             if (this.players.has(note.sample)) {
-                this.players.player(note.sample).start(scoreStartTime + note.time).volume.value = Tone.gainToDb(note.velocity);
+                try {
+                    this.players.player(note.sample).start(startTime + note.time).volume.value = Tone.gainToDb(note.velocity);
+                } catch(e) {
+                    console.error(`[DRUM_TRACE] Error scheduling drum sample ${note.sample} at time ${startTime + note.time}. Error: ${e}`);
+                }
             }
         });
-        console.log(`[DRUM_TRACE] Scheduled ${score.length} drum notes.`);
+        // console.log(`[DRUM_TRACE] Scheduled ${score.length} drum notes to start at transport time ${startTime.toFixed(2)}.`);
     }
 
     public stopAll() {
         if (this.isReady()) {
-            // Mute the players object. This is the most reliable way to instantly silence all scheduled and playing sounds.
             this.players.mute = true;
-            console.log('[DRUM_TRACE] All drum sounds muted via stopAll.');
+            // console.log('[DRUM_TRACE] All drum sounds muted via stopAll.');
         }
     }
 }
+
+    
