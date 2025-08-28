@@ -144,6 +144,7 @@ class Voice {
     this.startTime = 0;
     this.releaseTime = Infinity;
     this.noteVelocity = 0;
+    this.noteId = -1; // Added to track which note this voice is playing
     this.sampleRate = sampleRate;
     this.oscillator = new Oscillator('sine', sampleRate);
     this.envelope = new ADSREnvelope({}, sampleRate);
@@ -153,6 +154,7 @@ class Voice {
     this.startTime = currentTime;
     this.releaseTime = currentTime + note.duration;
     this.noteVelocity = note.velocity;
+    this.noteId = note.id;
     this.oscillator = new Oscillator(note.oscType || 'sine', this.sampleRate);
     this.oscillator.setFrequency(note.freq);
     this.envelope = new ADSREnvelope({
@@ -174,13 +176,19 @@ class Voice {
       }
 
       // Check if it's time to release the note
-      if (this.envelope.state === 'attack' || this.envelope.state === 'decay' || this.envelope.state === 'sustain') {
-        if (currentTime >= this.releaseTime) {
-            this.stop();
-        }
+      if (this.envelope.state !== 'release' && currentTime >= this.releaseTime) {
+          this.stop();
       }
 
       const envValue = this.envelope.process(this.noteVelocity);
+      
+      // If the envelope has just become idle, log it and return 0
+      if (!this.isActive()) {
+          console.log(`[WORKLET_VOICE_FREE] Voice for noteId ${this.noteId} is now idle.`);
+          this.noteId = -1;
+          return 0.0;
+      }
+
       const oscValue = this.oscillator.process();
       return oscValue * envValue;
   }
@@ -280,7 +288,7 @@ class SynthProcessor extends AudioWorkletProcessor {
       voiceIndex = oldestVoiceIndex;
     }
     
-    console.log(`[WORKLET_VOICE_TRACE] Part: ${note.part}, Voice: ${voiceIndex}, Freq: ${note.freq.toFixed(2)}, V: ${note.velocity.toFixed(2)}, ADSR: A:${note.attack} D:${note.decay} S:${note.sustain} R:${note.release}`);
+    // console.log(`[WORKLET_VOICE_TRACE] Part: ${note.part}, Voice: ${voiceIndex}, Freq: ${note.freq.toFixed(2)}, V: ${note.velocity.toFixed(2)}, ADSR: A:${note.attack} D:${note.decay} S:${note.sustain} R:${note.release}`);
 
     return pool[voiceIndex];
   }
