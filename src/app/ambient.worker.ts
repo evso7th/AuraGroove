@@ -25,11 +25,15 @@ class EvolutionEngine {
     }
 
     getCurrentChord(): string[] {
-        const chordIndex = this.barCount % this.chordProgression.length;
+        const chordIndex = Math.floor(this.barCount / 2) % this.chordProgression.length;
         return this.chordProgression[chordIndex];
     }
 
     generateAccompanimentScore(preset: any, volume: number, barDuration: number): WorkletNote[] {
+        if (this.barCount % 2 !== 0) {
+            return []; // Play chord only on even bars
+        }
+    
         const currentChord = this.getCurrentChord();
         return currentChord.map(note => ({
             part: 'accompaniment',
@@ -40,7 +44,7 @@ class EvolutionEngine {
             release: preset.release,
             oscType: preset.oscType,
             startTime: 0, 
-            duration: barDuration,
+            duration: barDuration * 2, // Hold the chord for two bars
             velocity: volume / 3 
         }));
     }
@@ -186,18 +190,16 @@ const Composer = {
             
             accompaniment.forEach(n => { n.startTime += barStartTime; synthScore.accompaniment.push(n); });
 
-            if (this.drumSettings.pattern !== 'none') {
-                 if (this.drumSettings.pattern === 'composer') {
-                    // Generative drum logic will go here
-                    // const barDrumNotes = this.evolutionEngine.generateDrumScore(...)
-                    // For now, it's empty
-                } else {
-                    const barDrumNotes = this.generateStaticDrumScoreForBar();
-                    barDrumNotes.forEach(n => { 
-                        n.time += barStartTime; 
-                        drumScore.push(n); 
-                    });
-                }
+            if (this.drumSettings.pattern === 'composer') {
+                // Generative drum logic will go here
+                // const barDrumNotes = this.evolutionEngine.generateDrumScore(...)
+                // For now, it's empty
+            } else {
+                const barDrumNotes = this.generateStaticDrumScoreForBar();
+                barDrumNotes.forEach(n => { 
+                    n.time += barStartTime; 
+                    drumScore.push(n); 
+                });
             }
         }
         

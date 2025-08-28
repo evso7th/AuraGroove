@@ -184,7 +184,6 @@ class Voice {
       
       // If the envelope has just become idle, log it and return 0
       if (!this.isActive()) {
-          console.log(`[WORKLET_VOICE_FREE] Voice for noteId ${this.noteId} is now idle.`);
           this.noteId = -1;
           return 0.0;
       }
