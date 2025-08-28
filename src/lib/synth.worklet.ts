@@ -4,16 +4,7 @@ console.log("[WORKLET_TRACE] synth.worklet.ts script loading. ARCH: ATTACK_RELEA
 
 // --- ADSR Envelope ---
 class ADSREnvelope {
-  private state: 'idle' | 'attack' | 'decay' | 'sustain' | 'release';
-  private value: number;
-  private samplesProcessed: number;
-  private attackSamples: number;
-  private decaySamples: number;
-  private releaseSamples: number;
-  private sustainLevel: number;
-  private releaseInitialValue: number;
-
-  constructor(options: any, sampleRate: number) {
+  constructor(options, sampleRate) {
     this.state = 'idle';
     this.value = 0.0;
     this.samplesProcessed = 0;
@@ -39,7 +30,7 @@ class ADSREnvelope {
     }
   }
 
-  process(velocity: number): number {
+  process(velocity) {
     switch (this.state) {
       case 'attack':
         if (this.attackSamples > 0) {
@@ -92,30 +83,25 @@ class ADSREnvelope {
     return this.value * velocity;
   }
 
-  isActive(): boolean {
+  isActive() {
     return this.state !== 'idle';
   }
 }
 
 // --- Oscillator ---
 class Oscillator {
-  private phase: number;
-  private phaseIncrement: number;
-  private type: string;
-  private sampleRate: number;
-
-  constructor(type: string, sampleRate: number) {
+  constructor(type, sampleRate) {
     this.phase = 0;
     this.phaseIncrement = 0;
     this.type = type;
     this.sampleRate = sampleRate;
   }
 
-  setFrequency(freq: number) {
+  setFrequency(freq) {
     this.phaseIncrement = (2 * Math.PI * freq) / this.sampleRate;
   }
 
-  process(): number {
+  process() {
     let value = 0;
     switch (this.type) {
       case 'sine':
@@ -153,19 +139,14 @@ class Oscillator {
 
 // --- Voice (A single mono-synth automaton) ---
 class Voice {
-  public noteId: number;
-  private sampleRate: number;
-  private oscillator: Oscillator;
-  public envelope: ADSREnvelope;
-
-  constructor(sampleRate: number) {
+  constructor(sampleRate) {
     this.noteId = -1; 
     this.sampleRate = sampleRate;
     this.oscillator = new Oscillator('sine', sampleRate);
     this.envelope = new ADSREnvelope({}, sampleRate);
   }
 
-  trigger(note: any) {
+  trigger(note) {
     this.noteId = note.id;
     this.oscillator = new Oscillator(note.oscType || 'sine', this.sampleRate);
     this.oscillator.setFrequency(note.freq);
@@ -182,7 +163,7 @@ class Voice {
     this.envelope.triggerRelease();
   }
 
-  process(velocity: number): number {
+  process(velocity) {
     if (!this.isActive()) {
       return 0.0;
     }
@@ -195,7 +176,7 @@ class Voice {
     return oscValue * envValue;
   }
 
-  isActive(): boolean {
+  isActive() {
     return this.envelope.isActive();
   }
 }
@@ -203,11 +184,6 @@ class Voice {
 
 // --- Main Processor (The Metronome and Mixer) ---
 class SynthProcessor extends AudioWorkletProcessor {
-  private voicePools: Record<string, Voice[]>;
-  private poolSizes: Record<string, number>;
-  private attackQueue: any[];
-  private releaseQueue: Map<number, number>; // Maps noteId to releaseTime
-
   constructor() {
     super();
     console.log("[WORKLET_TRACE] SynthProcessor constructor called.");
@@ -260,7 +236,7 @@ class SynthProcessor extends AudioWorkletProcessor {
     };
   }
 
-  getVoiceForNote(note: any): Voice | null {
+  getVoiceForNote(note) {
     const poolName = note.part;
     const pool = this.voicePools[poolName];
     if (!pool) return null;
@@ -269,7 +245,7 @@ class SynthProcessor extends AudioWorkletProcessor {
 
     if (!voice) {
         // Voice stealing: find the voice that has been in release the longest
-        let oldestVoice: Voice | null = null;
+        let oldestVoice = null;
         let longestRelease = -1;
 
         for(const v of pool){
@@ -278,14 +254,14 @@ class SynthProcessor extends AudioWorkletProcessor {
                 break;
             }
              // Prioritize stealing voices that are in release phase
-            if (v.envelope['state'] === 'release' && v.envelope['samplesProcessed'] > longestRelease) {
-                longestRelease = v.envelope['samplesProcessed'];
+            if (v.envelope.state === 'release' && v.envelope.samplesProcessed > longestRelease) {
+                longestRelease = v.envelope.samplesProcessed;
                 oldestVoice = v;
             }
         }
         if(!oldestVoice){
              // if no voice is in release, steal the one that has been playing the longest in sustain
-             oldestVoice = pool.reduce((prev, curr) => (prev.envelope['samplesProcessed'] > curr.envelope['samplesProcessed']) ? prev : curr);
+             oldestVoice = pool.reduce((prev, curr) => (prev.envelope.samplesProcessed > curr.envelope.samplesProcessed) ? prev : curr);
         }
         
         console.warn(`[WORKLET_VOICE_STEAL] Stealing voice for part ${note.part}`);
@@ -295,7 +271,7 @@ class SynthProcessor extends AudioWorkletProcessor {
     return voice;
   }
 
-  process(inputs: any, outputs: any[][]) {
+  process(inputs, outputs) {
     const output = outputs[0];
     const channel = output[0];
 
