@@ -156,7 +156,7 @@ class Voice {
   public noteId: number;
   private sampleRate: number;
   private oscillator: Oscillator;
-  private envelope: ADSREnvelope;
+  public envelope: ADSREnvelope;
 
   constructor(sampleRate: number) {
     this.noteId = -1; 
@@ -188,7 +188,6 @@ class Voice {
     }
     const envValue = this.envelope.process(velocity);
     if (!this.isActive()) {
-      // console.log(`[WORKLET_VOICE_FREE] Voice for noteId ${this.noteId} is now idle.`);
       this.noteId = -1;
       return 0.0;
     }
@@ -348,5 +347,3 @@ class SynthProcessor extends AudioWorkletProcessor {
 
 registerProcessor('synth-processor', SynthProcessor);
 console.log("[WORKLET_TRACE] synth-processor registered.");
-
-    
