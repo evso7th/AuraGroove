@@ -1,13 +1,13 @@
 
 /// <reference lib="webworker" />
 
-import { promenadeScore } from '@/lib/scores/promenade';
 import type { DrumSettings, EffectsSettings, InstrumentSettings, ScoreName, WorkletNote, DrumNote } from '@/types/music';
 
 // --- Evolution Engine (New) ---
 class EvolutionEngine {
     private barCount: number;
     private chordProgression: string[][];
+    private noteIdCounter: number;
 
     constructor() {
         this.barCount = 0;
@@ -18,10 +18,15 @@ class EvolutionEngine {
             ['A4', 'C5', 'E5'], // vi: A Minor
             ['F4', 'A4', 'C5']  // IV: F Major
         ];
+        this.noteIdCounter = 0;
     }
 
     setBar(bar: number) {
         this.barCount = bar;
+    }
+
+    private getNextNoteId() {
+        return this.noteIdCounter++;
     }
 
     getCurrentChord(): string[] {
@@ -36,6 +41,7 @@ class EvolutionEngine {
     
         const currentChord = this.getCurrentChord();
         return currentChord.map(note => ({
+            id: this.getNextNoteId(),
             part: 'accompaniment',
             freq: noteToFreq(note),
             attack: preset.attack,
@@ -44,15 +50,18 @@ class EvolutionEngine {
             release: preset.release,
             oscType: preset.oscType,
             startTime: 0, 
-            duration: barDuration * 2, // Hold the chord for two bars
+            duration: barDuration, // Play for one bar, not two
             velocity: volume / 3 
         }));
     }
 
     generateDrumScore(volume: number, secondsPerBeat: number): DrumNote[] {
-       // Placeholder for future generative logic
-       // For now, it returns an empty array for the 'composer' mode
-       return [];
+       const score: DrumNote[] = [];
+       if (this.barCount % 1 === 0) {
+            score.push({ sample: 'kick', velocity: volume, beat: 0, time: 0 });
+            score.push({ sample: 'snare', velocity: volume * 0.8, beat: 2, time: 2 * secondsPerBeat });
+       }
+       return score;
     }
 }
 
@@ -191,9 +200,11 @@ const Composer = {
             accompaniment.forEach(n => { n.startTime += barStartTime; synthScore.accompaniment.push(n); });
 
             if (this.drumSettings.pattern === 'composer') {
-                // Generative drum logic will go here
-                // const barDrumNotes = this.evolutionEngine.generateDrumScore(...)
-                // For now, it's empty
+                const barDrumNotes = this.evolutionEngine.generateDrumScore(this.drumSettings.volume, this.secondsPerBeat);
+                barDrumNotes.forEach(n => { 
+                    n.time += barStartTime; 
+                    drumScore.push(n); 
+                });
             } else {
                 const barDrumNotes = this.generateStaticDrumScoreForBar();
                 barDrumNotes.forEach(n => { 

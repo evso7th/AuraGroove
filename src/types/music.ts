@@ -3,6 +3,7 @@ export type InstrumentPart = 'solo' | 'accompaniment' | 'bass' | 'effects' | 'dr
 export type OscillatorType = 'sine' | 'square' | 'sawtooth' | 'fatsine' | 'fatsawtooth' | 'fmsquare';
 
 export type WorkletNote = {
+    id: number; // Unique ID for each note event
     part: InstrumentPart;
     freq: number;
     velocity: number;
