@@ -55,7 +55,9 @@ export const useAuraGroove = () => {
 
     Tone.Transport.pause();
     musicWorkerRef.current?.postMessage({ command: 'stop' });
-    workletNodeRef.current?.port.postMessage({ type: 'clear' });
+    if(workletNodeRef.current) {
+        workletNodeRef.current.port.postMessage({ type: 'clear' });
+    }
     drumMachineRef.current?.stopAll();
     setIsPlaying(false);
     console.log("[HOOK_TRACE] Tone.Transport paused.");
@@ -63,6 +65,8 @@ export const useAuraGroove = () => {
 
   const handlePlay = useCallback(async () => {
     console.log("[HOOK_TRACE] handlePlay called.");
+
+    if (!isStarted) return; // Should not happen if UI is rendered, but for safety
 
     // If already playing, just stop.
     if (isPlaying) {
@@ -72,6 +76,7 @@ export const useAuraGroove = () => {
     
     // Resume transport if it's just paused
     if (Tone.Transport.state === 'paused') {
+        await Tone.start();
         Tone.Transport.start();
         console.log("[HOOK_TRACE] Tone.Transport resumed.");
         musicWorkerRef.current?.postMessage({ command: 'start', data: { drumSettings, instrumentSettings, effectsSettings, bpm, score } });
@@ -88,7 +93,7 @@ export const useAuraGroove = () => {
         console.log("[HOOK_TRACE] Tone.Transport started.");
     }
 
-  }, [isPlaying, handleStop, drumSettings, instrumentSettings, effectsSettings, bpm, score]);
+  }, [isStarted, isPlaying, handleStop, drumSettings, instrumentSettings, effectsSettings, bpm, score]);
 
 
   const handleStart = useCallback(async () => {
@@ -99,9 +104,13 @@ export const useAuraGroove = () => {
     try {
         setLoadingText("Waking up audio context...");
         await Tone.start();
-        const context = Tone.getContext().rawContext;
-        audioContextRef.current = context;
         console.log("[HOOK_TRACE] AudioContext started.");
+        const context = Tone.getContext().rawContext;
+        if (!context) {
+            throw new Error("Failed to get raw AudioContext from Tone.js");
+        }
+        audioContextRef.current = context;
+
 
         setLoadingText("Loading Synthesis Engine...");
         await context.audioWorklet.addModule('/workers/synth.worklet.js');
@@ -125,7 +134,7 @@ export const useAuraGroove = () => {
 
         worker.onmessage = (event: MessageEvent) => {
             const { type, synthScore, drumScore, error } = event.data;
-            console.log(`[HOOK_TRACE] Received message from worker: ${type}`, event.data);
+            // console.log(`[HOOK_TRACE] Received message from worker: ${type}`, event.data);
 
             if (type === 'score_ready') {
                 if (!isPlaying) return;
@@ -166,6 +175,7 @@ export const useAuraGroove = () => {
     } catch (e) {
         const errorMsg = e instanceof Error ? e.message : String(e);
         toast({ variant: "destructive", title: "Initialization Failed", description: errorMsg });
+        console.error("Initialization failed:", e);
     } finally {
         setIsInitializing(false);
     }
@@ -214,11 +224,10 @@ export const useAuraGroove = () => {
         handleStop();
         musicWorkerRef.current?.terminate();
         if (scoreRequestLoopIdRef.current !== null) {
-            Tone.Transport.clear(scoreRequestLoopIdRef.current);
+            Tone.Transport.clear(scoreRequestLoop_loopIdRef.current);
         }
         workletNodeRef.current?.disconnect();
         drumChannelRef.current?.dispose();
-        // Don't stop transport globally here, it might be used by other components
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -240,3 +249,5 @@ export const useAuraGroove = () => {
     setScore,
   };
 };
+
+    
