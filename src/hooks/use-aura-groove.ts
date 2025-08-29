@@ -63,10 +63,10 @@ export const useAuraGroove = () => {
     console.log("[HOOK_TRACE] Tone.Transport paused.");
   }, []);
 
-  const handlePlay = useCallback(async () => {
-    console.log("[HOOK_TRACE] handlePlay called.");
+  const handleTogglePlay = useCallback(async () => {
+    console.log("[HOOK_TRACE] handleTogglePlay called.");
 
-    if (!isStarted) return; // Should not happen if UI is rendered, but for safety
+    if (!isStarted || isInitializing) return;
 
     // If already playing, just stop.
     if (isPlaying) {
@@ -74,30 +74,25 @@ export const useAuraGroove = () => {
       return;
     }
     
-    // Resume transport if it's just paused
-    if (Tone.Transport.state === 'paused') {
+    if (Tone.Transport.state !== 'started') {
         await Tone.start();
         Tone.Transport.start();
-        console.log("[HOOK_TRACE] Tone.Transport resumed.");
-        musicWorkerRef.current?.postMessage({ command: 'start', data: { drumSettings, instrumentSettings, effectsSettings, bpm, score } });
-        setIsPlaying(true);
-        return;
+    } else if (Tone.Transport.state === 'paused') {
+        Tone.Transport.start();
     }
+    
+    console.log("[HOOK_TRACE] Tone.Transport started/resumed.");
+    
+    const settings = { drumSettings, instrumentSettings, effectsSettings, bpm, score };
+    musicWorkerRef.current?.postMessage({ command: 'start', data: settings });
+    setIsPlaying(true);
 
-    // This is the first play or play after a full stop
-    if (Tone.Transport.state !== 'started') {
-        const settings = { drumSettings, instrumentSettings, effectsSettings, bpm, score };
-        musicWorkerRef.current?.postMessage({ command: 'start', data: settings });
-        await Tone.Transport.start();
-        setIsPlaying(true);
-        console.log("[HOOK_TRACE] Tone.Transport started.");
-    }
 
-  }, [isStarted, isPlaying, handleStop, drumSettings, instrumentSettings, effectsSettings, bpm, score]);
+  }, [isStarted, isInitializing, isPlaying, handleStop, drumSettings, instrumentSettings, effectsSettings, bpm, score]);
 
 
   const handleStart = useCallback(async () => {
-    if (isStarted) return;
+    if (isStarted || isInitializing) return;
 
     setIsInitializing(true);
     
@@ -179,7 +174,7 @@ export const useAuraGroove = () => {
     } finally {
         setIsInitializing(false);
     }
-  }, [isStarted, requestNewScoreFromWorker, handleStop, toast, isPlaying, drumSettings.volume]);
+  }, [isStarted, isInitializing, requestNewScoreFromWorker, handleStop, toast, isPlaying, drumSettings.volume]);
 
 
   // Effect for updating worker settings
@@ -238,7 +233,7 @@ export const useAuraGroove = () => {
     isPlaying,
     loadingText,
     handleStart,
-    handleTogglePlay: handlePlay,
+    handleTogglePlay: handleTogglePlay,
     drumSettings,
     setDrumSettings,
     instrumentSettings,
