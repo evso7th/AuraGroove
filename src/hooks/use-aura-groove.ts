@@ -11,7 +11,7 @@ const SCORE_CHUNK_DURATION_IN_BARS = 8;
 export const useAuraGroove = () => {
   const [isInitializing, setIsInitializing] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [loadingText, setLoadingText] = useState("Click Play to start...");
+  const [loadingText, setLoadingText] = useState("");
   
   const [drumSettings, setDrumSettings] = useState<DrumSettings>({ pattern: 'none', volume: 0.7 });
   const [effectsSettings, setEffectsSettings] = useState<EffectsSettings>({ mode: 'none', volume: 0.7 });
@@ -30,7 +30,7 @@ export const useAuraGroove = () => {
   const musicWorkerRef = useRef<Worker | null>(null);
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const drumMachineRef = useRef<DrumMachine | null>(null);
-  const drumChannelRef = useRef<any | null>(null); // This will be a Tone.Channel
+  const drumChannelRef = useRef<any | null>(null);
   const nextScheduleTimeRef = useRef<number>(0);
   const scoreRequestLoopIdRef = useRef<any | null>(null);
 
@@ -43,42 +43,33 @@ export const useAuraGroove = () => {
     }
   }, []);
 
-  const initializeAudio = async () => {
+  const initializeAudio = useCallback(async () => {
       setIsInitializing(true);
       try {
           setLoadingText("Creating Audio Context...");
-          // 1. Create the native AudioContext first.
           const context = new (window.AudioContext || (window as any).webkitAudioContext)();
           
           setLoadingText("Waking up audio context...");
-          // 2. Dynamically import Tone.js
           const Tone = await import('tone');
           toneRef.current = Tone;
           
-          // 3. Set Tone.js to use OUR context. This is the crucial step.
           Tone.setContext(context);
-          
-          // 4. Start the context, which is now required by browsers.
           await Tone.start();
           console.log("[HOOK_TRACE] AudioContext started.");
 
           setLoadingText("Loading Synthesis Engine...");
-          // 5. Add our custom worklet module to the native context.
           await context.audioWorklet.addModule('/workers/synth.worklet.js');
           console.log("[HOOK_TRACE] AudioWorklet module added.");
 
-          // 6. Create the AudioWorkletNode using the native constructor.
           const workletNode = new AudioWorkletNode(context, 'synth-processor');
           workletNodeRef.current = workletNode;
           
-          // 7. Connect our custom node to the Tone.js signal chain.
-          workletNode.connect(Tone.getDestination());
+          workletNode.connect(context.destination);
           console.log("[HOOK_TRACE] Native AudioWorkletNode created and connected.");
 
           setLoadingText("Initializing Drum Machine...");
           const drumChannel = new Tone.Channel({ volume: Tone.gainToDb(drumSettings.volume), pan: 0 }).connect(Tone.getDestination());
           drumChannelRef.current = drumChannel;
-          // Pass the imported Tone object directly to the DrumMachine
           const drums = new DrumMachine(drumChannel, Tone);
           await drums.waitForReady();
           drumMachineRef.current = drums;
@@ -141,7 +132,7 @@ export const useAuraGroove = () => {
         setIsInitializing(false);
         setLoadingText("");
       }
-  };
+  }, [isPlaying, drumSettings.volume, requestNewScoreFromWorker]);
 
   const handleStop = useCallback(() => {
     const Tone = toneRef.current;
@@ -175,13 +166,14 @@ export const useAuraGroove = () => {
     }
     
     if (Tone.Transport.state !== 'started') {
+      await Tone.start();
       Tone.Transport.start();
     }
     
     const settings = { drumSettings, instrumentSettings, effectsSettings, bpm, score };
     musicWorkerRef.current?.postMessage({ command: 'start', data: settings });
     setIsPlaying(true);
-  }, [isInitializing, isPlaying, handleStop, drumSettings, instrumentSettings, effectsSettings, bpm, score]);
+  }, [isInitializing, isPlaying, initializeAudio, handleStop, drumSettings, instrumentSettings, effectsSettings, bpm, score]);
 
   useEffect(() => {
     return () => {
@@ -234,7 +226,7 @@ export const useAuraGroove = () => {
   return {
     isInitializing,
     isPlaying,
-    loadingText: isInitializing ? loadingText : (!isInitializedRef.current ? "Ready to initialize" : ""),
+    loadingText,
     handleTogglePlay,
     drumSettings,
     setDrumSettings,
