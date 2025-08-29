@@ -104,9 +104,9 @@ export const useAuraGroove = () => {
     try {
         setLoadingText("Waking up audio context...");
         await Tone.start();
-        console.log("[HOOK_TRACE] AudioContext started.");
-
         const context = Tone.getContext().rawContext;
+        console.log("[HOOK_TRACE] AudioContext started.");
+        
         if (!context) {
             throw new Error("Failed to get raw AudioContext from Tone.js after start.");
         }
