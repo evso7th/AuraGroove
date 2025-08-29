@@ -45,10 +45,15 @@ export function AuraGroove() {
   const drumChannelRef = useRef<Tone.Channel | null>(null);
   const nextScheduleTimeRef = useRef<number>(0);
   const scoreRequestLoopRef = useRef<Tone.Loop | null>(null);
+  const isPlayingRef = useRef(isPlaying);
+
+  useEffect(() => {
+      isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
 
 
   const requestNewScoreFromWorker = useCallback(() => {
-    if (musicWorkerRef.current && Tone.Transport.state === 'started') {
+    if (musicWorkerRef.current) {
         console.log('[UI_TRACE] Requesting new score from worker.');
         musicWorkerRef.current.postMessage({ 
             command: 'request_new_score', 
@@ -131,7 +136,7 @@ export function AuraGroove() {
         // Setup the controlled loop for requesting scores
         scoreRequestLoopRef.current = new Tone.Loop(() => {
             requestNewScoreFromWorker();
-        }, `${SCORE_CHUNK_DURATION_IN_BARS}m`); // "m" stands for measures/bars
+        }, `${SCORE_CHUNK_DURATION_IN_BARS}m`);
 
         worker.onmessage = (event: MessageEvent) => {
             const { type, synthScore, drumScore, error } = event.data;
@@ -139,10 +144,10 @@ export function AuraGroove() {
             
             if (type === 'started') {
                  nextScheduleTimeRef.current = Tone.context.currentTime + 0.1;
-                 requestNewScoreFromWorker(); // Request the very first score
+                 requestNewScoreFromWorker();
             }
             else if (type === 'score_ready') {
-                if(Tone.Transport.state !== 'started') return;
+                if (!isPlayingRef.current) return;
 
                 Tone.Transport.scheduleOnce((time) => {
                     if (workletNodeRef.current && synthScore) {
@@ -158,6 +163,8 @@ export function AuraGroove() {
             } else if (type === 'error') {
                 toast({ variant: "destructive", title: "Worker Error", description: error });
                 handleStop();
+            } else if (type === 'stopped') {
+                setIsPlaying(false);
             }
         };
 
@@ -166,7 +173,7 @@ export function AuraGroove() {
         });
         Tone.Transport.on('stop', () => {
              scoreRequestLoopRef.current?.stop(0);
-             if (isPlaying) {
+             if (isPlayingRef.current) {
                 setIsPlaying(false);
              }
         });
@@ -369,3 +376,6 @@ export function AuraGroove() {
     </Card>
   );
 }
+
+
+    
