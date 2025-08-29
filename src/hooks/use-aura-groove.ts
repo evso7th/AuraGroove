@@ -9,13 +9,10 @@ import type { DrumSettings, EffectsSettings, InstrumentSettings, ScoreName, Tone
 const SCORE_CHUNK_DURATION_IN_BARS = 8;
 
 export const useAuraGroove = () => {
-  // --- Global State ---
-  const [isReady, setIsReady] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [loadingText, setLoadingText] = useState("Initializing...");
-
-  // --- Music Settings State ---
+  const [loadingText, setLoadingText] = useState("Loading...");
+  
   const [drumSettings, setDrumSettings] = useState<DrumSettings>({ pattern: 'none', volume: 0.7 });
   const [effectsSettings, setEffectsSettings] = useState<EffectsSettings>({ mode: 'none', volume: 0.7 });
   const [instrumentSettings, setInstrumentSettings] = useState<InstrumentSettings>({
@@ -28,7 +25,6 @@ export const useAuraGroove = () => {
   
   const { toast } = useToast();
 
-  // --- Refs for Worker and Audio components ---
   const toneRef = useRef<ToneJS | null>(null);
   const musicWorkerRef = useRef<Worker | null>(null);
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
@@ -37,13 +33,12 @@ export const useAuraGroove = () => {
   const nextScheduleTimeRef = useRef<number>(0);
   const scoreRequestLoopIdRef = useRef<number | null>(null);
 
-
   const requestNewScoreFromWorker = useCallback(() => {
     if (musicWorkerRef.current) {
-        musicWorkerRef.current.postMessage({ 
-            command: 'request_new_score', 
-            data: { chunkDurationInBars: SCORE_CHUNK_DURATION_IN_BARS } 
-        });
+      musicWorkerRef.current.postMessage({ 
+        command: 'request_new_score', 
+        data: { chunkDurationInBars: SCORE_CHUNK_DURATION_IN_BARS } 
+      });
     }
   }, []);
 
@@ -54,20 +49,20 @@ export const useAuraGroove = () => {
     Tone.Transport.pause();
     musicWorkerRef.current?.postMessage({ command: 'stop' });
     if(workletNodeRef.current) {
-        workletNodeRef.current.port.postMessage({ type: 'clear' });
+      workletNodeRef.current.port.postMessage({ type: 'clear' });
     }
     drumMachineRef.current?.stopAll();
     setIsPlaying(false);
   }, []);
 
   const handleTogglePlay = useCallback(async () => {
-    if (!isReady || isInitializing) return;
+    if (isInitializing) return;
 
     const Tone = toneRef.current;
     if (!Tone) return;
 
     if (Tone.context.state === 'suspended') {
-        await Tone.start();
+      await Tone.start();
     }
 
     if (isPlaying) {
@@ -76,131 +71,129 @@ export const useAuraGroove = () => {
     }
     
     if (Tone.Transport.state !== 'started') {
-        await Tone.start();
-        Tone.Transport.start();
+      await Tone.start();
+      Tone.Transport.start();
     } else if (Tone.Transport.state === 'paused') {
-        Tone.Transport.start();
+      Tone.Transport.start();
     }
     
     const settings = { drumSettings, instrumentSettings, effectsSettings, bpm, score };
     musicWorkerRef.current?.postMessage({ command: 'start', data: settings });
     setIsPlaying(true);
-  }, [isReady, isInitializing, isPlaying, handleStop, drumSettings, instrumentSettings, effectsSettings, bpm, score]);
-
+  }, [isInitializing, isPlaying, handleStop, drumSettings, instrumentSettings, effectsSettings, bpm, score]);
 
   useEffect(() => {
     const initializeAudio = async () => {
-        setIsInitializing(true);
-        try {
-            setLoadingText("Waking up audio context...");
-            
-            const Tone = await import('tone');
-            toneRef.current = Tone;
-    
-            await Tone.start();
-            const context = Tone.getContext().rawContext;
-            if (!context) {
-                throw new Error("Failed to get raw AudioContext from Tone.js after start.");
-            }
-            console.log("[HOOK_TRACE] AudioContext started.");
-            
-            setLoadingText("Loading Synthesis Engine...");
-            await context.audioWorklet.addModule('/workers/synth.worklet.js');
-            const workletNode = new Tone.AudioWorkletNode(context, 'synth-processor', { outputChannelCount: [2] });
-            Tone.getDestination().connect(workletNode);
-            workletNodeRef.current = workletNode as any;
-            console.log("[HOOK_TRACE] AudioWorkletNode created.");
-    
-            setLoadingText("Initializing Drum Machine...");
-            const drumChannel = new Tone.Channel(Tone.gainToDb(drumSettings.volume)).toDestination();
-            drumChannelRef.current = drumChannel;
-            const drums = new DrumMachine(drumChannel, Tone);
-            await drums.waitForReady();
-            drumMachineRef.current = drums;
-            console.log("[HOOK_TRACE] DrumMachine initialized.");
-            
-            setLoadingText("Waking up the Composer...");
-            const worker = new Worker(new URL('../app/ambient.worker.ts', import.meta.url));
-            musicWorkerRef.current = worker;
-            worker.postMessage({ command: 'init' });
-    
-            worker.onmessage = (event: MessageEvent) => {
-                const { type, synthScore, drumScore, error } = event.data;
-                const T = toneRef.current;
-                if (!T) return;
-    
-                if (type === 'score_ready') {
-                    if (!isPlaying) return;
-    
-                    T.Transport.scheduleOnce((time) => {
-                        if (workletNodeRef.current && synthScore) {
-                            workletNodeRef.current.port.postMessage({ type: 'schedule', score: synthScore, startTime: time });
-                        }
-                        if (drumMachineRef.current && drumScore) {
-                            drumMachineRef.current.scheduleDrumScore(drumScore, time);
-                        }
-                    }, nextScheduleTimeRef.current);
-                    
-                    const currentBpm = T.Transport.bpm.value;
-                    const chunkDuration = (SCORE_CHUNK_DURATION_IN_BARS * 4 * 60) / currentBpm;
-                    nextScheduleTimeRef.current += chunkDuration;
-                } else if (type === 'error') {
-                    toast({ variant: "destructive", title: "Worker Error", description: error });
-                    handleStop();
-                } else if (type === 'started') {
-                     nextScheduleTimeRef.current = T.context.currentTime + 0.1;
-                     requestNewScoreFromWorker();
-                }
-            };
-    
-            await new Promise(resolve => {
-                const checkInit = (event: MessageEvent) => {
-                    if (event.data.type === 'initialized') {
-                        worker.removeEventListener('message', checkInit);
-                        resolve(true);
-                    }
-                };
-                worker.addEventListener('message', checkInit);
-            });
-    
-            console.log("[HOOK_TRACE] Worker initialized.");
-            setIsReady(true);
-        } catch (e) {
-            const errorMsg = e instanceof Error ? e.message : String(e);
-            toast({ variant: "destructive", title: "Initialization Failed", description: errorMsg });
-            console.error("Initialization failed:", e);
-        } finally {
-            setIsInitializing(false);
-            setLoadingText("");
+      setIsInitializing(true);
+      try {
+        setLoadingText("Waking up audio context...");
+        
+        const Tone = await import('tone');
+        toneRef.current = Tone;
+
+        await Tone.start();
+        const context = Tone.getContext().rawContext;
+        if (!context) {
+          throw new Error("Failed to get raw AudioContext from Tone.js after start.");
         }
+        console.log("[HOOK_TRACE] AudioContext started.");
+        
+        setLoadingText("Loading Synthesis Engine...");
+        await context.audioWorklet.addModule('/workers/synth.worklet.js');
+        const workletNode = new Tone.AudioWorkletNode(context, 'synth-processor', { outputChannelCount: [2] });
+        Tone.getDestination().connect(workletNode);
+        workletNodeRef.current = workletNode as any;
+        console.log("[HOOK_TRACE] AudioWorkletNode created.");
+
+        setLoadingText("Initializing Drum Machine...");
+        const drumChannel = new Tone.Channel(Tone.gainToDb(drumSettings.volume)).toDestination();
+        drumChannelRef.current = drumChannel;
+        const drums = new DrumMachine(drumChannel, Tone);
+        await drums.waitForReady();
+        drumMachineRef.current = drums;
+        console.log("[HOOK_TRACE] DrumMachine initialized.");
+        
+        setLoadingText("Waking up the Composer...");
+        const worker = new Worker(new URL('../app/ambient.worker.ts', import.meta.url));
+        musicWorkerRef.current = worker;
+        worker.postMessage({ command: 'init' });
+
+        worker.onmessage = (event: MessageEvent) => {
+          const { type, synthScore, drumScore, error } = event.data;
+          const T = toneRef.current;
+          if (!T) return;
+
+          if (type === 'score_ready') {
+            if (!isPlaying) return;
+
+            T.Transport.scheduleOnce((time) => {
+              if (workletNodeRef.current && synthScore) {
+                workletNodeRef.current.port.postMessage({ type: 'schedule', score: synthScore, startTime: time });
+              }
+              if (drumMachineRef.current && drumScore) {
+                drumMachineRef.current.scheduleDrumScore(drumScore, time);
+              }
+            }, nextScheduleTimeRef.current);
+            
+            const currentBpm = T.Transport.bpm.value;
+            const chunkDuration = (SCORE_CHUNK_DURATION_IN_BARS * 4 * 60) / currentBpm;
+            nextScheduleTimeRef.current += chunkDuration;
+          } else if (type === 'error') {
+            toast({ variant: "destructive", title: "Worker Error", description: error });
+            handleStop();
+          } else if (type === 'started') {
+            nextScheduleTimeRef.current = T.context.currentTime + 0.1;
+            requestNewScoreFromWorker();
+          }
+        };
+
+        await new Promise(resolve => {
+          const checkInit = (event: MessageEvent) => {
+            if (event.data.type === 'initialized') {
+              worker.removeEventListener('message', checkInit);
+              resolve(true);
+            }
+          };
+          worker.addEventListener('message', checkInit);
+        });
+
+        console.log("[HOOK_TRACE] Worker initialized.");
+      } catch (e) {
+        const errorMsg = e instanceof Error ? e.message : String(e);
+        toast({ variant: "destructive", title: "Initialization Failed", description: errorMsg });
+        console.error("Initialization failed:", e);
+      } finally {
+        setIsInitializing(false);
+        setLoadingText("");
+      }
     };
     
     initializeAudio();
 
     // Cleanup effect
     return () => {
-        console.log("[HOOK_TRACE] Unmounting. Cleaning up audio resources.");
-        const Tone = toneRef.current;
-        if (Tone) {
-          handleStop();
-          if (scoreRequestLoopIdRef.current !== null) {
-              Tone.Transport.clear(scoreRequestLoopIdRef.current);
-          }
-          drumChannelRef.current?.dispose();
+      console.log("[HOOK_TRACE] Unmounting. Cleaning up audio resources.");
+      const Tone = toneRef.current;
+      if (Tone) {
+        handleStop();
+        if (scoreRequestLoopIdRef.current !== null) {
+          Tone.Transport.clear(scoreRequestLoopIdRef.current);
         }
-        musicWorkerRef.current?.terminate();
-        workletNodeRef.current?.disconnect();
+        drumChannelRef.current?.dispose();
+      }
+      musicWorkerRef.current?.terminate();
+      workletNodeRef.current?.disconnect();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Effect for updating worker settings
   useEffect(() => {
-    if (musicWorkerRef.current && isReady) {
+    if (musicWorkerRef.current && !isInitializing) {
         const settings = { instrumentSettings, drumSettings, effectsSettings, bpm, score };
         musicWorkerRef.current.postMessage({ command: 'update_settings', data: settings });
     }
-  }, [instrumentSettings, drumSettings, effectsSettings, bpm, score, isReady]);
+  }, [instrumentSettings, drumSettings, effectsSettings, bpm, score, isInitializing]);
 
   // Effect for updating drum volume
   useEffect(() => {
@@ -212,7 +205,7 @@ export const useAuraGroove = () => {
   // Effect for managing the score request loop
   useEffect(() => {
     const Tone = toneRef.current;
-    if (isReady && Tone) {
+    if (!isInitializing && Tone) {
         Tone.Transport.bpm.value = bpm;
         if (scoreRequestLoopIdRef.current !== null) {
             Tone.Transport.clear(scoreRequestLoopIdRef.current);
@@ -228,7 +221,7 @@ export const useAuraGroove = () => {
             toneRef.current.Transport.clear(scoreRequestLoopIdRef.current);
         }
     };
-  }, [bpm, isReady, isPlaying, requestNewScoreFromWorker]);
+  }, [bpm, isInitializing, isPlaying, requestNewScoreFromWorker]);
 
   return {
     isInitializing,
