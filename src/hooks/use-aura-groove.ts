@@ -54,7 +54,7 @@ export const useAuraGroove = () => {
     drumMachineRef.current?.stopAll();
     setIsPlaying(false);
   }, []);
-
+  
   const handleTogglePlay = useCallback(async () => {
     if (isInitializing) return;
 
@@ -67,6 +67,7 @@ export const useAuraGroove = () => {
     }
     
     if (Tone.Transport.state !== 'started') {
+      await Tone.start();
       Tone.Transport.start();
     } else if (Tone.Transport.state === 'paused') {
       Tone.Transport.start();
@@ -77,6 +78,7 @@ export const useAuraGroove = () => {
     setIsPlaying(true);
   }, [isInitializing, isPlaying, handleStop, drumSettings, instrumentSettings, effectsSettings, bpm, score]);
 
+
   useEffect(() => {
     const initializeAudio = async () => {
       try {
@@ -86,13 +88,13 @@ export const useAuraGroove = () => {
         toneRef.current = Tone;
         console.log("[HOOK_TRACE] AudioContext started.");
 
-        const context = Tone.getContext();
+        const context = Tone.getContext().rawContext;
         
         setLoadingText("Loading Synthesis Engine...");
         await context.audioWorklet.addModule('/workers/synth.worklet.js');
         console.log("[HOOK_TRACE] AudioWorklet module added.");
         
-        const workletNode = new Tone.AudioWorkletNode(context, 'synth-processor', { outputChannelCount: [2] });
+        const workletNode = new Tone.AudioWorkletNode(context, 'synth-processor');
         workletNode.toDestination();
         workletNodeRef.current = workletNode;
         console.log("[HOOK_TRACE] AudioWorkletNode created and connected.");
@@ -185,8 +187,9 @@ export const useAuraGroove = () => {
   }, [instrumentSettings, drumSettings, effectsSettings, bpm, score, isInitializing]);
 
   useEffect(() => {
-    if (drumChannelRef.current && toneRef.current) {
-        drumChannelRef.current.volume.value = toneRef.current.gainToDb(drumSettings.volume);
+    const Tone = toneRef.current;
+    if (drumChannelRef.current && Tone) {
+        drumChannelRef.current.volume.value = Tone.gainToDb(drumSettings.volume);
     }
   }, [drumSettings.volume]);
 
