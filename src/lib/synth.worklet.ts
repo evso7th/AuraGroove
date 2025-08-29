@@ -6,7 +6,16 @@ declare const sampleRate: number;
 
 // --- ADSR Envelope ---
 class ADSREnvelope {
-  constructor(options, sampleRate) {
+  private state: 'idle' | 'attack' | 'decay' | 'sustain' | 'release';
+  private value: number;
+  private samplesProcessed: number;
+  private attackSamples: number;
+  private decaySamples: number;
+  private releaseSamples: number;
+  private sustainLevel: number;
+  private releaseInitialValue: number;
+
+  constructor(options: any, sampleRate: number) {
     this.state = 'idle';
     this.value = 0.0;
     this.samplesProcessed = 0;
@@ -92,6 +101,11 @@ class ADSREnvelope {
 
 // --- Oscillator ---
 class Oscillator {
+  private phase: number;
+  private phaseIncrement: number;
+  private type: string;
+  private sampleRate: number;
+
   constructor(type, sampleRate) {
     this.phase = 0;
     this.phaseIncrement = 0;
@@ -141,6 +155,12 @@ class Oscillator {
 
 // --- Voice (A single mono-synth automaton) ---
 class Voice {
+  public noteId: number;
+  private sampleRate: number;
+  private oscillator: Oscillator;
+  public envelope: ADSREnvelope;
+  private velocity: number;
+    
   constructor(sampleRate) {
     this.noteId = -1; 
     this.sampleRate = sampleRate;
@@ -188,6 +208,11 @@ class Voice {
 
 // --- Main Processor (The Metronome and Mixer) ---
 class SynthProcessor extends AudioWorkletProcessor {
+  private voicePools: Record<string, Voice[]>;
+  private poolSizes: Record<string, number>;
+  private attackQueue: any[];
+  private releaseQueue: Map<number, number>;
+
   constructor() {
     super();
     console.log("[WORKLET_TRACE] SynthProcessor constructor called.");
@@ -212,8 +237,6 @@ class SynthProcessor extends AudioWorkletProcessor {
     this.port.onmessage = (event) => {
       const { type, score, startTime } = event.data;
       if (type === 'schedule') {
-        // console.log("[WORKLET_TRACE] Received 'schedule' command with score.", { score });
-        
         const allNotes = [];
         if (score.solo) allNotes.push(...score.solo);
         if (score.accompaniment) allNotes.push(...score.accompaniment);

@@ -9,7 +9,7 @@ import type { DrumSettings, EffectsSettings, InstrumentSettings, ScoreName, Tone
 const SCORE_CHUNK_DURATION_IN_BARS = 8;
 
 export const useAuraGroove = () => {
-  const [isInitializing, setIsInitializing] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
   const [loadingText, setLoadingText] = useState("");
   
@@ -49,6 +49,9 @@ export const useAuraGroove = () => {
       try {
           setLoadingText("Creating Audio Context...");
           const context = new (window.AudioContext || (window as any).webkitAudioContext)();
+          if (context.state === 'suspended') {
+            await context.resume();
+          }
           
           setLoadingText("Waking up audio context...");
           const Tone = await import('tone');
@@ -188,6 +191,16 @@ export const useAuraGroove = () => {
   }, [isPlaying, handleStop, requestNewScoreFromWorker, toast]);
 
 
+  useEffect(() => {
+    const mainPage = document.querySelector('main');
+    if (isInitializing) {
+        setLoadingText("Initializing audio engine...");
+        mainPage?.classList.add('cursor-wait');
+    } else {
+        mainPage?.classList.remove('cursor-wait');
+    }
+  }, [isInitializing]);
+  
   useEffect(() => {
     return () => {
       console.log("[HOOK_TRACE] Unmounting. Cleaning up audio resources.");
