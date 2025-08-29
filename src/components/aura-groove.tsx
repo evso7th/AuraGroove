@@ -45,16 +45,9 @@ export function AuraGroove() {
   const drumChannelRef = useRef<Tone.Channel | null>(null);
   const nextScheduleTimeRef = useRef<number>(0);
   const scoreRequestLoopRef = useRef<Tone.Loop | null>(null);
-  const isPlayingRef = useRef(isPlaying);
-
-  useEffect(() => {
-      isPlayingRef.current = isPlaying;
-  }, [isPlaying]);
-
 
   const requestNewScoreFromWorker = useCallback(() => {
     if (musicWorkerRef.current) {
-        console.log('[UI_TRACE] Requesting new score from worker.');
         musicWorkerRef.current.postMessage({ 
             command: 'request_new_score', 
             data: { chunkDurationInBars: SCORE_CHUNK_DURATION_IN_BARS } 
@@ -63,7 +56,6 @@ export function AuraGroove() {
   }, []);
 
   const handlePlay = useCallback(async () => {
-    console.log('[UI_TRACE] handlePlay called.');
     if (isInitializing || !isAudioReady || isPlaying) return;
 
     if (Tone.context.state !== 'running') {
@@ -71,12 +63,12 @@ export function AuraGroove() {
     }
     
     const settings = { drumSettings, instrumentSettings, effectsSettings, bpm, score };
-    console.log('[UI_TRACE] Sending "start" command to worker.');
     musicWorkerRef.current?.postMessage({ command: 'start', data: settings });
 
     if (Tone.Transport.state !== 'started') {
         Tone.Transport.start();
     }
+    scoreRequestLoopRef.current?.start(0);
     setIsPlaying(true);
   }, [isInitializing, isAudioReady, isPlaying, drumSettings, instrumentSettings, effectsSettings, bpm, score]);
 
@@ -86,14 +78,14 @@ export function AuraGroove() {
     drumMachineRef.current?.stopAll();
     
     if (Tone.Transport.state !== 'stopped') {
+        scoreRequestLoopRef.current?.stop(0);
         Tone.Transport.stop();
-        // Clear any scheduled events to prevent them from firing on next start
         Tone.Transport.cancel(0);
     }
     nextScheduleTimeRef.current = 0;
     
     setIsPlaying(false);
-  }, []);
+  }, [scoreRequestLoopRef]);
   
   const handleTogglePlay = useCallback(() => {
     if (isInitializing) return;
@@ -140,14 +132,13 @@ export function AuraGroove() {
 
         worker.onmessage = (event: MessageEvent) => {
             const { type, synthScore, drumScore, error } = event.data;
-            console.log(`[UI_TRACE] Received message from worker: ${type}`, event.data);
             
             if (type === 'started') {
                  nextScheduleTimeRef.current = Tone.context.currentTime + 0.1;
                  requestNewScoreFromWorker();
             }
             else if (type === 'score_ready') {
-                if (!isPlayingRef.current) return;
+                if (!isPlaying) return;
 
                 Tone.Transport.scheduleOnce((time) => {
                     if (workletNodeRef.current && synthScore) {
@@ -167,17 +158,6 @@ export function AuraGroove() {
                 setIsPlaying(false);
             }
         };
-
-        Tone.Transport.on('start', () => {
-            scoreRequestLoopRef.current?.start(0);
-        });
-        Tone.Transport.on('stop', () => {
-             scoreRequestLoopRef.current?.stop(0);
-             if (isPlayingRef.current) {
-                setIsPlaying(false);
-             }
-        });
-
 
         setLoadingText("");
         setIsAudioReady(true);
