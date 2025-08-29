@@ -128,10 +128,15 @@ const Composer = {
     get beatsPerBar() { return 4; },
     get secondsPerBeat() { return 60 / this.bpm; },
     
+    reset() {
+        console.log('[WORKER_TRACE] Composer state reset.');
+        this.barCount = 0;
+    },
+
     start(settings: any) {
         if (this.isRunning) return;
+        this.reset();
         this.updateSettings(settings);
-        this.barCount = 0;
         this.isRunning = true;
         self.postMessage({ type: 'started' });
     },

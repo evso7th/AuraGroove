@@ -44,6 +44,7 @@ export function AuraGroove() {
   const drumMachineRef = useRef<DrumMachine | null>(null);
   const drumChannelRef = useRef<Tone.Channel | null>(null);
   const nextScheduleTimeRef = useRef<number>(0);
+  const scoreRequestLoopRef = useRef<Tone.Loop | null>(null);
 
 
   const requestNewScoreFromWorker = useCallback(() => {
@@ -81,6 +82,8 @@ export function AuraGroove() {
     
     if (Tone.Transport.state !== 'stopped') {
         Tone.Transport.stop();
+        // Clear any scheduled events to prevent them from firing on next start
+        Tone.Transport.cancel(0);
     }
     nextScheduleTimeRef.current = 0;
     
@@ -125,13 +128,18 @@ export function AuraGroove() {
         musicWorkerRef.current = worker;
         worker.postMessage({ command: 'init' });
 
+        // Setup the controlled loop for requesting scores
+        scoreRequestLoopRef.current = new Tone.Loop(() => {
+            requestNewScoreFromWorker();
+        }, `${SCORE_CHUNK_DURATION_IN_BARS}m`); // "m" stands for measures/bars
+
         worker.onmessage = (event: MessageEvent) => {
             const { type, synthScore, drumScore, error } = event.data;
             console.log(`[UI_TRACE] Received message from worker: ${type}`, event.data);
             
             if (type === 'started') {
                  nextScheduleTimeRef.current = Tone.context.currentTime + 0.1;
-                 requestNewScoreFromWorker();
+                 requestNewScoreFromWorker(); // Request the very first score
             }
             else if (type === 'score_ready') {
                 if(Tone.Transport.state !== 'started') return;
@@ -147,16 +155,17 @@ export function AuraGroove() {
                 
                 const chunkDuration = (SCORE_CHUNK_DURATION_IN_BARS * 4 * 60) / bpm;
                 nextScheduleTimeRef.current += chunkDuration;
-                
-                requestNewScoreFromWorker();
-
             } else if (type === 'error') {
                 toast({ variant: "destructive", title: "Worker Error", description: error });
                 handleStop();
             }
         };
 
+        Tone.Transport.on('start', () => {
+            scoreRequestLoopRef.current?.start(0);
+        });
         Tone.Transport.on('stop', () => {
+             scoreRequestLoopRef.current?.stop(0);
              if (isPlaying) {
                 setIsPlaying(false);
              }
@@ -179,6 +188,7 @@ export function AuraGroove() {
     return () => {
       handleStop();
       musicWorkerRef.current?.terminate();
+      scoreRequestLoopRef.current?.dispose();
       workletNodeRef.current?.disconnect();
       drumMachineRef.current?.stopAll();
       drumChannelRef.current?.dispose();
@@ -359,5 +369,3 @@ export function AuraGroove() {
     </Card>
   );
 }
-
-    
