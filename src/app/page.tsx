@@ -2,6 +2,7 @@
 'use client';
 
 import { useState } from 'react';
+import * as Tone from 'tone';
 import { AuraGroove } from '@/components/aura-groove';
 import { Button } from '@/components/ui/button';
 import Logo from '@/components/icons';
@@ -11,7 +12,9 @@ import { Music } from 'lucide-react';
 export default function Home() {
   const [isStarted, setIsStarted] = useState(false);
 
-  const handleStart = () => {
+  const handleStart = async () => {
+    await Tone.start();
+    console.log("AudioContext started by user gesture.");
     setIsStarted(true);
   };
 
