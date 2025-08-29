@@ -280,6 +280,12 @@ class SynthProcessor extends AudioWorkletProcessor {
     }
 
     for (let i = 0; i < channel.length; i++) {
+        if (i === 0) { // Log only once per process block to avoid flooding
+            console.log(`[WORKLET_DIAG] currentTime: ${currentTime}, attackQueue length: ${this.attackQueue.length}`);
+            if (this.attackQueue.length > 0) {
+                console.log(`[WORKLET_DIAG] Next note scheduled for: ${this.attackQueue[0].scheduledTime}`);
+            }
+        }
         const currentFrameTime = currentTime + i / sampleRate;
 
         // Process attacks
@@ -287,6 +293,7 @@ class SynthProcessor extends AudioWorkletProcessor {
             const note = this.attackQueue.shift();
             const voice = this.getVoiceForNote(note);
             if (voice) {
+                console.log('[WORKLET_DIAG] Triggering voice for note:', { id: note.id, part: note.part, freq: note.freq, velocity: note.velocity });
                 voice.trigger(note);
             }
         }
