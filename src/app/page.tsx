@@ -1,22 +1,21 @@
 
 'use client';
 
-import { useState } from 'react';
-import * as Tone from 'tone';
 import { AuraGroove } from '@/components/aura-groove';
 import { Button } from '@/components/ui/button';
 import Logo from '@/components/icons';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Music } from 'lucide-react';
+import { Music, Loader2 } from 'lucide-react';
+import { useAuraGroove } from '@/hooks/use-aura-groove';
 
 export default function Home() {
-  const [isStarted, setIsStarted] = useState(false);
-
-  const handleStart = async () => {
-    await Tone.start();
-    console.log("AudioContext started by user gesture.");
-    setIsStarted(true);
-  };
+  const {
+    isStarted,
+    isInitializing,
+    loadingText,
+    handleStart,
+    ...auraGrooveProps
+  } = useAuraGroove();
 
   if (!isStarted) {
     return (
@@ -35,9 +34,13 @@ export default function Home() {
                 </p>
             </CardContent>
             <CardFooter>
-                 <Button onClick={handleStart} className="w-full text-lg py-6">
-                    <Music className="mr-2 h-6 w-6" />
-                    Start AuraGroove
+                 <Button onClick={handleStart} className="w-full text-lg py-6" disabled={isInitializing}>
+                    {isInitializing ? (
+                        <Loader2 className="mr-2 h-6 w-6 animate-spin" />
+                    ) : (
+                        <Music className="mr-2 h-6 w-6" />
+                    )}
+                    {isInitializing ? loadingText : 'Start AuraGroove'}
                 </Button>
             </CardFooter>
         </Card>
@@ -47,7 +50,7 @@ export default function Home() {
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-4 sm:p-8">
-      <AuraGroove />
+      <AuraGroove {...auraGrooveProps} />
     </main>
   );
 }

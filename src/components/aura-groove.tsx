@@ -1,218 +1,45 @@
 
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
-import * as Tone from 'tone';
-import { Loader2, Music, Pause, Speaker, FileMusic, Waves, ChevronsRight, Sparkles, SlidersHorizontal, Drum } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { Loader2, Music, Pause, Speaker, FileMusic, Drum, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import Logo from "@/components/icons";
-import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
-import { DrumMachine } from "@/lib/drum-machine";
-import type { DrumSettings, EffectsSettings, InstrumentSettings, ScoreName, WorkletNote, DrumNote } from '@/types/music';
+import type { DrumSettings, EffectsSettings, InstrumentSettings, ScoreName } from '@/types/music';
 
-// Architectural constants
-const SCORE_CHUNK_DURATION_IN_BARS = 8; // Generate 8 bars of music at a time
+// This is now a "dumb" UI component controlled by the useAuraGroove hook.
+export type AuraGrooveProps = {
+  isPlaying: boolean;
+  isInitializing: boolean;
+  loadingText: string;
+  drumSettings: DrumSettings;
+  setDrumSettings: (settings: React.SetStateAction<DrumSettings>) => void;
+  instrumentSettings: InstrumentSettings;
+  setInstrumentSettings: (settings: React.SetStateAction<InstrumentSettings>) => void;
+  bpm: number;
+  setBpm: (value: number) => void;
+  score: ScoreName;
+  setScore: (value: ScoreName) => void;
+  handleTogglePlay: () => void;
+};
 
-export function AuraGroove() {
-  const [isAudioReady, setIsAudioReady] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isInitializing, setIsInitializing] = useState(true); 
-  const [loadingText, setLoadingText] = useState("Initializing...");
-
-  // --- State for Music Settings ---
-  const [drumSettings, setDrumSettings] = useState<DrumSettings>({ pattern: 'none', volume: 0.7 });
-  const [effectsSettings, setEffectsSettings] = useState<EffectsSettings>({ mode: 'none', volume: 0.7 });
-  const [instrumentSettings, setInstrumentSettings] = useState<InstrumentSettings>({
-    solo: { name: "none", volume: 0.8 },
-    accompaniment: { name: "synthesizer", volume: 0.7 },
-    bass: { name: "none", volume: 0.9 },
-  });
-  const [bpm, setBpm] = useState(75);
-  const [score, setScore] = useState<ScoreName>('evolve');
-  
-  const { toast } = useToast();
-
-  // --- Refs for Worker and Audio components ---
-  const musicWorkerRef = useRef<Worker | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const workletNodeRef = useRef<AudioWorkletNode | null>(null);
-  const drumMachineRef = useRef<DrumMachine | null>(null);
-  const drumChannelRef = useRef<Tone.Channel | null>(null);
-  const nextScheduleTimeRef = useRef<number>(0);
-  const scoreRequestLoopIdRef = useRef<number | null>(null);
-
-  const requestNewScoreFromWorker = useCallback(() => {
-    console.log("[UI_TRACE] Requesting new score from worker.");
-    if (musicWorkerRef.current) {
-        musicWorkerRef.current.postMessage({ 
-            command: 'request_new_score', 
-            data: { chunkDurationInBars: SCORE_CHUNK_DURATION_IN_BARS } 
-        });
-    }
-  }, []);
-
-  const handlePlay = useCallback(async () => {
-    console.log("[UI_TRACE] handlePlay called.");
-    if (isInitializing) return;
-
-    if (!isAudioReady) {
-        try {
-            setIsInitializing(true);
-            setLoadingText("Initializing Audio System...");
-            
-            await Tone.start();
-            const context = Tone.getContext().rawContext;
-            audioContextRef.current = context;
-            
-            setLoadingText("Loading Synthesis Engine...");
-            await context.audioWorklet.addModule('/workers/synth.worklet.js');
-            
-            const workletNode = new AudioWorkletNode(context, 'synth-processor', {
-                outputChannelCount: [2]
-            });
-            workletNode.connect(context.destination);
-            workletNodeRef.current = workletNode;
-            
-            setLoadingText("Initializing Drum Machine...");
-            const drumChannel = new Tone.Channel(Tone.gainToDb(drumSettings.volume)).toDestination();
-            drumChannelRef.current = drumChannel;
-            const drums = new DrumMachine(drumChannel);
-            await drums.waitForReady();
-            drumMachineRef.current = drums;
-
-
-            setLoadingText("Waking up the Composer...");
-            const worker = new Worker(new URL('../app/ambient.worker.ts', import.meta.url));
-            musicWorkerRef.current = worker;
-            worker.postMessage({ command: 'init' });
-
-            worker.onmessage = (event: MessageEvent) => {
-                const { type, synthScore, drumScore, error } = event.data;
-                console.log(`[UI_TRACE] Received message from worker: ${type}`, event.data);
-                
-                if (type === 'started') {
-                    nextScheduleTimeRef.current = Tone.context.currentTime + 0.1;
-                    requestNewScoreFromWorker();
-                } else if (type === 'score_ready') {
-                    if (!isPlaying) return;
-    
-                    Tone.Transport.scheduleOnce((time) => {
-                        if (workletNodeRef.current && synthScore) {
-                            workletNodeRef.current.port.postMessage({ type: 'schedule', score: synthScore, startTime: time });
-                        }
-                        if (drumMachineRef.current && drumScore) {
-                            drumMachineRef.current.scheduleDrumScore(drumScore, time);
-                        }
-                    }, nextScheduleTimeRef.current);
-                    
-                    const chunkDuration = (SCORE_CHUNK_DURATION_IN_BARS * 4 * 60) / bpm;
-                    nextScheduleTimeRef.current += chunkDuration;
-                } else if (type === 'error') {
-                    toast({ variant: "destructive", title: "Worker Error", description: error });
-                    handleStop();
-                } else if (type === 'stopped') {
-                    setIsPlaying(false);
-                }
-            };
-
-            await new Promise(resolve => {
-                const checkInit = (event: MessageEvent) => {
-                    if (event.data.type === 'initialized') {
-                        worker.removeEventListener('message', checkInit);
-                        resolve(true);
-                    }
-                };
-                worker.addEventListener('message', checkInit);
-            });
-
-            setLoadingText("");
-            setIsAudioReady(true);
-            setIsInitializing(false);
-
-        } catch (e) {
-            const errorMsg = e instanceof Error ? e.message : String(e);
-            toast({ variant: "destructive", title: "Initialization Failed", description: errorMsg });
-            setIsInitializing(false);
-            return;
-        }
-    }
-    
-    if (Tone.Transport.state !== 'started') {
-        Tone.Transport.start();
-        console.log("[UI_TRACE] Tone.Transport started.");
-        const settings = { drumSettings, instrumentSettings, effectsSettings, bpm, score };
-        musicWorkerRef.current?.postMessage({ command: 'start', data: settings });
-        setIsPlaying(true);
-    }
-  }, [isInitializing, isAudioReady, isPlaying, drumSettings, instrumentSettings, effectsSettings, bpm, score, requestNewScoreFromWorker, toast]);
-
-  const handleStop = useCallback(() => {
-    console.log("[UI_TRACE] handleStop called.");
-    if (Tone.Transport.state === 'started') {
-        Tone.Transport.pause();
-        musicWorkerRef.current?.postMessage({ command: 'stop' });
-        workletNodeRef.current?.port.postMessage({ type: 'clear' });
-        drumMachineRef.current?.stopAll();
-        setIsPlaying(false);
-        console.log("[UI_TRACE] Tone.Transport paused.");
-    }
-  }, []);
-  
-  const handleTogglePlay = useCallback(() => {
-    if (isInitializing) return;
-    isPlaying ? handleStop() : handlePlay();
-  }, [isInitializing, isPlaying, handleStop, handlePlay]);
-
-
-  useEffect(() => {
-    if (musicWorkerRef.current && isAudioReady && !isInitializing) {
-        const settings = { instrumentSettings, drumSettings, effectsSettings, bpm, score };
-        musicWorkerRef.current.postMessage({ command: 'update_settings', data: settings });
-    }
-  }, [instrumentSettings, drumSettings, effectsSettings, bpm, score, isAudioReady, isInitializing]);
-  
-  useEffect(() => {
-    if (drumChannelRef.current) {
-        drumChannelRef.current.volume.value = Tone.gainToDb(drumSettings.volume);
-    }
-  }, [drumSettings.volume]);
-  
-   useEffect(() => {
-      if (isAudioReady) {
-        Tone.Transport.bpm.value = bpm;
-        if(scoreRequestLoopIdRef.current !== null){
-            Tone.Transport.clear(scoreRequestLoopIdRef.current);
-        }
-        scoreRequestLoopIdRef.current = Tone.Transport.scheduleRepeat(() => {
-            if(isPlaying){
-               requestNewScoreFromWorker();
-            }
-        }, `${SCORE_CHUNK_DURATION_IN_BARS}m`);
-      }
-  }, [bpm, isAudioReady, isPlaying, requestNewScoreFromWorker]);
-
-  useEffect(() => {
-    return () => {
-        console.log("[UI_TRACE] AuraGroove component unmounting. Cleaning up.");
-        handleStop();
-        musicWorkerRef.current?.terminate();
-        if (scoreRequestLoopIdRef.current !== null) {
-            Tone.Transport.clear(scoreRequestLoopIdRef.current);
-        }
-        workletNodeRef.current?.disconnect();
-        drumMachineRef.current?.stopAll();
-        drumChannelRef.current?.dispose();
-        Tone.Transport.stop();
-        Tone.Transport.cancel(0);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
+export function AuraGroove({
+  isPlaying,
+  isInitializing,
+  loadingText,
+  drumSettings,
+  setDrumSettings,
+  instrumentSettings,
+  setInstrumentSettings,
+  bpm,
+  setBpm,
+  score,
+  setScore,
+  handleTogglePlay
+}: AuraGrooveProps) {
 
   if (isInitializing) {
     return (
@@ -239,7 +66,6 @@ export function AuraGroove() {
         </Card>
     );
   }
-
 
   return (
     <Card className="w-full max-w-lg shadow-2xl">
@@ -353,18 +179,12 @@ export function AuraGroove() {
              </div>
         </div>
          
-         {isInitializing && (
-            <div className="flex flex-col items-center justify-center text-muted-foreground space-y-2 min-h-[40px]">
-                <Loader2 className="h-6 w-6 animate-spin" />
-                <p>{loadingText || "Loading..."}</p>
-            </div>
-        )}
-         {!isInitializing && !isPlaying && (
+         {!isPlaying && (
             <p className="text-muted-foreground text-center min-h-[40px] flex items-center justify-center px-4">
               Press play to start the music.
             </p>
         )}
-        {!isInitializing && isPlaying && (
+        {isPlaying && (
              <p className="text-muted-foreground text-center min-h-[40px] flex items-center justify-center px-4">
               Playing at {bpm} BPM...
             </p>
@@ -378,14 +198,12 @@ export function AuraGroove() {
             disabled={isInitializing}
             className="w-full text-lg py-6"
           >
-            {isInitializing ? (
-              <Loader2 className="mr-2 h-6 w-6 animate-spin" />
-            ) : isPlaying ? (
+            {isPlaying ? (
               <Pause className="mr-2 h-6 w-6" />
             ) : (
               <Music className="mr-2 h-6 w-6" />
             )}
-            {isInitializing ? loadingText : isPlaying ? "Stop" : "Play"}
+            {isPlaying ? "Stop" : "Play"}
           </Button>
         </div>
       </CardFooter>
