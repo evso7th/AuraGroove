@@ -25,15 +25,14 @@ export const useAuraGroove = () => {
   
   const { toast } = useToast();
 
-  // Refs for audio components and state
   const isInitializedRef = useRef<boolean>(false);
   const toneRef = useRef<ToneJS | null>(null);
   const musicWorkerRef = useRef<Worker | null>(null);
-  const workletNodeRef = useRef<any | null>(null);
+  const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const drumMachineRef = useRef<DrumMachine | null>(null);
-  const drumChannelRef = useRef<any | null>(null);
+  const drumChannelRef = useRef<any | null>(null); // This will be a Tone.Channel
   const nextScheduleTimeRef = useRef<number>(0);
-  const scoreRequestLoopIdRef = useRef<any | null>(null); // Can be number or Tone.Event ID
+  const scoreRequestLoopIdRef = useRef<any | null>(null);
 
   const requestNewScoreFromWorker = useCallback(() => {
     if (musicWorkerRef.current) {
@@ -45,91 +44,103 @@ export const useAuraGroove = () => {
   }, []);
 
   const initializeAudio = async () => {
-    setIsInitializing(true);
-    try {
-        setLoadingText("Waking up audio context...");
-        const Tone = await import('tone');
-        await Tone.start();
-        toneRef.current = Tone;
-        console.log("[HOOK_TRACE] AudioContext started.");
+      setIsInitializing(true);
+      try {
+          setLoadingText("Creating Audio Context...");
+          // 1. Create the native AudioContext first.
+          const context = new (window.AudioContext || (window as any).webkitAudioContext)();
+          
+          setLoadingText("Waking up audio context...");
+          // 2. Dynamically import Tone.js
+          const Tone = await import('tone');
+          toneRef.current = Tone;
+          
+          // 3. Set Tone.js to use OUR context. This is the crucial step.
+          Tone.setContext(context);
+          
+          // 4. Start the context, which is now required by browsers.
+          await Tone.start();
+          console.log("[HOOK_TRACE] AudioContext started.");
 
-        const context = Tone.getContext().rawContext;
-        
-        setLoadingText("Loading Synthesis Engine...");
-        await context.audioWorklet.addModule('/workers/synth.worklet.js');
-        console.log("[HOOK_TRACE] AudioWorklet module added.");
-        
-        // Use the native AudioWorkletNode constructor
-        const workletNode = new AudioWorkletNode(context, 'synth-processor');
-        workletNode.connect(Tone.getDestination());
-        workletNodeRef.current = workletNode;
-        console.log("[HOOK_TRACE] Native AudioWorkletNode created and connected.");
+          setLoadingText("Loading Synthesis Engine...");
+          // 5. Add our custom worklet module to the native context.
+          await context.audioWorklet.addModule('/workers/synth.worklet.js');
+          console.log("[HOOK_TRACE] AudioWorklet module added.");
 
-        setLoadingText("Initializing Drum Machine...");
-        const drumChannel = new Tone.Channel({ volume: Tone.gainToDb(drumSettings.volume), pan: 0 }).connect(Tone.getDestination());
-        drumChannelRef.current = drumChannel;
-        const drums = new DrumMachine(drumChannel, Tone);
-        await drums.waitForReady();
-        drumMachineRef.current = drums;
-        console.log("[HOOK_TRACE] DrumMachine initialized.");
-        
-        setLoadingText("Waking up the Composer...");
-        const worker = new Worker(new URL('../app/ambient.worker.ts', import.meta.url));
-        musicWorkerRef.current = worker;
-        worker.postMessage({ command: 'init' });
+          // 6. Create the AudioWorkletNode using the native constructor.
+          const workletNode = new AudioWorkletNode(context, 'synth-processor');
+          workletNodeRef.current = workletNode;
+          
+          // 7. Connect our custom node to the Tone.js signal chain.
+          workletNode.connect(Tone.getDestination());
+          console.log("[HOOK_TRACE] Native AudioWorkletNode created and connected.");
 
-        worker.onmessage = (event: MessageEvent) => {
-          const { type, synthScore, drumScore, error } = event.data;
-          const T = toneRef.current;
-          if (!T || !T.Transport) return;
+          setLoadingText("Initializing Drum Machine...");
+          const drumChannel = new Tone.Channel({ volume: Tone.gainToDb(drumSettings.volume), pan: 0 }).connect(Tone.getDestination());
+          drumChannelRef.current = drumChannel;
+          // Pass the imported Tone object directly to the DrumMachine
+          const drums = new DrumMachine(drumChannel, Tone);
+          await drums.waitForReady();
+          drumMachineRef.current = drums;
+          console.log("[HOOK_TRACE] DrumMachine initialized.");
+          
+          setLoadingText("Waking up the Composer...");
+          const worker = new Worker(new URL('../app/ambient.worker.ts', import.meta.url));
+          musicWorkerRef.current = worker;
+          worker.postMessage({ command: 'init' });
 
-          if (type === 'score_ready') {
-            if (!isPlaying) return;
+          worker.onmessage = (event: MessageEvent) => {
+            const { type, synthScore, drumScore, error } = event.data;
+            const T = toneRef.current;
+            if (!T || !T.Transport) return;
 
-            T.Transport.scheduleOnce((time) => {
-              const scheduleTime = Math.max(time, T.context.currentTime);
-              if (workletNodeRef.current && synthScore) {
-                workletNodeRef.current.port.postMessage({ type: 'schedule', score: synthScore, startTime: scheduleTime });
-              }
-              if (drumMachineRef.current && drumScore) {
-                drumMachineRef.current.scheduleDrumScore(drumScore, scheduleTime);
-              }
-            }, nextScheduleTimeRef.current);
-            
-            const currentBpm = T.Transport.bpm.value;
-            const chunkDuration = (SCORE_CHUNK_DURATION_IN_BARS * 4 * 60) / currentBpm;
-            nextScheduleTimeRef.current += chunkDuration;
-          } else if (type === 'error') {
-            toast({ variant: "destructive", title: "Worker Error", description: error });
-            handleStop();
-          } else if (type === 'started') {
-            nextScheduleTimeRef.current = T.context.currentTime + 0.1;
-            requestNewScoreFromWorker();
-          }
-        };
+            if (type === 'score_ready') {
+              if (!isPlaying) return;
 
-        await new Promise<void>(resolve => {
-          const checkInit = (event: MessageEvent) => {
-            if (event.data.type === 'initialized') {
-              worker.removeEventListener('message', checkInit);
-              resolve();
+              T.Transport.scheduleOnce((time) => {
+                const scheduleTime = Math.max(time, T.context.currentTime);
+                if (workletNodeRef.current && synthScore) {
+                  workletNodeRef.current.port.postMessage({ type: 'schedule', score: synthScore, startTime: scheduleTime });
+                }
+                if (drumMachineRef.current && drumScore) {
+                  drumMachineRef.current.scheduleDrumScore(drumScore, scheduleTime);
+                }
+              }, nextScheduleTimeRef.current);
+              
+              const currentBpm = T.Transport.bpm.value;
+              const chunkDuration = (SCORE_CHUNK_DURATION_IN_BARS * 4 * 60) / currentBpm;
+              nextScheduleTimeRef.current += chunkDuration;
+            } else if (type === 'error') {
+              toast({ variant: "destructive", title: "Worker Error", description: error });
+              handleStop();
+            } else if (type === 'started') {
+              nextScheduleTimeRef.current = T.context.currentTime + 0.1;
+              requestNewScoreFromWorker();
             }
           };
-          worker.addEventListener('message', checkInit);
-        });
 
-        console.log("[HOOK_TRACE] Worker initialized.");
-        isInitializedRef.current = true;
+          await new Promise<void>(resolve => {
+            const checkInit = (event: MessageEvent) => {
+              if (event.data.type === 'initialized') {
+                worker.removeEventListener('message', checkInit);
+                resolve();
+              }
+            };
+            worker.addEventListener('message', checkInit);
+          });
 
-    } catch (e) {
-      const errorMsg = e instanceof Error ? e.message : String(e);
-      toast({ variant: "destructive", title: "Initialization Failed", description: errorMsg });
-      console.error("Initialization failed:", e);
-      isInitializedRef.current = false;
-    } finally {
-      setIsInitializing(false);
-      setLoadingText("");
-    }
+          console.log("[HOOK_TRACE] Worker initialized.");
+          isInitializedRef.current = true;
+
+      } catch (e) {
+        const errorMsg = e instanceof Error ? e.message : String(e);
+        toast({ variant: "destructive", title: "Initialization Failed", description: errorMsg });
+        console.error("Initialization failed:", e);
+        isInitializedRef.current = false;
+      } finally {
+        setIsInitializing(false);
+        setLoadingText("");
+      }
   };
 
   const handleStop = useCallback(() => {
