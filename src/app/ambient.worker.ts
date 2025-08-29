@@ -190,7 +190,6 @@ const Composer = {
     },
 
     generateChunk(chunkDurationInBars: number) {
-        console.log(`[WORKER_TRACE] generateChunk called for ${chunkDurationInBars} bars.`);
         if (!this.isRunning) return;
 
         let synthScore: { solo: WorkletNote[], accompaniment: WorkletNote[], bass: WorkletNote[], effects: WorkletNote[] } = { solo: [], accompaniment: [], bass: [], effects: [] };
@@ -223,9 +222,6 @@ const Composer = {
         
         this.barCount += chunkDurationInBars;
         
-        const totalSynthNotes = synthScore.solo.length + synthScore.accompaniment.length + synthScore.bass.length + synthScore.effects.length;
-        console.log(`[WORKER_TRACE] Generated score. Synth notes: ${totalSynthNotes}, Drum notes: ${drumScore.length}`);
-        console.log("[WORKER_TRACE] Posting 'score_ready' message back to UI.");
         self.postMessage({ type: 'score_ready', synthScore, drumScore });
     }
 };
@@ -234,7 +230,6 @@ const Composer = {
 // --- MessageBus ---
 self.onmessage = async (event: MessageEvent) => {
     const { command, data } = event.data;
-    console.log(`[WORKER_TRACE] Received command: ${command}`, data);
 
     try {
         switch (command) {

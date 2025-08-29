@@ -1,6 +1,5 @@
 
-import * as Tone from 'tone';
-import type { DrumNote } from '@/types/music';
+import type { DrumNote, ToneJS } from '@/types/music';
 
 const DRUM_SAMPLES = {
     'kick': '/assets/drums/kick_drum6.wav',
@@ -11,19 +10,21 @@ const DRUM_SAMPLES = {
 };
 
 export class DrumMachine {
-    private players: Tone.Players;
+    private players: any; // Tone.Players
     private isInitialized = false;
-    private drumChannel: Tone.Channel;
+    private drumChannel: any; // Tone.Channel
     private readyPromise: Promise<void>;
     private resolveReady!: () => void;
+    private Tone: ToneJS;
 
-    constructor(channel: Tone.Channel) {
+    constructor(channel: any, tone: ToneJS) {
         this.drumChannel = channel;
+        this.Tone = tone;
         this.readyPromise = new Promise(resolve => {
             this.resolveReady = resolve;
         });
 
-        this.players = new Tone.Players({
+        this.players = new this.Tone.Players({
             urls: DRUM_SAMPLES,
             onload: () => {
                 console.log('[DRUM_TRACE] Drum samples loaded.');
@@ -57,21 +58,17 @@ export class DrumMachine {
         score.forEach(note => {
             if (this.players.has(note.sample)) {
                 try {
-                    this.players.player(note.sample).start(startTime + note.time).volume.value = Tone.gainToDb(note.velocity);
+                    this.players.player(note.sample).start(startTime + note.time).volume.value = this.Tone.gainToDb(note.velocity);
                 } catch(e) {
                     console.error(`[DRUM_TRACE] Error scheduling drum sample ${note.sample} at time ${startTime + note.time}. Error: ${e}`);
                 }
             }
         });
-        // console.log(`[DRUM_TRACE] Scheduled ${score.length} drum notes to start at transport time ${startTime.toFixed(2)}.`);
     }
 
     public stopAll() {
         if (this.isReady()) {
             this.players.mute = true;
-            // console.log('[DRUM_TRACE] All drum sounds muted via stopAll.');
         }
     }
 }
-
-    

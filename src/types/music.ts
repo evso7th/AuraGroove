@@ -1,4 +1,10 @@
 
+// This imports the full type definition for the Tone.js library.
+// It's a heavy import, so we only use it in type-checking, not runtime.
+import type * as Tone from 'tone';
+
+export type ToneJS = typeof Tone;
+
 export type InstrumentPart = 'solo' | 'accompaniment' | 'bass' | 'effects' | 'drums';
 export type OscillatorType = 'sine' | 'square' | 'sawtooth' | 'fatsine' | 'fatsawtooth' | 'fmsquare';
 
