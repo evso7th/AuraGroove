@@ -105,12 +105,12 @@ export const useAuraGroove = () => {
         setLoadingText("Waking up audio context...");
         await Tone.start();
         console.log("[HOOK_TRACE] AudioContext started.");
+
         const context = Tone.getContext().rawContext;
         if (!context) {
-            throw new Error("Failed to get raw AudioContext from Tone.js");
+            throw new Error("Failed to get raw AudioContext from Tone.js after start.");
         }
         audioContextRef.current = context;
-
 
         setLoadingText("Loading Synthesis Engine...");
         await context.audioWorklet.addModule('/workers/synth.worklet.js');
@@ -224,7 +224,7 @@ export const useAuraGroove = () => {
         handleStop();
         musicWorkerRef.current?.terminate();
         if (scoreRequestLoopIdRef.current !== null) {
-            Tone.Transport.clear(scoreRequestLoop_loopIdRef.current);
+            Tone.Transport.clear(scoreRequestLoopIdRef.current);
         }
         workletNodeRef.current?.disconnect();
         drumChannelRef.current?.dispose();
@@ -249,5 +249,3 @@ export const useAuraGroove = () => {
     setScore,
   };
 };
-
-    
