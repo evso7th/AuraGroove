@@ -20,9 +20,9 @@ export type AuraGrooveProps = {
   instrumentSettings: InstrumentSettings;
   setInstrumentSettings: (settings: React.SetStateAction<InstrumentSettings>) => void;
   bpm: number;
-  setBpm: (value: number) => void;
+  handleBpmChange: (value: number) => void;
   score: ScoreName;
-  setScore: (value: ScoreName) => void;
+  handleScoreChange: (value: ScoreName) => void;
   handleTogglePlay: () => void;
 };
 
@@ -35,9 +35,9 @@ export function AuraGroove({
   instrumentSettings,
   setInstrumentSettings,
   bpm,
-  setBpm,
+  handleBpmChange,
   score,
-  setScore,
+  handleScoreChange,
   handleTogglePlay
 }: AuraGrooveProps) {
 
@@ -84,7 +84,7 @@ export function AuraGroove({
                  <Label htmlFor="score-selector" className="text-right">Style</Label>
                  <Select
                     value={score}
-                    onValueChange={(v) => setScore(v as ScoreName)}
+                    onValueChange={(v) => handleScoreChange(v as ScoreName)}
                     disabled={isInitializing || isPlaying}
                     >
                     <SelectTrigger id="score-selector" className="col-span-2">
@@ -104,7 +104,7 @@ export function AuraGroove({
                     min={60}
                     max={160}
                     step={5}
-                    onValueChange={(v) => setBpm(v[0])}
+                    onValueChange={(v) => handleBpmChange(v[0])}
                     className="col-span-2"
                     disabled={isInitializing}
                 />
