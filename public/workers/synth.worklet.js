@@ -1,6 +1,8 @@
 
 // synth.worklet.js
 console.log("[WORKLET_TRACE] synth.worklet.ts script loading. ARCH: ATTACK_RELEASE");
+declare const currentTime: number;
+declare const sampleRate: number;
 
 // --- ADSR Envelope ---
 class ADSREnvelope {
@@ -30,7 +32,7 @@ class ADSREnvelope {
     }
   }
 
-  process(velocity) {
+  process() {
     switch (this.state) {
       case 'attack':
         if (this.attackSamples > 0) {
@@ -80,7 +82,7 @@ class ADSREnvelope {
 
 
     this.samplesProcessed++;
-    return this.value * velocity;
+    return this.value;
   }
 
   isActive() {
@@ -144,10 +146,12 @@ class Voice {
     this.sampleRate = sampleRate;
     this.oscillator = new Oscillator('sine', sampleRate);
     this.envelope = new ADSREnvelope({}, sampleRate);
+    this.velocity = 0;
   }
 
   trigger(note) {
     this.noteId = note.id;
+    this.velocity = note.velocity;
     this.oscillator = new Oscillator(note.oscType || 'sine', this.sampleRate);
     this.oscillator.setFrequency(note.freq);
     this.envelope = new ADSREnvelope({
@@ -163,17 +167,17 @@ class Voice {
     this.envelope.triggerRelease();
   }
 
-  process(velocity) {
+  process() {
     if (!this.isActive()) {
       return 0.0;
     }
-    const envValue = this.envelope.process(velocity);
+    const envValue = this.envelope.process();
     if (!this.isActive()) {
       this.noteId = -1;
       return 0.0;
     }
     const oscValue = this.oscillator.process();
-    return oscValue * envValue;
+    return oscValue * envValue * this.velocity;
   }
 
   isActive() {
@@ -280,12 +284,6 @@ class SynthProcessor extends AudioWorkletProcessor {
     }
 
     for (let i = 0; i < channel.length; i++) {
-        if (i === 0) { // Log only once per process block to avoid flooding
-            console.log(`[WORKLET_DIAG] currentTime: ${currentTime}, attackQueue length: ${this.attackQueue.length}`);
-            if (this.attackQueue.length > 0) {
-                console.log(`[WORKLET_DIAG] Next note scheduled for: ${this.attackQueue[0].scheduledTime}`);
-            }
-        }
         const currentFrameTime = currentTime + i / sampleRate;
 
         // Process attacks
@@ -293,7 +291,6 @@ class SynthProcessor extends AudioWorkletProcessor {
             const note = this.attackQueue.shift();
             const voice = this.getVoiceForNote(note);
             if (voice) {
-                console.log('[WORKLET_DIAG] Triggering voice for note:', { id: note.id, part: note.part, freq: note.freq, velocity: note.velocity });
                 voice.trigger(note);
             }
         }
@@ -317,7 +314,7 @@ class SynthProcessor extends AudioWorkletProcessor {
         for (const poolName in this.voicePools) {
             for (const voice of this.voicePools[poolName]) {
                 if (voice.isActive()) {
-                    sample += voice.process(1.0); 
+                    sample += voice.process(); 
                 }
             }
         }

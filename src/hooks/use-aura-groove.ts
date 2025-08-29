@@ -35,15 +35,16 @@ export const useAuraGroove = () => {
   const scoreRequestLoopIdRef = useRef<any | null>(null);
 
   const requestNewScoreFromWorker = useCallback(() => {
-    if (musicWorkerRef.current) {
+    if (musicWorkerRef.current && isPlaying) {
       musicWorkerRef.current.postMessage({ 
         command: 'request_new_score', 
         data: { chunkDurationInBars: SCORE_CHUNK_DURATION_IN_BARS } 
       });
     }
-  }, []);
+  }, [isPlaying]);
 
   const initializeAudio = useCallback(async () => {
+      if (isInitializedRef.current) return;
       setIsInitializing(true);
       try {
           setLoadingText("Creating Audio Context...");
@@ -80,36 +81,6 @@ export const useAuraGroove = () => {
           musicWorkerRef.current = worker;
           worker.postMessage({ command: 'init' });
 
-          worker.onmessage = (event: MessageEvent) => {
-            const { type, synthScore, drumScore, error } = event.data;
-            const T = toneRef.current;
-            if (!T || !T.Transport) return;
-
-            if (type === 'score_ready') {
-              if (!isPlaying) return;
-
-              T.Transport.scheduleOnce((time) => {
-                const scheduleTime = Math.max(time, T.context.currentTime);
-                if (workletNodeRef.current && synthScore) {
-                  workletNodeRef.current.port.postMessage({ type: 'schedule', score: synthScore, startTime: scheduleTime });
-                }
-                if (drumMachineRef.current && drumScore) {
-                  drumMachineRef.current.scheduleDrumScore(drumScore, scheduleTime);
-                }
-              }, nextScheduleTimeRef.current);
-              
-              const currentBpm = T.Transport.bpm.value;
-              const chunkDuration = (SCORE_CHUNK_DURATION_IN_BARS * 4 * 60) / currentBpm;
-              nextScheduleTimeRef.current += chunkDuration;
-            } else if (type === 'error') {
-              toast({ variant: "destructive", title: "Worker Error", description: error });
-              handleStop();
-            } else if (type === 'started') {
-              nextScheduleTimeRef.current = T.context.currentTime + 0.1;
-              requestNewScoreFromWorker();
-            }
-          };
-
           await new Promise<void>(resolve => {
             const checkInit = (event: MessageEvent) => {
               if (event.data.type === 'initialized') {
@@ -132,7 +103,8 @@ export const useAuraGroove = () => {
         setIsInitializing(false);
         setLoadingText("");
       }
-  }, [isPlaying, drumSettings.volume, requestNewScoreFromWorker]);
+  }, [drumSettings.volume, toast]);
+
 
   const handleStop = useCallback(() => {
     const Tone = toneRef.current;
@@ -173,7 +145,48 @@ export const useAuraGroove = () => {
     const settings = { drumSettings, instrumentSettings, effectsSettings, bpm, score };
     musicWorkerRef.current?.postMessage({ command: 'start', data: settings });
     setIsPlaying(true);
-  }, [isInitializing, isPlaying, initializeAudio, handleStop, drumSettings, instrumentSettings, effectsSettings, bpm, score]);
+  }, [isInitializing, isPlaying, initializeAudio, handleStop, drumSettings, instrumentSettings, effectsSettings, bpm, score, toast]);
+
+  useEffect(() => {
+    const worker = musicWorkerRef.current;
+    if (!worker || !isPlaying) return;
+
+    const handleMessage = (event: MessageEvent) => {
+        const { type, synthScore, drumScore, error } = event.data;
+        const T = toneRef.current;
+        if (!T || !T.Transport) return;
+
+        if (type === 'score_ready') {
+            T.Transport.scheduleOnce((time) => {
+              const scheduleTime = Math.max(time, T.context.currentTime);
+              if (workletNodeRef.current && synthScore) {
+                workletNodeRef.current.port.postMessage({ type: 'schedule', score: synthScore, startTime: scheduleTime });
+              }
+              if (drumMachineRef.current && drumScore) {
+                drumMachineRef.current.scheduleDrumScore(drumScore, scheduleTime);
+              }
+            }, nextScheduleTimeRef.current);
+            
+            const currentBpm = T.Transport.bpm.value;
+            const chunkDuration = (SCORE_CHUNK_DURATION_IN_BARS * 4 * 60) / currentBpm;
+            nextScheduleTimeRef.current += chunkDuration;
+        } else if (type === 'error') {
+            toast({ variant: "destructive", title: "Worker Error", description: error });
+            handleStop();
+        } else if (type === 'started') {
+            nextScheduleTimeRef.current = T.context.currentTime + 0.1;
+            requestNewScoreFromWorker();
+        }
+    };
+    
+    worker.addEventListener('message', handleMessage);
+
+    return () => {
+      worker.removeEventListener('message', handleMessage);
+    };
+
+  }, [isPlaying, handleStop, requestNewScoreFromWorker, toast]);
+
 
   useEffect(() => {
     return () => {
