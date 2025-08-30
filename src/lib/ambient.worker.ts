@@ -80,7 +80,7 @@ class EvolutionEngine {
             score.push({
                 note: note,
                 duration: 2, // Длинный release создаст эффект наложения
-                time: timeOffset + (index * 0.05), // Микросдвиг для "живого" исполнения
+                time: timeOffset + (index * 0.02), // Микросдвиг для "живого" исполнения
                 velocity: 0.6 * volume,
             });
         });
@@ -234,3 +234,5 @@ self.onmessage = async (event: MessageEvent<WorkerCommand>) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
+
+    
