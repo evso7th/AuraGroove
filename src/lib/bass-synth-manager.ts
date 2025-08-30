@@ -37,7 +37,7 @@ export class BassSynthManager {
         // --- PRESET 2: 'bass_synth' (new layered synth with two separate synths) ---
         const subOsc = new this.Tone.Synth({
             oscillator: { type: 'sine' },
-            envelope: { attack: 0.01, decay: 0.2, sustain: 0.9, release: 0.5 }
+            envelope: { attack: 0.01, decay: 0.2, sustain: 0.9, release: 1.0 }
         });
         const subDistortion = new this.Tone.Distortion(0.05).toDestination();
         subOsc.connect(subDistortion);
