@@ -5,42 +5,47 @@ import type * as Tone from 'tone';
 
 export type ToneJS = typeof Tone;
 
-export type InstrumentPart = 'solo' | 'accompaniment' | 'bass' | 'effects' | 'drums';
-export type OscillatorType = 'sine' | 'square' | 'sawtooth' | 'fatsine' | 'fatsawtooth' | 'fmsquare';
-
-export type WorkletNote = {
-    id: number; // Unique ID for each note event
-    part: InstrumentPart;
-    freq: number;
-    velocity: number;
-    // ADSR
-    attack: number;
-    decay: number;
-    sustain: number; // level
-    release: number;
-    // Timing
-    startTime: number; // in seconds, relative to the start of the score chunk
-    duration: number; // in seconds
-    // Sound
-    oscType: OscillatorType;
+// --- Types for Worker -> Main Thread Communication ---
+export type AudioChunk = {
+    chunk: Float32Array;
+    startTime: number; // Absolute time from audioContext.currentTime
+    duration: number;
 };
 
-export type DrumSample = 'kick' | 'snare' | 'hat' | 'crash' | 'ride';
+
+// --- Types for Main Thread -> Worker Communication ---
+export type WorkerSettings = {
+    bpm: number;
+    score: ScoreName;
+    drumSettings: Omit<DrumSettings, 'volume'> & { enabled: boolean, volume: number };
+    instrumentSettings: InstrumentSettings;
+};
+
+export type WorkerCommand = 
+| { command: 'start', data: WorkerSettings }
+| { command: 'stop' }
+| { command: 'update_settings', data: Partial<WorkerSettings> }
+| { command: 'init', data: { sampleRate: number, samples: Record<string, ArrayBuffer> } };
+
+
+// --- Types for internal Worker logic ---
+export type DrumSampleName = 'kick' | 'snare' | 'hat' | 'crash' | 'ride';
 
 export type DrumNote = {
-    sample: DrumSample;
-    time: number; // in seconds, relative to the start of the score chunk
+    sample: DrumSampleName;
+    time: number; // in beats, relative to the start of the bar
     velocity: number;
 };
 
 export type SynthNote = {
     note: string | string[]; // Can be a single note or an array for a chord
-    duration: string; // Tone.js time format e.g., "8n", "1m"
-    time: number; // in seconds, relative to the start of the score chunk
+    duration: number; // in beats
+    time: number; // in beats, relative to the start of the bar
     velocity: number;
 };
 
 
+// --- UI Types ---
 export type InstrumentSettings = {
   solo: {
       name: 'synthesizer' | 'piano' | 'organ' | 'none';

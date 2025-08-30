@@ -1,8 +1,8 @@
 
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from "react";
-import type { DrumSettings, InstrumentSettings, ScoreName } from '@/types/music';
+import { useState, useEffect, useCallback } from "react";
+import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings } from '@/types/music';
 import { useAudioEngine } from "@/contexts/audio-engine-context";
 
 export const useAuraGroove = () => {
@@ -18,47 +18,37 @@ export const useAuraGroove = () => {
   const [bpm, setBpm] = useState(75);
   const [score, setScore] = useState<ScoreName>('evolve');
 
+  const getFullSettings = useCallback((): WorkerSettings => {
+    return {
+      bpm,
+      score,
+      instrumentSettings,
+      drumSettings: { ...drumSettings, enabled: drumSettings.pattern !== 'none' }
+    };
+  }, [bpm, score, instrumentSettings, drumSettings]);
+
   const handleTogglePlay = useCallback(async () => {
     if (!isInitialized || !engine) return;
     
     const newIsPlaying = !isPlaying;
-    console.log("[PLAYER_TRACE] handleTogglePlay called. Setting isPlaying to:", newIsPlaying);
     setIsPlaying(newIsPlaying);
     
-    const settings = {
-        bpm,
-        score,
-        instrumentSettings,
-        drumSettings: { ...drumSettings, enabled: drumSettings.pattern !== 'none' }
-    };
-
     if (newIsPlaying) {
-        engine.updateSettings(settings); // Update before starting
+        // Pass all current settings to the engine when starting
+        engine.updateSettings(getFullSettings());
         engine.setIsPlaying(true);
     } else {
         engine.setIsPlaying(false);
     }
-  }, [isInitialized, engine, isPlaying, bpm, score, instrumentSettings, drumSettings]);
+  }, [isInitialized, engine, isPlaying, getFullSettings]);
 
-  // Update BPM in realtime
+  // Update settings in the worker in realtime
   useEffect(() => {
     if (engine) {
-        engine.updateSettings({ bpm });
+        engine.updateSettings({ bpm, drumSettings, instrumentSettings });
     }
-  }, [bpm, engine]);
-  
-  // Update settings when they change while playing
-  useEffect(() => {
-    if (isPlaying && engine) {
-        engine.updateSettings({ drumSettings: {...drumSettings, enabled: drumSettings.pattern !== 'none'} });
-    }
-  }, [drumSettings, isPlaying, engine]);
+  }, [bpm, drumSettings, instrumentSettings, engine]);
 
-  useEffect(() => {
-    if (isPlaying && engine) {
-        engine.updateSettings({ instrumentSettings });
-    }
-  }, [instrumentSettings, isPlaying, engine]);
 
   const isLoading = isInitializing || !isInitialized;
 
@@ -75,13 +65,14 @@ export const useAuraGroove = () => {
     handleBpmChange: setBpm,
     score,
     handleScoreChange: (newScore: ScoreName) => {
-      // Logic to change score, might require stopping and starting the worker
       if (isPlaying) {
-        // For simplicity, we ask the user to stop first.
         alert("Please stop the music before changing the style.");
         return;
       }
       setScore(newScore);
+      if(engine) {
+        engine.updateSettings({ score: newScore });
+      }
     },
   };
 };
