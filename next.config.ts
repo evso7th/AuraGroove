@@ -1,5 +1,7 @@
 
 import type {NextConfig} from 'next';
+import CopyWebpackPlugin from 'copy-webpack-plugin';
+import path from 'path';
 
 const nextConfig: NextConfig = {
   typescript: {
@@ -30,6 +32,20 @@ const nextConfig: NextConfig = {
         ],
       },
     ]
+  },
+  webpack: (config, { isServer, dev }) => {
+    config.plugins.push(
+        new CopyWebpackPlugin({
+            patterns: [
+                {
+                    from: path.join(__dirname, 'src/lib/synth.worklet.ts'),
+                    to: path.join(__dirname, 'public/workers/synth.worklet.js'),
+                },
+            ],
+        })
+    );
+    // Important: return the modified config
+    return config;
   },
   allowedDevOrigins: [
     'https://*.cloudworkstations.dev',

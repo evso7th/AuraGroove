@@ -145,7 +145,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         },
         updateSettings: (settings: any) => {
           musicWorkerRef.current?.postMessage({ command: 'update_settings', data: settings });
-          if (toneRef.current) {
+          if (toneRef.current && settings.bpm) {
             toneRef.current.Transport.bpm.value = settings.bpm;
           }
         }
