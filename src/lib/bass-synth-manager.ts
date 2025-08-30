@@ -1,43 +1,92 @@
 
 import type { ToneJS, SynthNote } from '@/types/music';
 
+type BassSynthPreset = {
+    type: 'simple' | 'layered';
+    synth: any; // Tone.MonoSynth
+    layeredSynths?: {
+        sub: any; // Tone.Synth
+        character: any; // Tone.Synth
+    };
+};
+
 export class BassSynthManager {
     private Tone: ToneJS;
-    private synth: any;
+    private presets: Map<string, BassSynthPreset>;
+    private activePreset: BassSynthPreset | null;
+    private currentInstrument: string;
 
     constructor(Tone: ToneJS) {
         this.Tone = Tone;
-        this.synth = new this.Tone.MonoSynth({
-            oscillator: {
-                type: 'fmsine'
-            },
-            envelope: {
-                attack: 0.05,
-                decay: 0.3,
-                sustain: 0.4,
-                release: 0.8
-            },
-            filterEnvelope: {
-                attack: 0.06,
-                decay: 0.2,
-                sustain: 0.5,
-                release: 2,
-                baseFrequency: 200,
-                octaves: 7,
-            }
+        this.presets = new Map();
+        this.currentInstrument = 'bass_synth';
+        this.createPresets();
+        this.activePreset = this.presets.get(this.currentInstrument) ?? null;
+    }
+
+    private createPresets() {
+        // --- PRESET 1: 'bassGuitar' (the original FM synth) ---
+        const bassGuitarSynth = new this.Tone.MonoSynth({
+            oscillator: { type: 'fmsine' },
+            envelope: { attack: 0.05, decay: 0.3, sustain: 0.4, release: 0.8 },
+            filterEnvelope: { attack: 0.06, decay: 0.2, sustain: 0.5, release: 2, baseFrequency: 200, octaves: 7 }
         }).toDestination();
+        this.presets.set('bassGuitar', { type: 'simple', synth: bassGuitarSynth });
+
+        // --- PRESET 2: 'bass_synth' (new layered synth) ---
+        const subOsc = new this.Tone.Synth({
+            oscillator: { type: 'sine' },
+            envelope: { attack: 0.01, decay: 0.2, sustain: 0.9, release: 0.5 }
+        });
+        const subDistortion = new this.Tone.Distortion(0.05).toDestination();
+        subOsc.connect(subDistortion);
+
+        const charOsc = new this.Tone.Synth({
+            oscillator: { type: 'sawtooth' },
+            envelope: { attack: 0.05, decay: 0.3, sustain: 0.4, release: 0.8 }
+        });
+        const charChorus = new this.Tone.Chorus(4, 2.5, 0.5).toDestination();
+        charOsc.connect(charChorus);
+        
+        this.presets.set('bass_synth', {
+            type: 'layered',
+            synth: null, // not used for layered
+            layeredSynths: { sub: subOsc, character: charOsc }
+        });
+    }
+
+    public setInstrument(name: 'bass_synth' | 'bassGuitar' | 'none') {
+        if (name === 'none') {
+            this.activePreset = null;
+        } else if (this.presets.has(name)) {
+            this.currentInstrument = name;
+            this.activePreset = this.presets.get(name) ?? null;
+        } else {
+            console.warn(`[BassSynthManager] Instrument "${name}" not found.`);
+        }
     }
 
     public schedule(score: SynthNote[], time: number) {
-        if (score.length === 0) return;
+        if (!this.activePreset || score.length === 0) return;
 
-        score.forEach(note => {
-            this.synth.triggerAttackRelease(
-                note.note,
-                this.Tone.Time(note.duration, 'n'),
-                time + (note.time * this.Tone.Time('4n').toSeconds()),
-                note.velocity
-            );
-        });
+        if (this.activePreset.type === 'simple') {
+            score.forEach(note => {
+                this.activePreset?.synth.triggerAttackRelease(
+                    note.note,
+                    this.Tone.Time(note.duration, 'n'),
+                    time + (note.time * this.Tone.Time('4n').toSeconds()),
+                    note.velocity
+                );
+            });
+        } else if (this.activePreset.type === 'layered' && this.activePreset.layeredSynths) {
+            const { sub, character } = this.activePreset.layeredSynths;
+            score.forEach(note => {
+                const scheduledTime = time + (note.time * this.Tone.Time('4n').toSeconds());
+                const duration = this.Tone.Time(note.duration, 'n');
+                
+                sub.triggerAttackRelease(note.note, duration, scheduledTime, note.velocity * 0.9);
+                character.triggerAttackRelease(note.note, duration, scheduledTime, note.velocity * 0.6);
+            });
+        }
     }
 }

@@ -31,9 +31,8 @@ export const useAuraGroove = () => {
   useEffect(() => {
       if (engine && isInitialized) {
           engine.accompanimentManager.setInstrument(instrumentSettings.accompaniment.name);
-          // Add calls for other managers here when they support setInstrument
+          engine.bassManager.setInstrument(instrumentSettings.bass.name);
           // engine.soloManager.setInstrument(instrumentSettings.solo.name);
-          // engine.bassManager.setInstrument(instrumentSettings.bass.name);
       }
   }, [instrumentSettings.accompaniment, instrumentSettings.solo, instrumentSettings.bass, engine, isInitialized]);
 
