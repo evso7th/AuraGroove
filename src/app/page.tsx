@@ -2,27 +2,25 @@
 'use client';
 
 import { useState } from 'react';
-import * as Tone from 'tone';
+import { useRouter } from 'next/navigation';
+import { useAudioEngine } from '@/contexts/audio-engine-context';
 import { Button } from '@/components/ui/button';
 import Logo from '@/components/icons';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Music, Loader2 } from 'lucide-react';
 
 export default function Home() {
-  const [isInitializing, setIsInitializing] = useState(false);
-  const [isInitialized, setIsInitialized] = useState(false);
+  const { initialize, isInitializing, isInitialized } = useAudioEngine();
+  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
   const handleStart = async () => {
-    setIsInitializing(true);
-    console.log('[CONTEXT_TRACE] Attempting to start AudioContext...');
-    try {
-      await Tone.start();
-      console.log(`[CONTEXT_TRACE] AudioContext started successfully. State: ${Tone.context.state}`);
-      setIsInitialized(true);
-    } catch (e) {
-      console.error('[CONTEXT_TRACE] Error starting AudioContext:', e);
-    } finally {
-      setIsInitializing(false);
+    setError(null);
+    const success = await initialize();
+    if (success) {
+      router.push('/aura-groove');
+    } else {
+      setError('Failed to initialize the audio engine. Please check the console for details.');
     }
   };
 
@@ -37,12 +35,13 @@ export default function Home() {
           <CardDescription className="text-lg">Your personal AI-powered ambient music generator.</CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground">
-            {isInitialized 
-              ? `AudioContext is ready. State: ${Tone.context.state}`
-              : 'Click the button below to initialize the audio context.'
+          <p className="text-muted-foreground min-h-[20px]">
+            {isInitialized
+              ? 'Audio engine is ready.'
+              : 'Click the button below to initialize the audio engine.'
             }
           </p>
+          {error && <p className="text-destructive mt-2">{error}</p>}
         </CardContent>
         <CardFooter>
           <Button onClick={handleStart} disabled={isInitializing || isInitialized} className="w-full text-lg py-6">
@@ -51,7 +50,7 @@ export default function Home() {
             ) : (
               <Music className="mr-2 h-6 w-6" />
             )}
-            {isInitializing ? 'Initializing...' : isInitialized ? 'Initialized' : 'Start Audio Context'}
+            {isInitializing ? 'Initializing...' : isInitialized ? 'Initialized' : 'Start AuraGroove'}
           </Button>
         </CardFooter>
       </Card>
