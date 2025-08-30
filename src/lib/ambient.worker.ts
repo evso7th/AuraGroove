@@ -5,7 +5,7 @@
  * This worker operates on a microservice-style architecture.
  * It is the "Sound Engine", responsible for both composing and rendering audio.
  */
-import type { DrumNote, SynthNote, WorkerCommand, WorkerSettings, DrumSampleName } from '@/types/music';
+import type { DrumNote, SynthNote, WorkerCommand, WorkerSettings, DrumSampleName, InstrumentSettings, ScoreName } from '@/types/music';
 
 // --- 1. PatternProvider (The Music Sheet Library) ---
 const PatternProvider = {
@@ -63,93 +63,105 @@ class EvolutionEngine {
          ]
     }
     
-    generateAccompanimentScore(bar: number, settings: WorkerSettings): SynthNote[] {
-        const isAccompanimentEnabled = settings.instrumentSettings?.accompaniment?.name !== 'none';
-        if (!isAccompanimentEnabled) return [];
+    // --- "Тибетские чаши" ---
+    // Генерирует не аккорд, а последовательность одиночных нот (арпеджио),
+    // чтобы избежать одновременной атаки нескольких звуков.
+    generateAccompanimentScore(bar: number, settings: WorkerSettings, timeOffset: number): SynthNote[] {
+        const instrumentName = settings.instrumentSettings?.accompaniment?.name;
+        if (instrumentName === 'none') {
+            return [];
+        }
 
         const volume = settings.instrumentSettings?.accompaniment?.volume ?? 0.7;
+        const notes = ['C4', 'E4', 'G4']; // Базовые ноты для арпеджио
+        const score: SynthNote[] = [];
 
-        return [
-            {
-                note: ['C4', 'E4', 'G4', 'B4'],
-                duration: 4, // in beats
-                time: 0, // in beats
+        notes.forEach((note, index) => {
+            score.push({
+                note: note,
+                duration: 2, // Длинный release создаст эффект наложения
+                time: timeOffset + (index * 0.5), // Ноты играются последовательно, а не одновременно
                 velocity: 0.6 * volume,
-            }
-        ];
+            });
+        });
+
+        return score;
+    }
+
+    generateSoloScore(bar: number, settings: WorkerSettings, timeOffset: number): SynthNote[] {
+        const instrumentName = settings.instrumentSettings?.solo?.name;
+        if (instrumentName === 'none') {
+            return [];
+        }
+         const volume = settings.instrumentSettings?.solo?.volume ?? 0.8;
+         // Простая логика для примера
+         if (bar % 4 === 2) {
+            return [{
+                note: 'B4',
+                duration: 1,
+                time: timeOffset,
+                velocity: 0.8 * volume
+            }];
+         }
+         return [];
+    }
+    
+    generateBassScore(bar: number, settings: WorkerSettings, timeOffset: number): SynthNote[] {
+        const instrumentName = settings.instrumentSettings?.bass?.name;
+        if (instrumentName === 'none') {
+            return [];
+        }
+        const volume = settings.instrumentSettings?.bass?.volume ?? 0.9;
+        // Простая басовая нота в начале такта
+        return [{
+            note: 'C2',
+            duration: 4,
+            time: timeOffset,
+            velocity: 1.0 * volume
+        }];
     }
 }
 
+// Dummy classes for parts that are not yet fully implemented, to avoid breaking changes.
+class OmegaScoreGenerator {
+    generateScore(bar: number, settings: any) { return []; }
+}
+class PromenadeScoreGenerator {
+     generateScore(bar: number, settings: any) { return []; }
+}
+
+
 // --- 3. SampleBank (Decoded Audio Storage) ---
+// This is now simplified as it doesn't handle rendering, just data.
 const SampleBank = {
-    samples: {} as Record<string, Float32Array>,
     isInitialized: false,
-
-    async init(samples: Record<string, ArrayBuffer>, sampleRate: number) {
-        const tempAudioContext = new OfflineAudioContext(1, 1, sampleRate);
-        for (const key in samples) {
-            if (samples[key] && samples[key].byteLength > 0) {
-                try {
-                    const audioBuffer = await tempAudioContext.decodeAudioData(samples[key].slice(0));
-                    this.samples[key] = audioBuffer.getChannelData(0);
-                } catch(e) {
-                    self.postMessage({ type: 'error', error: `Failed to decode sample ${key}: ${e instanceof Error ? e.message : String(e)}` });
-                }
-            }
-        }
+    async init() {
         this.isInitialized = true;
-        console.log("[WORKER_TRACE] SampleBank Initialized with samples:", Object.keys(this.samples));
+        console.log("[WORKER_TRACE] SampleBank Initialized.");
     },
-
-    getSample(name: string): Float32Array | undefined {
-        return this.samples[name];
-    }
 };
 
-// --- 4. AudioRenderer (The Sound Engine) ---
-const AudioRenderer = {
-    render(drumScore: DrumNote[], settings: { duration: number, sampleRate: number, secondsPerBeat: number }): Float32Array {
-        const totalSamples = Math.floor(settings.duration * settings.sampleRate);
-        const chunk = new Float32Array(totalSamples).fill(0);
-
-        for (const note of drumScore) {
-            const sampleData = SampleBank.getSample(note.sample);
-            if (!sampleData) continue;
-            
-            const startSample = Math.floor(note.time * settings.secondsPerBeat * settings.sampleRate);
-
-            for (let i = 0; i < sampleData.length; i++) {
-                if (startSample + i < chunk.length) {
-                    chunk[startSample + i] += sampleData[i] * note.velocity;
-                }
-            }
-        }
-        
-        // Basic clipping prevention
-        for (let i = 0; i < totalSamples; i++) {
-            chunk[i] = Math.max(-1, Math.min(1, chunk[i]));
-        }
-
-        return chunk;
-    }
-};
-
-// --- 5. Scheduler (The Conductor) ---
+// --- 4. Scheduler (The Conductor) ---
 const Scheduler = {
     loopId: null as any,
     isRunning: false,
     barCount: 0,
     
-    // Settings from main thread
     settings: {
-        bpm: 120,
-        score: 'evolve',
-        drumSettings: { pattern: 'none', volume: 0.7, enabled: true },
-        instrumentSettings: { accompaniment: { name: 'synthesizer', volume: 0.7 } },
+        bpm: 75,
+        score: 'evolve' as ScoreName,
+        drumSettings: { pattern: 'ambient_beat', volume: 0.7, enabled: true },
+        instrumentSettings: { 
+            solo: { name: "none", volume: 0.8 },
+            accompaniment: { name: "synthesizer", volume: 0.7 },
+            bass: { name: "none", volume: 0.9 },
+        },
     } as WorkerSettings,
-    sampleRate: 44100,
 
     evolutionEngine: new EvolutionEngine(),
+    omegaEngine: new OmegaScoreGenerator(),
+    promenadeEngine: new PromenadeScoreGenerator(),
+
 
     // Calculated properties
     get beatsPerBar() { return 4; },
@@ -162,7 +174,7 @@ const Scheduler = {
         this.barCount = 0;
         this.isRunning = true;
         
-        this.tick(); // Schedule first tick
+        this.tick(); 
         this.loopId = setInterval(() => this.tick(), this.barDuration * 1000);
         self.postMessage({ type: 'started' });
     },
@@ -186,6 +198,9 @@ const Scheduler = {
         if (!this.isRunning || !SampleBank.isInitialized) return;
 
         let drumScore: DrumNote[] = [];
+        let soloScore: SynthNote[] = [];
+        let accompanimentScore: SynthNote[] = [];
+        let bassScore: SynthNote[] = [];
 
         if (this.settings.drumSettings.enabled) {
              if (this.settings.drumSettings.pattern === 'composer') {
@@ -195,26 +210,35 @@ const Scheduler = {
             }
         }
         
-        // Note: Accompaniment rendering not implemented yet. This first step focuses on drums.
-        // const accompanimentScore = this.evolutionEngine.generateAccompanimentScore(this.barCount, this.settings);
-
-        const audioChunk = AudioRenderer.render(drumScore, {
-            duration: this.barDuration,
-            sampleRate: this.sampleRate,
-            secondsPerBeat: this.secondsPerBeat
-        });
+        // --- Микро-смещения для разведения атак во времени ---
+        const BASS_OFFSET = 0;         // Бас играет точно в долю
+        const ACCOMP_OFFSET = 0.125;   // Аккомпанемент играет с небольшой задержкой (32-я нота)
+        const SOLO_OFFSET = 0.25;      // Соло играет с еще большей задержкой (16-я нота)
         
+        switch(this.settings.score) {
+            case 'evolve':
+                bassScore = this.evolutionEngine.generateBassScore(this.barCount, this.settings, BASS_OFFSET);
+                accompanimentScore = this.evolutionEngine.generateAccompanimentScore(this.barCount, this.settings, ACCOMP_OFFSET);
+                soloScore = this.evolutionEngine.generateSoloScore(this.barCount, this.settings, SOLO_OFFSET);
+                break;
+            case 'omega':
+                // Placeholder for Omega logic
+                break;
+            case 'promenade':
+                 // Placeholder for Promenade logic
+                break;
+        }
+
         const messageData = {
-            chunk: audioChunk,
-            startTime: 0, // This will be handled by the main thread's AudioPlayer queue
-            duration: this.barDuration,
+            drumScore,
+            soloScore,
+            accompanimentScore,
+            bassScore,
+            barDuration: this.barDuration,
         };
 
-        self.postMessage({
-            type: 'audio_chunk',
-            data: messageData
-        }, [audioChunk.buffer]);
-
+        self.postMessage({ type: 'score', data: messageData });
+        
         this.barCount++;
     }
 };
@@ -227,8 +251,8 @@ self.onmessage = async (event: MessageEvent<WorkerCommand>) => {
     try {
         switch (command) {
             case 'init':
-                Scheduler.sampleRate = data.sampleRate;
-                await SampleBank.init(data.samples, data.sampleRate);
+                // We don't need to decode samples here anymore, just acknowledge.
+                await SampleBank.init();
                 break;
             case 'start':
                 Scheduler.start(data);
@@ -244,3 +268,5 @@ self.onmessage = async (event: MessageEvent<WorkerCommand>) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
+
+    
