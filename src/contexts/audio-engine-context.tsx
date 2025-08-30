@@ -3,12 +3,27 @@
 
 import React, { createContext, useContext, useState, useRef, useCallback } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import { AudioPlayer } from '@/lib/audio-player';
-import type { ToneJS, AudioChunk, WorkerCommand, WorkerSettings, DrumSampleName } from '@/types/music';
+import type { ToneJS, WorkerCommand, WorkerSettings, DrumNote, SynthNote } from '@/types/music';
+
+// Import the real managers
+import { DrumMachine } from '@/lib/drum-machine';
+import { SoloSynthManager } from '@/lib/solo-synth-manager';
+import { AccompanimentSynthManager } from '@/lib/accompaniment-synth-manager';
+import { BassSynthManager } from '@/lib/bass-synth-manager';
+import { EffectsSynthManager } from '@/lib/effects-synth-manager';
+
+
+type Score = {
+    drumScore: DrumNote[];
+    soloScore: SynthNote[];
+    accompanimentScore: SynthNote[];
+    bassScore: SynthNote[];
+    barDuration: number;
+};
 
 type WorkerMessage = {
   type: 'score';
-  data: any; // expand this later
+  data: Score;
 } | {
   type: 'started' | 'stopped' | 'error';
   error?: string;
@@ -38,14 +53,6 @@ export const useAudioEngine = () => {
   return context;
 };
 
-const DRUM_SAMPLES_TO_LOAD: Record<DrumSampleName, string> = {
-    'kick': '/assets/drums/kick_drum6.wav',
-    'snare': '/assets/drums/snare.wav',
-    'hat': '/assets/drums/closed_hi_hat_accented.wav',
-    'crash': '/assets/drums/crash1.wav',
-    'ride': '/assets/drums/cymbal1.wav',
-};
-
 export const AudioEngineProvider = ({ children }: { children: React.ReactNode }) => {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
@@ -54,6 +61,14 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   const engineRef = useRef<AudioEngine | null>(null);
   const workerRef = useRef<Worker | null>(null);
   const toneRef = useRef<ToneJS | null>(null);
+  const managersRef = useRef<{
+      drumMachine?: DrumMachine;
+      soloManager?: SoloSynthManager;
+      accompanimentManager?: AccompanimentSynthManager;
+      bassManager?: BassSynthManager;
+      effectsManager?: EffectsSynthManager;
+  }>({});
+  const tickLoopRef = useRef<Tone.Loop | null>(null);
   const lastSettingsRef = useRef<Partial<WorkerSettings>>({});
 
   const { toast } = useToast();
@@ -68,32 +83,39 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
       toneRef.current = Tone;
       await Tone.start();
       console.log('[CONTEXT_TRACE] Tone.js started.');
-      
+
+      // --- Initialize real managers ---
+      const T = toneRef.current;
+      managersRef.current = {
+          drumMachine: new DrumMachine(T),
+          soloManager: new SoloSynthManager(T),
+          accompanimentManager: new AccompanimentSynthManager(T),
+          bassManager: new BassSynthManager(T),
+          effectsManager: new EffectsSynthManager(T),
+      };
+      console.log('[CONTEXT_TRACE] Synth managers created.');
 
       setLoadingText('Initializing Composer AI...');
       const worker = new Worker(new URL('../lib/ambient.worker.ts', import.meta.url), { type: 'module' });
       workerRef.current = worker;
       console.log('[CONTEXT_TRACE] Web Worker created.');
       
-
-      // MOCK MANAGERS for now. To be replaced with real ones.
-      const drumMachine = { schedule: (score: any) => { if(score.length > 0) console.log("[CONTEXT_TRACE] Scheduling Drums:", score)} };
-      const accompanimentManager = { schedule: (score: any) => { if(score.length > 0) console.log("[CONTEXT_TRACE] Scheduling Accompaniment:", score)} };
-      const bassManager = { schedule: (score: any) => { if(score.length > 0) console.log("[CONTEXT_TRACE] Scheduling Bass:", score)} };
-      const soloManager = { schedule: (score: any) => { if(score.length > 0) console.log("[CONTEXT_TRACE] Scheduling Solo:", score)} };
-
-
       worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
-        console.log('[CONTEXT_TRACE] Received message from worker:', event.data);
+        console.log('[CONTEXT_TRACE] Received message from worker:', event.data.type, event.data);
         const { type, data } = event.data;
-        if (type === 'score') {
-           // These will be replaced by real manager calls
-           drumMachine.schedule(data.drumScore);
-           accompanimentManager.schedule(data.accompanimentScore);
-           bassManager.schedule(data.bassScore);
-           soloManager.schedule(data.soloScore);
+        if (type === 'score' && managersRef.current) {
+            const { drumMachine, soloManager, accompanimentManager, bassManager } = managersRef.current;
+            const nextBarTime = T.Transport.seconds + data.barDuration;
+            
+            T.Transport.scheduleOnce((time) => {
+                drumMachine?.schedule(data.drumScore, time);
+                soloManager?.schedule(data.soloScore, time);
+                accompanimentManager?.schedule(data.accompanimentScore, time);
+                bassManager?.schedule(data.bassScore, time);
+                 console.log(`[CONTEXT_TRACE] Scheduled scores for time: ${time}`);
+            }, nextBarTime);
 
-        } else if (event.data.type === 'error') {
+        } else if (type === 'error') {
             console.error('Error from worker:', event.data.error);
             toast({
                 variant: 'destructive',
@@ -103,6 +125,15 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         }
       };
 
+      // --- Create the main transport loop ---
+      tickLoopRef.current = new T.Loop((time) => {
+        if (workerRef.current) {
+            workerRef.current.postMessage({ command: 'tick' });
+             console.log(`[CONTEXT_TRACE] Sent 'tick' to worker at transport time: ${time}`);
+        }
+      }, '1m').start(0);
+
+
       engineRef.current = {
         getTone: () => toneRef.current,
         setIsPlaying: (isPlaying: boolean) => {
@@ -111,11 +142,15 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
           const T = toneRef.current;
           
           if (isPlaying) {
-            T.Transport.start();
-            workerRef.current.postMessage({ command: 'start', data: lastSettingsRef.current } as WorkerCommand);
+            if (T.Transport.state !== 'started') {
+                 T.Transport.start();
+                 console.log('[CONTEXT_TRACE] Tone.Transport started.');
+            }
           } else {
-            T.Transport.stop();
-            workerRef.current.postMessage({ command: 'stop' });
+             if (T.Transport.state === 'started') {
+                T.Transport.stop();
+                console.log('[CONTEXT_TRACE] Tone.Transport stopped.');
+             }
           }
         },
         updateSettings: (settings: Partial<WorkerSettings>) => {
@@ -128,6 +163,9 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
            }
         },
       };
+      
+      // Send initial settings to the worker
+       workerRef.current.postMessage({ command: 'init', data: {} });
 
       setIsInitialized(true);
       return true;

@@ -130,20 +130,9 @@ class PromenadeScoreGenerator {
      generateScore(bar: number, settings: any) { return []; }
 }
 
-
-// --- 3. SampleBank (Decoded Audio Storage) ---
-// This is now simplified as it doesn't handle rendering, just data.
-const SampleBank = {
-    isInitialized: false,
-    async init() {
-        this.isInitialized = true;
-    },
-};
-
-// --- 4. Scheduler (The Conductor) ---
+// --- 3. Scheduler (The Conductor) ---
+// This is now simplified as it doesn't handle rendering or timing, just data generation.
 const Scheduler = {
-    loopId: null as any,
-    isRunning: false,
     barCount: 0,
     
     settings: {
@@ -167,23 +156,9 @@ const Scheduler = {
     get secondsPerBeat() { return 60 / this.settings.bpm; },
     get barDuration() { return this.beatsPerBar * this.secondsPerBeat; },
 
-    start(data: WorkerSettings) {
-        if (this.isRunning) this.stop();
-        this.updateSettings(data);
-        this.barCount = 0;
-        this.isRunning = true;
-        
-        this.tick(); 
-        this.loopId = setInterval(() => this.tick(), this.barDuration * 1000);
-        self.postMessage({ type: 'started' });
-    },
-
-    stop() {
-        if (!this.isRunning) return;
-        clearInterval(this.loopId);
-        this.loopId = null;
-        this.isRunning = false;
-        self.postMessage({ type: 'stopped' });
+    init() {
+      this.barCount = 0;
+      self.postMessage({ type: 'started' });
     },
     
     updateSettings(newSettings: Partial<WorkerSettings>) {
@@ -191,11 +166,10 @@ const Scheduler = {
         if (newSettings.instrumentSettings) this.settings.instrumentSettings = { ...this.settings.instrumentSettings, ...newSettings.instrumentSettings };
         if (newSettings.bpm) this.settings.bpm = newSettings.bpm;
         if (newSettings.score) this.settings.score = newSettings.score;
+        console.log('[WORKER_TRACE] Settings updated:', this.settings);
     },
 
     tick() {
-        if (!this.isRunning || !SampleBank.isInitialized) return;
-
         let drumScore: DrumNote[] = [];
         let soloScore: SynthNote[] = [];
         let accompanimentScore: SynthNote[] = [];
@@ -209,10 +183,9 @@ const Scheduler = {
             }
         }
         
-        // --- Микро-смещения для разведения атак во времени ---
-        const BASS_OFFSET = 0;         // Бас играет точно в долю
-        const ACCOMP_OFFSET = 0.125;   // Аккомпанемент играет с небольшой задержкой (32-я нота)
-        const SOLO_OFFSET = 0.25;      // Соло играет с еще большей задержкой (16-я нота)
+        const BASS_OFFSET = 0;
+        const ACCOMP_OFFSET = 0.125;
+        const SOLO_OFFSET = 0.25;
         
         switch(this.settings.score) {
             case 'evolve':
@@ -221,10 +194,8 @@ const Scheduler = {
                 soloScore = this.evolutionEngine.generateSoloScore(this.barCount, this.settings, SOLO_OFFSET);
                 break;
             case 'omega':
-                // Placeholder for Omega logic
                 break;
             case 'promenade':
-                 // Placeholder for Promenade logic
                 break;
         }
 
@@ -251,18 +222,15 @@ self.onmessage = async (event: MessageEvent<WorkerCommand>) => {
     try {
         switch (command) {
             case 'init':
-                // We don't need to decode samples here anymore, just acknowledge.
-                await SampleBank.init();
+                Scheduler.init();
                 break;
-            case 'start':
-                Scheduler.start(data);
-                break;
-            case 'stop':
-                Scheduler.stop();
-                break;
+            case 'tick':
+                 Scheduler.tick();
+                 break;
             case 'update_settings':
                  Scheduler.updateSettings(data);
                 break;
+            // 'start' and 'stop' commands are no longer needed here as timing is controlled by the main thread.
         }
     } catch (e) {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });

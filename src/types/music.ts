@@ -1,4 +1,5 @@
 
+
 // This imports the full type definition for the Tone.js library.
 // It's a heavy import, so we only use it in type-checking, not runtime.
 import type * as Tone from 'tone';
@@ -22,10 +23,9 @@ export type WorkerSettings = {
 };
 
 export type WorkerCommand = 
-| { command: 'start', data: WorkerSettings }
-| { command: 'stop' }
 | { command: 'update_settings', data: Partial<WorkerSettings> }
-| { command: 'init', data: { sampleRate: number, samples: Record<string, ArrayBuffer> } };
+| { command: 'init', data: {} }
+| { command: 'tick' };
 
 
 // --- Types for internal Worker logic ---
