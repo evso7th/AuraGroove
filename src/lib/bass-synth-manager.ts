@@ -3,10 +3,11 @@ import type { ToneJS, SynthNote } from '@/types/music';
 
 type BassSynthPreset = {
     type: 'simple' | 'layered';
-    synth: any; // Tone.MonoSynth
+    // For simple presets, a single synth instance
+    synth?: any; // Tone.MonoSynth
+    // For layered presets, multiple synth instances
     layeredSynths?: {
-        sub: any; // Tone.Synth
-        character: any; // Tone.Synth
+        [key: string]: any; // e.g., { sub: Tone.Synth, character: Tone.Synth }
     };
 };
 
@@ -25,7 +26,7 @@ export class BassSynthManager {
     }
 
     private createPresets() {
-        // --- PRESET 1: 'bassGuitar' (the original FM synth) ---
+        // --- PRESET 1: 'bassGuitar' (the original FM synth, remains a simple MonoSynth) ---
         const bassGuitarSynth = new this.Tone.MonoSynth({
             oscillator: { type: 'fmsine' },
             envelope: { attack: 0.05, decay: 0.3, sustain: 0.4, release: 0.8 },
@@ -33,7 +34,7 @@ export class BassSynthManager {
         }).toDestination();
         this.presets.set('bassGuitar', { type: 'simple', synth: bassGuitarSynth });
 
-        // --- PRESET 2: 'bass_synth' (new layered synth) ---
+        // --- PRESET 2: 'bass_synth' (new layered synth with two separate synths) ---
         const subOsc = new this.Tone.Synth({
             oscillator: { type: 'sine' },
             envelope: { attack: 0.01, decay: 0.2, sustain: 0.9, release: 0.5 }
@@ -50,7 +51,6 @@ export class BassSynthManager {
         
         this.presets.set('bass_synth', {
             type: 'layered',
-            synth: null, // not used for layered
             layeredSynths: { sub: subOsc, character: charOsc }
         });
     }
@@ -69,7 +69,8 @@ export class BassSynthManager {
     public schedule(score: SynthNote[], time: number) {
         if (!this.activePreset || score.length === 0) return;
 
-        if (this.activePreset.type === 'simple') {
+        // Logic for simple, single-synth presets like 'bassGuitar'
+        if (this.activePreset.type === 'simple' && this.activePreset.synth) {
             score.forEach(note => {
                 this.activePreset?.synth.triggerAttackRelease(
                     note.note,
@@ -78,8 +79,11 @@ export class BassSynthManager {
                     note.velocity
                 );
             });
+        // Logic for layered presets like 'bass_synth'
         } else if (this.activePreset.type === 'layered' && this.activePreset.layeredSynths) {
             const { sub, character } = this.activePreset.layeredSynths;
+            if (!sub || !character) return;
+
             score.forEach(note => {
                 const scheduledTime = time + (note.time * this.Tone.Time('4n').toSeconds());
                 const duration = this.Tone.Time(note.duration, 'n');
