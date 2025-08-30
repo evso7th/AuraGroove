@@ -5,9 +5,9 @@
  * This worker operates on a microservice-style architecture.
  * Each musical component is an isolated entity responsible for a single task.
  */
+import type { DrumNote, SynthNote } from '@/types/music';
 
 // --- Type Definitions for Worker Communication ---
-type DrumNote = { sample: string; time: number; velocity: number; };
 type StartData = {
     drumSettings: { pattern: string; volume: number, enabled: boolean };
     instrumentSettings: any;
@@ -38,26 +38,25 @@ const PatternProvider = {
         ],
         none: []
     },
-    getDrumPattern(name: string): Omit<DrumNote, 'time'>[] {
+    getDrumPattern(name: string): Omit<DrumNote, 'time' | 'velocity'>[] {
         return this.drumPatterns[name as keyof typeof this.drumPatterns] || [];
     },
 };
 
 // --- 2. Instrument Generators (The Composers) ---
 class DrumGenerator {
-    static createScore(patternName: string, barNumber: number, settings: { volume: number }): DrumNote[] {
+    static createScore(patternName: string, barNumber: number, settings: { volume: number }): Omit<DrumNote, 'time'>[] {
         if (patternName === 'none') return [];
         const pattern = PatternProvider.getDrumPattern(patternName);
         let score = [...pattern];
 
         // Add a crash cymbal on the first beat of every 4th bar for ambient_beat
         if (patternName === 'ambient_beat' && barNumber % 4 === 0) {
-            score = score.filter(note => note.time !== 0);
-            score.push({ sample: 'crash', time: 0, velocity: 0.8 * settings.volume });
+            score = score.filter(note => (note as any).time !== 0);
+            score.push({ sample: 'crash' });
         }
         
-        // Apply volume
-        return score.map(note => ({...note, velocity: note.velocity * settings.volume}));
+        return score.map(note => ({...note, velocity: (note as any).velocity * settings.volume}));
     }
 }
 
@@ -79,6 +78,23 @@ class EvolutionEngine {
                 { sample: 'snare', time: 3, velocity: 0.7 * settings.volume },
          ]
     }
+    
+    generateAccompanimentScore(bar: number, settings: any): SynthNote[] {
+        // For now, let's generate a simple C Major 7 chord at the start of each bar
+        const isAccompanimentEnabled = settings.instrumentSettings?.accompaniment?.name !== 'none';
+        if (!isAccompanimentEnabled) return [];
+
+        const volume = settings.instrumentSettings?.accompaniment?.volume ?? 0.7;
+
+        return [
+            {
+                note: ['C4', 'E4', 'G4', 'B4'],
+                duration: '1m',
+                time: 0,
+                velocity: 0.6 * volume,
+            }
+        ];
+    }
 }
 
 
@@ -91,6 +107,7 @@ const Scheduler = {
     // Settings from main thread
     bpm: 120,
     drumSettings: { pattern: 'none', volume: 0.7, enabled: true },
+    instrumentSettings: {},
     evolutionEngine: new EvolutionEngine(),
 
     // Calculated properties
@@ -120,6 +137,7 @@ const Scheduler = {
     
     updateSettings(settings: any) {
         if (settings.drumSettings) this.drumSettings = { ...this.drumSettings, ...settings.drumSettings };
+        if (settings.instrumentSettings) this.instrumentSettings = { ...this.instrumentSettings, ...settings.instrumentSettings };
         if (settings.bpm) this.bpm = settings.bpm;
     },
 
@@ -127,28 +145,44 @@ const Scheduler = {
         if (!this.isRunning) return;
 
         let drumScore: DrumNote[] = [];
+        let accompanimentScore: SynthNote[] = [];
 
         if (this.drumSettings.enabled && this.drumSettings.pattern !== 'none') {
             if (this.drumSettings.pattern === 'composer') {
                 drumScore = this.evolutionEngine.generateDrumScore(this.barCount, this.drumSettings);
             } else {
-                drumScore = DrumGenerator.createScore(this.drumSettings.pattern, this.barCount, this.drumSettings);
+                 const pattern = PatternProvider.getDrumPattern(this.drumSettings.pattern);
+                 drumScore = pattern.map(note => ({
+                     ...note,
+                     time: (note as any).time,
+                     velocity: (note as any).velocity * this.drumSettings.volume
+                 }));
             }
         }
         
+        accompanimentScore = this.evolutionEngine.generateAccompanimentScore(this.barCount, { instrumentSettings: this.instrumentSettings });
+
         // Add time relative to bar start
         const finalDrumScore = drumScore.map(note => ({
             ...note,
             time: note.time * this.secondsPerBeat
         }));
+
+        const finalAccompanimentScore = accompanimentScore.map(note => ({
+            ...note,
+            time: note.time * this.secondsPerBeat
+        }));
         
-        console.log('[WORKER_TRACE] Posting "score" message with data:', { drumScore: finalDrumScore, barDuration: this.barDuration });
+        const messageData = {
+            drumScore: finalDrumScore,
+            accompanimentScore: finalAccompanimentScore,
+            barDuration: this.barDuration,
+        };
+
+        console.log('[WORKER_TRACE] Posting "score" message with data:', messageData);
         self.postMessage({
             type: 'score',
-            data: {
-                drumScore: finalDrumScore,
-                barDuration: this.barDuration,
-            }
+            data: messageData
         });
 
         this.barCount++;

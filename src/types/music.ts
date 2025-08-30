@@ -31,7 +31,13 @@ export type DrumNote = {
     sample: DrumSample;
     time: number; // in seconds, relative to the start of the score chunk
     velocity: number;
-    beat: number; // beat position within the bar
+};
+
+export type SynthNote = {
+    note: string | string[]; // Can be a single note or an array for a chord
+    duration: string; // Tone.js time format e.g., "8n", "1m"
+    time: number; // in seconds, relative to the start of the score chunk
+    velocity: number;
 };
 
 
