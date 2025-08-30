@@ -96,6 +96,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
       worker.postMessage(initMessage, Object.values(samples));
 
       worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
+        console.log('[CONTEXT_TRACE] Received message from worker:', event.data);
         const { type, data } = event.data;
         if (type === 'audio_chunk') {
           audioPlayerRef.current?.scheduleChunk(data);
@@ -112,6 +113,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
       engineRef.current = {
         getTone: () => toneRef.current,
         setIsPlaying: (isPlaying: boolean) => {
+          console.log('[CONTEXT_TRACE] setIsPlaying called with:', isPlaying);
           if (!workerRef.current || !toneRef.current) return;
           const T = toneRef.current;
           
