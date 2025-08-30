@@ -84,8 +84,12 @@ export class BassSynthManager {
                 const scheduledTime = time + (note.time * this.Tone.Time('4n').toSeconds());
                 const duration = this.Tone.Time(note.duration, 'n');
                 
+                // The 'sub' layer plays the original note
                 sub.triggerAttackRelease(note.note, duration, scheduledTime, note.velocity * 0.9);
-                character.triggerAttackRelease(note.note, duration, scheduledTime, note.velocity * 0.6);
+                
+                // The 'character' layer plays the note transposed up by one octave
+                const charNote = this.Tone.Frequency(note.note).transpose(12);
+                character.triggerAttackRelease(charNote, duration, scheduledTime, note.velocity * 0.6);
             });
         }
     }
