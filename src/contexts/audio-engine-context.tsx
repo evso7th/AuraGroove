@@ -58,6 +58,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
       const context = Tone.getContext();
       
       // Load the AudioWorklet processor
+      // The path is relative to the `public` directory. Webpack plugin handles the rest.
       await context.audioWorklet.addModule('/workers/synth.worklet.js');
       const workletNode = new AudioWorkletNode(context, 'synth-processor');
       workletNode.connect(context.destination);
