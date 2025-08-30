@@ -6,13 +6,22 @@ import { useToast } from "@/hooks/use-toast";
 import { DrumMachine } from "@/lib/drum-machine";
 import type { ToneJS, WorkletNote, DrumNote } from '@/types/music';
 
-// The AudioEngine now directly communicates with the AudioWorklet and DrumMachine.
+// --- Type Definitions for Worker Communication ---
+type WorkerMessage = {
+  type: 'score';
+  data: {
+    drumScore: DrumNote[];
+    barDuration: number;
+  };
+} | {
+  type: 'started' | 'stopped' | 'error';
+  error?: string;
+};
+
+// The AudioEngine now orchestrates Tone.js and the Web Worker
 interface AudioEngine {
   setIsPlaying: (isPlaying: boolean) => void;
   updateSettings: (settings: any) => void;
-  scheduleSynthScore: (score: { solo: WorkletNote[], accompaniment: WorkletNote[], bass: WorkletNote[], effects: WorkletNote[] }, startTime: number) => void;
-  scheduleDrumScore: (score: DrumNote[], startTime: number) => void;
-  clearAllSchedules: () => void;
   getTone: () => ToneJS | null;
 }
 
@@ -21,6 +30,7 @@ interface AudioEngineContextType {
   isInitialized: boolean;
   isInitializing: boolean;
   initialize: () => Promise<boolean>;
+  loadingText: string;
 }
 
 const AudioEngineContext = createContext<AudioEngineContextType | null>(null);
@@ -36,76 +46,80 @@ export const useAudioEngine = () => {
 export const AudioEngineProvider = ({ children }: { children: React.ReactNode }) => {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
+  const [loadingText, setLoadingText] = useState('');
   const engineRef = useRef<AudioEngine | null>(null);
+  const workerRef = useRef<Worker | null>(null);
   const { toast } = useToast();
 
   const toneRef = useRef<ToneJS | null>(null);
-  const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const drumMachineRef = useRef<DrumMachine | null>(null);
 
   const initialize = useCallback(async () => {
     if (isInitialized || isInitializing) return true;
 
     setIsInitializing(true);
+    setLoadingText('Loading Tone.js...');
     try {
-      // Dynamically import Tone.js only on the client side
       const Tone = await import('tone');
       toneRef.current = Tone;
       
       await Tone.start();
       console.log("[CONTEXT_TRACE] AudioContext started.");
 
-      const context = Tone.getContext();
-      
-      // Load the AudioWorklet processor
-      // The path is relative to the `public` directory. Webpack plugin handles the rest.
-      await context.audioWorklet.addModule('/workers/synth.worklet.js');
-      const workletNode = new AudioWorkletNode(context, 'synth-processor');
-      workletNode.connect(context.destination);
-      workletNodeRef.current = workletNode;
-      console.log("[CONTEXT_TRACE] Native AudioWorkletNode created and connected.");
-
-      // Initialize Drum Machine
-      const drumChannel = new Tone.Channel({ volume: Tone.gainToDb(0.7), pan: 0 }).connect(Tone.getDestination());
+      setLoadingText('Initializing Drum Machine...');
+      const drumChannel = new Tone.Channel({ volume: Tone.gainToDb(0.7), pan: 0 }).toDestination();
       const drums = new DrumMachine(drumChannel, Tone);
       await drums.waitForReady();
       drumMachineRef.current = drums;
       console.log("[CONTEXT_TRACE] DrumMachine initialized.");
       
-      // Create the engine object with methods to control the audio
+      setLoadingText('Initializing Composer AI...');
+      const worker = new Worker(new URL('../lib/ambient.worker.ts', import.meta.url), { type: 'module' });
+      workerRef.current = worker;
+      console.log("[CONTEXT_TRACE] Web Worker created.");
+
+      worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
+        const { type, data } = event.data;
+        if (type === 'score') {
+          const now = toneRef.current?.now() ?? 0;
+          drumMachineRef.current?.scheduleDrumScore(data.drumScore, now);
+        } else if (event.data.type === 'error') {
+            console.error('Error from worker:', event.data.error);
+            toast({
+                variant: 'destructive',
+                title: 'Worker Error',
+                description: event.data.error,
+            });
+        }
+      };
+      
       engineRef.current = {
         getTone: () => toneRef.current,
         setIsPlaying: (isPlaying: boolean) => {
-          if (!toneRef.current) return;
-          const T = toneRef.current;
+          if (!workerRef.current) return;
+          const command = isPlaying ? 'start' : 'stop';
+          // Settings are sent on 'start'
+          const settings = isPlaying ? {
+              // This is a placeholder for the actual state management
+              bpm: 120, 
+              drumSettings: { pattern: 'ambient_beat', volume: 0.7, enabled: true },
+          } : {};
+          workerRef.current.postMessage({ command, data: settings });
+
           if (isPlaying) {
-            if (T.Transport.state !== 'started') {
-              T.Transport.start();
-            }
+             if (Tone.Transport.state !== 'started') Tone.Transport.start();
           } else {
-            if (T.Transport.state === 'started') {
-              T.Transport.stop(); // Use stop() to reset the timeline
-              workletNodeRef.current?.port.postMessage({ type: 'clear' });
-              drumMachineRef.current?.stopAll();
-            }
+             if (Tone.Transport.state === 'started') Tone.Transport.stop();
+             drumMachineRef.current?.stopAll();
           }
         },
         updateSettings: (settings: any) => {
+           if (!workerRef.current) return;
+           workerRef.current.postMessage({ command: 'update_settings', data: settings });
            if (toneRef.current && settings.bpm) {
-            toneRef.current.Transport.bpm.value = settings.bpm;
-          }
-          // Here you could post messages to the worklet to update synth params if needed
+             toneRef.current.Transport.bpm.value = settings.bpm;
+           }
         },
-        scheduleSynthScore: (score, startTime) => {
-           workletNodeRef.current?.port.postMessage({ type: 'schedule', score, startTime });
-        },
-        scheduleDrumScore: (score, startTime) => {
-            drumMachineRef.current?.scheduleDrumScore(score, startTime);
-        },
-        clearAllSchedules: () => {
-            workletNodeRef.current?.port.postMessage({ type: 'clear' });
-            drumMachineRef.current?.stopAll();
-        }
       };
 
       setIsInitialized(true);
@@ -117,11 +131,12 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
       return false;
     } finally {
         setIsInitializing(false);
+        setLoadingText('');
     }
   }, [isInitialized, isInitializing, toast]);
 
   return (
-    <AudioEngineContext.Provider value={{ engine: engineRef.current, isInitialized, isInitializing, initialize }}>
+    <AudioEngineContext.Provider value={{ engine: engineRef.current, isInitialized, isInitializing, initialize, loadingText }}>
       {children}
     </AudioEngineContext.Provider>
   );
