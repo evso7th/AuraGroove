@@ -47,84 +47,83 @@ export const useAuraGroove = () => {
 
   useEffect(() => {
     let isMounted = true;
-    let scoreRequestLoopId: number | null = null;
-    
+
     const initializeAudio = async () => {
-        if (!isMounted) return;
-        try {
-            setLoadingText("Creating Audio Context...");
-            const context = new (window.AudioContext || (window as any).webkitAudioContext)();
-            if (context.state === 'suspended') await context.resume();
-            
-            setLoadingText("Waking up audio engine...");
-            const Tone = await import('tone');
-            toneRef.current = Tone;
-            
-            Tone.setContext(context);
-            await Tone.start();
-            console.log("[HOOK_TRACE] AudioContext started.");
-
-            setLoadingText("Loading Synthesis Engine...");
-            await context.audioWorklet.addModule('/workers/synth.worklet.js');
-            const workletNode = new AudioWorkletNode(context, 'synth-processor');
-            workletNode.connect(context.destination);
-            workletNodeRef.current = workletNode;
-            console.log("[HOOK_TRACE] Native AudioWorkletNode created and connected.");
-
-            setLoadingText("Initializing Drum Machine...");
-            const drumChannel = new Tone.Channel({ volume: Tone.gainToDb(0.7), pan: 0 }).connect(Tone.getDestination());
-            const drums = new DrumMachine(drumChannel, Tone);
-            await drums.waitForReady();
-            drumMachineRef.current = drums;
-            console.log("[HOOK_TRACE] DrumMachine initialized.");
-            
-            setLoadingText("Waking up the Composer...");
-            const worker = new Worker(new URL('../app/ambient.worker.ts', import.meta.url));
-            musicWorkerRef.current = worker;
-            
-            worker.onmessage = (event: MessageEvent) => {
-                const { type, synthScore, drumScore, error } = event.data;
-                const T = toneRef.current;
-                if (!T || !T.Transport) return;
+      if (!isMounted) return;
+      try {
+        setLoadingText("Creating Audio Context...");
+        const context = new (window.AudioContext || (window as any).webkitAudioContext)();
+        if (context.state === 'suspended') await context.resume();
         
-                if (type === 'score_ready') {
-                    T.Transport.scheduleOnce((time) => {
-                      const scheduleTime = Math.max(time, T.context.currentTime);
-                      if (workletNodeRef.current && synthScore) {
-                        workletNodeRef.current.port.postMessage({ type: 'schedule', score: synthScore, startTime: scheduleTime });
-                      }
-                      if (drumMachineRef.current && drumScore) {
-                        drumMachineRef.current.scheduleDrumScore(drumScore, scheduleTime);
-                      }
-                    }, nextScheduleTimeRef.current);
-                    
-                    const currentBpm = T.Transport.bpm.value;
-                    const chunkDuration = (SCORE_CHUNK_DURATION_IN_BARS * 4 * 60) / currentBpm;
-                    nextScheduleTimeRef.current += chunkDuration;
-                } else if (type === 'error') {
-                    toast({ variant: "destructive", title: "Worker Error", description: error });
-                    if (T.Transport.state === 'started') {
-                        T.Transport.pause();
-                        T.Transport.cancel();
-                    }
-                    setIsPlaying(false);
-                } else if (type === 'started') {
-                    nextScheduleTimeRef.current = T.context.currentTime + 0.1;
-                    requestNewScoreFromWorker();
-                } else if (type === 'initialized') {
-                    if (isMounted) setIsInitializing(false);
-                    console.log("[HOOK_TRACE] Worker initialized.");
-                }
-            };
-            
-            worker.postMessage({ command: 'init' });
+        setLoadingText("Waking up audio engine...");
+        const Tone = await import('tone');
+        toneRef.current = Tone;
+        
+        Tone.setContext(context);
+        await Tone.start();
+        console.log("[HOOK_TRACE] AudioContext started.");
 
-        } catch (e) {
-          const errorMsg = e instanceof Error ? e.message : String(e);
-          toast({ variant: "destructive", title: "Initialization Failed", description: errorMsg });
-          console.error("Initialization failed:", e);
-           if (isMounted) setIsInitializing(false);
-        }
+        setLoadingText("Loading Synthesis Engine...");
+        await context.audioWorklet.addModule('/workers/synth.worklet.js');
+        const workletNode = new AudioWorkletNode(context, 'synth-processor');
+        workletNode.connect(context.destination);
+        workletNodeRef.current = workletNode;
+        console.log("[HOOK_TRACE] Native AudioWorkletNode created and connected.");
+
+        setLoadingText("Initializing Drum Machine...");
+        const drumChannel = new Tone.Channel({ volume: Tone.gainToDb(0.7), pan: 0 }).connect(Tone.getDestination());
+        const drums = new DrumMachine(drumChannel, Tone);
+        await drums.waitForReady();
+        drumMachineRef.current = drums;
+        console.log("[HOOK_TRACE] DrumMachine initialized.");
+        
+        setLoadingText("Waking up the Composer...");
+        const worker = new Worker(new URL('../app/ambient.worker.ts', import.meta.url));
+        musicWorkerRef.current = worker;
+        
+        worker.onmessage = (event: MessageEvent) => {
+            const { type, synthScore, drumScore, error } = event.data;
+            const T = toneRef.current;
+            if (!T || !T.Transport) return;
+    
+            if (type === 'score_ready') {
+                T.Transport.scheduleOnce((time) => {
+                  const scheduleTime = Math.max(time, T.context.currentTime);
+                  if (workletNodeRef.current && synthScore) {
+                    workletNodeRef.current.port.postMessage({ type: 'schedule', score: synthScore, startTime: scheduleTime });
+                  }
+                  if (drumMachineRef.current && drumScore) {
+                    drumMachineRef.current.scheduleDrumScore(drumScore, scheduleTime);
+                  }
+                }, nextScheduleTimeRef.current);
+                
+                const currentBpm = T.Transport.bpm.value;
+                const chunkDuration = (SCORE_CHUNK_DURATION_IN_BARS * 4 * 60) / currentBpm;
+                nextScheduleTimeRef.current += chunkDuration;
+            } else if (type === 'error') {
+                toast({ variant: "destructive", title: "Worker Error", description: error });
+                if (T.Transport.state === 'started') {
+                    T.Transport.pause();
+                    T.Transport.cancel();
+                }
+                setIsPlaying(false);
+            } else if (type === 'started') {
+                nextScheduleTimeRef.current = T.context.currentTime + 0.1;
+                requestNewScoreFromWorker();
+            } else if (type === 'initialized') {
+                if (isMounted) setIsInitializing(false);
+                console.log("[HOOK_TRACE] Worker initialized.");
+            }
+        };
+        
+        worker.postMessage({ command: 'init' });
+
+      } catch (e) {
+        const errorMsg = e instanceof Error ? e.message : String(e);
+        toast({ variant: "destructive", title: "Initialization Failed", description: errorMsg });
+        console.error("Initialization failed:", e);
+        if (isMounted) setIsInitializing(false);
+      }
     };
 
     initializeAudio();
@@ -139,9 +138,6 @@ export const useAuraGroove = () => {
       }
       workletNodeRef.current?.disconnect();
       musicWorkerRef.current?.terminate();
-      if(scoreRequestLoopId !== null && Tone) {
-        Tone.Transport.clear(scoreRequestLoopId);
-      }
     };
   }, [toast, requestNewScoreFromWorker]);
   
@@ -225,3 +221,5 @@ export const useAuraGroove = () => {
     handleScoreChange,
   };
 };
+
+    
