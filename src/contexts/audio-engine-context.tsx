@@ -67,24 +67,26 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
       const Tone = await import('tone');
       toneRef.current = Tone;
       await Tone.start();
+      console.log('[CONTEXT_TRACE] Tone.js started.');
       
 
       setLoadingText('Initializing Composer AI...');
       const worker = new Worker(new URL('../lib/ambient.worker.ts', import.meta.url), { type: 'module' });
       workerRef.current = worker;
+      console.log('[CONTEXT_TRACE] Web Worker created.');
       
 
       // MOCK MANAGERS for now. To be replaced with real ones.
-      const drumMachine = { schedule: (score: any) => { if(score.length > 0) console.log("Scheduling Drums:", score)} };
-      const accompanimentManager = { schedule: (score: any) => { if(score.length > 0) console.log("Scheduling Accompaniment:", score)} };
-      const bassManager = { schedule: (score: any) => { if(score.length > 0) console.log("Scheduling Bass:", score)} };
-      const soloManager = { schedule: (score: any) => { if(score.length > 0) console.log("Scheduling Solo:", score)} };
+      const drumMachine = { schedule: (score: any) => { if(score.length > 0) console.log("[CONTEXT_TRACE] Scheduling Drums:", score)} };
+      const accompanimentManager = { schedule: (score: any) => { if(score.length > 0) console.log("[CONTEXT_TRACE] Scheduling Accompaniment:", score)} };
+      const bassManager = { schedule: (score: any) => { if(score.length > 0) console.log("[CONTEXT_TRACE] Scheduling Bass:", score)} };
+      const soloManager = { schedule: (score: any) => { if(score.length > 0) console.log("[CONTEXT_TRACE] Scheduling Solo:", score)} };
 
 
       worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
+        console.log('[CONTEXT_TRACE] Received message from worker:', event.data);
         const { type, data } = event.data;
         if (type === 'score') {
-           console.log("Scheduling received score", data);
            // These will be replaced by real manager calls
            drumMachine.schedule(data.drumScore);
            accompanimentManager.schedule(data.accompanimentScore);
@@ -104,6 +106,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
       engineRef.current = {
         getTone: () => toneRef.current,
         setIsPlaying: (isPlaying: boolean) => {
+          console.log('[CONTEXT_TRACE] setIsPlaying called with:', isPlaying);
           if (!workerRef.current || !toneRef.current) return;
           const T = toneRef.current;
           
@@ -116,6 +119,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
           }
         },
         updateSettings: (settings: Partial<WorkerSettings>) => {
+           console.log('[CONTEXT_TRACE] Updating worker settings:', settings);
            if (!workerRef.current) return;
            lastSettingsRef.current = {...lastSettingsRef.current, ...settings};
            workerRef.current.postMessage({ command: 'update_settings', data: settings });

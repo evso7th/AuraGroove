@@ -235,7 +235,8 @@ const Scheduler = {
             bassScore,
             barDuration: this.barDuration,
         };
-
+        
+        console.log('[WORKER_TRACE] Posting score:', messageData);
         self.postMessage({ type: 'score', data: messageData });
         
         this.barCount++;
