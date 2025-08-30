@@ -98,6 +98,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         setIsPlaying: (isPlaying: boolean) => {
           if (!workerRef.current) return;
           const command = isPlaying ? 'start' : 'stop';
+          console.log("[CONTEXT_TRACE] setIsPlaying command sent to worker:", command);
           // Settings are sent on 'start'
           const settings = isPlaying ? {
               // This is a placeholder for the actual state management

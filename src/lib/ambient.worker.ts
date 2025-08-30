@@ -142,6 +142,7 @@ const Scheduler = {
             time: note.time * this.secondsPerBeat
         }));
         
+        console.log('[WORKER_TRACE] Posting "score" message with data:', { drumScore: finalDrumScore, barDuration: this.barDuration });
         self.postMessage({
             type: 'score',
             data: {
@@ -162,6 +163,7 @@ self.onmessage = async (event: MessageEvent) => {
     try {
         switch (command) {
             case 'start':
+                console.log('[WORKER_TRACE] Received "start" command with data:', data);
                 Scheduler.start(data);
                 break;
             case 'stop':

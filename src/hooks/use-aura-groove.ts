@@ -22,6 +22,7 @@ export const useAuraGroove = () => {
     if (!isInitialized || !engine) return;
     
     const newIsPlaying = !isPlaying;
+    console.log("[PLAYER_TRACE] handleTogglePlay called. Setting isPlaying to:", newIsPlaying);
     setIsPlaying(newIsPlaying);
     
     const settings = {
