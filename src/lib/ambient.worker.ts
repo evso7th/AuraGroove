@@ -137,7 +137,6 @@ const SampleBank = {
     isInitialized: false,
     async init() {
         this.isInitialized = true;
-        console.log("[WORKER_TRACE] SampleBank Initialized.");
     },
 };
 
@@ -237,7 +236,6 @@ const Scheduler = {
             barDuration: this.barDuration,
         };
 
-        console.log('[WORKER_TRACE] Posting score:', messageData);
         self.postMessage({ type: 'score', data: messageData });
         
         this.barCount++;
@@ -269,5 +267,3 @@ self.onmessage = async (event: MessageEvent<WorkerCommand>) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
-
-    

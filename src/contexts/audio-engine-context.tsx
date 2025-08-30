@@ -7,8 +7,8 @@ import { AudioPlayer } from '@/lib/audio-player';
 import type { ToneJS, AudioChunk, WorkerCommand, WorkerSettings, DrumSampleName } from '@/types/music';
 
 type WorkerMessage = {
-  type: 'audio_chunk';
-  data: AudioChunk;
+  type: 'score';
+  data: any; // expand this later
 } | {
   type: 'started' | 'stopped' | 'error';
   error?: string;
@@ -53,9 +53,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   
   const engineRef = useRef<AudioEngine | null>(null);
   const workerRef = useRef<Worker | null>(null);
-  const audioPlayerRef = useRef<AudioPlayer | null>(null);
   const toneRef = useRef<ToneJS | null>(null);
-  const transportLoopId = useRef<number | null>(null);
   const lastSettingsRef = useRef<Partial<WorkerSettings>>({});
 
   const { toast } = useToast();
@@ -69,37 +67,30 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
       const Tone = await import('tone');
       toneRef.current = Tone;
       await Tone.start();
-      console.log("[CONTEXT_TRACE] AudioContext started.");
-
-      setLoadingText('Initializing Audio Player...');
-      const player = new AudioPlayer(Tone.getContext().rawContext);
-      audioPlayerRef.current = player;
-      console.log("[CONTEXT_TRACE] AudioPlayer initialized.");
+      
 
       setLoadingText('Initializing Composer AI...');
       const worker = new Worker(new URL('../lib/ambient.worker.ts', import.meta.url), { type: 'module' });
       workerRef.current = worker;
-      console.log("[CONTEXT_TRACE] Web Worker created.");
+      
 
-      setLoadingText('Loading Drum Samples...');
-      const sampleResponses = await Promise.all(
-          Object.values(DRUM_SAMPLES_TO_LOAD).map(url => fetch(url))
-      );
-      const sampleBuffers = await Promise.all(sampleResponses.map(res => res.arrayBuffer()));
-      const samples: Record<string, ArrayBuffer> = {};
-      Object.keys(DRUM_SAMPLES_TO_LOAD).forEach((key, i) => {
-          samples[key] = sampleBuffers[i];
-      });
+      // MOCK MANAGERS for now. To be replaced with real ones.
+      const drumMachine = { schedule: (score: any) => { if(score.length > 0) console.log("Scheduling Drums:", score)} };
+      const accompanimentManager = { schedule: (score: any) => { if(score.length > 0) console.log("Scheduling Accompaniment:", score)} };
+      const bassManager = { schedule: (score: any) => { if(score.length > 0) console.log("Scheduling Bass:", score)} };
+      const soloManager = { schedule: (score: any) => { if(score.length > 0) console.log("Scheduling Solo:", score)} };
 
-      // Initialize worker with sample rate and samples
-      const initMessage: WorkerCommand = { command: 'init', data: { sampleRate: Tone.getContext().sampleRate, samples } };
-      worker.postMessage(initMessage, Object.values(samples));
 
       worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
-        console.log('[CONTEXT_TRACE] Received message from worker:', event.data);
         const { type, data } = event.data;
-        if (type === 'audio_chunk') {
-          audioPlayerRef.current?.scheduleChunk(data);
+        if (type === 'score') {
+           console.log("Scheduling received score", data);
+           // These will be replaced by real manager calls
+           drumMachine.schedule(data.drumScore);
+           accompanimentManager.schedule(data.accompanimentScore);
+           bassManager.schedule(data.bassScore);
+           soloManager.schedule(data.soloScore);
+
         } else if (event.data.type === 'error') {
             console.error('Error from worker:', event.data.error);
             toast({
@@ -113,17 +104,14 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
       engineRef.current = {
         getTone: () => toneRef.current,
         setIsPlaying: (isPlaying: boolean) => {
-          console.log('[CONTEXT_TRACE] setIsPlaying called with:', isPlaying);
           if (!workerRef.current || !toneRef.current) return;
           const T = toneRef.current;
           
           if (isPlaying) {
             T.Transport.start();
-            audioPlayerRef.current?.start();
             workerRef.current.postMessage({ command: 'start', data: lastSettingsRef.current } as WorkerCommand);
           } else {
             T.Transport.stop();
-            audioPlayerRef.current?.stop();
             workerRef.current.postMessage({ command: 'stop' });
           }
         },
