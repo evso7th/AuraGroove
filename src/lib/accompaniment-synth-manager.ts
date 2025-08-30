@@ -7,11 +7,13 @@ class Voice {
     public isBusy = false;
     private releaseTimeoutId: ReturnType<typeof setTimeout> | null = null;
     private readonly releaseTime: number;
+    private Tone: ToneJS;
 
     constructor(tone: ToneJS, outputChannel: any, options: any) {
-        this.synth = new tone.Synth(options).connect(outputChannel);
+        this.Tone = tone; // Store the Tone.js object
+        this.synth = new this.Tone.Synth(options).connect(outputChannel);
         // Store release time in milliseconds for timeout calculation
-        this.releaseTime = new tone.Time(this.synth.envelope.release).toMilliseconds();
+        this.releaseTime = new this.Tone.Time(this.synth.envelope.release).toMilliseconds();
     }
 
     public triggerAttackRelease(note: string, duration: string, time: number, velocity: number) {
@@ -23,8 +25,8 @@ class Voice {
         this.synth.triggerAttackRelease(note, duration, time, velocity);
         
         // Calculate when the voice will be free again
-        const durationMs = new this.synth.Tone.Time(duration).toMilliseconds();
-        const scheduledReleaseTime = (time - this.synth.Tone.now()) * 1000;
+        const durationMs = new this.Tone.Time(duration).toMilliseconds();
+        const scheduledReleaseTime = (time - this.Tone.now()) * 1000;
 
         // Total time until the voice is fully released and available
         const totalBusyTime = scheduledReleaseTime + durationMs + this.releaseTime;
@@ -64,7 +66,7 @@ export class AccompanimentSynthManager {
             },
         };
 
-        // Create the pool of voices
+        // Create the pool of voices, passing Tone to each one
         for (let i = 0; i < this.poolSize; i++) {
             this.voicePool.push(new Voice(this.Tone, outputChannel, synthOptions));
         }
@@ -81,7 +83,6 @@ export class AccompanimentSynthManager {
         }
         
         // If no voice is free, implement voice stealing: steal the next one in line.
-        // This is a simple round-robin stealing strategy.
         const voiceToSteal = this.voicePool[this.nextVoiceIndex];
         this.nextVoiceIndex = (this.nextVoiceIndex + 1) % this.poolSize;
         console.warn(`[ACCOMP_TRACE] No free voices. Stealing voice.`);
