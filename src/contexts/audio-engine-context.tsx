@@ -77,7 +77,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
       drumMachineRef.current = drums;
       console.log("[CONTEXT_TRACE] DrumMachine initialized.");
       
-      const worker = new Worker(new URL('../app/ambient.worker.ts', import.meta.url));
+      const worker = new Worker(new URL('../app/ambient.worker.ts', import.meta.url), { type: 'module' });
       musicWorkerRef.current = worker;
       
       worker.onmessage = (event: MessageEvent) => {
