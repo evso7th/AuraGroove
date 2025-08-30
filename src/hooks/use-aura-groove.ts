@@ -27,6 +27,17 @@ export const useAuraGroove = () => {
     };
   }, [bpm, score, instrumentSettings, drumSettings]);
 
+  // Update instrument presets in managers when they change
+  useEffect(() => {
+      if (engine && isInitialized) {
+          engine.accompanimentManager.setInstrument(instrumentSettings.accompaniment.name);
+          // Add calls for other managers here when they support setInstrument
+          // engine.soloManager.setInstrument(instrumentSettings.solo.name);
+          // engine.bassManager.setInstrument(instrumentSettings.bass.name);
+      }
+  }, [instrumentSettings.accompaniment.name, instrumentSettings.solo.name, instrumentSettings.bass.name, engine, isInitialized]);
+
+
   // Update settings in the worker in realtime
   useEffect(() => {
     if (engine && isInitialized) {

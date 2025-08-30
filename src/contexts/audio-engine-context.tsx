@@ -29,10 +29,15 @@ type WorkerMessage = {
   error?: string;
 };
 
-interface AudioEngine {
+export interface AudioEngine {
   setIsPlaying: (isPlaying: boolean) => void;
   updateSettings: (settings: Partial<WorkerSettings>) => void;
   getTone: () => ToneJS | null;
+  drumMachine: DrumMachine;
+  soloManager: SoloSynthManager;
+  accompanimentManager: AccompanimentSynthManager;
+  bassManager: BassSynthManager;
+  effectsManager: EffectsSynthManager;
 }
 
 interface AudioEngineContextType {
@@ -101,9 +106,9 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
       console.log('[CONTEXT_TRACE] Web Worker created.');
       
       worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
-        console.log('[CONTEXT_TRACE] Received message from worker:', event.data.type, event.data);
         const { type, data } = event.data;
-        if (type === 'score' && managersRef.current) {
+        if (type === 'score' && managersRef.current && toneRef.current) {
+            const T = toneRef.current;
             const { drumMachine, soloManager, accompanimentManager, bassManager } = managersRef.current;
             const nextBarTime = T.Transport.seconds + data.barDuration;
             
@@ -112,7 +117,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
                 soloManager?.schedule(data.soloScore, time);
                 accompanimentManager?.schedule(data.accompanimentScore, time);
                 bassManager?.schedule(data.bassScore, time);
-                 console.log(`[CONTEXT_TRACE] Scheduled scores for time: ${time}`);
+                console.log(`[CONTEXT_TRACE] Scheduled scores for time: ${time}`);
             }, nextBarTime);
 
         } else if (type === 'error') {
@@ -129,15 +134,19 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
       tickLoopRef.current = new T.Loop((time) => {
         if (workerRef.current) {
             workerRef.current.postMessage({ command: 'tick' });
-             console.log(`[CONTEXT_TRACE] Sent 'tick' to worker at transport time: ${time}`);
         }
       }, '1m').start(0);
 
 
       engineRef.current = {
         getTone: () => toneRef.current,
+        // Expose managers
+        drumMachine: managersRef.current.drumMachine!,
+        soloManager: managersRef.current.soloManager!,
+        accompanimentManager: managersRef.current.accompanimentManager!,
+        bassManager: managersRef.current.bassManager!,
+        effectsManager: managersRef.current.effectsManager!,
         setIsPlaying: (isPlaying: boolean) => {
-          console.log('[CONTEXT_TRACE] setIsPlaying called with:', isPlaying);
           if (!workerRef.current || !toneRef.current) return;
           const T = toneRef.current;
           
@@ -154,7 +163,6 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
           }
         },
         updateSettings: (settings: Partial<WorkerSettings>) => {
-           console.log('[CONTEXT_TRACE] Updating worker settings:', settings);
            if (!workerRef.current) return;
            lastSettingsRef.current = {...lastSettingsRef.current, ...settings};
            workerRef.current.postMessage({ command: 'update_settings', data: settings });
