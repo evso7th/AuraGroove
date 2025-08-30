@@ -52,7 +52,7 @@ export type InstrumentSettings = {
       volume: number; // 0-1
   };
   accompaniment: {
-      name: 'synthesizer' | 'piano' | 'organ' | 'none';
+      name: 'synthesizer' | 'piano' | 'organ' | 'mellotron' | 'none';
       volume: number; // 0-1
   };
   bass: {

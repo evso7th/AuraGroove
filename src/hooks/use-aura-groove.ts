@@ -35,7 +35,7 @@ export const useAuraGroove = () => {
           // engine.soloManager.setInstrument(instrumentSettings.solo.name);
           // engine.bassManager.setInstrument(instrumentSettings.bass.name);
       }
-  }, [instrumentSettings.accompaniment.name, instrumentSettings.solo.name, instrumentSettings.bass.name, engine, isInitialized]);
+  }, [instrumentSettings.accompaniment, instrumentSettings.solo, instrumentSettings.bass, engine, isInitialized]);
 
 
   // Update settings in the worker in realtime

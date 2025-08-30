@@ -41,9 +41,21 @@ export class AccompanimentSynthManager {
         const piano = new this.Tone.PolySynth(this.Tone.FMSynth, pianoOptions).toDestination();
         piano.volume.value = -6;
         this.synths.set('piano', piano);
+        
+        const mellotronOptions = {
+            harmonicity: 3,
+            modulationIndex: 0.5,
+            oscillator: { type: "sine" },
+            envelope: { attack: 0.1, decay: 0.2, sustain: 0.4, release: 0.8 },
+            modulation: { type: "sine" },
+            modulationEnvelope: { attack: 0.2, decay: 0.5, sustain: 0.1, release: 0.8 }
+        };
+        const mellotron = new this.Tone.PolySynth(this.Tone.FMSynth, mellotronOptions).toDestination();
+        mellotron.volume.value = -7;
+        this.synths.set('mellotron', mellotron);
     }
 
-    public setInstrument(name: 'synthesizer' | 'piano' | 'organ' | 'none') {
+    public setInstrument(name: 'synthesizer' | 'piano' | 'organ' | 'mellotron' | 'none') {
         if (name === 'none') {
             this.activeSynth = null;
         } else if (this.synths.has(name)) {
