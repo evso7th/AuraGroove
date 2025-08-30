@@ -63,9 +63,9 @@ class EvolutionEngine {
          ]
     }
     
-    // --- "Тибетские чаши" ---
-    // Генерирует не аккорд, а последовательность одиночных нот (арпеджио),
-    // чтобы избежать одновременной атаки нескольких звуков.
+    // --- "Живой" аккорд с микросдвигом ---
+    // Генерирует аккорд, но с небольшим сдвигом между нотами,
+    // чтобы имитировать человеческое исполнение и снизить нагрузку на процессор.
     generateAccompanimentScore(bar: number, settings: WorkerSettings, timeOffset: number): SynthNote[] {
         const instrumentName = settings.instrumentSettings?.accompaniment?.name;
         if (instrumentName === 'none') {
@@ -73,14 +73,14 @@ class EvolutionEngine {
         }
 
         const volume = settings.instrumentSettings?.accompaniment?.volume ?? 0.7;
-        const notes = ['C4', 'E4', 'G4']; // Базовые ноты для арпеджио
+        const notes = ['C4', 'E4', 'G4']; // Ноты аккорда
         const score: SynthNote[] = [];
 
         notes.forEach((note, index) => {
             score.push({
                 note: note,
                 duration: 2, // Длинный release создаст эффект наложения
-                time: timeOffset + (index * 0.5), // Ноты играются последовательно, а не одновременно
+                time: timeOffset + (index * 0.05), // Микросдвиг для "живого" исполнения
                 velocity: 0.6 * volume,
             });
         });
@@ -166,7 +166,6 @@ const Scheduler = {
         if (newSettings.instrumentSettings) this.settings.instrumentSettings = { ...this.settings.instrumentSettings, ...newSettings.instrumentSettings };
         if (newSettings.bpm) this.settings.bpm = newSettings.bpm;
         if (newSettings.score) this.settings.score = newSettings.score;
-        console.log('[WORKER_TRACE] Settings updated:', this.settings);
     },
 
     tick() {
@@ -184,8 +183,8 @@ const Scheduler = {
         }
         
         const BASS_OFFSET = 0;
-        const ACCOMP_OFFSET = 0.125;
-        const SOLO_OFFSET = 0.25;
+        const ACCOMP_OFFSET = 0.05; 
+        const SOLO_OFFSET = 0.1; 
         
         switch(this.settings.score) {
             case 'evolve':
@@ -207,7 +206,6 @@ const Scheduler = {
             barDuration: this.barDuration,
         };
         
-        console.log('[WORKER_TRACE] Posting score:', messageData);
         self.postMessage({ type: 'score', data: messageData });
         
         this.barCount++;
