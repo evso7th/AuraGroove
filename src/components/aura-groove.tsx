@@ -128,7 +128,6 @@ export function AuraGroove({
                           <SelectContent>
                              <SelectItem value="none">None</SelectItem>
                              {part === 'bass' ? <>
-                                <SelectItem value="bass_synth">Bass Synth</SelectItem>
                                 <SelectItem value="bassGuitar">Bass Guitar</SelectItem>
                              </> : part === 'accompaniment' ? <>
                                 <SelectItem value="synthesizer">Synthesizer</SelectItem>
