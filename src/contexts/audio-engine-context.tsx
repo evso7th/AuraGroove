@@ -112,12 +112,14 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
             const { drumMachine, soloManager, accompanimentManager, bassManager } = managersRef.current;
             const nextBarTime = T.Transport.seconds + data.barDuration;
             
+            console.log(`[CONTEXT_TRACE] Received scores. Non-empty: ${data.bassScore.length > 0 ? 'BASS' : ''} ${data.accompanimentScore.length > 0 ? 'ACCOMP' : ''} ${data.soloScore.length > 0 ? 'SOLO' : ''}`);
+
             T.Transport.scheduleOnce((time) => {
                 drumMachine?.schedule(data.drumScore, time);
                 soloManager?.schedule(data.soloScore, time);
                 accompanimentManager?.schedule(data.accompanimentScore, time);
                 bassManager?.schedule(data.bassScore, time);
-                console.log(`[CONTEXT_TRACE] Scheduled scores for time: ${time}`);
+                // console.log(`[CONTEXT_TRACE] Scheduled scores for time: ${time}`);
             }, nextBarTime);
 
         } else if (type === 'error') {
