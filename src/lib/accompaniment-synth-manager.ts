@@ -172,7 +172,10 @@ export class AccompanimentSynthManager {
         const scheduledTime = time + (note.time * this.Tone.Time('8n').toSeconds());
 
         if (!this[isPlayingFlag]) {
-            synth.triggerAttack(note.note, scheduledTime, note.velocity);
+            // First, ensure any previous note is smoothly released before attacking with a new one.
+            // This prevents abrupt cut-offs and clicks.
+            synth.triggerRelease(time);
+            synth.triggerAttack(note.note, time, note.velocity);
             this[isPlayingFlag] = true;
         } else {
             synth.setNote(note.note, scheduledTime);
@@ -199,18 +202,16 @@ export class AccompanimentSynthManager {
         const rightHandNote = score[0];
         const leftHandNote = score[1];
 
+        // If a note exists for the right hand, play it.
+        // If not, this implies a rest, and we let the synth's natural release handle the silence.
         if (rightHandNote) {
             this.playHand('rightHand', rightHandNote, time);
-        } else {
-            this.releaseHand('rightHand', time);
         }
 
-        // Only play the left hand on desktop profile
+        // Only handle the left hand on desktop profile
         if (this.profile === 'desktop') {
             if (leftHandNote) {
                 this.playHand('leftHand', leftHandNote, time);
-            } else {
-                this.releaseHand('leftHand', time);
             }
         }
     }
