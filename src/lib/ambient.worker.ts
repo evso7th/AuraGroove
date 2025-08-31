@@ -107,21 +107,21 @@ class EvolutionEngine {
         const score: SynthNote[] = [];
         const volume = accompanimentSettings?.volume ?? 0.7;
 
-        // "Right Hand" - plays on every beat
+        // "Right Hand" - plays a longer phrase of shorter notes
         this.lastRightHandNote = this.getNextNote(this.lastRightHandNote, this.rightHandNotes);
         score.push({
             note: this.lastRightHandNote,
-            duration: 4, // Duration doesn't matter for portamento synth
+            duration: 8, // Duration doesn't matter for portamento synth
             time: 0, 
             velocity: (0.5 + Math.random() * 0.2) * volume
         });
 
-        // "Left Hand" - plays every two beats
+        // "Left Hand" - plays a longer phrase every two bars
         if (bar % 2 === 0) {
             this.lastLeftHandNote = this.getNextNote(this.lastLeftHandNote, this.leftHandNotes);
              score.push({
                 note: this.lastLeftHandNote,
-                duration: 8,
+                duration: 16,
                 time: 0,
                 velocity: (0.4 + Math.random() * 0.1) * volume
             });
