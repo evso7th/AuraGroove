@@ -48,16 +48,16 @@ export class BassSynthManager {
         this.synths.portamento.volume.value = -3;
         
         // PortamentoMob Preset - exact copy for now
-        const portamentoMobReverb = new this.Tone.Reverb({
+        /* const portamentoMobReverb = new this.Tone.Reverb({
             decay: 6,
             wet: 0.4
-        }).toDestination();
+        }).toDestination(); */
         this.synths.portamentoMob = new this.Tone.MonoSynth({
             portamento: 0.1, 
             oscillator: { type: 'fmsine' },
             envelope: { attack: 0.05, decay: 0.3, sustain: 0.4, release: 4.0 },
             filterEnvelope: { attack: 0.06, decay: 0.2, sustain: 0.5, release: 5.0, baseFrequency: 200, octaves: 7 }
-        }).connect(portamentoMobReverb);
+        }).toDestination();
         this.synths.portamentoMob.volume.value = -3;
 
 
