@@ -30,14 +30,6 @@ const PatternProvider = {
 
 // --- 2. Instrument Generators (The Composers) ---
 class EvolutionEngine {
-    private lastRightHandNote: string | null = 'E4';
-    private lastLeftHandNote: string | null = 'G3';
-    private lastMobileAccompNote: string | null = 'E3';
-
-    private readonly rightHandNotes = ['C4', 'D4', 'E4', 'G4', 'A4', 'C5'];
-    private readonly leftHandNotes = ['C3', 'D3', 'E3', 'G3', 'A3', 'C4'];
-    private readonly mobileAccompanimentNotes = ['C3', 'D3', 'E3', 'G3', 'A3', 'C4', 'D4', 'E4', 'F4'];
-
     private soloLastNote: string | null = 'C4';
     private readonly soloNotes = ['C4', 'D4', 'E4', 'G4', 'A4', 'C5', 'D5', 'E5'];
 
@@ -46,10 +38,6 @@ class EvolutionEngine {
 
     private bassPhraseLength: number;
     private maxBassPhraseLength: number;
-
-    private accompPhrase: SynthNote[] = [];
-    private accompPhraseIndex = 0;
-
 
     constructor() {
         this.reset();
@@ -67,12 +55,6 @@ class EvolutionEngine {
         this.maxBassPhraseLength = this.getNewMaxBassPhraseLength();
 
         this.soloLastNote = 'C4';
-        this.lastRightHandNote = 'E4';
-        this.lastLeftHandNote = 'G3';
-        this.lastMobileAccompNote = 'E3';
-        
-        this.accompPhrase = [];
-        this.accompPhraseIndex = 0;
         console.log('[Worker EvolutionEngine] Reset.');
     }
 
@@ -90,8 +72,7 @@ class EvolutionEngine {
         return scale[nextNoteIndex];
     }
 
-
-    generateDrumScore(bar: number, settings: {volume: number}, isAccompanimentResting: boolean): DrumNote[] {
+    generateDrumScore(bar: number, settings: {volume: number}): DrumNote[] {
         const score: DrumNote[] = [];
         const vol = settings.volume;
 
@@ -100,8 +81,8 @@ class EvolutionEngine {
         score.push({ sample: 'snare', time: 2, velocity: 0.8 * vol });
         score.push({ sample: 'hat', time: 3, velocity: 0.4 * vol });
 
-        // Only add fills if the accompaniment is resting
-        if (isAccompanimentResting && bar === this.nextFillBar) {
+        // Add fills
+        if (bar === this.nextFillBar) {
              score.push({ sample: 'kick', time: 1, velocity: 0.7 * vol });
              score[2] = { sample: 'crash', time: 3, velocity: 0.6 * vol };
              this.currentFillInterval = Math.floor(Math.random() * (12 - 6 + 1)) + 6;
@@ -109,64 +90,6 @@ class EvolutionEngine {
         }
 
         return score;
-    }
-    
-    generateAccompanimentScore(bar: number, settings: WorkerSettings): { score: SynthNote[], isResting: boolean } {
-        const accompanimentSettings = settings.instrumentSettings?.accompaniment;
-        if (accompanimentSettings?.name === 'none') return { score: [], isResting: true };
-
-        const volume = accompanimentSettings?.volume ?? 0.7;
-
-        if (this.accompPhraseIndex >= this.accompPhrase.length) {
-            this.accompPhraseIndex = 0;
-            this.accompPhrase = [];
-            
-            const isResting = Math.random() < 0.25; // 25% chance to rest for a bar
-            if (isResting) {
-                return { score: [], isResting: true };
-            }
-
-            const phraseLength = Math.floor(Math.random() * 3) + 3; // 3-5 notes per phrase
-            const noteDuration = 8; // eighth notes
-            const timeOffset = 0.5; // Start on the off-beat to avoid clashing with bass
-
-            if (settings.audioProfile === 'mobile') {
-                for (let i = 0; i < phraseLength; i++) {
-                    this.lastMobileAccompNote = this.getNextNote(this.lastMobileAccompNote, this.mobileAccompanimentNotes);
-                    this.accompPhrase.push({
-                        note: this.lastMobileAccompNote,
-                        duration: noteDuration,
-                        time: i + timeOffset,
-                        velocity: (0.5 + Math.random() * 0.2) * volume
-                    });
-                }
-            } else { // Desktop profile
-                const rightHandPhrase: SynthNote[] = [];
-                const leftHandPhrase: SynthNote[] = [];
-                
-                for (let i = 0; i < phraseLength; i++) {
-                    this.lastRightHandNote = this.getNextNote(this.lastRightHandNote, this.rightHandNotes);
-                    rightHandPhrase.push({ note: this.lastRightHandNote, duration: noteDuration, time: i + timeOffset, velocity: (0.5 + Math.random() * 0.2) * volume });
-
-                    if (i % 2 === 0) { // Left hand plays less frequently
-                        this.lastLeftHandNote = this.getNextNote(this.lastLeftHandNote, this.leftHandNotes);
-                        leftHandPhrase.push({ note: this.lastLeftHandNote, duration: noteDuration * 2, time: i + timeOffset, velocity: (0.4 + Math.random() * 0.1) * volume });
-                    }
-                }
-                
-                // For desktop, we interleave notes for the manager
-                // This logic is a placeholder as the manager now handles two separate synths
-                this.accompPhrase = [rightHandPhrase[0], leftHandPhrase[0]];
-            }
-        }
-
-        const nextNote = this.accompPhrase[this.accompPhraseIndex];
-        this.accompPhraseIndex++;
-
-        // If the phrase is finished, the next bar will be a resting bar.
-        const willBeRestingNext = this.accompPhraseIndex >= this.accompPhrase.length;
-
-        return { score: [nextNote].filter(Boolean), isResting: willBeRestingNext };
     }
     
     generateSoloScore(bar: number, settings: WorkerSettings, barDuration: number): SynthNote[] {
@@ -218,10 +141,10 @@ class EvolutionEngine {
 
 // Dummy classes for parts that are not yet fully implemented, to avoid breaking changes.
 class OmegaScoreGenerator {
-    generateScore(bar: number, settings: any) { return []; }
+    generateScore(bar: number, settings: any) { return { soloScore: [], bassScore: [] }; }
 }
 class PromenadeScoreGenerator {
-     generateScore(bar: number, settings: any) { return []; }
+     generateScore(bar: number, settings: any) { return { soloScore: [], bassScore: [] }; }
 }
 
 // --- 3. Scheduler (The Conductor) ---
@@ -231,12 +154,10 @@ const Scheduler = {
     settings: {
         bpm: 75,
         score: 'evolve' as ScoreName,
-        audioProfile: 'desktop' as AudioProfile,
         drumSettings: { pattern: 'ambient_beat', volume: 0.5, enabled: true },
         instrumentSettings: { 
-            solo: { name: "none", volume: 0.8 },
-            accompaniment: { name: "synthesizer", volume: 0.7 },
-            bass: { name: "bassGuitar", volume: 0.45 },
+            solo: { name: "piano", volume: 0.8 },
+            bass: { name: "portamento", volume: 0.45 },
         },
     } as WorkerSettings,
 
@@ -261,22 +182,16 @@ const Scheduler = {
         if (newSettings.instrumentSettings) this.settings.instrumentSettings = { ...this.settings.instrumentSettings, ...newSettings.instrumentSettings };
         if (newSettings.bpm) this.settings.bpm = newSettings.bpm;
         if (newSettings.score) this.settings.score = newSettings.score;
-        if (newSettings.audioProfile) this.settings.audioProfile = newSettings.audioProfile;
     },
 
     tick() {
-        // console.log(`[WORKER_TRACE] Scheduler.tick() called for bar ${this.barCount}`);
         let drumScore: DrumNote[] = [];
         let soloScore: SynthNote[] = [];
-        let accompanimentScore: SynthNote[] = [];
         let bassScore: SynthNote[] = [];
-
-        const { score: newAccompanimentScore, isResting: isAccompanimentResting } = this.evolutionEngine.generateAccompanimentScore(this.barCount, this.settings);
-        accompanimentScore = newAccompanimentScore;
 
         if (this.settings.drumSettings.enabled) {
             if (this.settings.drumSettings.pattern === 'composer') {
-               drumScore = this.evolutionEngine.generateDrumScore(this.barCount, this.settings.drumSettings, isAccompanimentResting);
+               drumScore = this.evolutionEngine.generateDrumScore(this.barCount, this.settings.drumSettings);
            } else {
                 drumScore = PatternProvider.getDrumPattern(this.settings.drumSettings.pattern);
            }
@@ -288,7 +203,6 @@ const Scheduler = {
         const messageData = {
             drumScore,
             soloScore,
-            accompanimentScore,
             bassScore,
             barDuration: this.barDuration,
         };
@@ -323,5 +237,3 @@ self.onmessage = async (event: MessageEvent<WorkerCommand>) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
-
-    

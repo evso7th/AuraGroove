@@ -16,7 +16,6 @@ export const useAuraGroove = () => {
   const [drumSettings, setDrumSettings] = useState<DrumSettings>({ pattern: 'composer', volume: 0.5 });
   const [instrumentSettings, setInstrumentSettings] = useState<InstrumentSettings>({
     solo: { name: "piano", volume: 0.8 },
-    accompaniment: { name: "synthesizer", volume: 0.7 },
     bass: { name: "portamento", volume: 0.45 },
   });
   const [bpm, setBpm] = useState(75);
@@ -37,11 +36,10 @@ export const useAuraGroove = () => {
   // Update instrument presets in managers when they change
   useEffect(() => {
       if (engine && isInitialized) {
-          engine.accompanimentManager.setInstrument(instrumentSettings.accompaniment.name);
           engine.bassManager.setInstrument(instrumentSettings.bass.name);
           engine.soloManager.setInstrument(instrumentSettings.solo.name);
       }
-  }, [instrumentSettings.accompaniment.name, instrumentSettings.solo.name, instrumentSettings.bass.name, engine, isInitialized]);
+  }, [instrumentSettings.solo.name, instrumentSettings.bass.name, engine, isInitialized]);
 
   // Update drum volume
   useEffect(() => {

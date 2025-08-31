@@ -133,11 +133,6 @@ export function AuraGroove({
                                 <SelectItem value="BassGrooveMob">BassGrooveMob</SelectItem>
                                 <SelectItem value="portamento">Portamento</SelectItem>
                                 <SelectItem value="portamentoMob">PortamentoMob</SelectItem>
-                             </> : part === 'accompaniment' ? <>
-                                <SelectItem value="synthesizer">Synthesizer</SelectItem>
-                                <SelectItem value="piano">Piano</SelectItem>
-                                <SelectItem value="organ">Organ</SelectItem>
-                                <SelectItem value="mellotron">Mellotron</SelectItem>
                              </> : <>
                                 <SelectItem value="synthesizer">Synthesizer</SelectItem>
                                 <SelectItem value="piano">Piano</SelectItem>

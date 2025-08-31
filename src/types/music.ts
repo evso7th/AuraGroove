@@ -54,10 +54,6 @@ export type InstrumentSettings = {
       name: 'synthesizer' | 'piano' | 'organ' | 'mellotron' | 'none';
       volume: number; // 0-1
   };
-  accompaniment: {
-      name: 'synthesizer' | 'piano' | 'organ' | 'mellotron' | 'none';
-      volume: number; // 0-1
-  };
   bass: {
       name: 'bassGuitar' | 'BassGroove' | 'portamento' | 'portamentoMob' | 'BassGrooveMob' | 'none';
       volume: number; // 0-1
