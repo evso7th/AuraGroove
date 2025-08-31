@@ -89,12 +89,10 @@ export class BassSynthManager {
                 const duration = this.Tone.Time(note.duration, 'n');
                 
                 // The 'sub' layer plays the original note
-                console.log(`[BASS TRACE] Scheduling SUB layer. Time: ${scheduledTime}, Note: ${note.note}`);
                 sub.triggerAttackRelease(note.note, duration, scheduledTime, note.velocity * 0.9);
                 
                 // The 'character' layer plays the note transposed up by one octave
                 const charNote = this.Tone.Frequency(note.note).transpose(12);
-                console.log(`[BASS TRACE] Scheduling CHARACTER layer. Time: ${scheduledTime}, Note: ${charNote.toNote()}`);
                 character.triggerAttackRelease(charNote, duration, scheduledTime, note.velocity * 0.6);
             });
         }
