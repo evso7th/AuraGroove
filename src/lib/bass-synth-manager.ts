@@ -72,8 +72,16 @@ export class BassSynthManager {
     }
 
     public schedule(score: SynthNote[], time: number) {
-        if (this.activeInstrument === 'none' || score.length === 0) {
+        if (this.activeInstrument === 'none') {
              if (this.isPortamentoPlaying) {
+                this.synths.portamento?.triggerRelease(time);
+                this.isPortamentoPlaying = false;
+            }
+            return;
+        }
+
+        if (score.length === 0) {
+            if (this.activeInstrument === 'portamento' && this.isPortamentoPlaying) {
                 this.synths.portamento?.triggerRelease(time);
                 this.isPortamentoPlaying = false;
             }
