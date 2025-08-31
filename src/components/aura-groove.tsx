@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import Image from 'next/image';
 import Logo from "@/components/icons";
 import { Slider } from "@/components/ui/slider";
 import type { DrumSettings, EffectsSettings, InstrumentSettings, ScoreName } from '@/types/music';
@@ -46,7 +47,7 @@ export function AuraGroove({
         <Card className="w-full max-w-lg shadow-2xl">
             <CardHeader className="text-center">
                  <div className="mx-auto mb-4">
-                    <Logo className="h-16 w-16" />
+                    <Image src="/assets/icon8.jpeg" alt="AuraGroove Logo" width={64} height={64} className="rounded-full" />
                 </div>
                 <CardTitle className="font-headline text-3xl">AuraGroove</CardTitle>
                 <CardDescription>AI-powered ambient music generator</CardDescription>
@@ -71,7 +72,7 @@ export function AuraGroove({
     <Card className="w-full max-w-lg shadow-2xl">
       <CardHeader className="text-center">
         <div className="mx-auto mb-4">
-            <Logo className="h-16 w-16" />
+            <Image src="/assets/icon8.jpeg" alt="AuraGroove Logo" width={64} height={64} className="rounded-full" />
         </div>
         <CardTitle className="font-headline text-3xl">AuraGroove</CardTitle>
         <CardDescription>AI-powered ambient music generator</CardDescription>
