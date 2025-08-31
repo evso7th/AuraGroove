@@ -4,6 +4,8 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings } from '@/types/music';
 import { useAudioEngine } from "@/contexts/audio-engine-context";
+import * as Tone from 'tone';
+
 
 export const useAuraGroove = () => {
   const { isInitializing, isInitialized, engine, loadingText: engineLoadingText } = useAudioEngine();
@@ -35,6 +37,14 @@ export const useAuraGroove = () => {
           engine.soloManager.setInstrument(instrumentSettings.solo.name);
       }
   }, [instrumentSettings.accompaniment, instrumentSettings.solo, instrumentSettings.bass, engine, isInitialized]);
+
+  // Update drum volume
+  useEffect(() => {
+      if(engine && isInitialized) {
+          // We use gainToDb for a more natural volume curve.
+          engine.drumMachine.channel.volume.value = Tone.gainToDb(drumSettings.volume);
+      }
+  }, [drumSettings.volume, engine, isInitialized]);
 
 
   // Update settings in the worker in realtime

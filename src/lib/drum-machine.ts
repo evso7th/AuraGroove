@@ -13,13 +13,15 @@ export class DrumMachine {
     private Tone: ToneJS;
     private sampler: any; // Tone.Players is not easily typed here, using any
     private isReady = false;
+    public channel: Tone.Channel;
 
     constructor(Tone: ToneJS) {
         this.Tone = Tone;
+        this.channel = new this.Tone.Channel().toDestination();
         this.sampler = new this.Tone.Players(DRUM_SAMPLES, () => {
             this.isReady = true;
             console.log('[DrumMachine] Samples loaded.');
-        }).toDestination();
+        }).connect(this.channel);
     }
 
     public schedule(score: DrumNote[], time: number) {
@@ -27,6 +29,8 @@ export class DrumMachine {
 
         score.forEach(note => {
             if (this.sampler.has(note.sample)) {
+                // The velocity of the sample is already baked in and multiplied by the worker.
+                // The final volume is controlled by the channel.
                 this.sampler.player(note.sample).start(time + (note.time * this.Tone.Time('4n').toSeconds()));
             }
         });
