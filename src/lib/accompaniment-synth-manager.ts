@@ -190,6 +190,7 @@ export class AccompanimentSynthManager {
     }
 
     public schedule(score: SynthNote[], time: number) {
+        console.log('[ACCOMPANIMENT_DIAGNOSTICS]', { time, score });
         if (this.currentInstrument === 'none' || Object.keys(this.synths).length === 0) {
             this.stopAll();
             return;
