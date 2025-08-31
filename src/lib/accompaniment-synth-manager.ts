@@ -107,4 +107,8 @@ export class AccompanimentSynthManager {
             this.nextVoiceIndex = (this.nextVoiceIndex + 1) % this.synths.length;
         });
     }
+
+    public stopAll() {
+        this.synths.forEach(synth => synth.triggerRelease());
+    }
 }

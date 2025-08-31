@@ -112,14 +112,11 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
             const { drumMachine, soloManager, accompanimentManager, bassManager } = managersRef.current;
             const nextBarTime = T.Transport.seconds + data.barDuration;
             
-            console.log(`[CONTEXT_TRACE] Received scores. Non-empty: ${data.bassScore.length > 0 ? 'BASS' : ''} ${data.accompanimentScore.length > 0 ? 'ACCOMP' : ''} ${data.soloScore.length > 0 ? 'SOLO' : ''}`);
-
             T.Transport.scheduleOnce((time) => {
                 drumMachine?.schedule(data.drumScore, time);
                 soloManager?.schedule(data.soloScore, time);
                 accompanimentManager?.schedule(data.accompanimentScore, time);
                 bassManager?.schedule(data.bassScore, time);
-                // console.log(`[CONTEXT_TRACE] Scheduled scores for time: ${time}`);
             }, nextBarTime);
 
         } else if (type === 'error') {
@@ -149,7 +146,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         bassManager: managersRef.current.bassManager!,
         effectsManager: managersRef.current.effectsManager!,
         setIsPlaying: (isPlaying: boolean) => {
-          if (!workerRef.current || !toneRef.current) return;
+          if (!workerRef.current || !toneRef.current || !managersRef.current) return;
           const T = toneRef.current;
           
           if (isPlaying) {
@@ -160,7 +157,17 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
           } else {
              if (T.Transport.state === 'started') {
                 T.Transport.stop();
-                console.log('[CONTEXT_TRACE] Tone.Transport stopped.');
+                T.Transport.cancel(0); // Clear all scheduled events
+
+                // Command all managers to stop their sounds
+                managersRef.current.bassManager?.stopAll();
+                managersRef.current.soloManager?.stopAll();
+                managersRef.current.accompanimentManager?.stopAll();
+                
+                // Reset the worker's composition state
+                workerRef.current.postMessage({ command: 'reset' });
+
+                console.log('[CONTEXT_TRACE] Tone.Transport stopped and all sounds/schedules cleared.');
              }
           }
         },
@@ -175,7 +182,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
       };
       
       // Send initial settings to the worker
-       workerRef.current.postMessage({ command: 'init', data: {} });
+       workerRef.current.postMessage({ command: 'init' });
 
       setIsInitialized(true);
       return true;

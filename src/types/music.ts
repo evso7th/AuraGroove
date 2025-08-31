@@ -24,7 +24,8 @@ export type WorkerSettings = {
 
 export type WorkerCommand = 
 | { command: 'update_settings', data: Partial<WorkerSettings> }
-| { command: 'init', data: {} }
+| { command: 'init' }
+| { command: 'reset' }
 | { command: 'tick' };
 
 

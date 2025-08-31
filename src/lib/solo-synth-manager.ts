@@ -79,4 +79,10 @@ export class SoloSynthManager {
             );
         });
     }
+
+    public stopAll() {
+        if (this.activeSynth) {
+            this.activeSynth.triggerRelease();
+        }
+    }
 }

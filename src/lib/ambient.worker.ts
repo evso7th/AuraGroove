@@ -63,6 +63,14 @@ class EvolutionEngine {
 
 
     constructor() {
+        this.reset();
+    }
+    
+    private getNewMaxBassPhraseLength(): number {
+        return Math.floor(Math.random() * (5 - 3 + 1)) + 3; // Random length from 3 to 5
+    }
+    
+    public reset() {
         // Initialize with a random interval between 6 and 12 bars
         this.currentFillInterval = Math.floor(Math.random() * (12 - 6 + 1)) + 6;
         this.nextFillBar = this.currentFillInterval - 1;
@@ -70,10 +78,10 @@ class EvolutionEngine {
         // Bass phrase initialization
         this.bassPhraseLength = 0;
         this.maxBassPhraseLength = this.getNewMaxBassPhraseLength();
-    }
-    
-    private getNewMaxBassPhraseLength(): number {
-        return Math.floor(Math.random() * (5 - 3 + 1)) + 3; // Random length from 3 to 5
+
+        this.soloLastNote = 'C5';
+        this.accompanimentVoices = [];
+        console.log('[Worker EvolutionEngine] Reset.');
     }
 
 
@@ -215,11 +223,11 @@ const Scheduler = {
     settings: {
         bpm: 75,
         score: 'evolve' as ScoreName,
-        drumSettings: { pattern: 'ambient_beat', volume: 0.7, enabled: true },
+        drumSettings: { pattern: 'ambient_beat', volume: 0.5, enabled: true },
         instrumentSettings: { 
             solo: { name: "none", volume: 0.8 },
             accompaniment: { name: "synthesizer", volume: 0.7 },
-            bass: { name: "bassGuitar", volume: 0.9 },
+            bass: { name: "bassGuitar", volume: 0.45 },
         },
     } as WorkerSettings,
 
@@ -233,9 +241,9 @@ const Scheduler = {
     get secondsPerBeat() { return 60 / this.settings.bpm; },
     get barDuration() { return this.beatsPerBar * this.secondsPerBeat; },
 
-    init() {
+    reset() {
       this.barCount = 0;
-      this.evolutionEngine = new EvolutionEngine(); // Reset engine state
+      this.evolutionEngine.reset();
       self.postMessage({ type: 'started' });
     },
     
@@ -292,7 +300,7 @@ self.onmessage = async (event: MessageEvent<WorkerCommand>) => {
     try {
         switch (command) {
             case 'init':
-                Scheduler.init();
+                Scheduler.reset();
                 break;
             case 'tick':
                  Scheduler.tick();
@@ -300,6 +308,9 @@ self.onmessage = async (event: MessageEvent<WorkerCommand>) => {
             case 'update_settings':
                  Scheduler.updateSettings(data);
                 break;
+            case 'reset':
+                 Scheduler.reset();
+                 break;
         }
     } catch (e) {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
