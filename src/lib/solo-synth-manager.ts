@@ -16,10 +16,11 @@ export class SoloSynthManager {
     }
 
     private createPresets() {
+        // Using the light mobile preset from accompaniment for testing
         const synthesizer = new this.Tone.MonoSynth({
-            oscillator: { type: 'fatsquare' }, // Changed to fatsquare for a classic analog sound
-            envelope: { attack: 0.1, decay: 0.4, sustain: 0.6, release: 1.5 },
-            filter: { type: 'lowpass', rolloff: -12, Q: 1 }
+            portamento: 0.1,
+            oscillator: { type: 'fmsine' },
+            envelope: { attack: 0.1, decay: 0.2, sustain: 0.5, release: 1.2 }
         }).toDestination();
         this.synths.set('synthesizer', synthesizer);
 
