@@ -89,13 +89,13 @@ export class BassSynthManager {
         // BassGrooveMob - Now without effects
         const fundamentalSynthMob = new this.Tone.MonoSynth({
             oscillator: { type: 'sine' },
-            envelope: { attack: 0.05, decay: 0.3, sustain: 0.8, release: 0.8 }
+            envelope: { attack: 0.05, decay: 0.3, sustain: 0.8, release: 1.6 }
         }).toDestination();
         fundamentalSynthMob.volume.value = -3;
 
         const textureSynthMob = new this.Tone.MonoSynth({
             oscillator: { type: 'sawtooth' },
-            envelope: { attack: 0.08, decay: 0.4, sustain: 0.6, release: 0.8 }
+            envelope: { attack: 0.08, decay: 0.4, sustain: 0.6, release: 1.6 }
         }).toDestination();
         textureSynthMob.volume.value = -12;
 
