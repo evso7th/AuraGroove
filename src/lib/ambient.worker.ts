@@ -255,6 +255,7 @@ const Scheduler = {
     },
 
     tick() {
+        console.log(`[WORKER_TRACE] Scheduler.tick() called for bar ${this.barCount}`);
         let drumScore: DrumNote[] = [];
         let soloScore: SynthNote[] = [];
         let accompanimentScore: SynthNote[] = [];
@@ -296,6 +297,7 @@ const Scheduler = {
 // --- MessageBus (The entry point) ---
 self.onmessage = async (event: MessageEvent<WorkerCommand>) => {
     const { command, data } = event.data;
+    console.log(`[WORKER_TRACE] Received command: ${command}`);
 
     try {
         switch (command) {

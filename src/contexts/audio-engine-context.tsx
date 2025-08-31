@@ -107,6 +107,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
       
       worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
         const { type, data } = event.data;
+        console.log('[CONTEXT_TRACE] Received message from worker:', type, data);
         if (type === 'score' && managersRef.current && toneRef.current) {
             const T = toneRef.current;
             const { drumMachine, soloManager, accompanimentManager, bassManager } = managersRef.current;
@@ -131,6 +132,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
 
       // --- Create the main transport loop ---
       tickLoopRef.current = new T.Loop((time) => {
+        console.log('[CONTEXT_TRACE] TickLoop: Sending tick to worker...');
         if (workerRef.current) {
             workerRef.current.postMessage({ command: 'tick' });
         }
@@ -150,12 +152,14 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
           const T = toneRef.current;
           
           if (isPlaying) {
+            console.log('[CONTEXT_TRACE] setIsPlaying(true): Attempting to start transport and loop.');
             if (T.Transport.state !== 'started') {
                  tickLoopRef.current?.start(0);
                  T.Transport.start();
                  console.log('[CONTEXT_TRACE] Tone.Transport started.');
             }
           } else {
+             console.log('[CONTEXT_TRACE] setIsPlaying(false): Attempting to stop transport and reset.');
              if (T.Transport.state === 'started') {
                 T.Transport.stop();
                 T.Transport.cancel(0); // Clear all scheduled events
