@@ -5,9 +5,9 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAudioEngine } from '@/contexts/audio-engine-context';
 import { Button } from '@/components/ui/button';
-import Logo from '@/components/icons';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Music, Loader2 } from 'lucide-react';
+import Image from 'next/image';
 
 export default function Home() {
   const { initialize, isInitializing, isInitialized } = useAudioEngine();
@@ -29,7 +29,7 @@ export default function Home() {
       <Card className="w-full max-w-lg shadow-2xl text-center">
         <CardHeader>
           <div className="mx-auto mb-4">
-            <Logo className="h-20 w-20" />
+            <Image src="/assets/icon8.jpeg" alt="AuraGroove Logo" width={80} height={80} className="rounded-full" />
           </div>
           <CardTitle className="font-headline text-4xl">Welcome to AuraGroove</CardTitle>
           <CardDescription className="text-lg">Your personal AI-powered ambient music generator.</CardDescription>
