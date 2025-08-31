@@ -56,7 +56,7 @@ export type InstrumentSettings = {
       volume: number; // 0-1
   };
   bass: {
-      name: 'bassGuitar' | 'BassGroove' | 'none';
+      name: 'bassGuitar' | 'BassGroove' | 'portamento' | 'none';
       volume: number; // 0-1
   };
 };

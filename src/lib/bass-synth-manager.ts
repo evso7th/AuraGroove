@@ -1,7 +1,7 @@
 
 import type { ToneJS, SynthNote } from '@/types/music';
 
-type BassInstrument = 'bassGuitar' | 'BassGroove' | 'none';
+type BassInstrument = 'bassGuitar' | 'BassGroove' | 'portamento' | 'none';
 
 export class BassSynthManager {
     private Tone: ToneJS;
@@ -11,8 +11,9 @@ export class BassSynthManager {
             fundamental: any;
             texture: any;
         };
+        portamento?: any;
     } = {};
-    private activeInstrument: BassInstrument = 'bassGuitar';
+    private activeInstrument: BassInstrument = 'portamento';
 
     constructor(Tone: ToneJS) {
         this.Tone = Tone;
@@ -28,6 +29,16 @@ export class BassSynthManager {
             filterEnvelope: { attack: 0.06, decay: 0.2, sustain: 0.5, release: 2, baseFrequency: 200, octaves: 7 }
         }).toDestination();
         this.synths.bassGuitar.volume.value = -3;
+
+        // Portamento Preset (based on bassGuitar)
+        this.synths.portamento = new this.Tone.MonoSynth({
+            portamento: 0.1, // Add portamento for smooth note transitions
+            oscillator: { type: 'fmsine' },
+            envelope: { attack: 0.05, decay: 0.3, sustain: 0.4, release: 1.5 }, // Longer release
+            filterEnvelope: { attack: 0.06, decay: 0.2, sustain: 0.5, release: 2.5, baseFrequency: 200, octaves: 7 } // Longer filter release
+        }).toDestination();
+        this.synths.portamento.volume.value = -3;
+
 
         // BassGroove Layered Preset
         const bassDrive = new this.Tone.Distortion(0.05).toDestination();
@@ -66,6 +77,8 @@ export class BassSynthManager {
 
             if (this.activeInstrument === 'bassGuitar' && this.synths.bassGuitar) {
                 this.synths.bassGuitar.triggerAttackRelease(noteName, duration, scheduledTime, velocity);
+            } else if (this.activeInstrument === 'portamento' && this.synths.portamento) {
+                this.synths.portamento.triggerAttackRelease(noteName, duration, scheduledTime, velocity);
             } else if (this.activeInstrument === 'BassGroove' && this.synths.bassGroove) {
                 
                 console.log(`[BassGroove TRACE] Scheduling Fundamental: Note=${noteName}, Vel=${velocity.toFixed(2)}, Time=${scheduledTime.toFixed(2)}`);
