@@ -64,11 +64,15 @@ export class BassSynthManager {
         // BassGroove Layered Preset
         const bassDrive = new this.Tone.Distortion(0.05).toDestination();
         const textureChorus = new this.Tone.Chorus(0.5, 3.5, 0.7).toDestination();
+        const bassGrooveReverb = new this.Tone.Reverb({
+            decay: 4,
+            wet: 0.3
+        }).connect(bassDrive);
         
         const fundamentalSynth = new this.Tone.MonoSynth({
             oscillator: { type: 'sine' },
-            envelope: { attack: 0.05, decay: 0.3, sustain: 0.8, release: 1.6 }
-        }).connect(bassDrive);
+            envelope: { attack: 0.05, decay: 0.3, sustain: 0.8, release: 4.0 }
+        }).connect(bassGrooveReverb);
         fundamentalSynth.volume.value = -3;
 
         const textureSynth = new this.Tone.MonoSynth({
