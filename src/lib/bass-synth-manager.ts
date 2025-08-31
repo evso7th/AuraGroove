@@ -1,7 +1,7 @@
 
 import type { ToneJS, SynthNote } from '@/types/music';
 
-type BassInstrument = 'bassGuitar' | 'BassGroove' | 'portamento' | 'none';
+type BassInstrument = 'bassGuitar' | 'BassGroove' | 'portamento' | 'portamentoMob' | 'none';
 
 export class BassSynthManager {
     private Tone: ToneJS;
@@ -12,9 +12,11 @@ export class BassSynthManager {
             texture: any;
         };
         portamento?: any;
+        portamentoMob?: any;
     } = {};
     private activeInstrument: BassInstrument = 'portamento';
     private isPortamentoPlaying = false;
+    private isPortamentoMobPlaying = false;
 
     constructor(Tone: ToneJS) {
         this.Tone = Tone;
@@ -44,6 +46,19 @@ export class BassSynthManager {
             filterEnvelope: { attack: 0.06, decay: 0.2, sustain: 0.5, release: 5.0, baseFrequency: 200, octaves: 7 } // Increased filter release
         }).connect(portamentoReverb);
         this.synths.portamento.volume.value = -3;
+        
+        // PortamentoMob Preset - exact copy for now
+        const portamentoMobReverb = new this.Tone.Reverb({
+            decay: 6,
+            wet: 0.4
+        }).toDestination();
+        this.synths.portamentoMob = new this.Tone.MonoSynth({
+            portamento: 0.1, 
+            oscillator: { type: 'fmsine' },
+            envelope: { attack: 0.05, decay: 0.3, sustain: 0.4, release: 4.0 },
+            filterEnvelope: { attack: 0.06, decay: 0.2, sustain: 0.5, release: 5.0, baseFrequency: 200, octaves: 7 }
+        }).connect(portamentoMobReverb);
+        this.synths.portamentoMob.volume.value = -3;
 
 
         // BassGroove Layered Preset
@@ -73,6 +88,10 @@ export class BassSynthManager {
            this.synths.portamento?.triggerRelease();
            this.isPortamentoPlaying = false;
        }
+       if (this.activeInstrument === 'portamentoMob' && name !== 'portamentoMob' && this.isPortamentoMobPlaying) {
+           this.synths.portamentoMob?.triggerRelease();
+           this.isPortamentoMobPlaying = false;
+       }
        this.activeInstrument = name;
     }
 
@@ -82,6 +101,10 @@ export class BassSynthManager {
                 this.synths.portamento?.triggerRelease(time);
                 this.isPortamentoPlaying = false;
             }
+             if (this.isPortamentoMobPlaying) {
+                this.synths.portamentoMob?.triggerRelease(time);
+                this.isPortamentoMobPlaying = false;
+            }
             return;
         }
 
@@ -89,6 +112,10 @@ export class BassSynthManager {
             if (this.activeInstrument === 'portamento' && this.isPortamentoPlaying) {
                 this.synths.portamento?.triggerRelease(time);
                 this.isPortamentoPlaying = false;
+            }
+            if (this.activeInstrument === 'portamentoMob' && this.isPortamentoMobPlaying) {
+                this.synths.portamentoMob?.triggerRelease(time);
+                this.isPortamentoMobPlaying = false;
             }
             return;
         }
@@ -106,10 +133,21 @@ export class BassSynthManager {
                 } else {
                     this.synths.portamento.setNote(noteName, scheduledTime);
                 }
+            } else if (this.activeInstrument === 'portamentoMob' && this.synths.portamentoMob) {
+                 if (!this.isPortamentoMobPlaying) {
+                    this.synths.portamentoMob.triggerAttack(noteName, scheduledTime, velocity);
+                    this.isPortamentoMobPlaying = true;
+                } else {
+                    this.synths.portamentoMob.setNote(noteName, scheduledTime);
+                }
             } else {
                  if (this.isPortamentoPlaying) {
                     this.synths.portamento?.triggerRelease(time);
                     this.isPortamentoPlaying = false;
+                }
+                 if (this.isPortamentoMobPlaying) {
+                    this.synths.portamentoMob?.triggerRelease(time);
+                    this.isPortamentoMobPlaying = false;
                 }
                 if (this.activeInstrument === 'bassGuitar' && this.synths.bassGuitar) {
                     this.synths.bassGuitar.triggerAttackRelease(noteName, duration, scheduledTime, velocity);
@@ -127,7 +165,10 @@ export class BassSynthManager {
             this.synths.portamento?.triggerRelease();
             this.isPortamentoPlaying = false;
         }
-        // These might not be playing, but calling triggerRelease is safe.
+        if (this.isPortamentoMobPlaying) {
+            this.synths.portamentoMob?.triggerRelease();
+            this.isPortamentoMobPlaying = false;
+        }
         this.synths.bassGuitar?.triggerRelease();
         this.synths.bassGroove?.fundamental.triggerRelease();
         this.synths.bassGroove?.texture.triggerRelease();
