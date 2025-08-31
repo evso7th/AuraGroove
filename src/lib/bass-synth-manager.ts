@@ -24,15 +24,15 @@ export class BassSynthManager {
         }).toDestination();
         this.presets.set('bassGuitar', { type: 'simple', synth: bassGuitarSynth });
 
-        // --- PRESET 2: 'bass_synth' (Layered with two independent PolySynths) ---
-        const subOsc = new this.Tone.PolySynth(this.Tone.Synth, {
+        // --- PRESET 2: 'bass_synth' (Layered with two independent MonoSynths) ---
+        const subOsc = new this.Tone.MonoSynth({
             oscillator: { type: 'sine' },
             envelope: { attack: 0.01, decay: 0.2, sustain: 0.9, release: 1.0 }
         });
         const subDistortion = new this.Tone.Distortion(0.05).toDestination();
         subOsc.connect(subDistortion);
 
-        const charOsc = new this.Tone.PolySynth(this.Tone.Synth, {
+        const charOsc = new this.Tone.MonoSynth({
             oscillator: { type: 'sawtooth' },
             envelope: { attack: 0.05, decay: 0.3, sustain: 0.4, release: 0.8 }
         });
