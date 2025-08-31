@@ -99,7 +99,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
       managersRef.current = {
           drumMachine: new DrumMachine(T),
           soloManager: new SoloSynthManager(T),
-          accompanimentManager: new AccompanimentSynthManager(T, deviceType),
+          accompanimentManager: new AccompanimentSynthManager(T, 'mobile'),
           bassManager: new BassSynthManager(T),
           effectsManager: new EffectsSynthManager(T),
       };
