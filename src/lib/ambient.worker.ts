@@ -56,20 +56,23 @@ class EvolutionEngine {
 
 
     generateDrumScore(bar: number, settings: {volume: number}): DrumNote[] {
-         if (bar % 2 === 0) {
-            return [
-                { sample: 'kick', time: 0, velocity: 1.0 * settings.volume },
-                { sample: 'hat', time: 1, velocity: 0.4 * settings.volume },
-                { sample: 'snare', time: 2, velocity: 0.8 * settings.volume },
-                { sample: 'hat', time: 3, velocity: 0.4 * settings.volume },
-            ];
-         }
-         return [
-                { sample: 'kick', time: 0, velocity: 1.0 * settings.volume },
-                { sample: 'hat', time: 1.5, velocity: 0.3 * settings.volume },
-                { sample: 'kick', time: 2, velocity: 0.9 * settings.volume },
-                { sample: 'snare', time: 3, velocity: 0.7 * settings.volume },
-         ]
+        const score: DrumNote[] = [];
+        const vol = settings.volume;
+
+        // Bass and Kick in unison
+        score.push({ sample: 'kick', time: 0, velocity: 1.0 * vol });
+        score.push({ sample: 'hat', time: 1, velocity: 0.4 * vol });
+        score.push({ sample: 'snare', time: 2, velocity: 0.8 * vol });
+        score.push({ sample: 'hat', time: 3, velocity: 0.4 * vol });
+
+        // Simple fill with crash every 8 bars
+        if (bar % 8 === 7) {
+             score.push({ sample: 'kick', time: 1, velocity: 0.7 * vol });
+             // Replace snare with crash
+             score[2] = { sample: 'crash', time: 3, velocity: 0.6 * vol };
+        }
+
+        return score;
     }
     
     generateAccompanimentScore(bar: number, settings: WorkerSettings, barDuration: number): SynthNote[] {
@@ -261,3 +264,5 @@ self.onmessage = async (event: MessageEvent<WorkerCommand>) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
+
+    
