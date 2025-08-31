@@ -1,13 +1,17 @@
 
 import type { ToneJS, SynthNote } from '@/types/music';
 
-type BassInstrument = 'bassGuitar' | 'BassGroove' | 'portamento' | 'portamentoMob' | 'none';
+type BassInstrument = 'bassGuitar' | 'BassGroove' | 'portamento' | 'portamentoMob' | 'BassGrooveMob' | 'none';
 
 export class BassSynthManager {
     private Tone: ToneJS;
     private synths: {
         bassGuitar?: any;
         bassGroove?: {
+            fundamental: any;
+            texture: any;
+        };
+        bassGrooveMob?: {
             fundamental: any;
             texture: any;
         };
@@ -47,11 +51,7 @@ export class BassSynthManager {
         }).connect(portamentoReverb);
         this.synths.portamento.volume.value = -3;
         
-        // PortamentoMob Preset - exact copy for now
-        /* const portamentoMobReverb = new this.Tone.Reverb({
-            decay: 6,
-            wet: 0.4
-        }).toDestination(); */
+        // PortamentoMob Preset - without reverb for performance
         this.synths.portamentoMob = new this.Tone.MonoSynth({
             portamento: 0.1, 
             oscillator: { type: 'fmsine' },
@@ -80,6 +80,27 @@ export class BassSynthManager {
         this.synths.bassGroove = {
             fundamental: fundamentalSynth,
             texture: textureSynth
+        };
+        
+        // BassGrooveMob - Identical copy for experimentation
+        const bassDriveMob = new this.Tone.Distortion(0.05).toDestination();
+        const textureChorusMob = new this.Tone.Chorus(0.5, 3.5, 0.7).toDestination();
+        
+        const fundamentalSynthMob = new this.Tone.MonoSynth({
+            oscillator: { type: 'sine' },
+            envelope: { attack: 0.05, decay: 0.3, sustain: 0.8, release: 0.8 }
+        }).connect(bassDriveMob);
+        fundamentalSynthMob.volume.value = -3;
+
+        const textureSynthMob = new this.Tone.MonoSynth({
+            oscillator: { type: 'sawtooth' },
+            envelope: { attack: 0.08, decay: 0.4, sustain: 0.6, release: 0.8 }
+        }).connect(textureChorusMob);
+        textureSynthMob.volume.value = -12;
+
+        this.synths.bassGrooveMob = {
+            fundamental: fundamentalSynthMob,
+            texture: textureSynthMob
         };
     }
 
@@ -155,6 +176,10 @@ export class BassSynthManager {
                     this.synths.bassGroove.fundamental.triggerAttackRelease(noteName, duration, scheduledTime, velocity);
                     const textureNote = this.Tone.Frequency(noteName).transpose(12).toNote();
                     this.synths.bassGroove.texture.triggerAttackRelease(textureNote, duration, scheduledTime, velocity * 0.5);
+                } else if (this.activeInstrument === 'BassGrooveMob' && this.synths.bassGrooveMob) {
+                    this.synths.bassGrooveMob.fundamental.triggerAttackRelease(noteName, duration, scheduledTime, velocity);
+                    const textureNote = this.Tone.Frequency(noteName).transpose(12).toNote();
+                    this.synths.bassGrooveMob.texture.triggerAttackRelease(textureNote, duration, scheduledTime, velocity * 0.5);
                 }
             }
         });
@@ -172,5 +197,7 @@ export class BassSynthManager {
         this.synths.bassGuitar?.triggerRelease();
         this.synths.bassGroove?.fundamental.triggerRelease();
         this.synths.bassGroove?.texture.triggerRelease();
+        this.synths.bassGrooveMob?.fundamental.triggerRelease();
+        this.synths.bassGrooveMob?.texture.triggerRelease();
     }
 }
