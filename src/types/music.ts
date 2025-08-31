@@ -48,7 +48,7 @@ export type SynthNote = {
 // --- UI Types ---
 export type InstrumentSettings = {
   solo: {
-      name: 'synthesizer' | 'piano' | 'organ' | 'none';
+      name: 'synthesizer' | 'piano' | 'organ' | 'mellotron' | 'none';
       volume: number; // 0-1
   };
   accompaniment: {

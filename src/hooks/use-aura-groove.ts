@@ -32,7 +32,7 @@ export const useAuraGroove = () => {
       if (engine && isInitialized) {
           engine.accompanimentManager.setInstrument(instrumentSettings.accompaniment.name);
           engine.bassManager.setInstrument(instrumentSettings.bass.name);
-          // engine.soloManager.setInstrument(instrumentSettings.solo.name);
+          engine.soloManager.setInstrument(instrumentSettings.solo.name);
       }
   }, [instrumentSettings.accompaniment, instrumentSettings.solo, instrumentSettings.bass, engine, isInitialized]);
 

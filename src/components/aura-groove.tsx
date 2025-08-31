@@ -139,6 +139,7 @@ export function AuraGroove({
                                 <SelectItem value="synthesizer">Synthesizer</SelectItem>
                                 <SelectItem value="piano">Piano</SelectItem>
                                 <SelectItem value="organ">Organ</SelectItem>
+                                <SelectItem value="mellotron">Mellotron</SelectItem>
                              </>}
                           </SelectContent>
                         </Select>
