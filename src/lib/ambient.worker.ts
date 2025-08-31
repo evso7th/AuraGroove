@@ -46,9 +46,14 @@ class DrumGenerator {
 }
 
 class EvolutionEngine {
-    private textureNotes: { note: string; part: 'solo' | 'accompaniment'; releaseTime: number }[] = [];
-    private readonly MAX_TEXTURE_NOTES = 6; // 4 for accompaniment, 2 for solo
-    private readonly TARGET_DENSITY = 3; // Try to keep 3 notes sounding at once
+    private accompanimentVoices: { note: string; releaseTime: number; }[] = [];
+    private readonly MAX_ACCOMPANIMENT_VOICES = 4;
+    private readonly TARGET_ACCOMPANIMENT_DENSITY = 2.5;
+    
+    private soloLastNote: string | null = 'C5';
+    private readonly harmonyNotes = ['C4', 'D4', 'E4', 'G4', 'A4', 'C5', 'D5'];
+    private readonly soloNotes = ['C5', 'D5', 'E5', 'G5', 'A5', 'C6'];
+
 
     generateDrumScore(bar: number, settings: {volume: number}): DrumNote[] {
          if (bar % 2 === 0) {
@@ -67,71 +72,92 @@ class EvolutionEngine {
          ]
     }
     
-    generateTextureScores(bar: number, settings: WorkerSettings, barDuration: number): { soloScore: SynthNote[], accompanimentScore: SynthNote[] } {
-        const soloSettings = settings.instrumentSettings?.solo;
+    generateAccompanimentScore(bar: number, settings: WorkerSettings, barDuration: number): SynthNote[] {
         const accompanimentSettings = settings.instrumentSettings?.accompaniment;
-
-        const soloScore: SynthNote[] = [];
-        const accompanimentScore: SynthNote[] = [];
-        const harmonyNotes = ['C4', 'E4', 'G4', 'B4', 'D5', 'F5']; // Expanded harmony
+        if (accompanimentSettings?.name === 'none') return [];
         
+        const score: SynthNote[] = [];
         const now = bar * barDuration;
 
         // 1. Clean up old notes
-        this.textureNotes = this.textureNotes.filter(n => n.releaseTime > now);
+        this.accompanimentVoices = this.accompanimentVoices.filter(v => v.releaseTime > now);
 
         // 2. Generate new notes to maintain density
-        let currentDensity = this.textureNotes.length;
+        let currentDensity = this.accompanimentVoices.length;
         
-        for (let i = 0; i < 4; i++) { // Check 4 times per bar (once per beat)
-            if (currentDensity < this.TARGET_DENSITY && this.textureNotes.length < this.MAX_TEXTURE_NOTES) {
-                
-                const timeOffset = i * (barDuration / 4);
-                const isSoloMoment = Math.random() < 0.25 && soloSettings?.name !== 'none';
-
-                let newNote: SynthNote;
-                
-                if (isSoloMoment) {
-                     newNote = {
-                        note: harmonyNotes[Math.floor(Math.random() * harmonyNotes.length)],
-                        duration: barDuration * 1.5,
-                        time: i, // time in beats
-                        velocity: (0.6 + Math.random() * 0.2) * (soloSettings?.volume ?? 0.8)
-                    };
-                    soloScore.push(newNote);
-                    this.textureNotes.push({ note: newNote.note, part: 'solo', releaseTime: now + timeOffset + newNote.duration });
-
-                } else if (accompanimentSettings?.name !== 'none') {
-                    newNote = {
-                        note: harmonyNotes[Math.floor(Math.random() * harmonyNotes.length)],
-                        duration: barDuration * 2, // Longer notes for accompaniment
-                        time: i, // time in beats
+        for (let beat = 0; beat < 4; beat++) {
+            if (currentDensity < this.TARGET_ACCOMPANIMENT_DENSITY && this.accompanimentVoices.length < this.MAX_ACCOMPANIMENT_VOICES) {
+                if (Math.random() > 0.4) { // Don't add a note on every beat
+                    const timeOffset = beat * (barDuration / 4);
+                    const noteName = this.harmonyNotes[Math.floor(Math.random() * this.harmonyNotes.length)];
+                    const duration = barDuration * (1.5 + Math.random());
+                    
+                    const newNote: SynthNote = {
+                        note: noteName,
+                        duration: duration,
+                        time: beat, // time in beats
                         velocity: (0.4 + Math.random() * 0.2) * (accompanimentSettings?.volume ?? 0.7)
                     };
-                    accompanimentScore.push(newNote);
-                    this.textureNotes.push({ note: newNote.note, part: 'accompaniment', releaseTime: now + timeOffset + newNote.duration });
+                    score.push(newNote);
+                    this.accompanimentVoices.push({ note: newNote.note, releaseTime: now + timeOffset + duration });
+                    currentDensity++;
                 }
-                
-                currentDensity++;
             }
         }
-        
-        return { soloScore, accompanimentScore };
+        return score;
     }
     
+    generateSoloScore(bar: number, settings: WorkerSettings, barDuration: number): SynthNote[] {
+        const soloSettings = settings.instrumentSettings?.solo;
+        if (soloSettings?.name === 'none') return [];
+
+        const score: SynthNote[] = [];
+
+        // Generate a continuous melody line
+        for (let beat = 0; beat < 4; beat++) {
+            // Stepwise motion
+            const lastNoteIndex = this.soloNotes.indexOf(this.soloLastNote || 'C5');
+            let nextNoteIndex;
+            if (lastNoteIndex === -1) {
+                nextNoteIndex = Math.floor(this.soloNotes.length / 2);
+            } else {
+                const direction = Math.random() < 0.5 ? -1 : 1;
+                nextNoteIndex = lastNoteIndex + direction;
+            }
+
+            // Boundary checks
+            if (nextNoteIndex < 0) nextNoteIndex = 1;
+            if (nextNoteIndex >= this.soloNotes.length) nextNoteIndex = this.soloNotes.length - 2;
+            
+            const nextNoteName = this.soloNotes[nextNoteIndex];
+            this.soloLastNote = nextNoteName;
+
+            const newNote: SynthNote = {
+                note: nextNoteName,
+                duration: barDuration / 2, // longer notes
+                time: beat,
+                velocity: (0.6 + Math.random() * 0.2) * (soloSettings?.volume ?? 0.8)
+            };
+            score.push(newNote);
+        }
+
+        return score;
+    }
+
     generateBassScore(bar: number, settings: WorkerSettings): SynthNote[] {
         const instrumentName = settings.instrumentSettings?.bass?.name;
         if (instrumentName === 'none') {
             return [];
         }
         const volume = settings.instrumentSettings?.bass?.volume ?? 0.9;
-        const note = bar % 4 < 2 ? 'C2' : 'G1'; // Simple I-V progression
+        // Brighter, more positive I-vi progression
+        const note = bar % 4 < 2 ? 'C2' : 'A1'; 
         
         return [{
             note: note,
-            duration: 4,
+            duration: 4, // Whole note duration in beats
             time: 0,
-            velocity: 1.0 * volume
+            velocity: 0.9 * volume
         }];
     }
 }
@@ -196,11 +222,8 @@ const Scheduler = {
         }
         
         bassScore = this.evolutionEngine.generateBassScore(this.barCount, this.settings);
-        
-        // Generate texture scores together
-        const textureScores = this.evolutionEngine.generateTextureScores(this.barCount, this.settings, this.barDuration);
-        soloScore = textureScores.soloScore;
-        accompanimentScore = textureScores.accompanimentScore;
+        accompanimentScore = this.evolutionEngine.generateAccompanimentScore(this.barCount, this.settings, this.barDuration);
+        soloScore = this.evolutionEngine.generateSoloScore(this.barCount, this.settings, this.barDuration);
 
 
         const messageData = {

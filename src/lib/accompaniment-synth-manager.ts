@@ -26,7 +26,7 @@ export class AccompanimentSynthManager {
             const options: any = {
                 'synthesizer': {
                     oscillator: { type: 'fmsine', harmonicity: 1.2 },
-                    envelope: { attack: 0.1, decay: 0.2, sustain: 0.5, release: 1.5 }
+                    envelope: { attack: 0.1, decay: 0.2, sustain: 0.5, release: 2.0 }
                 },
                 'organ': {
                      oscillator: { type: 'fatsawtooth', count: 3 },
