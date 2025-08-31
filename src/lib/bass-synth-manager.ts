@@ -31,13 +31,18 @@ export class BassSynthManager {
         }).toDestination();
         this.synths.bassGuitar.volume.value = -3;
 
-        // Portamento Preset (based on bassGuitar)
-        this.synths.portamento = new this.Tone.MonoSynth({
-            portamento: 0.1, // Add portamento for smooth note transitions
-            oscillator: { type: 'fmsine' },
-            envelope: { attack: 0.05, decay: 0.3, sustain: 0.4, release: 2.0 }, // Longer release
-            filterEnvelope: { attack: 0.06, decay: 0.2, sustain: 0.5, release: 3.0, baseFrequency: 200, octaves: 7 } // Longer filter release
+        // Portamento Preset with its own reverb for atmospheric decay
+        const portamentoReverb = new this.Tone.Reverb({
+            decay: 6, // Long decay for atmospheric feel
+            wet: 0.4  // Mix of dry/wet signal
         }).toDestination();
+
+        this.synths.portamento = new this.Tone.MonoSynth({
+            portamento: 0.1, 
+            oscillator: { type: 'fmsine' },
+            envelope: { attack: 0.05, decay: 0.3, sustain: 0.4, release: 4.0 }, // Increased release
+            filterEnvelope: { attack: 0.06, decay: 0.2, sustain: 0.5, release: 5.0, baseFrequency: 200, octaves: 7 } // Increased filter release
+        }).connect(portamentoReverb);
         this.synths.portamento.volume.value = -3;
 
 
@@ -64,7 +69,7 @@ export class BassSynthManager {
     }
 
     public setInstrument(name: BassInstrument) {
-       if (name !== 'portamento' && this.isPortamentoPlaying) {
+       if (this.activeInstrument === 'portamento' && name !== 'portamento' && this.isPortamentoPlaying) {
            console.log('[Portamento TRACE] Switching instrument. Forcing release...');
            this.synths.portamento?.triggerRelease();
            this.isPortamentoPlaying = false;
@@ -75,7 +80,6 @@ export class BassSynthManager {
     public schedule(score: SynthNote[], time: number) {
         if (this.activeInstrument === 'none') {
              if (this.isPortamentoPlaying) {
-                console.log('[Portamento TRACE] Instrument is none. Forcing release...');
                 this.synths.portamento?.triggerRelease(time);
                 this.isPortamentoPlaying = false;
             }
