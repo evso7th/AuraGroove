@@ -1,95 +1,165 @@
 
-import type { ToneJS, SynthNote } from '@/types/music';
+
+import type { ToneJS, SynthNote, AudioProfile } from '@/types/music';
+
+type InstrumentName = 'synthesizer' | 'piano' | 'organ' | 'mellotron' | 'none';
 
 /**
  * Manages a pool of monophonic synthesizers to play the accompaniment part.
- * This approach avoids using the resource-intensive PolySynth, ensuring better performance
- * on mobile devices by playing overlapping monophonic lines.
+ * This manager now supports audio profiles to deliver optimized presets for
+ * desktop (high-quality with effects) and mobile (performant, no effects).
  */
 export class AccompanimentSynthManager {
     private Tone: ToneJS;
     private synths: any[] = [];
-    private readonly voiceCount = 4; // Fixed pool of 4 voices.
+    private readonly voiceCount = 4;
     private nextVoiceIndex = 0;
-    private currentInstrument: string;
+    private currentInstrument: InstrumentName;
+    private activePresets: Record<string, any>;
+    private profile: AudioProfile;
 
-    constructor(Tone: ToneJS) {
+    private desktopPresets: Record<string, any>;
+    private mobilePresets: Record<string, any>;
+
+    constructor(Tone: ToneJS, profile: AudioProfile) {
         this.Tone = Tone;
+        this.profile = profile;
         this.currentInstrument = 'synthesizer';
-        this.createPresets();
+        
+        this.desktopPresets = this.createDesktopPresets();
+        this.mobilePresets = this.createMobilePresets();
+
+        this.activePresets = this.profile === 'desktop' ? this.desktopPresets : this.mobilePresets;
+        console.log(`[AccompanimentSynthManager] Initialized with '${this.profile}' profile.`);
+        
+        this.createSynthPool();
     }
 
-    private createPresets() {
-        this.synths = []; // Clear existing synths
-
-        const createSynthPreset = (type: string) => {
-            const options: any = {
-                'synthesizer': {
-                    oscillator: { type: 'fmsine', harmonicity: 1.2 },
-                    envelope: { attack: 0.1, decay: 0.2, sustain: 0.5, release: 2.0 }
+    private createDesktopPresets() {
+        const chorus = new this.Tone.Chorus(0.5, 3.5, 0.7).toDestination();
+        return {
+            'synthesizer': {
+                type: 'FMSynth',
+                options: {
+                    harmonicity: 1.2,
+                    envelope: { attack: 0.1, decay: 0.2, sustain: 0.5, release: 2.0 },
+                    modulation: { type: 'sine' },
                 },
-                'organ': {
+                effects: [chorus]
+            },
+            'organ': {
+                 type: 'MonoSynth',
+                 options: {
                      oscillator: { type: 'fatsawtooth', count: 3 },
                      envelope: { attack: 0.1, decay: 0.2, sustain: 0.7, release: 2.0 }
+                 },
+                 effects: []
+            },
+            'piano': {
+                type: 'FMSynth',
+                options: {
+                    harmonicity: 3.01,
+                    modulationIndex: 14,
+                    envelope: { attack: 0.02, decay: 0.3, sustain: 0.1, release: 1.5 },
                 },
-                'piano': {
-                    type: 'FMSynth',
-                    options: {
-                        harmonicity: 3.01,
-                        modulationIndex: 14,
-                        envelope: { attack: 0.02, decay: 0.3, sustain: 0.1, release: 1.5 },
-                    }
+                effects: []
+            },
+            'mellotron': {
+                 type: 'FMSynth',
+                 options: {
+                    harmonicity: 3,
+                    modulationIndex: 0.5,
+                    oscillator: { type: "sine" },
+                    envelope: { attack: 0.2, decay: 0.2, sustain: 0.4, release: 1.8 },
+                    modulation: { type: "sine" },
+                    modulationEnvelope: { attack: 0.3, decay: 0.5, sustain: 0.1, release: 1.8 }
                 },
-                'mellotron': {
-                     type: 'FMSynth',
-                     options: {
-                        harmonicity: 3,
-                        modulationIndex: 0.5,
-                        oscillator: { type: "sine" },
-                        envelope: { attack: 0.2, decay: 0.2, sustain: 0.4, release: 1.8 },
-                        modulation: { type: "sine" },
-                        modulationEnvelope: { attack: 0.3, decay: 0.5, sustain: 0.1, release: 1.8 }
-                    }
-                }
-            };
-
-            const preset = options[type as keyof typeof options];
-            
-            for (let i = 0; i < this.voiceCount; i++) {
-                 let synth;
-                 if (preset.type === 'FMSynth') {
-                    synth = new this.Tone.FMSynth(preset.options).toDestination();
-                 } else {
-                    synth = new this.Tone.MonoSynth(preset).toDestination();
-                 }
-                 synth.volume.value = -9; // Quieter to avoid clipping with overlapping notes
-                 this.synths.push(synth);
+                effects: []
             }
-        }
-
-        createSynthPreset(this.currentInstrument);
+        };
     }
 
-    public setInstrument(name: 'synthesizer' | 'piano' | 'organ' | 'mellotron' | 'none') {
+    private createMobilePresets() {
+        return {
+            'synthesizer': {
+                type: 'MonoSynth', // Simpler synth for mobile
+                options: {
+                    oscillator: { type: 'fmsine' }, // Less complex oscillator
+                    envelope: { attack: 0.1, decay: 0.2, sustain: 0.5, release: 1.2 } // Shorter release
+                },
+                effects: []
+            },
+            'organ': {
+                 type: 'MonoSynth',
+                 options: {
+                     oscillator: { type: 'fatsawtooth', count: 3 },
+                     envelope: { attack: 0.1, decay: 0.2, sustain: 0.7, release: 1.2 }
+                 },
+                 effects: []
+            },
+            'piano': {
+                type: 'FMSynth',
+                options: {
+                    harmonicity: 3.01,
+                    modulationIndex: 14,
+                    envelope: { attack: 0.02, decay: 0.3, sustain: 0.1, release: 1.0 }, // Shorter release
+                },
+                effects: []
+            },
+            'mellotron': {
+                 type: 'FMSynth',
+                 options: {
+                    harmonicity: 3,
+                    modulationIndex: 0.5,
+                    oscillator: { type: "sine" },
+                    envelope: { attack: 0.2, decay: 0.2, sustain: 0.4, release: 1.2 },
+                    modulation: { type: "sine" },
+                    modulationEnvelope: { attack: 0.3, decay: 0.5, sustain: 0.1, release: 1.2 }
+                },
+                effects: []
+            }
+        };
+    }
+
+    private createSynthPool() {
+        this.synths.forEach(synth => synth.dispose());
+        this.synths = [];
+        
+        const preset = this.activePresets[this.currentInstrument];
+        if (!preset) return;
+
+        for (let i = 0; i < this.voiceCount; i++) {
+             let synth;
+             if (preset.type === 'FMSynth') {
+                synth = new this.Tone.FMSynth(preset.options);
+             } else {
+                synth = new this.Tone.MonoSynth(preset.options);
+             }
+             
+             if (preset.effects && preset.effects.length > 0) {
+                 synth.chain(...preset.effects, this.Tone.Destination);
+             } else {
+                 synth.toDestination();
+             }
+             
+             synth.volume.value = -9;
+             this.synths.push(synth);
+        }
+    }
+
+    public setInstrument(name: InstrumentName) {
+        if (name === this.currentInstrument && name !== 'none') return;
+        
         if (name === 'none') {
-            // Dispose of old synths but don't create new ones
+            this.stopAll();
             this.synths.forEach(synth => synth.dispose());
             this.synths = [];
+        } else {
             this.currentInstrument = name;
-        } else if (this.currentInstrument !== name) {
-            this.currentInstrument = name;
-            // Dispose of old synths before creating new ones
-            this.synths.forEach(synth => synth.dispose());
-            this.createPresets();
+            this.createSynthPool();
         }
     }
 
-    /**
-     * Schedules notes from the score using a round-robin approach on the synth pool.
-     * The worker guarantees that the score length will not exceed the voice count.
-     * @param score - An array of SynthNote objects.
-     * @param time - The transport time to schedule the notes at.
-     */
     public schedule(score: SynthNote[], time: number) {
         if (this.synths.length === 0 || score.length === 0) return;
 
@@ -103,7 +173,6 @@ export class AccompanimentSynthManager {
                     note.velocity
                 );
             }
-            // Move to the next synth in the pool for the next note
             this.nextVoiceIndex = (this.nextVoiceIndex + 1) % this.synths.length;
         });
     }

@@ -1,9 +1,10 @@
 
+
 'use client';
 
 import React, { createContext, useContext, useState, useRef, useCallback } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import type { ToneJS, WorkerCommand, WorkerSettings, DrumNote, SynthNote } from '@/types/music';
+import type { ToneJS, WorkerCommand, WorkerSettings, DrumNote, SynthNote, AudioProfile } from '@/types/music';
 
 // Import the real managers
 import { DrumMachine } from '@/lib/drum-machine';
@@ -11,6 +12,7 @@ import { SoloSynthManager } from '@/lib/solo-synth-manager';
 import { AccompanimentSynthManager } from '@/lib/accompaniment-synth-manager';
 import { BassSynthManager } from '@/lib/bass-synth-manager';
 import { EffectsSynthManager } from '@/lib/effects-synth-manager';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 
 type Score = {
@@ -44,7 +46,7 @@ interface AudioEngineContextType {
   engine: AudioEngine | null;
   isInitialized: boolean;
   isInitializing: boolean;
-  initialize: () => Promise<boolean>;
+  initialize: (audioProfile: AudioProfile) => Promise<boolean>;
   loadingText: string;
 }
 
@@ -77,8 +79,9 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   const lastSettingsRef = useRef<Partial<WorkerSettings>>({});
 
   const { toast } = useToast();
+  const isMobile = useIsMobile();
 
-  const initialize = useCallback(async () => {
+  const initialize = useCallback(async (audioProfile: AudioProfile) => {
     if (isInitialized || isInitializing) return true;
 
     setIsInitializing(true);
@@ -91,10 +94,12 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
 
       // --- Initialize real managers ---
       const T = toneRef.current;
+      const deviceType = isMobile ? 'mobile' : 'desktop';
+
       managersRef.current = {
           drumMachine: new DrumMachine(T),
           soloManager: new SoloSynthManager(T),
-          accompanimentManager: new AccompanimentSynthManager(T),
+          accompanimentManager: new AccompanimentSynthManager(T, deviceType),
           bassManager: new BassSynthManager(T),
           effectsManager: new EffectsSynthManager(T),
       };
@@ -107,7 +112,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
       
       worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
         const { type, data } = event.data;
-        console.log('[CONTEXT_TRACE] Received message from worker:', type, data);
+        // console.log('[CONTEXT_TRACE] Received message from worker:', type, data); // Too noisy
         if (type === 'score' && managersRef.current && toneRef.current) {
             const T = toneRef.current;
             const { drumMachine, soloManager, accompanimentManager, bassManager } = managersRef.current;
@@ -132,7 +137,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
 
       // --- Create the main transport loop ---
       tickLoopRef.current = new T.Loop((time) => {
-        console.log('[CONTEXT_TRACE] TickLoop: Sending tick to worker...');
+        // console.log('[CONTEXT_TRACE] TickLoop: Sending tick to worker...'); // Too noisy
         if (workerRef.current) {
             workerRef.current.postMessage({ command: 'tick' });
         }
@@ -201,7 +206,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         setIsInitializing(false);
         setLoadingText('');
     }
-  }, [isInitialized, isInitializing, toast]);
+  }, [isInitialized, isInitializing, toast, isMobile]);
 
   return (
     <AudioEngineContext.Provider value={{ engine: engineRef.current, isInitialized, isInitializing, initialize, loadingText }}>

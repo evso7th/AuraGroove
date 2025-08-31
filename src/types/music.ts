@@ -6,6 +6,8 @@ import type * as Tone from 'tone';
 
 export type ToneJS = typeof Tone;
 
+export type AudioProfile = 'desktop' | 'mobile';
+
 // --- Types for Worker -> Main Thread Communication ---
 export type AudioChunk = {
     chunk: Float32Array;

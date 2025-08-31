@@ -1,9 +1,11 @@
 
+
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings } from '@/types/music';
+import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings, AudioProfile } from '@/types/music';
 import { useAudioEngine } from "@/contexts/audio-engine-context";
+import { useIsMobile } from "@/hooks/use-mobile";
 import * as Tone from 'tone';
 
 
@@ -14,11 +16,14 @@ export const useAuraGroove = () => {
   const [drumSettings, setDrumSettings] = useState<DrumSettings>({ pattern: 'composer', volume: 0.5 });
   const [instrumentSettings, setInstrumentSettings] = useState<InstrumentSettings>({
     solo: { name: "piano", volume: 0.8 },
-    accompaniment: { name: "mellotron", volume: 0.7 },
+    accompaniment: { name: "synthesizer", volume: 0.7 },
     bass: { name: "portamento", volume: 0.45 },
   });
   const [bpm, setBpm] = useState(75);
   const [score, setScore] = useState<ScoreName>('evolve');
+  const isMobile = useIsMobile();
+  const [audioProfile, setAudioProfile] = useState<AudioProfile>(isMobile ? 'mobile' : 'desktop');
+
 
   const getFullSettings = useCallback((): WorkerSettings => {
     return {
@@ -36,7 +41,7 @@ export const useAuraGroove = () => {
           engine.bassManager.setInstrument(instrumentSettings.bass.name);
           engine.soloManager.setInstrument(instrumentSettings.solo.name);
       }
-  }, [instrumentSettings.accompaniment, instrumentSettings.solo, instrumentSettings.bass, engine, isInitialized]);
+  }, [instrumentSettings.accompaniment.name, instrumentSettings.solo.name, instrumentSettings.bass.name, engine, isInitialized]);
 
   // Update drum volume
   useEffect(() => {

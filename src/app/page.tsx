@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState } from 'react';
@@ -8,15 +9,19 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Music, Loader2 } from 'lucide-react';
 import Image from 'next/image';
+import { useIsMobile } from '@/hooks/use-mobile';
+import type { AudioProfile } from '@/types/music';
 
 export default function Home() {
   const { initialize, isInitializing, isInitialized } = useAudioEngine();
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+  const isMobile = useIsMobile();
+  const audioProfile: AudioProfile = isMobile ? 'mobile' : 'desktop';
 
   const handleStart = async () => {
     setError(null);
-    const success = await initialize();
+    const success = await initialize(audioProfile);
     if (success) {
       router.push('/aura-groove');
     } else {
