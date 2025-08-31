@@ -128,6 +128,7 @@ class EvolutionEngine {
 
             const phraseLength = Math.floor(Math.random() * 3) + 3; // 3-5 notes per phrase
             const noteDuration = 8; // eighth notes
+            const timeOffset = 0.5; // Start on the off-beat to avoid clashing with bass
 
             if (settings.audioProfile === 'mobile') {
                 for (let i = 0; i < phraseLength; i++) {
@@ -135,7 +136,7 @@ class EvolutionEngine {
                     this.accompPhrase.push({
                         note: this.lastMobileAccompNote,
                         duration: noteDuration,
-                        time: i,
+                        time: i + timeOffset,
                         velocity: (0.5 + Math.random() * 0.2) * volume
                     });
                 }
@@ -145,11 +146,11 @@ class EvolutionEngine {
                 
                 for (let i = 0; i < phraseLength; i++) {
                     this.lastRightHandNote = this.getNextNote(this.lastRightHandNote, this.rightHandNotes);
-                    rightHandPhrase.push({ note: this.lastRightHandNote, duration: noteDuration, time: i, velocity: (0.5 + Math.random() * 0.2) * volume });
+                    rightHandPhrase.push({ note: this.lastRightHandNote, duration: noteDuration, time: i + timeOffset, velocity: (0.5 + Math.random() * 0.2) * volume });
 
                     if (i % 2 === 0) { // Left hand plays less frequently
                         this.lastLeftHandNote = this.getNextNote(this.lastLeftHandNote, this.leftHandNotes);
-                        leftHandPhrase.push({ note: this.lastLeftHandNote, duration: noteDuration * 2, time: i, velocity: (0.4 + Math.random() * 0.1) * volume });
+                        leftHandPhrase.push({ note: this.lastLeftHandNote, duration: noteDuration * 2, time: i + timeOffset, velocity: (0.4 + Math.random() * 0.1) * volume });
                     }
                 }
                 
