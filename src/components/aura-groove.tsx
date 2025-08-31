@@ -7,7 +7,6 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import Image from 'next/image';
-import Logo from "@/components/icons";
 import { Slider } from "@/components/ui/slider";
 import type { DrumSettings, EffectsSettings, InstrumentSettings, ScoreName } from '@/types/music';
 
@@ -130,6 +129,7 @@ export function AuraGroove({
                              <SelectItem value="none">None</SelectItem>
                              {part === 'bass' ? <>
                                 <SelectItem value="bassGuitar">Bass Guitar</SelectItem>
+                                <SelectItem value="BassGroove">BassGroove</SelectItem>
                              </> : part === 'accompaniment' ? <>
                                 <SelectItem value="synthesizer">Synthesizer</SelectItem>
                                 <SelectItem value="piano">Piano</SelectItem>

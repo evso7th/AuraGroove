@@ -1,50 +1,76 @@
 
 import type { ToneJS, SynthNote } from '@/types/music';
 
+type BassInstrument = 'bassGuitar' | 'BassGroove' | 'none';
+
 export class BassSynthManager {
     private Tone: ToneJS;
-    private presets: Map<string, any>;
-    private activeSynth: any;
-    private currentInstrument: string;
+    private synths: {
+        bassGuitar?: any;
+        bassGroove?: {
+            fundamental: any;
+            texture: any;
+        };
+    } = {};
+    private activeInstrument: BassInstrument = 'bassGuitar';
 
     constructor(Tone: ToneJS) {
         this.Tone = Tone;
-        this.presets = new Map();
-        this.currentInstrument = 'bassGuitar';
         this.createPresets();
-        this.activeSynth = this.presets.get(this.currentInstrument);
+        this.setInstrument(this.activeInstrument);
     }
 
     private createPresets() {
-        const bassGuitarSynth = new this.Tone.MonoSynth({
+        // Bass Guitar Preset
+        this.synths.bassGuitar = new this.Tone.MonoSynth({
             oscillator: { type: 'fmsine' },
             envelope: { attack: 0.05, decay: 0.3, sustain: 0.4, release: 0.8 },
             filterEnvelope: { attack: 0.06, decay: 0.2, sustain: 0.5, release: 2, baseFrequency: 200, octaves: 7 }
         }).toDestination();
-        this.presets.set('bassGuitar', bassGuitarSynth);
+        this.synths.bassGuitar.volume.value = -3;
+
+        // BassGroove Layered Preset
+        const fundamentalSynth = new this.Tone.MonoSynth({
+            oscillator: { type: 'sine' },
+            envelope: { attack: 0.05, decay: 0.3, sustain: 0.8, release: 0.8 }
+        }).toDestination();
+        fundamentalSynth.volume.value = -3;
+
+        const textureSynth = new this.Tone.MonoSynth({
+            oscillator: { type: 'sawtooth' },
+            envelope: { attack: 0.08, decay: 0.4, sustain: 0.6, release: 0.8 }
+        }).toDestination();
+        textureSynth.volume.value = -12; // Quieter texture layer
+
+        this.synths.bassGroove = {
+            fundamental: fundamentalSynth,
+            texture: textureSynth
+        };
     }
 
-    public setInstrument(name: 'bassGuitar' | 'none') {
-        if (name === 'none') {
-            this.activeSynth = null;
-        } else if (this.presets.has(name)) {
-            this.currentInstrument = name;
-            this.activeSynth = this.presets.get(name);
-        } else {
-            console.warn(`[BassSynthManager] Instrument "${name}" not found.`);
-        }
+    public setInstrument(name: BassInstrument) {
+       this.activeInstrument = name;
     }
 
     public schedule(score: SynthNote[], time: number) {
-        if (!this.activeSynth || score.length === 0) return;
+        if (this.activeInstrument === 'none' || score.length === 0) return;
 
         score.forEach(note => {
-            this.activeSynth.triggerAttackRelease(
-                note.note,
-                this.Tone.Time(note.duration, 'n'),
-                time + (note.time * this.Tone.Time('4n').toSeconds()),
-                note.velocity
-            );
+            const scheduledTime = time + (note.time * this.Tone.Time('4n').toSeconds());
+            const duration = this.Tone.Time(note.duration, 'n');
+            const velocity = note.velocity;
+            const noteName = note.note;
+
+            if (this.activeInstrument === 'bassGuitar' && this.synths.bassGuitar) {
+                this.synths.bassGuitar.triggerAttackRelease(noteName, duration, scheduledTime, velocity);
+            } else if (this.activeInstrument === 'BassGroove' && this.synths.bassGroove) {
+                // Fundamental layer
+                this.synths.bassGroove.fundamental.triggerAttackRelease(noteName, duration, scheduledTime, velocity);
+                
+                // Texture layer, one octave up
+                const textureNote = this.Tone.Frequency(noteName).transpose(12).toNote();
+                this.synths.bassGroove.texture.triggerAttackRelease(textureNote, duration, scheduledTime, velocity * 0.5);
+            }
         });
     }
 }

@@ -15,7 +15,7 @@ export const useAuraGroove = () => {
   const [instrumentSettings, setInstrumentSettings] = useState<InstrumentSettings>({
     solo: { name: "none", volume: 0.8 },
     accompaniment: { name: "synthesizer", volume: 0.7 },
-    bass: { name: "bassGuitar", volume: 0.9 },
+    bass: { name: "BassGroove", volume: 0.9 },
   });
   const [bpm, setBpm] = useState(75);
   const [score, setScore] = useState<ScoreName>('evolve');
