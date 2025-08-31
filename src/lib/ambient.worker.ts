@@ -29,30 +29,14 @@ const PatternProvider = {
 };
 
 // --- 2. Instrument Generators (The Composers) ---
-class DrumGenerator {
-    static createScore(patternName: string, barNumber: number, settings: { volume: number }): DrumNote[] {
-        if (patternName === 'none') return [];
-        const pattern = PatternProvider.getDrumPattern(patternName);
-        let score = [...pattern];
-
-        // Add a crash cymbal on the first beat of every 4th bar for ambient_beat
-        if (patternName === 'ambient_beat' && barNumber % 4 === 0) {
-            score = score.filter(note => note.time !== 0);
-            score.push({ sample: 'crash', time: 0, velocity: 0.8 });
-        }
-        
-        return score.map(note => ({...note, velocity: note.velocity * settings.volume}));
-    }
-}
-
 class EvolutionEngine {
     private accompanimentVoices: { note: string; releaseTime: number; }[] = [];
     private readonly MAX_ACCOMPANIMENT_VOICES = 4;
     private readonly TARGET_ACCOMPANIMENT_DENSITY = 2.5;
     
-    private soloLastNote: string | null = 'C5';
+    private soloLastNote: string | null = 'C4';
     private readonly harmonyNotes = ['C4', 'D4', 'E4', 'G4', 'A4', 'C5', 'D5'];
-    private readonly soloNotes = ['C5', 'D5', 'E5', 'G5', 'A5', 'C6'];
+    private readonly soloNotes = ['C4', 'D4', 'E4', 'G4', 'A4', 'C5', 'D5', 'E5'];
 
     private nextFillBar: number;
     private currentFillInterval: number;
@@ -79,7 +63,7 @@ class EvolutionEngine {
         this.bassPhraseLength = 0;
         this.maxBassPhraseLength = this.getNewMaxBassPhraseLength();
 
-        this.soloLastNote = 'C5';
+        this.soloLastNote = 'C4';
         this.accompanimentVoices = [];
         console.log('[Worker EvolutionEngine] Reset.');
     }
@@ -153,7 +137,7 @@ class EvolutionEngine {
         // Generate a continuous melody line
         for (let beat = 0; beat < 4; beat++) {
             // Stepwise motion
-            const lastNoteIndex = this.soloNotes.indexOf(this.soloLastNote || 'C5');
+            const lastNoteIndex = this.soloNotes.indexOf(this.soloLastNote || 'C4');
             let nextNoteIndex;
             if (lastNoteIndex === -1) {
                 nextNoteIndex = Math.floor(this.soloNotes.length / 2);

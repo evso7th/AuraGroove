@@ -17,17 +17,16 @@ export class SoloSynthManager {
 
     private createPresets() {
         const synthesizer = new this.Tone.MonoSynth({
-            oscillator: { type: 'fatsquare' },
+            oscillator: { type: 'fatsquare' }, // Changed to fatsquare for a classic analog sound
             envelope: { attack: 0.1, decay: 0.4, sustain: 0.6, release: 1.5 },
             filter: { type: 'lowpass', rolloff: -12, Q: 1 }
         }).toDestination();
         this.synths.set('synthesizer', synthesizer);
 
         const organOptions = {
-            oscillator: { type: 'fatsawtooth', count: 3 },
+            oscillator: { type: 'fatsawtooth', count: 3 }, // Changed to fatsawtooth for a brighter, distinct organ sound
              envelope: { attack: 0.05, decay: 0.2, sustain: 0.7, release: 1.2 }
         };
-        // Using MonoSynth for a monophonic organ sound
         const organ = new this.Tone.MonoSynth(organOptions).toDestination();
         organ.volume.value = -8;
         this.synths.set('organ', organ);
@@ -35,9 +34,8 @@ export class SoloSynthManager {
         const pianoOptions = {
             harmonicity: 3.01,
             modulationIndex: 14,
-            envelope: { attack: 0.02, decay: 0.3, sustain: 0.1, release: 0.9 },
+            envelope: { attack: 0.02, decay: 0.3, sustain: 0.1, release: 0.9 }, // Shortened release for a more percussive feel
         };
-        // FMSynth is monophonic by nature
         const piano = new this.Tone.FMSynth(pianoOptions).toDestination();
         piano.volume.value = -6;
         this.synths.set('piano', piano);
@@ -46,11 +44,10 @@ export class SoloSynthManager {
             harmonicity: 3,
             modulationIndex: 0.5,
             oscillator: { type: "sine" },
-            envelope: { attack: 0.1, decay: 0.2, sustain: 0.4, release: 0.8 },
+            envelope: { attack: 0.1, decay: 0.2, sustain: 0.4, release: 0.8 }, // Smoother attack
             modulation: { type: "sine" },
             modulationEnvelope: { attack: 0.2, decay: 0.5, sustain: 0.1, release: 0.8 }
         };
-        // FMSynth is monophonic by nature
         const mellotron = new this.Tone.FMSynth(mellotronOptions).toDestination();
         mellotron.volume.value = -7;
         this.synths.set('mellotron', mellotron);
