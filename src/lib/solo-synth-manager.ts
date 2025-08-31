@@ -89,6 +89,7 @@ export class SoloSynthManager {
         if (this.currentInstrument === 'portamento') {
             if (score.length > 0) {
                  const note = score[0]; // Portamento plays one note at a time
+                 console.log('[SOLO_PLAYING]', this.currentInstrument, note.note);
                  const scheduledTime = time + (note.time * this.Tone.Time('4n').toSeconds());
                  if (!this.isPortamentoPlaying) {
                     this.activeSynth.triggerAttack(note.note, scheduledTime, note.velocity);
@@ -108,6 +109,7 @@ export class SoloSynthManager {
                 this.isPortamentoPlaying = false;
             }
             score.forEach(note => {
+                console.log('[SOLO_PLAYING]', this.currentInstrument, note.note);
                 this.activeSynth.triggerAttackRelease(
                     note.note,
                     this.Tone.Time(note.duration, 'n'),

@@ -19,6 +19,7 @@ type Score = {
     soloScore: SynthNote[];
     bassScore: SynthNote[];
     barDuration: number;
+    generatedAt: number;
 };
 
 type WorkerMessage = {
@@ -109,6 +110,10 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         if (type === 'score' && managersRef.current && toneRef.current) {
             const T = toneRef.current;
             const { drumMachine, soloManager, bassManager } = managersRef.current;
+            
+            const latency = performance.now() - data.generatedAt;
+            console.log('SCORE_LATENCY:', latency);
+
             const nextBarTime = T.Transport.seconds + data.barDuration;
             
             T.Transport.scheduleOnce((time) => {
@@ -133,6 +138,11 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
             workerRef.current.postMessage({ command: 'tick' });
         }
       }, '1m');
+
+      // --- Diagnostic Pulse ---
+      setInterval(() => {
+        console.log('MAIN_THREAD_PULSE:', performance.now());
+      }, 100);
 
 
       engineRef.current = {

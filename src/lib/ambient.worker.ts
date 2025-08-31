@@ -156,7 +156,7 @@ const Scheduler = {
         score: 'evolve' as ScoreName,
         drumSettings: { pattern: 'ambient_beat', volume: 0.5, enabled: true },
         instrumentSettings: { 
-            solo: { name: "piano", volume: 0.8 },
+            solo: { name: "portamento", volume: 0.8 },
             bass: { name: "portamento", volume: 0.45 },
         },
     } as WorkerSettings,
@@ -207,7 +207,8 @@ const Scheduler = {
             barDuration: this.barDuration,
         };
         
-        self.postMessage({ type: 'score', data: messageData });
+        const generatedAt = self.performance.now();
+        self.postMessage({ type: 'score', data: { ...messageData, generatedAt } });
         
         this.barCount++;
     }
