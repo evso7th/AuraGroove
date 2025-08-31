@@ -84,7 +84,7 @@ export class BassSynthManager {
         
         // BassGrooveMob - Identical copy for experimentation
         const bassDriveMob = new this.Tone.Distortion(0.05).toDestination();
-        const textureChorusMob = new this.Tone.Chorus(0.5, 3.5, 0.7).toDestination();
+        // const textureChorusMob = new this.Tone.Chorus(0.5, 3.5, 0.7).toDestination();
         
         const fundamentalSynthMob = new this.Tone.MonoSynth({
             oscillator: { type: 'sine' },
@@ -95,7 +95,7 @@ export class BassSynthManager {
         const textureSynthMob = new this.Tone.MonoSynth({
             oscillator: { type: 'sawtooth' },
             envelope: { attack: 0.08, decay: 0.4, sustain: 0.6, release: 0.8 }
-        }).connect(textureChorusMob);
+        }).toDestination(); // Connect directly to destination, bypassing chorus
         textureSynthMob.volume.value = -12;
 
         this.synths.bassGrooveMob = {
