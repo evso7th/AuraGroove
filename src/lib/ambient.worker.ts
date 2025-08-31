@@ -63,32 +63,44 @@ class EvolutionEngine {
          ]
     }
     
-    // --- "Живой" аккорд с микросдвигом ---
-    // Генерирует аккорд, но с небольшим сдвигом между нотами,
-    // чтобы имитировать человеческое исполнение и снизить нагрузку на процессор.
-    generateAccompanimentScore(bar: number, settings: WorkerSettings, timeOffset: number): SynthNote[] {
+    // --- "Реактивный" аккомпанемент ---
+    generateAccompanimentScore(bar: number, settings: WorkerSettings, noteDensity: number): SynthNote[] {
         const instrumentName = settings.instrumentSettings?.accompaniment?.name;
         if (instrumentName === 'none') {
             return [];
         }
 
         const volume = settings.instrumentSettings?.accompaniment?.volume ?? 0.7;
-        const notes = ['C4', 'E4', 'G4']; // Ноты аккорда
+        const notes = ['C4', 'E4', 'G4']; 
         const score: SynthNote[] = [];
 
-        notes.forEach((note, index) => {
-            score.push({
-                note: note,
-                duration: 2, // Длинный release создаст эффект наложения
-                time: timeOffset + (index * 0.02), // Микросдвиг для "живого" исполнения
-                velocity: 0.6 * volume,
+        // Если плотность нот низкая (т.е. мало играют другие инструменты), играем полный аккорд
+        if (noteDensity < 2) {
+             notes.forEach((note, index) => {
+                score.push({
+                    note: note,
+                    duration: 2, 
+                    time: index * 0.02, // Микросдвиг
+                    velocity: 0.6 * volume,
+                });
             });
-        });
+        } else {
+            // Если другие играют активно, играем легкое арпеджио
+            const arpPattern = [0, 1, 2, 1]; // Простой паттерн арпеджио
+             arpPattern.forEach((noteIndex, beat) => {
+                score.push({
+                    note: notes[noteIndex],
+                    duration: 0.5,
+                    time: beat, // Играем на каждую долю
+                    velocity: 0.5 * volume
+                });
+            });
+        }
 
         return score;
     }
 
-    generateSoloScore(bar: number, settings: WorkerSettings, timeOffset: number): SynthNote[] {
+    generateSoloScore(bar: number, settings: WorkerSettings): SynthNote[] {
         const instrumentName = settings.instrumentSettings?.solo?.name;
         if (instrumentName === 'none') {
             return [];
@@ -99,14 +111,14 @@ class EvolutionEngine {
             return [{
                 note: 'B4',
                 duration: 1,
-                time: timeOffset,
+                time: 0,
                 velocity: 0.8 * volume
             }];
          }
          return [];
     }
     
-    generateBassScore(bar: number, settings: WorkerSettings, timeOffset: number): SynthNote[] {
+    generateBassScore(bar: number, settings: WorkerSettings): SynthNote[] {
         const instrumentName = settings.instrumentSettings?.bass?.name;
         if (instrumentName === 'none') {
             return [];
@@ -116,7 +128,7 @@ class EvolutionEngine {
         return [{
             note: 'C2',
             duration: 4,
-            time: timeOffset,
+            time: 0,
             velocity: 1.0 * volume
         }];
     }
@@ -182,15 +194,18 @@ const Scheduler = {
             }
         }
         
-        const BASS_OFFSET = 0;
-        const ACCOMP_OFFSET = 0.05; 
-        const SOLO_OFFSET = 0.1; 
+        // --- Логика реактивного аккомпанемента ---
+        // 1. Сначала генерируем соло и бас, чтобы узнать их плотность
+        soloScore = this.evolutionEngine.generateSoloScore(this.barCount, this.settings);
+        bassScore = this.evolutionEngine.generateBassScore(this.barCount, this.settings);
+
+        // 2. Считаем плотность нот
+        const noteDensity = soloScore.length + bassScore.length;
         
+        // 3. Генерируем аккомпанемент, передавая ему плотность
         switch(this.settings.score) {
             case 'evolve':
-                bassScore = this.evolutionEngine.generateBassScore(this.barCount, this.settings, BASS_OFFSET);
-                accompanimentScore = this.evolutionEngine.generateAccompanimentScore(this.barCount, this.settings, ACCOMP_OFFSET);
-                soloScore = this.evolutionEngine.generateSoloScore(this.barCount, this.settings, SOLO_OFFSET);
+                accompanimentScore = this.evolutionEngine.generateAccompanimentScore(this.barCount, this.settings, noteDensity);
                 break;
             case 'omega':
                 break;
@@ -234,5 +249,3 @@ self.onmessage = async (event: MessageEvent<WorkerCommand>) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
-
-    

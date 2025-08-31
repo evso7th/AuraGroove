@@ -18,11 +18,11 @@ export class AccompanimentSynthManager {
 
     private createPresets() {
         const synthOptions = {
-            oscillator: { type: 'fatsine' },
-            envelope: { attack: 0.1, decay: 0.2, sustain: 0.5, release: 1.2 }
+            oscillator: { type: 'fmsine', harmonicity: 1.2 },
+            envelope: { attack: 0.02, decay: 0.5, sustain: 0.3, release: 1.0 }
         };
         const synth = new this.Tone.PolySynth(this.Tone.Synth, synthOptions).toDestination();
-        synth.volume.value = -6;
+        synth.volume.value = -8; // Adjusted volume for new timbre
         this.synths.set('synthesizer', synth);
 
         const organOptions = {
@@ -30,10 +30,10 @@ export class AccompanimentSynthManager {
              envelope: { attack: 0.05, decay: 0.2, sustain: 0.7, release: 1.2 }
         };
         const organ = new this.Tone.PolySynth(this.Tone.Synth, organOptions).toDestination();
-        organ.volume.value = -8; // Organs can be loud
+        organ.volume.value = -8;
         this.synths.set('organ', organ);
 
-        const pianoOptions = { // Basic electric piano
+        const pianoOptions = { 
             harmonicity: 3.01,
             modulationIndex: 14,
             envelope: { attack: 0.02, decay: 0.3, sustain: 0.1, release: 0.9 },
