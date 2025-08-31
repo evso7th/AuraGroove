@@ -230,18 +230,23 @@ const Scheduler = {
         let accompanimentScore: SynthNote[] = [];
         let bassScore: SynthNote[] = [];
 
-        if (this.settings.drumSettings.enabled) {
-             if (this.settings.drumSettings.pattern === 'composer') {
-                drumScore = this.evolutionEngine.generateDrumScore(this.barCount, this.settings.drumSettings);
-            } else {
-                 drumScore = DrumGenerator.createScore(this.settings.drumSettings.pattern, this.barCount, this.settings.drumSettings);
-            }
+        // Gradual instrument introduction
+        if (this.barCount >= 0) {
+            soloScore = this.evolutionEngine.generateSoloScore(this.barCount, this.settings, this.barDuration);
         }
-        
-        bassScore = this.evolutionEngine.generateBassScore(this.barCount, this.settings);
-        accompanimentScore = this.evolutionEngine.generateAccompanimentScore(this.barCount, this.settings, this.barDuration);
-        soloScore = this.evolutionEngine.generateSoloScore(this.barCount, this.settings, this.barDuration);
-
+        if (this.barCount >= 1 && this.settings.drumSettings.enabled) {
+            if (this.settings.drumSettings.pattern === 'composer') {
+               drumScore = this.evolutionEngine.generateDrumScore(this.barCount, this.settings.drumSettings);
+           } else {
+                drumScore = DrumGenerator.createScore(this.settings.drumSettings.pattern, this.barCount, this.settings.drumSettings);
+           }
+        }
+        if (this.barCount >= 2) {
+             bassScore = this.evolutionEngine.generateBassScore(this.barCount, this.settings);
+        }
+        if (this.barCount >= 3) {
+            accompanimentScore = this.evolutionEngine.generateAccompanimentScore(this.barCount, this.settings, this.barDuration);
+        }
 
         const messageData = {
             drumScore,
@@ -278,5 +283,3 @@ self.onmessage = async (event: MessageEvent<WorkerCommand>) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
-
-    

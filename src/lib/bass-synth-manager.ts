@@ -64,11 +64,12 @@ export class BassSynthManager {
             if (this.activeInstrument === 'bassGuitar' && this.synths.bassGuitar) {
                 this.synths.bassGuitar.triggerAttackRelease(noteName, duration, scheduledTime, velocity);
             } else if (this.activeInstrument === 'BassGroove' && this.synths.bassGroove) {
-                // Fundamental layer
+                
+                console.log(`[BassGroove TRACE] Scheduling Fundamental: Note=${noteName}, Vel=${velocity.toFixed(2)}, Time=${scheduledTime.toFixed(2)}`);
                 this.synths.bassGroove.fundamental.triggerAttackRelease(noteName, duration, scheduledTime, velocity);
                 
-                // Texture layer, one octave up
                 const textureNote = this.Tone.Frequency(noteName).transpose(12).toNote();
+                console.log(`[BassGroove TRACE] Scheduling Texture: Note=${textureNote}, Vel=${(velocity * 0.5).toFixed(2)}, Time=${scheduledTime.toFixed(2)}`);
                 this.synths.bassGroove.texture.triggerAttackRelease(textureNote, duration, scheduledTime, velocity * 0.5);
             }
         });
