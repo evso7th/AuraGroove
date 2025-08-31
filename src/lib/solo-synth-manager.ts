@@ -27,7 +27,8 @@ export class SoloSynthManager {
             oscillator: { type: 'fatsawtooth', count: 3 },
              envelope: { attack: 0.05, decay: 0.2, sustain: 0.7, release: 1.2 }
         };
-        const organ = new this.Tone.PolySynth(this.Tone.Synth, organOptions).toDestination();
+        // Using MonoSynth for a monophonic organ sound
+        const organ = new this.Tone.MonoSynth(organOptions).toDestination();
         organ.volume.value = -8;
         this.synths.set('organ', organ);
 
@@ -36,7 +37,8 @@ export class SoloSynthManager {
             modulationIndex: 14,
             envelope: { attack: 0.02, decay: 0.3, sustain: 0.1, release: 0.9 },
         };
-        const piano = new this.Tone.PolySynth(this.Tone.FMSynth, pianoOptions).toDestination();
+        // FMSynth is monophonic by nature
+        const piano = new this.Tone.FMSynth(pianoOptions).toDestination();
         piano.volume.value = -6;
         this.synths.set('piano', piano);
         
@@ -48,7 +50,8 @@ export class SoloSynthManager {
             modulation: { type: "sine" },
             modulationEnvelope: { attack: 0.2, decay: 0.5, sustain: 0.1, release: 0.8 }
         };
-        const mellotron = new this.Tone.PolySynth(this.Tone.FMSynth, mellotronOptions).toDestination();
+        // FMSynth is monophonic by nature
+        const mellotron = new this.Tone.FMSynth(mellotronOptions).toDestination();
         mellotron.volume.value = -7;
         this.synths.set('mellotron', mellotron);
     }
