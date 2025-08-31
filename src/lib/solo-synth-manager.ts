@@ -7,14 +7,21 @@ export class SoloSynthManager {
 
     constructor(Tone: ToneJS) {
         this.Tone = Tone;
-        // A basic polyphonic synth for solo parts.
-        // It's less likely to cause issues than accompaniment chords.
-        this.synth = new this.Tone.PolySynth(this.Tone.Synth, {
-             envelope: {
-                attack: 0.02,
-                decay: 0.1,
-                sustain: 0.3,
-                release: 1
+        // Одноголосый синтезатор для сольных партий.
+        this.synth = new this.Tone.MonoSynth({
+            oscillator: {
+                type: 'fatsquare' // Богатый, теплый тембр
+            },
+            envelope: {
+                attack: 0.1,    // Плавное появление
+                decay: 0.4,
+                sustain: 0.6,
+                release: 1.5    // Длинный "хвост"
+            },
+            filter: {
+                type: 'lowpass', // Смягчающий фильтр
+                rolloff: -12,
+                Q: 1
             }
         }).toDestination();
     }
@@ -23,6 +30,7 @@ export class SoloSynthManager {
         if (score.length === 0) return;
 
         score.forEach(note => {
+            // MonoSynth использует тот же API для планирования
             this.synth.triggerAttackRelease(
                 note.note,
                 this.Tone.Time(note.duration, 'n'),
