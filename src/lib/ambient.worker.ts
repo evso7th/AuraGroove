@@ -63,7 +63,11 @@ class EvolutionEngine {
          ]
     }
     
-    // --- "Реактивный" аккомпанемент ---
+    /**
+     * Generates a "reactive" accompaniment score based on the density of other parts.
+     * Uses overlapping monophonic notes instead of chords to reduce CPU load.
+     * The number of notes generated is capped to respect the voice budget of the synth manager.
+     */
     generateAccompanimentScore(bar: number, settings: WorkerSettings, noteDensity: number): SynthNote[] {
         const instrumentName = settings.instrumentSettings?.accompaniment?.name;
         if (instrumentName === 'none') {
@@ -71,33 +75,37 @@ class EvolutionEngine {
         }
 
         const volume = settings.instrumentSettings?.accompaniment?.volume ?? 0.7;
-        const notes = ['C4', 'E4', 'G4']; 
+        const harmonyNotes = ['C4', 'E4', 'G4', 'B4']; // Base notes for harmony
         const score: SynthNote[] = [];
+        
+        // Voice budget for the accompaniment manager
+        const voiceBudget = 4;
 
-        // Если плотность нот низкая (т.е. мало играют другие инструменты), играем полный аккорд
+        // If other parts are quiet, play a richer, more overlapping texture.
         if (noteDensity < 2) {
-             notes.forEach((note, index) => {
-                score.push({
-                    note: note,
-                    duration: 2, 
-                    time: index * 0.02, // Микросдвиг
-                    velocity: 0.6 * volume,
+            // Play up to 3 notes of the harmony, staggered in time.
+            for(let i=0; i < 3; i++) {
+                 score.push({
+                    note: harmonyNotes[i],
+                    duration: 4, // Long duration for overlap
+                    time: i * 0.75, // Staggered start times
+                    velocity: (0.5 + Math.random() * 0.2) * volume,
                 });
-            });
+            }
         } else {
-            // Если другие играют активно, играем легкое арпеджио
-            const arpPattern = [0, 1, 2, 1]; // Простой паттерн арпеджио
-             arpPattern.forEach((noteIndex, beat) => {
-                score.push({
-                    note: notes[noteIndex],
-                    duration: 0.5,
-                    time: beat, // Играем на каждую долю
-                    velocity: 0.5 * volume
+            // If other parts are busy, play a simpler, more sparse texture.
+            for(let i=0; i < 2; i++) {
+                 score.push({
+                    note: harmonyNotes[i],
+                    duration: 4,
+                    time: i * 1.5, // Wider spacing
+                    velocity: (0.4 + Math.random() * 0.1) * volume,
                 });
-            });
+            }
         }
 
-        return score;
+        // Ensure we never exceed the voice budget.
+        return score.slice(0, voiceBudget);
     }
 
     generateSoloScore(bar: number, settings: WorkerSettings): SynthNote[] {
@@ -106,11 +114,11 @@ class EvolutionEngine {
             return [];
         }
          const volume = settings.instrumentSettings?.solo?.volume ?? 0.8;
-         // Простая логика для примера
+         // Simple logic for example
          if (bar % 4 === 2) {
             return [{
                 note: 'B4',
-                duration: 1,
+                duration: 2, // longer duration
                 time: 0,
                 velocity: 0.8 * volume
             }];
@@ -124,7 +132,7 @@ class EvolutionEngine {
             return [];
         }
         const volume = settings.instrumentSettings?.bass?.volume ?? 0.9;
-        // Простая басовая нота в начале такта
+        // Simple bass note at the start of the bar
         return [{
             note: 'C2',
             duration: 4,
@@ -143,7 +151,6 @@ class PromenadeScoreGenerator {
 }
 
 // --- 3. Scheduler (The Conductor) ---
-// This is now simplified as it doesn't handle rendering or timing, just data generation.
 const Scheduler = {
     barCount: 0,
     
@@ -154,7 +161,7 @@ const Scheduler = {
         instrumentSettings: { 
             solo: { name: "none", volume: 0.8 },
             accompaniment: { name: "synthesizer", volume: 0.7 },
-            bass: { name: "none", volume: 0.9 },
+            bass: { name: "bassGuitar", volume: 0.9 },
         },
     } as WorkerSettings,
 
@@ -194,22 +201,24 @@ const Scheduler = {
             }
         }
         
-        // --- Логика реактивного аккомпанемента ---
-        // 1. Сначала генерируем соло и бас, чтобы узнать их плотность
+        // --- Reactive Logic ---
+        // 1. Generate primary parts first to determine their density.
         soloScore = this.evolutionEngine.generateSoloScore(this.barCount, this.settings);
         bassScore = this.evolutionEngine.generateBassScore(this.barCount, this.settings);
 
-        // 2. Считаем плотность нот
+        // 2. Calculate note density for the current bar.
         const noteDensity = soloScore.length + bassScore.length;
         
-        // 3. Генерируем аккомпанемент, передавая ему плотность
+        // 3. Generate the accompaniment score, passing the density to it.
         switch(this.settings.score) {
             case 'evolve':
                 accompanimentScore = this.evolutionEngine.generateAccompanimentScore(this.barCount, this.settings, noteDensity);
                 break;
             case 'omega':
+                // Placeholder for future style
                 break;
             case 'promenade':
+                // Placeholder for future style
                 break;
         }
 
@@ -243,7 +252,6 @@ self.onmessage = async (event: MessageEvent<WorkerCommand>) => {
             case 'update_settings':
                  Scheduler.updateSettings(data);
                 break;
-            // 'start' and 'stop' commands are no longer needed here as timing is controlled by the main thread.
         }
     } catch (e) {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
