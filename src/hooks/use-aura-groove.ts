@@ -11,11 +11,11 @@ export const useAuraGroove = () => {
   const { isInitializing, isInitialized, engine, loadingText: engineLoadingText } = useAudioEngine();
   const [isPlaying, setIsPlaying] = useState(false);
   
-  const [drumSettings, setDrumSettings] = useState<DrumSettings>({ pattern: 'composer', volume: 0.7 });
+  const [drumSettings, setDrumSettings] = useState<DrumSettings>({ pattern: 'composer', volume: 0.5 });
   const [instrumentSettings, setInstrumentSettings] = useState<InstrumentSettings>({
     solo: { name: "piano", volume: 0.8 },
     accompaniment: { name: "mellotron", volume: 0.7 },
-    bass: { name: "portamento", volume: 0.9 },
+    bass: { name: "portamento", volume: 0.45 },
   });
   const [bpm, setBpm] = useState(75);
   const [score, setScore] = useState<ScoreName>('evolve');
