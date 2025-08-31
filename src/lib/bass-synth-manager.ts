@@ -14,6 +14,7 @@ export class BassSynthManager {
         portamento?: any;
     } = {};
     private activeInstrument: BassInstrument = 'portamento';
+    private isPortamentoPlaying = false;
 
     constructor(Tone: ToneJS) {
         this.Tone = Tone;
@@ -34,8 +35,8 @@ export class BassSynthManager {
         this.synths.portamento = new this.Tone.MonoSynth({
             portamento: 0.1, // Add portamento for smooth note transitions
             oscillator: { type: 'fmsine' },
-            envelope: { attack: 0.05, decay: 0.3, sustain: 0.4, release: 1.5 }, // Longer release
-            filterEnvelope: { attack: 0.06, decay: 0.2, sustain: 0.5, release: 2.5, baseFrequency: 200, octaves: 7 } // Longer filter release
+            envelope: { attack: 0.05, decay: 0.3, sustain: 0.4, release: 2.0 }, // Longer release
+            filterEnvelope: { attack: 0.06, decay: 0.2, sustain: 0.5, release: 3.0, baseFrequency: 200, octaves: 7 } // Longer filter release
         }).toDestination();
         this.synths.portamento.volume.value = -3;
 
@@ -63,11 +64,21 @@ export class BassSynthManager {
     }
 
     public setInstrument(name: BassInstrument) {
+       if (name !== 'portamento' && this.isPortamentoPlaying) {
+           this.synths.portamento?.triggerRelease();
+           this.isPortamentoPlaying = false;
+       }
        this.activeInstrument = name;
     }
 
     public schedule(score: SynthNote[], time: number) {
-        if (this.activeInstrument === 'none' || score.length === 0) return;
+        if (this.activeInstrument === 'none' || score.length === 0) {
+             if (this.isPortamentoPlaying) {
+                this.synths.portamento?.triggerRelease(time);
+                this.isPortamentoPlaying = false;
+            }
+            return;
+        }
 
         score.forEach(note => {
             const scheduledTime = time + (note.time * this.Tone.Time('4n').toSeconds());
@@ -75,18 +86,29 @@ export class BassSynthManager {
             const velocity = note.velocity;
             const noteName = note.note;
 
-            if (this.activeInstrument === 'bassGuitar' && this.synths.bassGuitar) {
-                this.synths.bassGuitar.triggerAttackRelease(noteName, duration, scheduledTime, velocity);
-            } else if (this.activeInstrument === 'portamento' && this.synths.portamento) {
-                this.synths.portamento.triggerAttackRelease(noteName, duration, scheduledTime, velocity);
-            } else if (this.activeInstrument === 'BassGroove' && this.synths.bassGroove) {
-                
-                console.log(`[BassGroove TRACE] Scheduling Fundamental: Note=${noteName}, Vel=${velocity.toFixed(2)}, Time=${scheduledTime.toFixed(2)}`);
-                this.synths.bassGroove.fundamental.triggerAttackRelease(noteName, duration, scheduledTime, velocity);
-                
-                const textureNote = this.Tone.Frequency(noteName).transpose(12).toNote();
-                console.log(`[BassGroove TRACE] Scheduling Texture: Note=${textureNote}, Vel=${(velocity * 0.5).toFixed(2)}, Time=${scheduledTime.toFixed(2)}`);
-                this.synths.bassGroove.texture.triggerAttackRelease(textureNote, duration, scheduledTime, velocity * 0.5);
+            if (this.activeInstrument === 'portamento' && this.synths.portamento) {
+                if (!this.isPortamentoPlaying) {
+                    this.synths.portamento.triggerAttack(noteName, scheduledTime, velocity);
+                    this.isPortamentoPlaying = true;
+                } else {
+                    this.synths.portamento.setNote(noteName, scheduledTime);
+                }
+            } else {
+                 if (this.isPortamentoPlaying) {
+                    this.synths.portamento?.triggerRelease(time);
+                    this.isPortamentoPlaying = false;
+                }
+                if (this.activeInstrument === 'bassGuitar' && this.synths.bassGuitar) {
+                    this.synths.bassGuitar.triggerAttackRelease(noteName, duration, scheduledTime, velocity);
+                } else if (this.activeInstrument === 'BassGroove' && this.synths.bassGroove) {
+                    
+                    console.log(`[BassGroove TRACE] Scheduling Fundamental: Note=${noteName}, Vel=${velocity.toFixed(2)}, Time=${scheduledTime.toFixed(2)}`);
+                    this.synths.bassGroove.fundamental.triggerAttackRelease(noteName, duration, scheduledTime, velocity);
+                    
+                    const textureNote = this.Tone.Frequency(noteName).transpose(12).toNote();
+                    console.log(`[BassGroove TRACE] Scheduling Texture: Note=${textureNote}, Vel=${(velocity * 0.5).toFixed(2)}, Time=${scheduledTime.toFixed(2)}`);
+                    this.synths.bassGroove.texture.triggerAttackRelease(textureNote, duration, scheduledTime, velocity * 0.5);
+                }
             }
         });
     }
