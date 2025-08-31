@@ -30,18 +30,17 @@ const PatternProvider = {
 
 // --- 2. Instrument Generators (The Composers) ---
 class EvolutionEngine {
-    private accompanimentVoices: { note: string; releaseTime: number; }[] = [];
-    private readonly MAX_ACCOMPANIMENT_VOICES = 4;
-    private readonly TARGET_ACCOMPANIMENT_DENSITY = 2.5;
-    
+    private lastRightHandNote: string | null = 'E4';
+    private lastLeftHandNote: string | null = 'G3';
+    private readonly rightHandNotes = ['C4', 'D4', 'E4', 'G4', 'A4', 'C5'];
+    private readonly leftHandNotes = ['C3', 'D3', 'E3', 'G3', 'A3', 'C4'];
+
     private soloLastNote: string | null = 'C4';
-    private readonly harmonyNotes = ['C4', 'D4', 'E4', 'G4', 'A4', 'C5', 'D5'];
     private readonly soloNotes = ['C4', 'D4', 'E4', 'G4', 'A4', 'C5', 'D5', 'E5'];
 
     private nextFillBar: number;
     private currentFillInterval: number;
 
-    // Bass phrase management
     private bassPhraseLength: number;
     private maxBassPhraseLength: number;
 
@@ -51,21 +50,34 @@ class EvolutionEngine {
     }
     
     private getNewMaxBassPhraseLength(): number {
-        return Math.floor(Math.random() * (5 - 3 + 1)) + 3; // Random length from 3 to 5
+        return Math.floor(Math.random() * (5 - 2 + 1)) + 2; // Random length from 2 to 4 bars
     }
     
     public reset() {
-        // Initialize with a random interval between 6 and 12 bars
         this.currentFillInterval = Math.floor(Math.random() * (12 - 6 + 1)) + 6;
         this.nextFillBar = this.currentFillInterval - 1;
 
-        // Bass phrase initialization
         this.bassPhraseLength = 0;
         this.maxBassPhraseLength = this.getNewMaxBassPhraseLength();
 
         this.soloLastNote = 'C4';
-        this.accompanimentVoices = [];
+        this.lastRightHandNote = 'E4';
+        this.lastLeftHandNote = 'G3';
         console.log('[Worker EvolutionEngine] Reset.');
+    }
+
+    private getNextNote(lastNote: string | null, scale: string[]): string {
+        const lastNoteIndex = scale.indexOf(lastNote || scale[0]);
+        let nextNoteIndex;
+        if (lastNoteIndex === -1) {
+            nextNoteIndex = Math.floor(scale.length / 2);
+        } else {
+            const direction = Math.random() < 0.5 ? -1 : 1;
+            nextNoteIndex = lastNoteIndex + direction;
+        }
+        if (nextNoteIndex < 0) nextNoteIndex = 1;
+        if (nextNoteIndex >= scale.length) nextNoteIndex = scale.length - 2;
+        return scale[nextNoteIndex];
     }
 
 
@@ -73,19 +85,14 @@ class EvolutionEngine {
         const score: DrumNote[] = [];
         const vol = settings.volume;
 
-        // Bass and Kick in unison
         score.push({ sample: 'kick', time: 0, velocity: 1.0 * vol });
         score.push({ sample: 'hat', time: 1, velocity: 0.4 * vol });
         score.push({ sample: 'snare', time: 2, velocity: 0.8 * vol });
         score.push({ sample: 'hat', time: 3, velocity: 0.4 * vol });
 
-        // Simple fill with crash at a random interval
         if (bar === this.nextFillBar) {
              score.push({ sample: 'kick', time: 1, velocity: 0.7 * vol });
-             // Replace snare with crash
              score[2] = { sample: 'crash', time: 3, velocity: 0.6 * vol };
-             
-             // Calculate the next fill
              this.currentFillInterval = Math.floor(Math.random() * (12 - 6 + 1)) + 6;
              this.nextFillBar += this.currentFillInterval;
         }
@@ -93,38 +100,33 @@ class EvolutionEngine {
         return score;
     }
     
-    generateAccompanimentScore(bar: number, settings: WorkerSettings, barDuration: number): SynthNote[] {
+    generateAccompanimentScore(bar: number, settings: WorkerSettings): SynthNote[] {
         const accompanimentSettings = settings.instrumentSettings?.accompaniment;
         if (accompanimentSettings?.name === 'none') return [];
         
         const score: SynthNote[] = [];
-        const now = bar * barDuration;
+        const volume = accompanimentSettings?.volume ?? 0.7;
 
-        // 1. Clean up old notes
-        this.accompanimentVoices = this.accompanimentVoices.filter(v => v.releaseTime > now);
+        // "Right Hand" - plays on every beat
+        this.lastRightHandNote = this.getNextNote(this.lastRightHandNote, this.rightHandNotes);
+        score.push({
+            note: this.lastRightHandNote,
+            duration: 4, // Duration doesn't matter for portamento synth
+            time: 0, 
+            velocity: (0.5 + Math.random() * 0.2) * volume
+        });
 
-        // 2. Generate new notes to maintain density
-        let currentDensity = this.accompanimentVoices.length;
-        
-        for (let beat = 0; beat < 4; beat++) {
-            if (currentDensity < this.TARGET_ACCOMPANIMENT_DENSITY && this.accompanimentVoices.length < this.MAX_ACCOMPANIMENT_VOICES) {
-                if (Math.random() > 0.4) { // Don't add a note on every beat
-                    const timeOffset = beat * (barDuration / 4);
-                    const noteName = this.harmonyNotes[Math.floor(Math.random() * this.harmonyNotes.length)];
-                    const duration = barDuration * (1.5 + Math.random());
-                    
-                    const newNote: SynthNote = {
-                        note: noteName,
-                        duration: duration,
-                        time: beat, // time in beats
-                        velocity: (0.4 + Math.random() * 0.2) * (accompanimentSettings?.volume ?? 0.7)
-                    };
-                    score.push(newNote);
-                    this.accompanimentVoices.push({ note: newNote.note, releaseTime: now + timeOffset + duration });
-                    currentDensity++;
-                }
-            }
+        // "Left Hand" - plays every two beats
+        if (bar % 2 === 0) {
+            this.lastLeftHandNote = this.getNextNote(this.lastLeftHandNote, this.leftHandNotes);
+             score.push({
+                note: this.lastLeftHandNote,
+                duration: 8,
+                time: 0,
+                velocity: (0.4 + Math.random() * 0.1) * volume
+            });
         }
+        
         return score;
     }
     
@@ -134,32 +136,17 @@ class EvolutionEngine {
 
         const score: SynthNote[] = [];
 
-        // Generate a continuous melody line
         for (let beat = 0; beat < 4; beat++) {
-            // Stepwise motion
-            const lastNoteIndex = this.soloNotes.indexOf(this.soloLastNote || 'C4');
-            let nextNoteIndex;
-            if (lastNoteIndex === -1) {
-                nextNoteIndex = Math.floor(this.soloNotes.length / 2);
-            } else {
-                const direction = Math.random() < 0.5 ? -1 : 1;
-                nextNoteIndex = lastNoteIndex + direction;
+            if (Math.random() > 0.3) { // Create some rests
+                this.soloLastNote = this.getNextNote(this.soloLastNote, this.soloNotes);
+                const newNote: SynthNote = {
+                    note: this.soloLastNote,
+                    duration: barDuration / 2,
+                    time: beat,
+                    velocity: (0.6 + Math.random() * 0.2) * (soloSettings?.volume ?? 0.8)
+                };
+                score.push(newNote);
             }
-
-            // Boundary checks
-            if (nextNoteIndex < 0) nextNoteIndex = 1;
-            if (nextNoteIndex >= this.soloNotes.length) nextNoteIndex = this.soloNotes.length - 2;
-            
-            const nextNoteName = this.soloNotes[nextNoteIndex];
-            this.soloLastNote = nextNoteName;
-
-            const newNote: SynthNote = {
-                note: nextNoteName,
-                duration: barDuration / 2, // longer notes
-                time: beat,
-                velocity: (0.6 + Math.random() * 0.2) * (soloSettings?.volume ?? 0.8)
-            };
-            score.push(newNote);
         }
 
         return score;
@@ -171,21 +158,19 @@ class EvolutionEngine {
             return [];
         }
 
-        // Check if the phrase should end
         if (this.bassPhraseLength >= this.maxBassPhraseLength) {
             this.bassPhraseLength = 0;
             this.maxBassPhraseLength = this.getNewMaxBassPhraseLength();
-            return []; // Return empty score for a pause
+            return [];
         }
 
         this.bassPhraseLength++;
         const volume = settings.instrumentSettings?.bass?.volume ?? 0.9;
-        // Brighter, more positive I-vi progression
         const note = bar % 4 < 2 ? 'C2' : 'A1'; 
         
         return [{
             note: note,
-            duration: 4, // Whole note duration in beats
+            duration: 4,
             time: 0,
             velocity: 0.9 * volume
         }];
@@ -247,20 +232,21 @@ const Scheduler = {
 
         // Gradual instrument introduction
         if (this.barCount >= 0) {
-            soloScore = this.evolutionEngine.generateSoloScore(this.barCount, this.settings, this.barDuration);
+            accompanimentScore = this.evolutionEngine.generateAccompanimentScore(this.barCount, this.settings);
         }
         if (this.barCount >= 1 && this.settings.drumSettings.enabled) {
             if (this.settings.drumSettings.pattern === 'composer') {
                drumScore = this.evolutionEngine.generateDrumScore(this.barCount, this.settings.drumSettings);
            } else {
-                drumScore = DrumGenerator.createScore(this.settings.drumSettings.pattern, this.barCount, this.settings.drumSettings);
+                // This branch is currently not used for 'evolve' score but kept for flexibility
+                drumScore = PatternProvider.getDrumPattern(this.settings.drumSettings.pattern);
            }
         }
         if (this.barCount >= 2) {
              bassScore = this.evolutionEngine.generateBassScore(this.barCount, this.settings);
         }
-        if (this.barCount >= 3) {
-            accompanimentScore = this.evolutionEngine.generateAccompanimentScore(this.barCount, this.settings, this.barDuration);
+        if (this.barCount >= 4) {
+             soloScore = this.evolutionEngine.generateSoloScore(this.barCount, this.settings, this.barDuration);
         }
 
         const messageData = {
@@ -281,7 +267,6 @@ const Scheduler = {
 // --- MessageBus (The entry point) ---
 self.onmessage = async (event: MessageEvent<WorkerCommand>) => {
     const { command, data } = event.data;
-    console.log(`[WORKER_TRACE] Received command: ${command}`);
 
     try {
         switch (command) {
