@@ -30,16 +30,19 @@ export class BassSynthManager {
         this.synths.bassGuitar.volume.value = -3;
 
         // BassGroove Layered Preset
+        const bassDrive = new this.Tone.Distortion(0.05).toDestination();
+        const textureChorus = new this.Tone.Chorus(0.5, 3.5, 0.7).toDestination();
+        
         const fundamentalSynth = new this.Tone.MonoSynth({
             oscillator: { type: 'sine' },
             envelope: { attack: 0.05, decay: 0.3, sustain: 0.8, release: 0.8 }
-        }).toDestination();
+        }).connect(bassDrive);
         fundamentalSynth.volume.value = -3;
 
         const textureSynth = new this.Tone.MonoSynth({
             oscillator: { type: 'sawtooth' },
             envelope: { attack: 0.08, decay: 0.4, sustain: 0.6, release: 0.8 }
-        }).toDestination();
+        }).connect(textureChorus);
         textureSynth.volume.value = -12; // Quieter texture layer
 
         this.synths.bassGroove = {
