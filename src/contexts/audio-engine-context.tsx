@@ -161,6 +161,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
           } else {
              console.log('[CONTEXT_TRACE] setIsPlaying(false): Attempting to stop transport and reset.');
              if (T.Transport.state === 'started') {
+                tickLoopRef.current?.stop(0);
                 T.Transport.stop();
                 T.Transport.cancel(0); // Clear all scheduled events
 
