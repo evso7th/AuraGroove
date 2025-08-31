@@ -65,6 +65,7 @@ export class BassSynthManager {
 
     public setInstrument(name: BassInstrument) {
        if (name !== 'portamento' && this.isPortamentoPlaying) {
+           console.log('[Portamento TRACE] Switching instrument. Forcing release...');
            this.synths.portamento?.triggerRelease();
            this.isPortamentoPlaying = false;
        }
@@ -74,6 +75,7 @@ export class BassSynthManager {
     public schedule(score: SynthNote[], time: number) {
         if (this.activeInstrument === 'none') {
              if (this.isPortamentoPlaying) {
+                console.log('[Portamento TRACE] Instrument is none. Forcing release...');
                 this.synths.portamento?.triggerRelease(time);
                 this.isPortamentoPlaying = false;
             }
@@ -82,6 +84,7 @@ export class BassSynthManager {
 
         if (score.length === 0) {
             if (this.activeInstrument === 'portamento' && this.isPortamentoPlaying) {
+                console.log('[Portamento TRACE] Empty score received. Forcing release...');
                 this.synths.portamento?.triggerRelease(time);
                 this.isPortamentoPlaying = false;
             }
@@ -96,9 +99,11 @@ export class BassSynthManager {
 
             if (this.activeInstrument === 'portamento' && this.synths.portamento) {
                 if (!this.isPortamentoPlaying) {
+                    console.log('[Portamento TRACE] ATTACK triggered.', { note: noteName, time: scheduledTime });
                     this.synths.portamento.triggerAttack(noteName, scheduledTime, velocity);
                     this.isPortamentoPlaying = true;
                 } else {
+                    console.log('[Portamento TRACE] SET_NOTE triggered.', { note: noteName, time: scheduledTime });
                     this.synths.portamento.setNote(noteName, scheduledTime);
                 }
             } else {
