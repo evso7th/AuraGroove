@@ -57,10 +57,23 @@ class EvolutionEngine {
     private nextFillBar: number;
     private currentFillInterval: number;
 
+    // Bass phrase management
+    private bassPhraseLength: number;
+    private maxBassPhraseLength: number;
+
+
     constructor() {
         // Initialize with a random interval between 6 and 12 bars
         this.currentFillInterval = Math.floor(Math.random() * (12 - 6 + 1)) + 6;
         this.nextFillBar = this.currentFillInterval - 1;
+
+        // Bass phrase initialization
+        this.bassPhraseLength = 0;
+        this.maxBassPhraseLength = this.getNewMaxBassPhraseLength();
+    }
+    
+    private getNewMaxBassPhraseLength(): number {
+        return Math.floor(Math.random() * (5 - 3 + 1)) + 3; // Random length from 3 to 5
     }
 
 
@@ -165,6 +178,15 @@ class EvolutionEngine {
         if (instrumentName === 'none') {
             return [];
         }
+
+        // Check if the phrase should end
+        if (this.bassPhraseLength >= this.maxBassPhraseLength) {
+            this.bassPhraseLength = 0;
+            this.maxBassPhraseLength = this.getNewMaxBassPhraseLength();
+            return []; // Return empty score for a pause
+        }
+
+        this.bassPhraseLength++;
         const volume = settings.instrumentSettings?.bass?.volume ?? 0.9;
         // Brighter, more positive I-vi progression
         const note = bar % 4 < 2 ? 'C2' : 'A1'; 
