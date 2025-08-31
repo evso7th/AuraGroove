@@ -46,6 +46,10 @@ class DrumGenerator {
 }
 
 class EvolutionEngine {
+    private textureNotes: { note: string; part: 'solo' | 'accompaniment'; releaseTime: number }[] = [];
+    private readonly MAX_TEXTURE_NOTES = 6; // 4 for accompaniment, 2 for solo
+    private readonly TARGET_DENSITY = 3; // Try to keep 3 notes sounding at once
+
     generateDrumScore(bar: number, settings: {volume: number}): DrumNote[] {
          if (bar % 2 === 0) {
             return [
@@ -63,67 +67,56 @@ class EvolutionEngine {
          ]
     }
     
-    /**
-     * Generates a "reactive" accompaniment score based on the density of other parts.
-     * Uses overlapping monophonic notes instead of chords to reduce CPU load.
-     * The number of notes generated is capped to respect the voice budget of the synth manager.
-     */
-    generateAccompanimentScore(bar: number, settings: WorkerSettings, noteDensity: number): SynthNote[] {
-        const instrumentName = settings.instrumentSettings?.accompaniment?.name;
-        if (instrumentName === 'none') {
-            return [];
-        }
+    generateTextureScores(bar: number, settings: WorkerSettings, barDuration: number): { soloScore: SynthNote[], accompanimentScore: SynthNote[] } {
+        const soloSettings = settings.instrumentSettings?.solo;
+        const accompanimentSettings = settings.instrumentSettings?.accompaniment;
 
-        const volume = settings.instrumentSettings?.accompaniment?.volume ?? 0.7;
-        const harmonyNotes = ['C4', 'E4', 'G4', 'B4']; // Base notes for harmony
-        const score: SynthNote[] = [];
+        const soloScore: SynthNote[] = [];
+        const accompanimentScore: SynthNote[] = [];
+        const harmonyNotes = ['C4', 'E4', 'G4', 'B4', 'D5', 'F5']; // Expanded harmony
         
-        // Voice budget for the accompaniment manager
-        const voiceBudget = 4;
+        const now = bar * barDuration;
 
-        // If other parts are quiet, play a richer, more overlapping texture.
-        if (noteDensity < 2) {
-            // Play up to 3 notes of the harmony, staggered in time.
-            for(let i=0; i < 3; i++) {
-                 score.push({
-                    note: harmonyNotes[i],
-                    duration: 4, // Long duration for overlap
-                    time: i * 0.75, // Staggered start times
-                    velocity: (0.5 + Math.random() * 0.2) * volume,
-                });
-            }
-        } else {
-            // If other parts are busy, play a simpler, more sparse texture.
-            for(let i=0; i < 2; i++) {
-                 score.push({
-                    note: harmonyNotes[i],
-                    duration: 4,
-                    time: i * 1.5, // Wider spacing
-                    velocity: (0.4 + Math.random() * 0.1) * volume,
-                });
+        // 1. Clean up old notes
+        this.textureNotes = this.textureNotes.filter(n => n.releaseTime > now);
+
+        // 2. Generate new notes to maintain density
+        let currentDensity = this.textureNotes.length;
+        
+        for (let i = 0; i < 4; i++) { // Check 4 times per bar (once per beat)
+            if (currentDensity < this.TARGET_DENSITY && this.textureNotes.length < this.MAX_TEXTURE_NOTES) {
+                
+                const timeOffset = i * (barDuration / 4);
+                const isSoloMoment = Math.random() < 0.25 && soloSettings?.name !== 'none';
+
+                let newNote: SynthNote;
+                
+                if (isSoloMoment) {
+                     newNote = {
+                        note: harmonyNotes[Math.floor(Math.random() * harmonyNotes.length)],
+                        duration: barDuration * 1.5,
+                        time: i, // time in beats
+                        velocity: (0.6 + Math.random() * 0.2) * (soloSettings?.volume ?? 0.8)
+                    };
+                    soloScore.push(newNote);
+                    this.textureNotes.push({ note: newNote.note, part: 'solo', releaseTime: now + timeOffset + newNote.duration });
+
+                } else if (accompanimentSettings?.name !== 'none') {
+                    newNote = {
+                        note: harmonyNotes[Math.floor(Math.random() * harmonyNotes.length)],
+                        duration: barDuration * 2, // Longer notes for accompaniment
+                        time: i, // time in beats
+                        velocity: (0.4 + Math.random() * 0.2) * (accompanimentSettings?.volume ?? 0.7)
+                    };
+                    accompanimentScore.push(newNote);
+                    this.textureNotes.push({ note: newNote.note, part: 'accompaniment', releaseTime: now + timeOffset + newNote.duration });
+                }
+                
+                currentDensity++;
             }
         }
-
-        // Ensure we never exceed the voice budget.
-        return score.slice(0, voiceBudget);
-    }
-
-    generateSoloScore(bar: number, settings: WorkerSettings): SynthNote[] {
-        const instrumentName = settings.instrumentSettings?.solo?.name;
-        if (instrumentName === 'none') {
-            return [];
-        }
-         const volume = settings.instrumentSettings?.solo?.volume ?? 0.8;
-         // Simple logic for example
-         if (bar % 4 === 2) {
-            return [{
-                note: 'B4',
-                duration: 2, // longer duration
-                time: 0,
-                velocity: 0.8 * volume
-            }];
-         }
-         return [];
+        
+        return { soloScore, accompanimentScore };
     }
     
     generateBassScore(bar: number, settings: WorkerSettings): SynthNote[] {
@@ -132,9 +125,10 @@ class EvolutionEngine {
             return [];
         }
         const volume = settings.instrumentSettings?.bass?.volume ?? 0.9;
-        // Simple bass note at the start of the bar
+        const note = bar % 4 < 2 ? 'C2' : 'G1'; // Simple I-V progression
+        
         return [{
-            note: 'C2',
+            note: note,
             duration: 4,
             time: 0,
             velocity: 1.0 * volume
@@ -201,26 +195,13 @@ const Scheduler = {
             }
         }
         
-        // --- Reactive Logic ---
-        // 1. Generate primary parts first to determine their density.
-        soloScore = this.evolutionEngine.generateSoloScore(this.barCount, this.settings);
         bassScore = this.evolutionEngine.generateBassScore(this.barCount, this.settings);
-
-        // 2. Calculate note density for the current bar.
-        const noteDensity = soloScore.length + bassScore.length;
         
-        // 3. Generate the accompaniment score, passing the density to it.
-        switch(this.settings.score) {
-            case 'evolve':
-                accompanimentScore = this.evolutionEngine.generateAccompanimentScore(this.barCount, this.settings, noteDensity);
-                break;
-            case 'omega':
-                // Placeholder for future style
-                break;
-            case 'promenade':
-                // Placeholder for future style
-                break;
-        }
+        // Generate texture scores together
+        const textureScores = this.evolutionEngine.generateTextureScores(this.barCount, this.settings, this.barDuration);
+        soloScore = textureScores.soloScore;
+        accompanimentScore = textureScores.accompanimentScore;
+
 
         const messageData = {
             drumScore,
