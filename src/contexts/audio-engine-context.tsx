@@ -134,7 +134,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         if (workerRef.current) {
             workerRef.current.postMessage({ command: 'tick' });
         }
-      }, '1m').start(0);
+      }, '1m');
 
 
       engineRef.current = {
@@ -151,6 +151,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
           
           if (isPlaying) {
             if (T.Transport.state !== 'started') {
+                 tickLoopRef.current?.start(0);
                  T.Transport.start();
                  console.log('[CONTEXT_TRACE] Tone.Transport started.');
             }
