@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import Image from 'next/image';
 import { Slider } from "@/components/ui/slider";
-import type { DrumSettings, EffectsSettings, InstrumentSettings, ScoreName } from '@/types/music';
+import type { DrumSettings, InstrumentSettings, ScoreName } from '@/types/music';
 
 // This is now a "dumb" UI component controlled by the useAuraGroove hook.
 export type AuraGrooveProps = {
@@ -138,6 +138,7 @@ export function AuraGroove({
                                 <SelectItem value="piano">Piano</SelectItem>
                                 <SelectItem value="organ">Organ</SelectItem>
                                 <SelectItem value="mellotron">Mellotron</SelectItem>
+                                <SelectItem value="portamento">Portamento</SelectItem>
                              </>}
                           </SelectContent>
                         </Select>

@@ -15,7 +15,7 @@ export const useAuraGroove = () => {
   
   const [drumSettings, setDrumSettings] = useState<DrumSettings>({ pattern: 'composer', volume: 0.5 });
   const [instrumentSettings, setInstrumentSettings] = useState<InstrumentSettings>({
-    solo: { name: "piano", volume: 0.8 },
+    solo: { name: "portamento", volume: 0.8 },
     bass: { name: "portamento", volume: 0.45 },
   });
   const [bpm, setBpm] = useState(75);

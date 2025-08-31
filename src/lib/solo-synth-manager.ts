@@ -6,17 +6,17 @@ export class SoloSynthManager {
     private synths: Map<string, any>;
     private activeSynth: any;
     private currentInstrument: string;
+    private isPortamentoPlaying = false;
 
     constructor(Tone: ToneJS) {
         this.Tone = Tone;
         this.synths = new Map();
-        this.currentInstrument = 'synthesizer';
+        this.currentInstrument = 'portamento';
         this.createPresets();
         this.activeSynth = this.synths.get(this.currentInstrument);
     }
 
     private createPresets() {
-        // Using the light mobile preset from accompaniment for testing
         const synthesizer = new this.Tone.MonoSynth({
             portamento: 0.1,
             oscillator: { type: 'fmsine' },
@@ -25,7 +25,7 @@ export class SoloSynthManager {
         this.synths.set('synthesizer', synthesizer);
 
         const organOptions = {
-            oscillator: { type: 'fatsawtooth', count: 3 }, // Changed to fatsawtooth for a brighter, distinct organ sound
+            oscillator: { type: 'fatsawtooth', count: 3 },
              envelope: { attack: 0.05, decay: 0.2, sustain: 0.7, release: 1.2 }
         };
         const organ = new this.Tone.MonoSynth(organOptions).toDestination();
@@ -35,7 +35,7 @@ export class SoloSynthManager {
         const pianoOptions = {
             harmonicity: 3.01,
             modulationIndex: 14,
-            envelope: { attack: 0.02, decay: 0.3, sustain: 0.1, release: 0.9 }, // Shortened release for a more percussive feel
+            envelope: { attack: 0.02, decay: 0.3, sustain: 0.1, release: 0.9 },
         };
         const piano = new this.Tone.FMSynth(pianoOptions).toDestination();
         piano.volume.value = -6;
@@ -45,16 +45,28 @@ export class SoloSynthManager {
             harmonicity: 3,
             modulationIndex: 0.5,
             oscillator: { type: "sine" },
-            envelope: { attack: 0.1, decay: 0.2, sustain: 0.4, release: 0.8 }, // Smoother attack
+            envelope: { attack: 0.1, decay: 0.2, sustain: 0.4, release: 0.8 },
             modulation: { type: "sine" },
             modulationEnvelope: { attack: 0.2, decay: 0.5, sustain: 0.1, release: 0.8 }
         };
         const mellotron = new this.Tone.FMSynth(mellotronOptions).toDestination();
         mellotron.volume.value = -7;
         this.synths.set('mellotron', mellotron);
+
+        const portamento = new this.Tone.MonoSynth({
+            portamento: 0.1,
+            oscillator: { type: 'fmsine' },
+            envelope: { attack: 0.1, decay: 0.2, sustain: 0.5, release: 1.2 }
+        }).toDestination();
+        this.synths.set('portamento', portamento);
     }
 
-    public setInstrument(name: 'synthesizer' | 'piano' | 'organ' | 'mellotron' | 'none') {
+    public setInstrument(name: 'synthesizer' | 'piano' | 'organ' | 'mellotron' | 'portamento' | 'none') {
+        if (this.currentInstrument === 'portamento' && name !== 'portamento' && this.isPortamentoPlaying) {
+           this.synths.get('portamento')?.triggerRelease();
+           this.isPortamentoPlaying = false;
+        }
+
         if (name === 'none') {
             this.activeSynth = null;
         } else if (this.synths.has(name)) {
@@ -66,21 +78,53 @@ export class SoloSynthManager {
     }
 
     public schedule(score: SynthNote[], time: number) {
-        if (!this.activeSynth || score.length === 0) return;
+        if (!this.activeSynth) {
+            if (this.isPortamentoPlaying) {
+                this.synths.get('portamento')?.triggerRelease(time);
+                this.isPortamentoPlaying = false;
+            }
+            return;
+        };
 
-        score.forEach(note => {
-            this.activeSynth.triggerAttackRelease(
-                note.note,
-                this.Tone.Time(note.duration, 'n'),
-                time + (note.time * this.Tone.Time('4n').toSeconds()),
-                note.velocity
-            );
-        });
+        if (this.currentInstrument === 'portamento') {
+            if (score.length > 0) {
+                 const note = score[0]; // Portamento plays one note at a time
+                 const scheduledTime = time + (note.time * this.Tone.Time('4n').toSeconds());
+                 if (!this.isPortamentoPlaying) {
+                    this.activeSynth.triggerAttack(note.note, scheduledTime, note.velocity);
+                    this.isPortamentoPlaying = true;
+                } else {
+                    this.activeSynth.setNote(note.note, scheduledTime);
+                }
+            } else {
+                if (this.isPortamentoPlaying) {
+                    this.activeSynth.triggerRelease(time);
+                    this.isPortamentoPlaying = false;
+                }
+            }
+        } else {
+             if (this.isPortamentoPlaying) {
+                this.synths.get('portamento')?.triggerRelease(time);
+                this.isPortamentoPlaying = false;
+            }
+            score.forEach(note => {
+                this.activeSynth.triggerAttackRelease(
+                    note.note,
+                    this.Tone.Time(note.duration, 'n'),
+                    time + (note.time * this.Tone.Time('4n').toSeconds()),
+                    note.velocity
+                );
+            });
+        }
     }
 
     public stopAll() {
         if (this.activeSynth) {
             this.activeSynth.triggerRelease();
+        }
+        if (this.isPortamentoPlaying) {
+            this.synths.get('portamento')?.triggerRelease();
+            this.isPortamentoPlaying = false;
         }
     }
 }
