@@ -5,7 +5,7 @@
  * This worker operates on a microservice-style architecture.
  * It is the "Sound Engine", responsible for both composing and rendering audio.
  */
-import type { DrumNote, SynthNote, WorkerCommand, WorkerSettings, DrumSampleName, InstrumentSettings, ScoreName } from '@/types/music';
+import type { DrumNote, SynthNote, WorkerCommand, WorkerSettings, DrumSampleName, InstrumentSettings, ScoreName, AudioProfile } from '@/types/music';
 
 // --- 1. PatternProvider (The Music Sheet Library) ---
 const PatternProvider = {
@@ -32,8 +32,11 @@ const PatternProvider = {
 class EvolutionEngine {
     private lastRightHandNote: string | null = 'E4';
     private lastLeftHandNote: string | null = 'G3';
+    private lastMobileAccompNote: string | null = 'E3';
+
     private readonly rightHandNotes = ['C4', 'D4', 'E4', 'G4', 'A4', 'C5'];
     private readonly leftHandNotes = ['C3', 'D3', 'E3', 'G3', 'A3', 'C4'];
+    private readonly mobileAccompanimentNotes = ['C3', 'D3', 'E3', 'G3', 'A3', 'C4', 'D4', 'E4', 'F4'];
 
     private soloLastNote: string | null = 'C4';
     private readonly soloNotes = ['C4', 'D4', 'E4', 'G4', 'A4', 'C5', 'D5', 'E5'];
@@ -43,6 +46,9 @@ class EvolutionEngine {
 
     private bassPhraseLength: number;
     private maxBassPhraseLength: number;
+
+    private accompPhrase: SynthNote[] = [];
+    private accompPhraseIndex = 0;
 
 
     constructor() {
@@ -63,6 +69,10 @@ class EvolutionEngine {
         this.soloLastNote = 'C4';
         this.lastRightHandNote = 'E4';
         this.lastLeftHandNote = 'G3';
+        this.lastMobileAccompNote = 'E3';
+        
+        this.accompPhrase = [];
+        this.accompPhraseIndex = 0;
         console.log('[Worker EvolutionEngine] Reset.');
     }
 
@@ -103,31 +113,57 @@ class EvolutionEngine {
     generateAccompanimentScore(bar: number, settings: WorkerSettings): SynthNote[] {
         const accompanimentSettings = settings.instrumentSettings?.accompaniment;
         if (accompanimentSettings?.name === 'none') return [];
-        
+
         const score: SynthNote[] = [];
         const volume = accompanimentSettings?.volume ?? 0.7;
 
-        // "Right Hand" - plays a longer phrase of shorter notes
-        this.lastRightHandNote = this.getNextNote(this.lastRightHandNote, this.rightHandNotes);
-        score.push({
-            note: this.lastRightHandNote,
-            duration: 8, // Duration doesn't matter for portamento synth
-            time: 0, 
-            velocity: (0.5 + Math.random() * 0.2) * volume
-        });
+        // Phrase-based generation
+        if (this.accompPhraseIndex >= this.accompPhrase.length) {
+            this.accompPhraseIndex = 0;
+            this.accompPhrase = [];
+            const phraseLength = Math.floor(Math.random() * 5) + 4; // 4-8 notes
 
-        // "Left Hand" - plays a longer phrase every two bars
-        if (bar % 2 === 0) {
-            this.lastLeftHandNote = this.getNextNote(this.lastLeftHandNote, this.leftHandNotes);
-             score.push({
-                note: this.lastLeftHandNote,
-                duration: 16,
-                time: 0,
-                velocity: (0.4 + Math.random() * 0.1) * volume
-            });
+            if (settings.audioProfile === 'mobile') {
+                for (let i = 0; i < phraseLength; i++) {
+                    this.lastMobileAccompNote = this.getNextNote(this.lastMobileAccompNote, this.mobileAccompanimentNotes);
+                    this.accompPhrase.push({
+                        note: this.lastMobileAccompNote,
+                        duration: 8,
+                        time: i, // time is now beat index within phrase
+                        velocity: (0.5 + Math.random() * 0.2) * volume
+                    });
+                }
+            } else { // Desktop profile
+                // For now, let's keep the desktop logic simpler, we can expand later
+                this.lastRightHandNote = this.getNextNote(this.lastRightHandNote, this.rightHandNotes);
+                score.push({
+                    note: this.lastRightHandNote,
+                    duration: 8,
+                    time: 0,
+                    velocity: (0.5 + Math.random() * 0.2) * volume
+                });
+
+                if (bar % 2 === 0) {
+                    this.lastLeftHandNote = this.getNextNote(this.lastLeftHandNote, this.leftHandNotes);
+                    score.push({
+                        note: this.lastLeftHandNote,
+                        duration: 16,
+                        time: 0,
+                        velocity: (0.4 + Math.random() * 0.1) * volume
+                    });
+                }
+                return score;
+            }
         }
-        
-        return score;
+
+        if (settings.audioProfile === 'mobile') {
+             // Return the next note from the phrase
+             const nextNote = this.accompPhrase[this.accompPhraseIndex];
+             this.accompPhraseIndex++;
+             return [nextNote];
+        }
+
+        return [];
     }
     
     generateSoloScore(bar: number, settings: WorkerSettings, barDuration: number): SynthNote[] {
@@ -192,6 +228,7 @@ const Scheduler = {
     settings: {
         bpm: 75,
         score: 'evolve' as ScoreName,
+        audioProfile: 'desktop' as AudioProfile,
         drumSettings: { pattern: 'ambient_beat', volume: 0.5, enabled: true },
         instrumentSettings: { 
             solo: { name: "none", volume: 0.8 },
@@ -221,6 +258,7 @@ const Scheduler = {
         if (newSettings.instrumentSettings) this.settings.instrumentSettings = { ...this.settings.instrumentSettings, ...newSettings.instrumentSettings };
         if (newSettings.bpm) this.settings.bpm = newSettings.bpm;
         if (newSettings.score) this.settings.score = newSettings.score;
+        if (newSettings.audioProfile) this.settings.audioProfile = newSettings.audioProfile;
     },
 
     tick() {

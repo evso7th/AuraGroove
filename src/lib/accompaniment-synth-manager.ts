@@ -4,8 +4,9 @@ import type { ToneJS, SynthNote, AudioProfile } from '@/types/music';
 type InstrumentName = 'synthesizer' | 'piano' | 'organ' | 'mellotron' | 'none';
 
 /**
- * Manages two persistent monophonic synthesizers to play the accompaniment part,
- * simulating a "two-handed" player for continuous, contrapuntal melodic lines.
+ * Manages synthesizers for the accompaniment part.
+ * In 'desktop' mode, it uses two mono synths to simulate two-handed playing.
+ * In 'mobile' mode, it uses a single mono synth to conserve CPU resources.
  */
 export class AccompanimentSynthManager {
     private Tone: ToneJS;
@@ -27,11 +28,6 @@ export class AccompanimentSynthManager {
         this.mobilePresets = this.createMobilePresets();
         
         this.recreateSynths();
-    }
-
-    private createPreset(instrument: InstrumentName, profile: AudioProfile) {
-        const presets = profile === 'desktop' ? this.desktopPresets : this.mobilePresets;
-        return presets[instrument];
     }
     
     private createDesktopPresets() {
@@ -137,10 +133,13 @@ export class AccompanimentSynthManager {
             return;
         }
 
-        const preset = this.createPreset(this.currentInstrument, this.profile);
+        const presets = this.profile === 'desktop' ? this.desktopPresets : this.mobilePresets;
+        const preset = presets[this.currentInstrument];
         if (!preset) return;
         
-        ['leftHand', 'rightHand'].forEach(hand => {
+        const handsToCreate = this.profile === 'desktop' ? ['leftHand', 'rightHand'] : ['rightHand'];
+
+        handsToCreate.forEach(hand => {
             let synth;
             if (preset.type === 'FMSynth') {
                 synth = new this.Tone.FMSynth(preset.options);
@@ -167,10 +166,10 @@ export class AccompanimentSynthManager {
     
     private playHand(hand: 'leftHand' | 'rightHand', note: SynthNote, time: number) {
         const synth = this.synths[hand];
-        const isPlayingFlag = hand === 'leftHand' ? 'isLeftHandPlaying' : 'isRightHandPlaying';
+        const isPlayingFlag: 'isLeftHandPlaying' | 'isRightHandPlaying' = hand === 'leftHand' ? 'isLeftHandPlaying' : 'isRightHandPlaying';
         if (!synth) return;
 
-        const scheduledTime = time + (note.time * this.Tone.Time('4n').toSeconds());
+        const scheduledTime = time + (note.time * this.Tone.Time('8n').toSeconds());
 
         if (!this[isPlayingFlag]) {
             synth.triggerAttack(note.note, scheduledTime, note.velocity);
@@ -182,7 +181,7 @@ export class AccompanimentSynthManager {
 
     private releaseHand(hand: 'leftHand' | 'rightHand', time: number) {
         const synth = this.synths[hand];
-        const isPlayingFlag = hand === 'leftHand' ? 'isLeftHandPlaying' : 'isRightHandPlaying';
+        const isPlayingFlag: 'isLeftHandPlaying' | 'isRightHandPlaying' = hand === 'leftHand' ? 'isLeftHandPlaying' : 'isRightHandPlaying';
         
         if (this[isPlayingFlag] && synth) {
             synth.triggerRelease(time);
@@ -205,10 +204,13 @@ export class AccompanimentSynthManager {
             this.releaseHand('rightHand', time);
         }
 
-        if (leftHandNote) {
-            this.playHand('leftHand', leftHandNote, time);
-        } else {
-            this.releaseHand('leftHand', time);
+        // Only play the left hand on desktop profile
+        if (this.profile === 'desktop') {
+            if (leftHandNote) {
+                this.playHand('leftHand', leftHandNote, time);
+            } else {
+                this.releaseHand('leftHand', time);
+            }
         }
     }
 
