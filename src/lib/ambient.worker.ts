@@ -54,6 +54,15 @@ class EvolutionEngine {
     private readonly harmonyNotes = ['C4', 'D4', 'E4', 'G4', 'A4', 'C5', 'D5'];
     private readonly soloNotes = ['C5', 'D5', 'E5', 'G5', 'A5', 'C6'];
 
+    private nextFillBar: number;
+    private currentFillInterval: number;
+
+    constructor() {
+        // Initialize with a random interval between 6 and 12 bars
+        this.currentFillInterval = Math.floor(Math.random() * (12 - 6 + 1)) + 6;
+        this.nextFillBar = this.currentFillInterval - 1;
+    }
+
 
     generateDrumScore(bar: number, settings: {volume: number}): DrumNote[] {
         const score: DrumNote[] = [];
@@ -65,11 +74,15 @@ class EvolutionEngine {
         score.push({ sample: 'snare', time: 2, velocity: 0.8 * vol });
         score.push({ sample: 'hat', time: 3, velocity: 0.4 * vol });
 
-        // Simple fill with crash every 8 bars
-        if (bar % 8 === 7) {
+        // Simple fill with crash at a random interval
+        if (bar === this.nextFillBar) {
              score.push({ sample: 'kick', time: 1, velocity: 0.7 * vol });
              // Replace snare with crash
              score[2] = { sample: 'crash', time: 3, velocity: 0.6 * vol };
+             
+             // Calculate the next fill
+             this.currentFillInterval = Math.floor(Math.random() * (12 - 6 + 1)) + 6;
+             this.nextFillBar += this.currentFillInterval;
         }
 
         return score;
@@ -200,6 +213,7 @@ const Scheduler = {
 
     init() {
       this.barCount = 0;
+      this.evolutionEngine = new EvolutionEngine(); // Reset engine state
       self.postMessage({ type: 'started' });
     },
     
