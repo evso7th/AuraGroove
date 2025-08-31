@@ -67,7 +67,7 @@ export class BassSynthManager {
         
         const fundamentalSynth = new this.Tone.MonoSynth({
             oscillator: { type: 'sine' },
-            envelope: { attack: 0.05, decay: 0.3, sustain: 0.8, release: 0.8 }
+            envelope: { attack: 0.05, decay: 0.3, sustain: 0.8, release: 1.6 }
         }).connect(bassDrive);
         fundamentalSynth.volume.value = -3;
 
@@ -82,7 +82,7 @@ export class BassSynthManager {
             texture: textureSynth
         };
         
-        // BassGrooveMob - Identical copy for experimentation
+        // BassGrooveMob - Now without effects
         const fundamentalSynthMob = new this.Tone.MonoSynth({
             oscillator: { type: 'sine' },
             envelope: { attack: 0.05, decay: 0.3, sustain: 0.8, release: 0.8 }
