@@ -155,7 +155,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
           if (isPlaying) {
             console.log('[MAIN THREAD] setIsPlaying(true): Attempting to start transport and loop.');
             if (T.Transport.state !== 'started') {
-                 // Trigger the first tick immediately to fill the buffer
+                 // Trigger the first tick immediately to fill the buffer before the loop starts
                  workerRef.current.postMessage({ command: 'tick' });
                  tickLoopRef.current?.start(T.now());
                  T.Transport.start();
