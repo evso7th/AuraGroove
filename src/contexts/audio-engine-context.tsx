@@ -73,6 +73,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   }>({});
   const tickLoopRef = useRef<Tone.Loop | null>(null);
   const lastSettingsRef = useRef<Partial<WorkerSettings>>({});
+  const nextScoreRef = useRef<Score | null>(null); // Buffer for the next score
 
   const { toast } = useToast();
   const isMobile = useIsMobile();
@@ -106,19 +107,10 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
       
       worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
         const message = event.data;
-        if (message.type === 'score' && managersRef.current && toneRef.current) {
+        if (message.type === 'score') {
             console.log('[MAIN THREAD] Received score from worker:', message.data);
-            const T = toneRef.current;
-            const { drumMachine, bassManager, melodyManager } = managersRef.current;
-            
-            // Schedule the received score for the next bar
-            T.Transport.scheduleOnce((time) => {
-                console.log(`[MAIN THREAD] Scheduling score with managers for time: ${time}`);
-                drumMachine?.schedule(message.data.drumScore, time);
-                bassManager?.schedule(message.data.bassScore, time);
-                melodyManager?.schedule(message.data.melodyScore, time);
-            }, `+${message.data.barDuration}`);
-
+            // Just store the score in the buffer. The loop will pick it up.
+            nextScoreRef.current = message.data;
         } else if (message.type === 'error') {
             console.error('Error from worker:', message.error);
             toast({
@@ -131,8 +123,18 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
 
       // --- Create the main transport loop ---
       tickLoopRef.current = new T.Loop((time) => {
+        // 1. Play the score that was buffered on the previous tick.
+        if (nextScoreRef.current && managersRef.current && toneRef.current) {
+            console.log(`[MAIN THREAD] Scheduling score with managers for time: ${time}`);
+            const { drumMachine, bassManager, melodyManager } = managersRef.current;
+            drumMachine?.schedule(nextScoreRef.current.drumScore, time);
+            bassManager?.schedule(nextScoreRef.current.bassScore, time);
+            melodyManager?.schedule(nextScoreRef.current.melodyScore, time);
+            nextScoreRef.current = null; // Clear the buffer after scheduling
+        }
+
+        // 2. Ask the worker to compose the score for the *next* tick.
         if (workerRef.current) {
-            // This is our "conductor's beat", telling the worker to compose the next measure.
             console.log('[MAIN THREAD] Sending tick to worker.');
             workerRef.current.postMessage({ command: 'tick' });
         }
@@ -153,6 +155,8 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
           if (isPlaying) {
             console.log('[MAIN THREAD] setIsPlaying(true): Attempting to start transport and loop.');
             if (T.Transport.state !== 'started') {
+                 // Trigger the first tick immediately to fill the buffer
+                 workerRef.current.postMessage({ command: 'tick' });
                  tickLoopRef.current?.start(0);
                  T.Transport.start();
                  console.log('[MAIN THREAD] Tone.Transport started.');
@@ -170,6 +174,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
                 
                 // Reset the worker's composition state
                 workerRef.current.postMessage({ command: 'reset' });
+                nextScoreRef.current = null; // Clear the buffer
 
                 console.log('[MAIN THREAD] Tone.Transport stopped and all sounds/schedules cleared.');
              }
