@@ -155,6 +155,16 @@ export class BassSynthManager {
 
             console.log('[BASS MANAGER] Scheduling note:', note.note, 'at', scheduledTime, 'with velocity', velocity);
 
+            if (this.isPortamentoPlaying && this.activeInstrument !== 'portamento') {
+                this.synths.portamento?.triggerRelease(time);
+                this.isPortamentoPlaying = false;
+            }
+            if (this.isPortamentoMobPlaying && this.activeInstrument !== 'portamentoMob') {
+                this.synths.portamentoMob?.triggerRelease(time);
+                this.isPortamentoMobPlaying = false;
+            }
+
+
             if (this.activeInstrument === 'portamento' && this.synths.portamento) {
                 if (!this.isPortamentoPlaying) {
                     console.log('[BASS MANAGER] Triggering Attack for Portamento');
@@ -173,29 +183,19 @@ export class BassSynthManager {
                     console.log('[BASS MANAGER] Setting note for PortamentoMob');
                     this.synths.portamentoMob.setNote(noteName, scheduledTime);
                 }
-            } else {
-                 if (this.isPortamentoPlaying) {
-                    this.synths.portamento?.triggerRelease(time);
-                    this.isPortamentoPlaying = false;
-                }
-                 if (this.isPortamentoMobPlaying) {
-                    this.synths.portamentoMob?.triggerRelease(time);
-                    this.isPortamentoMobPlaying = false;
-                }
-                if (this.activeInstrument === 'bassGuitar' && this.synths.bassGuitar) {
-                    console.log('[BASS MANAGER] Triggering Attack/Release for BassGuitar');
-                    this.synths.bassGuitar.triggerAttackRelease(noteName, duration, scheduledTime, velocity);
-                } else if (this.activeInstrument === 'BassGroove' && this.synths.bassGroove) {
-                    console.log('[BASS MANAGER] Triggering Attack/Release for BassGroove');
-                    this.synths.bassGroove.fundamental.triggerAttackRelease(noteName, duration, scheduledTime, velocity);
-                    const textureNote = this.Tone.Frequency(noteName).transpose(12).toNote();
-                    this.synths.bassGroove.texture.triggerAttackRelease(textureNote, duration, scheduledTime, velocity * 0.5);
-                } else if (this.activeInstrument === 'BassGrooveMob' && this.synths.bassGrooveMob) {
-                    console.log('[BASS MANAGER] Triggering Attack/Release for BassGrooveMob');
-                    this.synths.bassGrooveMob.fundamental.triggerAttackRelease(noteName, duration, scheduledTime, velocity);
-                    const textureNote = this.Tone.Frequency(noteName).transpose(12).toNote();
-                    this.synths.bassGrooveMob.texture.triggerAttackRelease(textureNote, duration, scheduledTime, velocity * 0.5);
-                }
+            } else if (this.activeInstrument === 'bassGuitar' && this.synths.bassGuitar) {
+                console.log('[BASS MANAGER] Triggering Attack/Release for BassGuitar');
+                this.synths.bassGuitar.triggerAttackRelease(noteName, duration, scheduledTime, velocity);
+            } else if (this.activeInstrument === 'BassGroove' && this.synths.bassGroove) {
+                console.log('[BASS MANAGER] Triggering Attack/Release for BassGroove');
+                this.synths.bassGroove.fundamental.triggerAttackRelease(noteName, duration, scheduledTime, velocity);
+                const textureNote = this.Tone.Frequency(noteName).transpose(12).toNote();
+                this.synths.bassGroove.texture.triggerAttackRelease(textureNote, duration, scheduledTime, velocity * 0.5);
+            } else if (this.activeInstrument === 'BassGrooveMob' && this.synths.bassGrooveMob) {
+                console.log('[BASS MANAGER] Triggering Attack/Release for BassGrooveMob');
+                this.synths.bassGrooveMob.fundamental.triggerAttackRelease(noteName, duration, scheduledTime, velocity);
+                const textureNote = this.Tone.Frequency(noteName).transpose(12).toNote();
+                this.synths.bassGrooveMob.texture.triggerAttackRelease(textureNote, duration, scheduledTime, velocity * 0.5);
             }
         });
     }
