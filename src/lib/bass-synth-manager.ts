@@ -28,6 +28,7 @@ export class BassSynthManager {
     }
 
     private createPresets() {
+        // --- bassGuitar ---
         this.synths.bassGuitar = new this.Tone.MonoSynth({
             oscillator: { type: 'fmsine' },
             envelope: { attack: 0.05, decay: 0.3, sustain: 0.4, release: 0.8 },
@@ -35,9 +36,10 @@ export class BassSynthManager {
         }).toDestination();
         this.synths.bassGuitar.volume.value = -3;
 
+        // --- portamento (Desktop) ---
         const portamentoReverb = new this.Tone.Reverb({
             decay: 6,
-            wet: 0.7 // Increased wetness to make it more audible
+            wet: 0.7
         }).toDestination();
 
         this.synths.portamento = new this.Tone.MonoSynth({
@@ -45,9 +47,10 @@ export class BassSynthManager {
             oscillator: { type: 'fmsine' },
             envelope: { attack: 0.1, decay: 0.3, sustain: 0.9, release: 4.0 },
             filterEnvelope: { attack: 0.06, decay: 0.2, sustain: 0.5, release: 5.0, baseFrequency: 200, octaves: 7 }
-        }).connect(portamentoReverb); // Connect directly to reverb
+        }).connect(portamentoReverb);
         this.synths.portamento.volume.value = -3;
         
+        // --- portamento (Mobile) ---
         this.synths.portamentoMob = new this.Tone.MonoSynth({
             portamento: 0.2, 
             oscillator: { type: 'fmsine' },
@@ -56,7 +59,7 @@ export class BassSynthManager {
         }).toDestination();
         this.synths.portamentoMob.volume.value = -3;
 
-        // Simplified BassGroove for now
+        // --- BassGroove (Mobile optimized, used for both for now) ---
         const fundamentalSynthMob = new this.Tone.MonoSynth({
             oscillator: { type: 'sine' },
             envelope: { attack: 0.05, decay: 0.3, sustain: 0.8, release: 1.6 }
@@ -67,13 +70,13 @@ export class BassSynthManager {
             oscillator: { type: 'sawtooth' },
             envelope: { attack: 0.08, decay: 0.4, sustain: 0.6, release: 1.6 }
         }).toDestination();
-        textureSynthMob.volume.value = -12;
+        textureSynthMob.volume.value = -12; // Texture is subtle
 
         this.synths.bassGrooveMob = {
             fundamental: fundamentalSynthMob,
             texture: textureSynthMob
         };
-        this.synths.bassGroove = this.synths.bassGrooveMob; // Use the same for now
+        this.synths.bassGroove = this.synths.bassGrooveMob; // Use the same performant preset for desktop
     }
     
     private getActiveSynth() {
@@ -81,7 +84,6 @@ export class BassSynthManager {
             case 'portamento': return this.synths.portamento;
             case 'portamentoMob': return this.synths.portamentoMob;
             case 'bassGuitar': return this.synths.bassGuitar;
-            // BassGroove returns the fundamental synth for control
             case 'BassGroove': return this.synths.bassGroove?.fundamental;
             case 'BassGrooveMob': return this.synths.bassGrooveMob?.fundamental;
             default: return null;
@@ -137,14 +139,11 @@ export class BassSynthManager {
                 const duration = this.Tone.Time(note.duration, 'n');
                 activeSynth.triggerAttackRelease(noteName, duration, scheduledTime, note.velocity);
 
-                // Handle texture for BassGroove
-                if (this.activeInstrument === 'BassGroove' && this.synths.bassGroove) {
+                // Handle texture for BassGroove and BassGrooveMob
+                const grooveSynth = this.activeInstrument === 'BassGroove' ? this.synths.bassGroove : this.synths.bassGrooveMob;
+                if ((this.activeInstrument === 'BassGroove' || this.activeInstrument === 'BassGrooveMob') && grooveSynth) {
                     const textureNote = this.Tone.Frequency(noteName).transpose(12).toNote();
-                    this.synths.bassGroove.texture.triggerAttackRelease(textureNote, duration, scheduledTime, note.velocity * 0.5);
-                }
-                 if (this.activeInstrument === 'BassGrooveMob' && this.synths.bassGrooveMob) {
-                    const textureNote = this.Tone.Frequency(noteName).transpose(12).toNote();
-                    this.synths.bassGrooveMob.texture.triggerAttackRelease(textureNote, duration, scheduledTime, note.velocity * 0.5);
+                    grooveSynth.texture.triggerAttackRelease(textureNote, duration, scheduledTime, note.velocity * 0.5);
                 }
             }
         });
