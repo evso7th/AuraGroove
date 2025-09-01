@@ -107,13 +107,9 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
       console.log('[MAIN THREAD] Web Worker created.');
       
       // --- Set up the message handler from the worker ---
-      // This is the core of the new, stable architecture.
       worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
         const message = event.data;
         if (message.type === 'score') {
-            // CRITICAL: We DO NOT schedule anything here.
-            // We just place the received score into the buffer (the "mailbox").
-            // The Tone.Loop will pick it up at the precise time.
             console.log(`[MAIN THREAD] Received score from worker for next measure.`);
             nextScoreRef.current = message.data;
         } else if (message.type === 'error') {
@@ -128,21 +124,22 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
 
       // --- Create the main transport loop (The Conductor's Heartbeat) ---
       tickLoopRef.current = new Tone.Loop((time) => {
-        // This function is executed with perfect timing by Tone.Transport.
-        
-        // 1. PLAY THE BUFFERED SCORE: Check the "mailbox" for the score prepared on the *previous* tick.
         if (nextScoreRef.current && managersRef.current && toneRef.current) {
             console.log(`[MAIN THREAD] Loop Tick: Scheduling score for time: ${time}`);
             const { drumMachine, bassManager, melodyManager } = managersRef.current;
+            
+            console.log('[MAIN THREAD] PRE-SCHEDULE CHECK FOR DRUMS...');
             drumMachine?.schedule(nextScoreRef.current.drumScore, time);
+            
+            console.log('[MAIN THREAD] PRE-SCHEDULE CHECK FOR BASS...');
             bassManager?.schedule(nextScoreRef.current.bassScore, time);
+
+            console.log('[MAIN THREAD] PRE-SCHEDULE CHECK FOR MELODY...');
             melodyManager?.schedule(nextScoreRef.current.melodyScore, time);
             
-            // Clear the buffer after scheduling.
             nextScoreRef.current = null; 
         }
 
-        // 2. REQUEST THE NEXT SCORE: Ask the worker to compose the score for the *next* measure.
         if (workerRef.current) {
             console.log('[MAIN THREAD] Loop Tick: Sending tick to worker to compose for the NEXT measure.');
             workerRef.current.postMessage({ command: 'tick' });
@@ -165,8 +162,6 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
           if (isPlaying) {
             console.log('[MAIN THREAD] setIsPlaying(true): Starting transport and loop.');
             if (T.Transport.state !== 'started') {
-                 // IMPORTANT: Request the very first score *before* the loop starts.
-                 // This ensures the buffer is full for the first tick.
                  console.log('[MAIN THREAD] Sending pre-emptive tick to worker to fill buffer.');
                  workerRef.current.postMessage({ command: 'tick' });
                  
@@ -179,13 +174,11 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
              if (T.Transport.state === 'started') {
                 tickLoopRef.current.stop(0);
                 T.Transport.stop();
-                T.Transport.cancel(0); // Clear all scheduled events
+                T.Transport.cancel(0);
 
-                // Command all managers to stop any lingering sounds
                 managersRef.current.bassManager?.stopAll();
                 managersRef.current.melodyManager?.stopAll();
                 
-                // Reset the worker's composition state and clear the buffer
                 workerRef.current.postMessage({ command: 'reset' });
                 nextScoreRef.current = null; 
 
@@ -203,8 +196,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         },
       };
       
-      // Send initial settings to the worker
-       workerRef.current.postMessage({ command: 'init' });
+      workerRef.current.postMessage({ command: 'init' });
 
       setIsInitialized(true);
       return true;

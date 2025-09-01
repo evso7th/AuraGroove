@@ -23,10 +23,11 @@ export class MelodySynthManager {
     // The setInstrument method is now a no-op as we only have one sound.
     public setInstrument(name: MelodyInstrument) {
         // Does nothing in this simplified version.
-        console.log(`[HURDY-GURDY] setInstrument called but ignored. We only have one sound.`);
     }
 
     public schedule(score: SynthNote[], time: number) {
+        console.log(`[MELODY MANAGER] Schedule called. Time: ${time}, Score:`, score);
+
         if (score.length === 0) return;
 
         score.forEach(note => {
@@ -35,8 +36,6 @@ export class MelodySynthManager {
             // We use 'n' notation to be explicit with Tone's transport time.
             const durationInNotation = `${note.duration}n`; 
             
-            console.log(`[HURDY-GURDY] Scheduling note: ${note.note} for duration ${durationInNotation} at ${scheduledTime}`);
-
             // Use the single, persistent synth to play the note.
             this.synth.triggerAttackRelease(note.note, durationInNotation, scheduledTime, note.velocity);
         });
