@@ -19,7 +19,6 @@ type Score = {
     soloScore: SynthNote[];
     bassScore: SynthNote[];
     barDuration: number;
-    generatedAt: number;
 };
 
 type WorkerMessage = {
@@ -111,9 +110,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
             const T = toneRef.current;
             const { drumMachine, soloManager, bassManager } = managersRef.current;
             
-            const latency = performance.now() - data.generatedAt;
-            console.log('SCORE_LATENCY:', latency);
-
+            // Schedule the received score for the next bar
             const nextBarTime = T.Transport.seconds + data.barDuration;
             
             T.Transport.scheduleOnce((time) => {
@@ -135,14 +132,10 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
       // --- Create the main transport loop ---
       tickLoopRef.current = new T.Loop((time) => {
         if (workerRef.current) {
+            // This is our "conductor's beat", telling the worker to compose the next measure.
             workerRef.current.postMessage({ command: 'tick' });
         }
-      }, '1m');
-
-      // --- Diagnostic Pulse ---
-      setInterval(() => {
-        console.log('MAIN_THREAD_PULSE:', performance.now());
-      }, 100);
+      }, '1m'); // The loop triggers every measure.
 
 
       engineRef.current = {

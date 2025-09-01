@@ -143,7 +143,6 @@ export class BassSynthManager {
         }
 
         score.forEach(note => {
-            console.log('[BASS_PLAYING]', this.activeInstrument, note.note);
             const scheduledTime = time + (note.time * this.Tone.Time('4n').toSeconds());
             const duration = this.Tone.Time(note.duration, 'n');
             const velocity = note.velocity;

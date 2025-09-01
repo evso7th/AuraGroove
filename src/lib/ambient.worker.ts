@@ -184,6 +184,7 @@ const Scheduler = {
         if (newSettings.score) this.settings.score = newSettings.score;
     },
 
+    // This is now only called when the main thread commands it.
     tick() {
         let drumScore: DrumNote[] = [];
         let soloScore: SynthNote[] = [];
@@ -207,8 +208,7 @@ const Scheduler = {
             barDuration: this.barDuration,
         };
         
-        const generatedAt = self.performance.now();
-        self.postMessage({ type: 'score', data: { ...messageData, generatedAt } });
+        self.postMessage({ type: 'score', data: messageData });
         
         this.barCount++;
     }
