@@ -67,15 +67,15 @@ class EvolutionEngine {
         
         // A simple 4-note sequence to test the synth manager
         const melodyLoop: {note: string, duration: number, time: number}[] = [
-            { note: 'C4', duration: 2.0, time: 0 },      // Half note on beat 1
-            { note: 'E4', duration: 2.0, time: 1 },      // Half note on beat 2
-            { note: 'G4', duration: 2.0, time: 2 },      // Half note on beat 3
-            { note: 'B4', duration: 2.0, time: 3 },      // Half note on beat 4
+            { note: 'C4', duration: 4.0, time: 0 },      // Whole note on beat 1
+            { note: 'E4', duration: 4.0, time: 1 },      // These will now overlap
+            { note: 'G4', duration: 4.0, time: 2 },
+            { note: 'B4', duration: 4.0, time: 3 },
         ];
         
         const score: SynthNote[] = melodyLoop.map(n => ({
             ...n,
-            velocity: (Math.random() * 0.3 + 0.6) * volume // Add some velocity variation
+            velocity: (Math.random() * 0.2 + 0.5) * volume // Softer velocity for ambient
         }));
         
         console.log(`[WORKER] Generated Melody Loop score:`, score);

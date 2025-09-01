@@ -2,47 +2,72 @@
 import type { ToneJS, SynthNote, MelodyInstrument } from '@/types/music';
 
 /**
- * A simplified manager for our "Hurdy-Gurdy" test.
- * It controls a single, persistent MonoSynth.
+ * A manager for melody synths that handles portamento correctly.
  */
 export class MelodySynthManager {
     private Tone: ToneJS;
     private synth: any; // A single Tone.MonoSynth
+    private isPlaying = false;
+    private activeInstrument: MelodyInstrument = 'portamento';
+
 
     constructor(Tone: ToneJS) {
         this.Tone = Tone;
-        
-        // Create one synth and keep it.
         this.synth = new this.Tone.MonoSynth({
+             portamento: 0.2, 
             oscillator: { type: 'sine' },
-            envelope: { attack: 0.1, decay: 0.2, sustain: 0.5, release: 0.8 },
+            envelope: { attack: 0.1, decay: 0.2, sustain: 0.8, release: 1.5 },
         }).toDestination();
-        this.synth.volume.value = -6; // A reasonable default volume
+        this.synth.volume.value = -9;
     }
 
-    // The setInstrument method is now a no-op as we only have one sound.
     public setInstrument(name: MelodyInstrument) {
-        // Does nothing in this simplified version.
+        if(this.isPlaying) {
+            this.synth.triggerRelease();
+            this.isPlaying = false;
+        }
+        this.activeInstrument = name;
+        // In a real scenario, we would change synth presets here.
+        // For now, we use one synth for simplicity.
     }
 
     public schedule(score: SynthNote[], time: number) {
         console.log(`[MELODY MANAGER] Schedule called. Time: ${time}, Score:`, score);
 
-        if (score.length === 0) return;
+        if (this.activeInstrument === 'none') {
+            if(this.isPlaying) {
+                this.synth.triggerRelease(time);
+                this.isPlaying = false;
+            }
+            return;
+        }
+
+        if (score.length === 0) {
+            if (this.isPlaying) {
+                this.synth.triggerRelease(time);
+                this.isPlaying = false;
+            }
+            return;
+        }
 
         score.forEach(note => {
             const scheduledTime = time + (note.time * this.Tone.Time('4n').toSeconds());
-            // In Tone.js notation, '4n' (a quarter note) corresponds to a duration of 1 beat in a 4/4 signature.
-            // We use 'n' notation to be explicit with Tone's transport time.
-            const durationInNotation = `${note.duration}n`; 
-            
-            // Use the single, persistent synth to play the note.
-            this.synth.triggerAttackRelease(note.note, durationInNotation, scheduledTime, note.velocity);
+            const noteName = note.note as string;
+
+            // Portamento logic: use triggerAttack and setNote for continuous sound
+            if (!this.isPlaying) {
+                this.synth.triggerAttack(noteName, scheduledTime, note.velocity);
+                this.isPlaying = true;
+            } else {
+                this.synth.setNote(noteName, scheduledTime);
+            }
         });
     }
 
     public stopAll() {
-        // Release any currently playing note.
-        this.synth?.triggerRelease();
+        if (this.isPlaying) {
+            this.synth?.triggerRelease();
+            this.isPlaying = false;
+        }
     }
 }

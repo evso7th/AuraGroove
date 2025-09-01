@@ -19,8 +19,7 @@ export class BassSynthManager {
         portamentoMob?: any;
     } = {};
     private activeInstrument: BassInstrument = 'portamento';
-    private isPortamentoPlaying = false;
-    private isPortamentoMobPlaying = false;
+    private isPlaying = false;
 
     constructor(Tone: ToneJS) {
         this.Tone = Tone;
@@ -29,7 +28,6 @@ export class BassSynthManager {
     }
 
     private createPresets() {
-        // Bass Guitar Preset
         this.synths.bassGuitar = new this.Tone.MonoSynth({
             oscillator: { type: 'fmsine' },
             envelope: { attack: 0.05, decay: 0.3, sustain: 0.4, release: 0.8 },
@@ -37,56 +35,28 @@ export class BassSynthManager {
         }).toDestination();
         this.synths.bassGuitar.volume.value = -3;
 
-        // Portamento Preset with its own reverb for atmospheric decay
         const portamentoReverb = new this.Tone.Reverb({
-            decay: 6, // Long decay for atmospheric feel
-            wet: 0.4  // Mix of dry/wet signal
+            decay: 6,
+            wet: 0.4
         }).toDestination();
 
         this.synths.portamento = new this.Tone.MonoSynth({
-            portamento: 0.1, 
+            portamento: 0.2, 
             oscillator: { type: 'fmsine' },
-            envelope: { attack: 0.05, decay: 0.3, sustain: 0.4, release: 4.0 }, // Increased release
-            filterEnvelope: { attack: 0.06, decay: 0.2, sustain: 0.5, release: 5.0, baseFrequency: 200, octaves: 7 } // Increased filter release
+            envelope: { attack: 0.1, decay: 0.3, sustain: 0.9, release: 4.0 },
+            filterEnvelope: { attack: 0.06, decay: 0.2, sustain: 0.5, release: 5.0, baseFrequency: 200, octaves: 7 }
         }).connect(portamentoReverb);
         this.synths.portamento.volume.value = -3;
         
-        // PortamentoMob Preset - without reverb for performance
         this.synths.portamentoMob = new this.Tone.MonoSynth({
-            portamento: 0.1, 
+            portamento: 0.2, 
             oscillator: { type: 'fmsine' },
-            envelope: { attack: 0.05, decay: 0.3, sustain: 0.4, release: 4.0 },
+            envelope: { attack: 0.1, decay: 0.3, sustain: 0.9, release: 4.0 },
             filterEnvelope: { attack: 0.06, decay: 0.2, sustain: 0.5, release: 5.0, baseFrequency: 200, octaves: 7 }
         }).toDestination();
         this.synths.portamentoMob.volume.value = -3;
 
-
-        // BassGroove Layered Preset
-        const bassDrive = new this.Tone.Distortion(0.05).toDestination();
-        const textureChorus = new this.Tone.Chorus(0.5, 3.5, 0.7).toDestination();
-        const bassGrooveReverb = new this.Tone.Reverb({
-            decay: 4,
-            wet: 0.3
-        }).connect(bassDrive);
-        
-        const fundamentalSynth = new this.Tone.MonoSynth({
-            oscillator: { type: 'sine' },
-            envelope: { attack: 0.05, decay: 0.3, sustain: 0.8, release: 4.0 }
-        }).connect(bassGrooveReverb);
-        fundamentalSynth.volume.value = -3;
-
-        const textureSynth = new this.Tone.MonoSynth({
-            oscillator: { type: 'sawtooth' },
-            envelope: { attack: 0.08, decay: 0.4, sustain: 0.6, release: 0.8 }
-        }).connect(textureChorus);
-        textureSynth.volume.value = -12; // Quieter texture layer
-
-        this.synths.bassGroove = {
-            fundamental: fundamentalSynth,
-            texture: textureSynth
-        };
-        
-        // BassGrooveMob - Now without effects
+        // Simplified BassGroove for now
         const fundamentalSynthMob = new this.Tone.MonoSynth({
             oscillator: { type: 'sine' },
             envelope: { attack: 0.05, decay: 0.3, sustain: 0.8, release: 1.6 }
@@ -103,16 +73,26 @@ export class BassSynthManager {
             fundamental: fundamentalSynthMob,
             texture: textureSynthMob
         };
+        this.synths.bassGroove = this.synths.bassGrooveMob; // Use the same for now
+    }
+    
+    private getActiveSynth() {
+        switch(this.activeInstrument) {
+            case 'portamento': return this.synths.portamento;
+            case 'portamentoMob': return this.synths.portamentoMob;
+            case 'bassGuitar': return this.synths.bassGuitar;
+            // BassGroove returns the fundamental synth for control
+            case 'BassGroove': return this.synths.bassGroove?.fundamental;
+            case 'BassGrooveMob': return this.synths.bassGrooveMob?.fundamental;
+            default: return null;
+        }
     }
 
     public setInstrument(name: BassInstrument) {
-       if (this.activeInstrument === 'portamento' && name !== 'portamento' && this.isPortamentoPlaying) {
-           this.synths.portamento?.triggerRelease();
-           this.isPortamentoPlaying = false;
-       }
-       if (this.activeInstrument === 'portamentoMob' && name !== 'portamentoMob' && this.isPortamentoMobPlaying) {
-           this.synths.portamentoMob?.triggerRelease();
-           this.isPortamentoMobPlaying = false;
+       const currentSynth = this.getActiveSynth();
+       if (this.isPlaying) {
+           currentSynth?.triggerRelease();
+           this.isPlaying = false;
        }
        this.activeInstrument = name;
     }
@@ -120,81 +100,60 @@ export class BassSynthManager {
     public schedule(score: SynthNote[], time: number) {
         console.log(`[BASS MANAGER] Schedule called. Instrument: ${this.activeInstrument}, Time: ${time}, Score:`, score);
 
-        if (this.activeInstrument === 'none') {
-             if (this.isPortamentoPlaying) {
-                this.synths.portamento?.triggerRelease(time);
-                this.isPortamentoPlaying = false;
-            }
-             if (this.isPortamentoMobPlaying) {
-                this.synths.portamentoMob?.triggerRelease(time);
-                this.isPortamentoMobPlaying = false;
+        const activeSynth = this.getActiveSynth();
+
+        if (this.activeInstrument === 'none' || !activeSynth) {
+             if (this.isPlaying) {
+                this.getActiveSynth()?.triggerRelease(time);
+                this.isPlaying = false;
             }
             return;
         }
 
         if (score.length === 0) {
-            if (this.activeInstrument === 'portamento' && this.isPortamentoPlaying) {
-                this.synths.portamento?.triggerRelease(time);
-                this.isPortamentoPlaying = false;
-            }
-            if (this.activeInstrument === 'portamentoMob' && this.isPortamentoMobPlaying) {
-                this.synths.portamentoMob?.triggerRelease(time);
-                this.isPortamentoMobPlaying = false;
+            if (this.isPlaying) {
+                activeSynth.triggerRelease(time);
+                this.isPlaying = false;
             }
             return;
         }
-
-        if (this.isPortamentoPlaying && this.activeInstrument !== 'portamento') {
-            this.synths.portamento?.triggerRelease(time);
-            this.isPortamentoPlaying = false;
-        }
-        if (this.isPortamentoMobPlaying && this.activeInstrument !== 'portamentoMob') {
-            this.synths.portamentoMob?.triggerRelease(time);
-            this.isPortamentoMobPlaying = false;
-        }
-
+        
         score.forEach(note => {
             const scheduledTime = time + (note.time * this.Tone.Time('4n').toSeconds());
-            const duration = this.Tone.Time(note.duration, 'n');
-            const velocity = note.velocity;
             const noteName = note.note as string;
+            
+            if (this.activeInstrument === 'portamento' || this.activeInstrument === 'portamentoMob') {
+                 if (!this.isPlaying) {
+                    activeSynth.triggerAttack(noteName, scheduledTime, note.velocity);
+                    this.isPlaying = true;
+                } else {
+                    activeSynth.setNote(noteName, scheduledTime);
+                }
+            } else {
+                 if(this.isPlaying && (this.activeInstrument === 'portamento' || this.activeInstrument === 'portamentoMob')) {
+                    activeSynth.triggerRelease(scheduledTime);
+                    this.isPlaying = false;
+                }
+                const duration = this.Tone.Time(note.duration, 'n');
+                activeSynth.triggerAttackRelease(noteName, duration, scheduledTime, note.velocity);
 
-            if (this.activeInstrument === 'portamento' && this.synths.portamento) {
-                if (!this.isPortamentoPlaying) {
-                    this.synths.portamento.triggerAttack(noteName, scheduledTime, velocity);
-                    this.isPortamentoPlaying = true;
-                } else {
-                    this.synths.portamento.setNote(noteName, scheduledTime);
+                // Handle texture for BassGroove
+                if (this.activeInstrument === 'BassGroove' && this.synths.bassGroove) {
+                    const textureNote = this.Tone.Frequency(noteName).transpose(12).toNote();
+                    this.synths.bassGroove.texture.triggerAttackRelease(textureNote, duration, scheduledTime, note.velocity * 0.5);
                 }
-            } else if (this.activeInstrument === 'portamentoMob' && this.synths.portamentoMob) {
-                 if (!this.isPortamentoMobPlaying) {
-                    this.synths.portamentoMob.triggerAttack(noteName, scheduledTime, velocity);
-                    this.isPortamentoMobPlaying = true;
-                } else {
-                    this.synths.portamentoMob.setNote(noteName, scheduledTime);
+                 if (this.activeInstrument === 'BassGrooveMob' && this.synths.bassGrooveMob) {
+                    const textureNote = this.Tone.Frequency(noteName).transpose(12).toNote();
+                    this.synths.bassGrooveMob.texture.triggerAttackRelease(textureNote, duration, scheduledTime, note.velocity * 0.5);
                 }
-            } else if (this.activeInstrument === 'bassGuitar' && this.synths.bassGuitar) {
-                this.synths.bassGuitar.triggerAttackRelease(noteName, duration, scheduledTime, velocity);
-            } else if (this.activeInstrument === 'BassGroove' && this.synths.bassGroove) {
-                this.synths.bassGroove.fundamental.triggerAttackRelease(noteName, duration, scheduledTime, velocity);
-                const textureNote = this.Tone.Frequency(noteName).transpose(12).toNote();
-                this.synths.bassGroove.texture.triggerAttackRelease(textureNote, duration, scheduledTime, velocity * 0.5);
-            } else if (this.activeInstrument === 'BassGrooveMob' && this.synths.bassGrooveMob) {
-                this.synths.bassGrooveMob.fundamental.triggerAttackRelease(noteName, duration, scheduledTime, velocity);
-                const textureNote = this.Tone.Frequency(noteName).transpose(12).toNote();
-                this.synths.bassGrooveMob.texture.triggerAttackRelease(textureNote, duration, scheduledTime, velocity * 0.5);
             }
         });
     }
 
     public stopAll() {
-        if (this.isPortamentoPlaying) {
-            this.synths.portamento?.triggerRelease();
-            this.isPortamentoPlaying = false;
-        }
-        if (this.isPortamentoMobPlaying) {
-            this.synths.portamentoMob?.triggerRelease();
-            this.isPortamentoMobPlaying = false;
+        if (this.isPlaying) {
+           this.getActiveSynth()?.triggerRelease();
+           this.isPlaying = false;
         }
         this.synths.bassGuitar?.triggerRelease();
         this.synths.bassGroove?.fundamental.triggerRelease();
