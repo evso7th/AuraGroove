@@ -90,12 +90,14 @@ class EvolutionEngine {
         const volume = settings.instrumentSettings?.bass?.volume ?? 0.9;
         const note = bar % 4 < 2 ? 'C2' : 'A1'; 
         
-        return [{
+        const score: SynthNote[] = [{
             note: note,
             duration: 4,
             time: 0,
             velocity: 0.9 * volume
         }];
+        console.log('[WORKER BASS] Generated bass score:', score);
+        return score;
     }
 }
 
@@ -158,6 +160,7 @@ const Scheduler = {
         
         bassScore = this.evolutionEngine.generateBassScore(this.barCount, this.settings);
        
+        console.log('[WORKER SCHEDULER] Posting bass score:', bassScore);
         const messageData = {
             drumScore,
             bassScore,
