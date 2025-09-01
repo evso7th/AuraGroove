@@ -37,17 +37,12 @@ export class BassSynthManager {
         this.synths.bassGuitar.volume.value = -3;
 
         // --- portamento (Desktop) ---
-        const portamentoReverb = new this.Tone.Reverb({
-            decay: 6,
-            wet: 0.7
-        }).toDestination();
-
         this.synths.portamento = new this.Tone.MonoSynth({
             portamento: 0.2, 
             oscillator: { type: 'fmsine' },
             envelope: { attack: 0.1, decay: 0.3, sustain: 0.9, release: 4.0 },
             filterEnvelope: { attack: 0.06, decay: 0.2, sustain: 0.5, release: 5.0, baseFrequency: 200, octaves: 7 }
-        }).connect(portamentoReverb);
+        }).toDestination();
         this.synths.portamento.volume.value = -3;
         
         // --- portamento (Mobile) ---
