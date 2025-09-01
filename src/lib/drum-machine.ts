@@ -15,9 +15,9 @@ export class DrumMachine {
     private isReady = false;
     public channel: Tone.Channel;
 
-    constructor(Tone: ToneJS) {
+    constructor(Tone: ToneJS, channel: Tone.Channel) {
         this.Tone = Tone;
-        this.channel = new this.Tone.Channel().toDestination();
+        this.channel = channel;
         this.sampler = new this.Tone.Players(DRUM_SAMPLES, () => {
             this.isReady = true;
             console.log('[DrumMachine] Samples loaded.');

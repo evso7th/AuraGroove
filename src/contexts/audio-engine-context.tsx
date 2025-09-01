@@ -3,7 +3,7 @@
 
 import React, { createContext, useContext, useState, useRef, useCallback } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import type { Tone as ToneJS, WorkerCommand, WorkerSettings, DrumNote, SynthNote, AudioProfile } from '@/types/music';
+import type { Tone as ToneJS, WorkerCommand, WorkerSettings, DrumNote, SynthNote, AudioProfile, EffectsSettings } from '@/types/music';
 
 // Import the real managers
 import { DrumMachine } from '@/lib/drum-machine';
@@ -32,6 +32,7 @@ type WorkerMessage = {
 export interface AudioEngine {
   setIsPlaying: (isPlaying: boolean) => void;
   updateSettings: (settings: Partial<WorkerSettings>) => void;
+  toggleEffects: (enabled: boolean) => void;
   getTone: () => ToneJS | null;
   drumMachine: DrumMachine;
   bassManager: BassSynthManager;
@@ -68,6 +69,8 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   const engineRef = useRef<AudioEngine | null>(null);
   const workerRef = useRef<Worker | null>(null);
   const toneRef = useRef<typeof import('tone') | null>(null);
+  const fxBusRef = useRef<{ reverb?: Tone.Reverb, delay?: Tone.FeedbackDelay }>({});
+  const channelsRef = useRef<Record<string, Tone.Channel>>({});
   const managersRef = useRef<{
       drumMachine?: DrumMachine;
       bassManager?: BassSynthManager;
@@ -75,7 +78,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
       effectsManager?: EffectsSynthManager;
   }>({});
   const tickLoopRef = useRef<Tone.Loop | null>(null);
-  const nextScoreRef = useRef<Score | null>(null); // Key part of the new architecture: the lookahead buffer
+  const nextScoreRef = useRef<Score | null>(null);
 
   const { toast } = useToast();
 
@@ -90,12 +93,32 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
       toneRef.current = Tone;
       await Tone.start();
       console.log('[MAIN THREAD] Tone.js started.');
+      
+      // --- Create FX Bus ---
+      fxBusRef.current = {
+        reverb: new Tone.Reverb({ decay: 5, wet: 0 }).toDestination(),
+        delay: new Tone.FeedbackDelay({ delayTime: "4n", feedback: 0.3, wet: 0 }).toDestination()
+      };
+      console.log('[MAIN THREAD] FX Bus created.');
+
+      // --- Create Channels ---
+      channelsRef.current = {
+        drums: new Tone.Channel().toDestination(),
+        bass: new Tone.Channel().toDestination(),
+        melody: new Tone.Channel().toDestination(),
+        effects: new Tone.Channel().toDestination()
+      };
+      // Connect channels to the FX bus
+      Object.values(channelsRef.current).forEach(channel => channel.connect(fxBusRef.current.reverb!));
+      Object.values(channelsRef.current).forEach(channel => channel.connect(fxBusRef.current.delay!));
+      console.log('[MAIN THREAD] Channels created and connected to FX Bus.');
+
 
       // --- Initialize Synth and Drum Managers ---
       managersRef.current = {
-          drumMachine: new DrumMachine(Tone),
-          bassManager: new BassSynthManager(Tone),
-          melodyManager: new MelodySynthManager(Tone),
+          drumMachine: new DrumMachine(Tone, channelsRef.current.drums),
+          bassManager: new BassSynthManager(Tone, channelsRef.current.bass),
+          melodyManager: new MelodySynthManager(Tone, channelsRef.current.melody),
           effectsManager: new EffectsSynthManager(Tone),
       };
       console.log('[MAIN THREAD] Synth managers created.');
@@ -125,23 +148,16 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
       // --- Create the main transport loop (The Conductor's Heartbeat) ---
       tickLoopRef.current = new Tone.Loop((time) => {
         if (nextScoreRef.current && managersRef.current && toneRef.current) {
-            console.log(`[MAIN THREAD] Loop Tick: Scheduling score for time: ${time}`);
             const { drumMachine, bassManager, melodyManager } = managersRef.current;
             
-            console.log('[MAIN THREAD] PRE-SCHEDULE CHECK FOR DRUMS...');
             drumMachine?.schedule(nextScoreRef.current.drumScore, time);
-            
-            console.log('[MAIN THREAD] PRE-SCHEDULE CHECK FOR BASS...');
             bassManager?.schedule(nextScoreRef.current.bassScore, time);
-
-            console.log('[MAIN THREAD] PRE-SCHEDULE CHECK FOR MELODY...');
             melodyManager?.schedule(nextScoreRef.current.melodyScore, time);
             
             nextScoreRef.current = null; 
         }
 
         if (workerRef.current) {
-            console.log('[MAIN THREAD] Loop Tick: Sending tick to worker to compose for the NEXT measure.');
             workerRef.current.postMessage({ command: 'tick' });
         }
       }, '1m'); // The loop triggers every measure.
@@ -160,17 +176,12 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
           const T = toneRef.current;
           
           if (isPlaying) {
-            console.log('[MAIN THREAD] setIsPlaying(true): Starting transport and loop.');
             if (T.Transport.state !== 'started') {
-                 console.log('[MAIN THREAD] Sending pre-emptive tick to worker to fill buffer.');
                  workerRef.current.postMessage({ command: 'tick' });
-                 
                  tickLoopRef.current.start(0);
                  T.Transport.start();
-                 console.log('[MAIN THREAD] Tone.Transport started.');
             }
           } else {
-             console.log('[MAIN THREAD] setIsPlaying(false): Stopping transport and resetting.');
              if (T.Transport.state === 'started') {
                 tickLoopRef.current.stop(0);
                 T.Transport.stop();
@@ -181,8 +192,6 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
                 
                 workerRef.current.postMessage({ command: 'reset' });
                 nextScoreRef.current = null; 
-
-                console.log('[MAIN THREAD] Tone.Transport stopped and all sounds/schedules cleared.');
              }
           }
         },
@@ -193,6 +202,13 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
            if (toneRef.current && settings.bpm) {
              toneRef.current.Transport.bpm.value = settings.bpm;
            }
+        },
+
+        toggleEffects: (enabled: boolean) => {
+            if (fxBusRef.current.reverb && fxBusRef.current.delay) {
+                fxBusRef.current.reverb.wet.value = enabled ? 0.3 : 0;
+                fxBusRef.current.delay.wet.value = enabled ? 0.2 : 0;
+            }
         },
       };
       

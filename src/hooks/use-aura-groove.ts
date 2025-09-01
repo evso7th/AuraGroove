@@ -3,7 +3,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings, AudioProfile } from '@/types/music';
+import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings, AudioProfile, EffectsSettings } from '@/types/music';
 import { useAudioEngine } from "@/contexts/audio-engine-context";
 import { useIsMobile } from "@/hooks/use-mobile";
 import * as Tone from 'tone';
@@ -18,6 +18,7 @@ export const useAuraGroove = () => {
     bass: { name: "portamento", volume: 0.45 },
     melody: { name: "synth", volume: 0.45 },
   });
+  const [effectsSettings, setEffectsSettings] = useState<EffectsSettings>({ enabled: false });
   const [bpm, setBpm] = useState(75);
   const [score, setScore] = useState<ScoreName>('evolve');
   const isMobile = useIsMobile();
@@ -44,7 +45,6 @@ export const useAuraGroove = () => {
   // Update drum volume
   useEffect(() => {
       if(engine && isInitialized) {
-          // We use gainToDb for a more natural volume curve.
           engine.drumMachine.channel.volume.value = Tone.gainToDb(drumSettings.volume);
       }
   }, [drumSettings.volume, engine, isInitialized]);
@@ -57,6 +57,14 @@ export const useAuraGroove = () => {
         engine.updateSettings(getFullSettings());
     }
   }, [bpm, drumSettings, instrumentSettings, score, engine, isInitialized, getFullSettings]);
+  
+  const handleToggleEffects = useCallback(() => {
+    if (!engine) return;
+    const newSettings = { ...effectsSettings, enabled: !effectsSettings.enabled };
+    setEffectsSettings(newSettings);
+    engine.toggleEffects(newSettings.enabled);
+  }, [engine, effectsSettings]);
+
 
   const handleTogglePlay = useCallback(async () => {
     if (!isInitialized || !engine) return;
@@ -78,6 +86,8 @@ export const useAuraGroove = () => {
     setDrumSettings,
     instrumentSettings,
     setInstrumentSettings,
+    effectsSettings,
+    handleToggleEffects,
     bpm,
     handleBpmChange: setBpm,
     score,
@@ -86,4 +96,3 @@ export const useAuraGroove = () => {
     },
   };
 };
-

@@ -6,14 +6,16 @@ import type { ToneJS, SynthNote, MelodyInstrument } from '@/types/music';
  */
 export class MelodySynthManager {
     private Tone: ToneJS;
+    private channel: Tone.Channel;
     private synth: any; // A single Tone.MonoSynth
     private isPlaying = false;
     private activeInstrument: MelodyInstrument = 'synth';
     private presets: Record<MelodyInstrument, any>;
 
 
-    constructor(Tone: ToneJS) {
+    constructor(Tone: ToneJS, channel: Tone.Channel) {
         this.Tone = Tone;
+        this.channel = channel;
         
         this.presets = {
             synth: { oscillator: { type: 'fatsine', spread: 40, count: 4 }, envelope: { attack: 0.2, decay: 0.5, sustain: 0.8, release: 2.5 } },
@@ -26,7 +28,7 @@ export class MelodySynthManager {
 
         this.synth = new this.Tone.MonoSynth({
              portamento: 0.1, 
-        }).toDestination();
+        }).connect(this.channel);
         this.synth.volume.value = -9;
         this.setInstrument('synth'); // Set default instrument
     }
@@ -47,8 +49,6 @@ export class MelodySynthManager {
     }
 
     public schedule(score: SynthNote[], time: number) {
-        console.log(`[MELODY MANAGER] Schedule called. Time: ${time}, Score:`, score);
-
         if (this.activeInstrument === 'none') {
             if(this.isPlaying) {
                 this.synth.triggerRelease(time);

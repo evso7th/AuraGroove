@@ -70,8 +70,7 @@ export type DrumSettings = {
 };
 
 export type EffectsSettings = {
-    mode: 'none' | 'piu' | 'bell' | 'mixed';
-    volume: number;
+    enabled: boolean;
 };
 
 export type ScoreName = 'evolve' | 'omega' | 'promenade';

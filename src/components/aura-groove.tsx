@@ -1,14 +1,14 @@
 
 "use client";
 
-import { Loader2, Music, Pause, Speaker, FileMusic, Drum, SlidersHorizontal } from "lucide-react";
+import { Loader2, Music, Pause, Speaker, FileMusic, Drum, SlidersHorizontal, Waves } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import Image from 'next/image';
 import { Slider } from "@/components/ui/slider";
-import type { DrumSettings, InstrumentSettings, ScoreName, MelodyInstrument, BassInstrument } from '@/types/music';
+import type { DrumSettings, InstrumentSettings, ScoreName, EffectsSettings } from '@/types/music';
 
 // This is now a "dumb" UI component controlled by the useAuraGroove hook.
 export type AuraGrooveProps = {
@@ -19,6 +19,8 @@ export type AuraGrooveProps = {
   setDrumSettings: (settings: React.SetStateAction<DrumSettings>) => void;
   instrumentSettings: InstrumentSettings;
   setInstrumentSettings: (settings: React.SetStateAction<InstrumentSettings>) => void;
+  effectsSettings: EffectsSettings;
+  handleToggleEffects: () => void;
   bpm: number;
   handleBpmChange: (value: number) => void;
   score: ScoreName;
@@ -34,6 +36,8 @@ export function AuraGroove({
   setDrumSettings,
   instrumentSettings,
   setInstrumentSettings,
+  effectsSettings,
+  handleToggleEffects,
   bpm,
   handleBpmChange,
   score,
@@ -189,6 +193,15 @@ export function AuraGroove({
              </div>
         </div>
          
+        <div className="space-y-3 rounded-lg border p-4">
+            <h3 className="text-lg font-medium text-primary flex items-center gap-2"><Waves className="h-5 w-5" /> Effects</h3>
+             <div className="space-y-3 rounded-md border p-3">
+                <Button onClick={handleToggleEffects} variant="outline" className="w-full">
+                    {effectsSettings.enabled ? 'Disable Effects' : 'Enable Effects'}
+                </Button>
+             </div>
+        </div>
+
          {!isPlaying && (
             <p className="text-muted-foreground text-center min-h-[40px] flex items-center justify-center px-4">
               Press play to start the music.
