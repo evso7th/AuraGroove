@@ -28,47 +28,49 @@ const PatternProvider = {
 // --- 2. Instrument Generators (The Composers) ---
 class EvolutionEngine {
     private chordProgression: { root: string; notes: string[] }[];
+    private lastMelodyNoteIndex: number = 0;
     
     constructor() {
         this.chordProgression = [
-            { root: 'C2', notes: ['C4', 'E4', 'G4', 'B4'] }, // I (C Major 7)
-            { root: 'A1', notes: ['A3', 'C4', 'E4', 'G4'] }, // vi (A Minor 7)
-            { root: 'F1', notes: ['F3', 'A3', 'C4', 'E4'] }, // IV (F Major 7)
-            { root: 'G1', notes: ['G3', 'B3', 'D4', 'F4'] }, // V (G Dominant 7)
+            { root: 'C2', notes: ['C3', 'E3', 'G3'] },    // I (C Major)
+            { root: 'A1', notes: ['A2', 'C3', 'E3'] },    // vi (A Minor)
+            { root: 'F1', notes: ['F2', 'A2', 'C3'] },    // IV (F Major)
+            { root: 'G1', notes: ['G2', 'B2', 'D3'] },    // V (G Major)
         ];
         this.reset();
     }
     
     public reset() {
         console.log('[WORKER] EvolutionEngine Reset.');
+        this.lastMelodyNoteIndex = 0;
     }
 
     generateComposerDrumScore(bar: number, volume: number): DrumNote[] {
         const score: DrumNote[] = [];
         
-        // Basic kick and snare
         score.push({ sample: 'kick', time: 0, velocity: 1.0 * volume });
-        score.push({ sample: 'snare', time: 2.0, velocity: 0.8 * volume });
+        score.push({ sample: 'snare', time: 2.0, velocity: 0.7 * volume });
 
-        // Evolving hi-hat pattern
         const hatPattern = bar % 4;
         switch(hatPattern) {
-            case 0: // Simple quarter notes
-                score.push({ sample: 'hat', time: 1.0, velocity: 0.4 * volume });
-                score.push({ sample: 'hat', time: 3.0, velocity: 0.4 * volume });
+            case 0:
+                score.push({ sample: 'hat', time: 0.5, velocity: 0.4 * volume });
+                score.push({ sample: 'hat', time: 1.5, velocity: 0.4 * volume });
+                score.push({ sample: 'hat', time: 2.5, velocity: 0.4 * volume });
+                score.push({ sample: 'hat', time: 3.5, velocity: 0.4 * volume });
                 break;
-            case 1: // Eighth notes
+            case 1: 
                 for(let i=0; i<4; i++) {
                     score.push({ sample: 'hat', time: i + 0.5, velocity: 0.3 * volume });
                 }
                 break;
-            case 2: // Syncopated
+            case 2:
                  score.push({ sample: 'hat', time: 0.75, velocity: 0.35 * volume });
                  score.push({ sample: 'hat', time: 1.5, velocity: 0.35 * volume });
                  score.push({ sample: 'hat', time: 2.25, velocity: 0.35 * volume });
                  score.push({ sample: 'hat', time: 3.75, velocity: 0.35 * volume });
                 break;
-            case 3: // Ride cymbal every 4 bars for variation
+            case 3:
                 if(bar % 8 < 4) {
                     score.push({ sample: 'ride', time: 1.0, velocity: 0.5 * volume });
                     score.push({ sample: 'ride', time: 3.0, velocity: 0.5 * volume });
@@ -79,55 +81,68 @@ class EvolutionEngine {
                 break;
         }
 
-        // Add a crash cymbal on the first beat of every 8th bar
         if (bar % 8 === 0) {
-            score.push({ sample: 'crash', time: 0, velocity: 0.7 * volume });
+            score.push({ sample: 'crash', time: 0, velocity: 0.6 * volume });
         }
         
         return score;
     }
 
 
-    // "Left hand of the pianist"
+    // "Harmony Breath"
     generateBassScore(bar: number, settings: WorkerSettings): SynthNote[] {
         const instrumentName = settings.instrumentSettings?.bass?.name;
         if (instrumentName === 'none') return [];
         
         const volume = settings.instrumentSettings?.bass?.volume ?? 0.7;
+        
+        // Change chord every 2 bars
+        if (bar % 2 !== 0) return [];
+        
         const currentChord = this.chordProgression[Math.floor(bar / 2) % this.chordProgression.length];
         
         const score: SynthNote[] = [
-            { note: currentChord.root, duration: 4.0, time: 0, velocity: volume },
-            { note: `${currentChord.root.charAt(0)}3`, duration: 2.0, time: 1.5, velocity: volume * 0.7 },
-            { note: `${currentChord.root.charAt(0)}2`, duration: 2.0, time: 3.0, velocity: volume * 0.8 },
+            // One long, 8-beat note (2 measures)
+            { note: currentChord.root, duration: 8.0, time: 0, velocity: volume },
         ];
 
-        console.log(`[WORKER] Generated Bass score:`, score);
         return score;
     }
 
-    // "Right hand of the pianist"
+    // "Lullaby"
     generateMelodyScore(bar: number, settings: WorkerSettings): SynthNote[] {
         const instrumentName = settings.instrumentSettings?.melody?.name;
         if (instrumentName === 'none') return [];
-        
+
         const volume = settings.instrumentSettings?.melody?.volume ?? 0.9;
         const currentChord = this.chordProgression[Math.floor(bar / 2) % this.chordProgression.length];
         const chordNotes = currentChord.notes;
 
-        // Two interwoven melodic lines
+        // Ensure lastMelodyNoteIndex is valid for the current chord
+        if (this.lastMelodyNoteIndex >= chordNotes.length) {
+            this.lastMelodyNoteIndex = 0;
+        }
+
+        // Stepwise motion: move to an adjacent note in the chord
+        const direction = Math.random() < 0.5 ? -1 : 1;
+        let nextNoteIndex = this.lastMelodyNoteIndex + direction;
+
+        // Boundary check
+        if (nextNoteIndex < 0) {
+            nextNoteIndex = 1;
+        } else if (nextNoteIndex >= chordNotes.length) {
+            nextNoteIndex = chordNotes.length - 2;
+             if (nextNoteIndex < 0) nextNoteIndex = 0;
+        }
+        
+        const nextNote = chordNotes[nextNoteIndex];
+        this.lastMelodyNoteIndex = nextNoteIndex;
+
         const score: SynthNote[] = [
-            // Line 1: Long, sustained notes
-            { note: chordNotes[bar % 4], duration: 8.0, time: 0, velocity: volume * 0.6 },
-            
-            // Line 2: Shorter, moving notes
-            { note: chordNotes[(bar + 2) % 4], duration: 4.0, time: 0.5, velocity: volume * 0.8 },
-            { note: chordNotes[(bar + 1) % 4], duration: 4.0, time: 1.5, velocity: volume * 0.9 },
-            { note: chordNotes[(bar + 3) % 4], duration: 4.0, time: 2.5, velocity: volume * 0.7 },
-            { note: chordNotes[bar % 4], duration: 4.0, time: 3.5, velocity: volume * 0.85 },
+            { note: nextNote, duration: 4.0, time: 0, velocity: volume },
+            { note: chordNotes[0], duration: 4.0, time: 2.0, velocity: volume * 0.7 },
         ];
         
-        console.log(`[WORKER] Generated Melody score:`, score);
         return score;
     }
 }
