@@ -104,16 +104,15 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         if (message.type === 'score' && managersRef.current && toneRef.current) {
             const T = toneRef.current;
             const { drumMachine, bassManager } = managersRef.current;
-            const data = message.data;
             console.log('[CONTEXT BASS] Received bass score from worker:', message.data.bassScore);
             
             // Schedule the received score for the next bar
-            const nextBarTime = T.Transport.seconds + data.barDuration;
+            const nextBarTime = T.Transport.seconds + message.data.barDuration;
             
             T.Transport.scheduleOnce((time) => {
                 console.log('[CONTEXT BASS] Scheduling bass score with manager for time:', time);
-                drumMachine?.schedule(data.drumScore, time);
-                bassManager?.schedule(data.bassScore, time);
+                drumMachine?.schedule(message.data.drumScore, time);
+                bassManager?.schedule(message.data.bassScore, time);
             }, nextBarTime);
 
         } else if (message.type === 'error') {
