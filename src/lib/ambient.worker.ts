@@ -55,7 +55,7 @@ class EvolutionEngine {
         return [];
     }
 
-    // This is now our "Hurdy-Gurdy" generator
+    // This now generates a 4-note loop.
     generateMelodyScore(bar: number, settings: WorkerSettings): SynthNote[] {
         const instrumentName = settings.instrumentSettings?.melody?.name;
         if (instrumentName === 'none') {
@@ -64,15 +64,20 @@ class EvolutionEngine {
 
         const volume = settings.instrumentSettings?.melody?.volume ?? 0.9;
         
-        // "note-pause-note-pause" rhythm. A quarter note at the start of the bar.
-        const score: SynthNote[] = [{
-            note: 'C4',
-            duration: 1, // '4n' is 1 beat
-            time: 0, // at the beginning of the bar
-            velocity: 0.8 * volume
-        }];
+        // A simple 4-note sequence to test the synth manager
+        const melodyLoop: {note: string, duration: number, time: number}[] = [
+            { note: 'C4', duration: 0.5, time: 0 },      // Eighth note on beat 1
+            { note: 'E4', duration: 0.5, time: 1 },      // Eighth note on beat 2
+            { note: 'G4', duration: 0.5, time: 2 },      // Eighth note on beat 3
+            { note: 'B4', duration: 0.5, time: 3 },      // Eighth note on beat 4
+        ];
         
-        console.log(`[WORKER] Generated Hurdy-Gurdy score:`, score);
+        const score: SynthNote[] = melodyLoop.map(n => ({
+            ...n,
+            velocity: (Math.random() * 0.3 + 0.6) * volume // Add some velocity variation
+        }));
+        
+        console.log(`[WORKER] Generated Melody Loop score:`, score);
         return score;
     }
 }
