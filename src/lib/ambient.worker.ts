@@ -52,8 +52,23 @@ class EvolutionEngine {
     }
 
     generateBassScore(bar: number, settings: WorkerSettings): SynthNote[] {
-        // Return empty score to disable bass
-        return [];
+        const instrumentName = settings.instrumentSettings?.bass?.name;
+        if (instrumentName === 'none') {
+            return [];
+        }
+        
+        const volume = settings.instrumentSettings?.bass?.volume ?? 0.7;
+        const note = bar % 2 === 0 ? 'C2' : 'G2'; // Simple alternating bass line
+        
+        const score: SynthNote[] = [{
+            note: note,
+            duration: 8.0, // Very long note to ensure portamento overlap
+            time: 0,
+            velocity: volume
+        }];
+
+        console.log(`[WORKER] Generated Bass score:`, score);
+        return score;
     }
 
     // This now generates a 4-note loop.
