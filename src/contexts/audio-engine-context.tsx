@@ -1,19 +1,17 @@
 
-
 'use client';
 
 import React, { createContext, useContext, useState, useRef, useCallback } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import type { ToneJS, WorkerCommand, WorkerSettings, DrumNote, SynthNote, AudioProfile } from '@/types/music';
+import type { Tone as ToneJS, WorkerCommand, WorkerSettings, DrumNote, SynthNote, AudioProfile } from '@/types/music';
 
 // Import the real managers
 import { DrumMachine } from '@/lib/drum-machine';
 import { BassSynthManager } from '@/lib/bass-synth-manager';
 import { MelodySynthManager } from '@/lib/melody-synth-manager';
 import { EffectsSynthManager } from '@/lib/effects-synth-manager';
-import { useIsMobile } from '@/hooks/use-mobile';
 
-
+// This is the structure of the data received from the worker
 type Score = {
     drumScore: DrumNote[];
     bassScore: SynthNote[];
@@ -21,6 +19,7 @@ type Score = {
     barDuration: number;
 };
 
+// This is the structure of messages from the worker
 type WorkerMessage = {
   type: 'score';
   data: Score;
@@ -29,6 +28,7 @@ type WorkerMessage = {
   error?: string;
 };
 
+// This is the public interface of our audio engine
 export interface AudioEngine {
   setIsPlaying: (isPlaying: boolean) => void;
   updateSettings: (settings: Partial<WorkerSettings>) => void;
@@ -39,6 +39,7 @@ export interface AudioEngine {
   effectsManager: EffectsSynthManager;
 }
 
+// React Context for the audio engine
 interface AudioEngineContextType {
   engine: AudioEngine | null;
   isInitialized: boolean;
@@ -57,14 +58,16 @@ export const useAudioEngine = () => {
   return context;
 };
 
+// The provider component that encapsulates all audio logic
 export const AudioEngineProvider = ({ children }: { children: React.ReactNode }) => {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const [loadingText, setLoadingText] = useState('');
   
+  // Refs to hold instances that shouldn't trigger re-renders
   const engineRef = useRef<AudioEngine | null>(null);
   const workerRef = useRef<Worker | null>(null);
-  const toneRef = useRef<ToneJS | null>(null);
+  const toneRef = useRef<typeof import('tone') | null>(null);
   const managersRef = useRef<{
       drumMachine?: DrumMachine;
       bassManager?: BassSynthManager;
@@ -72,11 +75,9 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
       effectsManager?: EffectsSynthManager;
   }>({});
   const tickLoopRef = useRef<Tone.Loop | null>(null);
-  const lastSettingsRef = useRef<Partial<WorkerSettings>>({});
-  const nextScoreRef = useRef<Score | null>(null); // Buffer for the next score
+  const nextScoreRef = useRef<Score | null>(null); // Key part of the new architecture: the lookahead buffer
 
   const { toast } = useToast();
-  const isMobile = useIsMobile();
 
   const initialize = useCallback(async (audioProfile: AudioProfile) => {
     if (isInitialized || isInitializing) return true;
@@ -84,32 +85,36 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     setIsInitializing(true);
     setLoadingText('Loading Audio Libraries...');
     try {
+      // Dynamically import Tone.js
       const Tone = await import('tone');
       toneRef.current = Tone;
       await Tone.start();
       console.log('[MAIN THREAD] Tone.js started.');
 
-      // --- Initialize real managers ---
-      const T = toneRef.current;
-
+      // --- Initialize Synth and Drum Managers ---
       managersRef.current = {
-          drumMachine: new DrumMachine(T),
-          bassManager: new BassSynthManager(T),
-          melodyManager: new MelodySynthManager(T),
-          effectsManager: new EffectsSynthManager(T),
+          drumMachine: new DrumMachine(Tone),
+          bassManager: new BassSynthManager(Tone),
+          melodyManager: new MelodySynthManager(Tone),
+          effectsManager: new EffectsSynthManager(Tone),
       };
       console.log('[MAIN THREAD] Synth managers created.');
 
+      // --- Initialize Web Worker (The Composer) ---
       setLoadingText('Initializing Composer AI...');
       const worker = new Worker(new URL('../lib/ambient.worker.ts', import.meta.url), { type: 'module' });
       workerRef.current = worker;
       console.log('[MAIN THREAD] Web Worker created.');
       
+      // --- Set up the message handler from the worker ---
+      // This is the core of the new, stable architecture.
       worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
         const message = event.data;
         if (message.type === 'score') {
-            console.log('[MAIN THREAD] Received score from worker:', message.data);
-            // Just store the score in the buffer. The loop will pick it up.
+            // CRITICAL: We DO NOT schedule anything here.
+            // We just place the received score into the buffer (the "mailbox").
+            // The Tone.Loop will pick it up at the precise time.
+            console.log(`[MAIN THREAD] Received score from worker for next measure.`);
             nextScoreRef.current = message.data;
         } else if (message.type === 'error') {
             console.error('Error from worker:', message.error);
@@ -121,68 +126,76 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         }
       };
 
-      // --- Create the main transport loop ---
-      tickLoopRef.current = new T.Loop((time) => {
-        // 1. Play the score that was buffered on the previous tick.
+      // --- Create the main transport loop (The Conductor's Heartbeat) ---
+      tickLoopRef.current = new Tone.Loop((time) => {
+        // This function is executed with perfect timing by Tone.Transport.
+        
+        // 1. PLAY THE BUFFERED SCORE: Check the "mailbox" for the score prepared on the *previous* tick.
         if (nextScoreRef.current && managersRef.current && toneRef.current) {
-            console.log(`[MAIN THREAD] Scheduling score with managers for time: ${time}`);
+            console.log(`[MAIN THREAD] Loop Tick: Scheduling score for time: ${time}`);
             const { drumMachine, bassManager, melodyManager } = managersRef.current;
             drumMachine?.schedule(nextScoreRef.current.drumScore, time);
             bassManager?.schedule(nextScoreRef.current.bassScore, time);
             melodyManager?.schedule(nextScoreRef.current.melodyScore, time);
-            nextScoreRef.current = null; // Clear the buffer after scheduling
+            
+            // Clear the buffer after scheduling.
+            nextScoreRef.current = null; 
         }
 
-        // 2. Ask the worker to compose the score for the *next* tick.
+        // 2. REQUEST THE NEXT SCORE: Ask the worker to compose the score for the *next* measure.
         if (workerRef.current) {
-            console.log('[MAIN THREAD] Sending tick to worker.');
+            console.log('[MAIN THREAD] Loop Tick: Sending tick to worker to compose for the NEXT measure.');
             workerRef.current.postMessage({ command: 'tick' });
         }
       }, '1m'); // The loop triggers every measure.
 
 
+      // --- Define the public engine interface ---
       engineRef.current = {
         getTone: () => toneRef.current,
-        // Expose managers
         drumMachine: managersRef.current.drumMachine!,
         bassManager: managersRef.current.bassManager!,
         melodyManager: managersRef.current.melodyManager!,
         effectsManager: managersRef.current.effectsManager!,
+        
         setIsPlaying: (isPlaying: boolean) => {
-          if (!workerRef.current || !toneRef.current || !managersRef.current) return;
+          if (!workerRef.current || !toneRef.current || !tickLoopRef.current) return;
           const T = toneRef.current;
           
           if (isPlaying) {
-            console.log('[MAIN THREAD] setIsPlaying(true): Attempting to start transport and loop.');
+            console.log('[MAIN THREAD] setIsPlaying(true): Starting transport and loop.');
             if (T.Transport.state !== 'started') {
-                 // Trigger the first tick immediately to fill the buffer before the loop starts
+                 // IMPORTANT: Request the very first score *before* the loop starts.
+                 // This ensures the buffer is full for the first tick.
+                 console.log('[MAIN THREAD] Sending pre-emptive tick to worker to fill buffer.');
                  workerRef.current.postMessage({ command: 'tick' });
-                 tickLoopRef.current?.start(T.now());
+                 
+                 tickLoopRef.current.start(0);
                  T.Transport.start();
                  console.log('[MAIN THREAD] Tone.Transport started.');
             }
           } else {
-             console.log('[MAIN THREAD] setIsPlaying(false): Attempting to stop transport and reset.');
+             console.log('[MAIN THREAD] setIsPlaying(false): Stopping transport and resetting.');
              if (T.Transport.state === 'started') {
-                tickLoopRef.current?.stop(0);
+                tickLoopRef.current.stop(0);
                 T.Transport.stop();
                 T.Transport.cancel(0); // Clear all scheduled events
 
-                // Command all managers to stop their sounds
+                // Command all managers to stop any lingering sounds
                 managersRef.current.bassManager?.stopAll();
                 managersRef.current.melodyManager?.stopAll();
                 
-                // Reset the worker's composition state
+                // Reset the worker's composition state and clear the buffer
                 workerRef.current.postMessage({ command: 'reset' });
-                nextScoreRef.current = null; // Clear the buffer
+                nextScoreRef.current = null; 
 
                 console.log('[MAIN THREAD] Tone.Transport stopped and all sounds/schedules cleared.');
              }
           }
         },
+        
         updateSettings: (settings: Partial<WorkerSettings>) => {
            if (!workerRef.current) return;
-           lastSettingsRef.current = {...lastSettingsRef.current, ...settings};
            workerRef.current.postMessage({ command: 'update_settings', data: settings });
            if (toneRef.current && settings.bpm) {
              toneRef.current.Transport.bpm.value = settings.bpm;
@@ -204,7 +217,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         setIsInitializing(false);
         setLoadingText('');
     }
-  }, [isInitialized, isInitializing, toast, isMobile]);
+  }, [isInitialized, isInitializing, toast]);
 
   return (
     <AudioEngineContext.Provider value={{ engine: engineRef.current, isInitialized, isInitializing, initialize, loadingText }}>
