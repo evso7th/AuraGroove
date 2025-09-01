@@ -1,4 +1,5 @@
 
+
 /**
  * @file AuraGroove Ambient Music Worker
  *
@@ -66,10 +67,10 @@ class EvolutionEngine {
         
         // A simple 4-note sequence to test the synth manager
         const melodyLoop: {note: string, duration: number, time: number}[] = [
-            { note: 'C4', duration: 0.5, time: 0 },      // Eighth note on beat 1
-            { note: 'E4', duration: 0.5, time: 1 },      // Eighth note on beat 2
-            { note: 'G4', duration: 0.5, time: 2 },      // Eighth note on beat 3
-            { note: 'B4', duration: 0.5, time: 3 },      // Eighth note on beat 4
+            { note: 'C4', duration: 2.0, time: 0 },      // Half note on beat 1
+            { note: 'E4', duration: 2.0, time: 1 },      // Half note on beat 2
+            { note: 'G4', duration: 2.0, time: 2 },      // Half note on beat 3
+            { note: 'B4', duration: 2.0, time: 3 },      // Half note on beat 4
         ];
         
         const score: SynthNote[] = melodyLoop.map(n => ({
@@ -181,3 +182,4 @@ self.onmessage = async (event: MessageEvent<WorkerCommand>) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
+
