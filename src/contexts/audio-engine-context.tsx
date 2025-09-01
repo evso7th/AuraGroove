@@ -157,7 +157,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
             if (T.Transport.state !== 'started') {
                  // Trigger the first tick immediately to fill the buffer
                  workerRef.current.postMessage({ command: 'tick' });
-                 tickLoopRef.current?.start(0);
+                 tickLoopRef.current?.start(T.now());
                  T.Transport.start();
                  console.log('[MAIN THREAD] Tone.Transport started.');
             }
