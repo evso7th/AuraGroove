@@ -127,19 +127,11 @@ export function AuraGroove({
                           </SelectTrigger>
                           <SelectContent>
                              <SelectItem value="none">None</SelectItem>
-                             {part === 'bass' ? <>
-                                <SelectItem value="bassGuitar">Bass Guitar</SelectItem>
-                                <SelectItem value="BassGroove">BassGroove</SelectItem>
-                                <SelectItem value="BassGrooveMob">BassGrooveMob</SelectItem>
-                                <SelectItem value="portamento">Portamento</SelectItem>
-                                <SelectItem value="portamentoMob">PortamentoMob</SelectItem>
-                             </> : <>
-                                <SelectItem value="synthesizer">Synthesizer</SelectItem>
-                                <SelectItem value="piano">Piano</SelectItem>
-                                <SelectItem value="organ">Organ</SelectItem>
-                                <SelectItem value="mellotron">Mellotron</SelectItem>
-                                <SelectItem value="portamento">Portamento</SelectItem>
-                             </>}
+                             <SelectItem value="bassGuitar">Bass Guitar</SelectItem>
+                             <SelectItem value="BassGroove">BassGroove</SelectItem>
+                             <SelectItem value="BassGrooveMob">BassGrooveMob</SelectItem>
+                             <SelectItem value="portamento">Portamento</SelectItem>
+                             <SelectItem value="portamentoMob">PortamentoMob</SelectItem>
                           </SelectContent>
                         </Select>
                     </div>

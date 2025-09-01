@@ -50,10 +50,6 @@ export type SynthNote = {
 
 // --- UI Types ---
 export type InstrumentSettings = {
-  solo: {
-      name: 'synthesizer' | 'piano' | 'organ' | 'mellotron' | 'portamento' | 'none';
-      volume: number; // 0-1
-  };
   bass: {
       name: 'bassGuitar' | 'BassGroove' | 'portamento' | 'portamentoMob' | 'BassGrooveMob' | 'none';
       volume: number; // 0-1

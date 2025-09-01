@@ -30,9 +30,6 @@ const PatternProvider = {
 
 // --- 2. Instrument Generators (The Composers) ---
 class EvolutionEngine {
-    private soloLastNote: string | null = 'C4';
-    private readonly soloNotes = ['C4', 'D4', 'E4', 'G4', 'A4', 'C5', 'D5', 'E5'];
-
     private nextFillBar: number;
     private currentFillInterval: number;
 
@@ -54,22 +51,7 @@ class EvolutionEngine {
         this.bassPhraseLength = 0;
         this.maxBassPhraseLength = this.getNewMaxBassPhraseLength();
 
-        this.soloLastNote = 'C4';
         console.log('[Worker EvolutionEngine] Reset.');
-    }
-
-    private getNextNote(lastNote: string | null, scale: string[]): string {
-        const lastNoteIndex = scale.indexOf(lastNote || scale[0]);
-        let nextNoteIndex;
-        if (lastNoteIndex === -1) {
-            nextNoteIndex = Math.floor(scale.length / 2);
-        } else {
-            const direction = Math.random() < 0.5 ? -1 : 1;
-            nextNoteIndex = lastNoteIndex + direction;
-        }
-        if (nextNoteIndex < 0) nextNoteIndex = 1;
-        if (nextNoteIndex >= scale.length) nextNoteIndex = scale.length - 2;
-        return scale[nextNoteIndex];
     }
 
     generateDrumScore(bar: number, settings: {volume: number}): DrumNote[] {
@@ -87,28 +69,6 @@ class EvolutionEngine {
              score[2] = { sample: 'crash', time: 3, velocity: 0.6 * vol };
              this.currentFillInterval = Math.floor(Math.random() * (12 - 6 + 1)) + 6;
              this.nextFillBar += this.currentFillInterval;
-        }
-
-        return score;
-    }
-    
-    generateSoloScore(bar: number, settings: WorkerSettings, barDuration: number): SynthNote[] {
-        const soloSettings = settings.instrumentSettings?.solo;
-        if (soloSettings?.name === 'none') return [];
-
-        const score: SynthNote[] = [];
-
-        for (let beat = 0; beat < 4; beat++) {
-            if (Math.random() > 0.3) { // Create some rests
-                this.soloLastNote = this.getNextNote(this.soloLastNote, this.soloNotes);
-                const newNote: SynthNote = {
-                    note: this.soloLastNote,
-                    duration: barDuration / 2,
-                    time: beat,
-                    velocity: (0.6 + Math.random() * 0.2) * (soloSettings?.volume ?? 0.8)
-                };
-                score.push(newNote);
-            }
         }
 
         return score;
@@ -141,10 +101,10 @@ class EvolutionEngine {
 
 // Dummy classes for parts that are not yet fully implemented, to avoid breaking changes.
 class OmegaScoreGenerator {
-    generateScore(bar: number, settings: any) { return { soloScore: [], bassScore: [] }; }
+    generateScore(bar: number, settings: any) { return { bassScore: [] }; }
 }
 class PromenadeScoreGenerator {
-     generateScore(bar: number, settings: any) { return { soloScore: [], bassScore: [] }; }
+     generateScore(bar: number, settings: any) { return { bassScore: [] }; }
 }
 
 // --- 3. Scheduler (The Conductor) ---
@@ -156,7 +116,6 @@ const Scheduler = {
         score: 'evolve' as ScoreName,
         drumSettings: { pattern: 'ambient_beat', volume: 0.5, enabled: true },
         instrumentSettings: { 
-            solo: { name: "portamento", volume: 0.8 },
             bass: { name: "portamento", volume: 0.45 },
         },
     } as WorkerSettings,
@@ -187,7 +146,6 @@ const Scheduler = {
     // This is now only called when the main thread commands it.
     tick() {
         let drumScore: DrumNote[] = [];
-        let soloScore: SynthNote[] = [];
         let bassScore: SynthNote[] = [];
 
         if (this.settings.drumSettings.enabled) {
@@ -199,11 +157,9 @@ const Scheduler = {
         }
         
         bassScore = this.evolutionEngine.generateBassScore(this.barCount, this.settings);
-        soloScore = this.evolutionEngine.generateSoloScore(this.barCount, this.settings, this.barDuration);
        
         const messageData = {
             drumScore,
-            soloScore,
             bassScore,
             barDuration: this.barDuration,
         };
