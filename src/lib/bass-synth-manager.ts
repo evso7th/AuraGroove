@@ -147,23 +147,22 @@ export class BassSynthManager {
             return;
         }
 
+        if (this.isPortamentoPlaying && this.activeInstrument !== 'portamento') {
+            this.synths.portamento?.triggerRelease(time);
+            this.isPortamentoPlaying = false;
+        }
+        if (this.isPortamentoMobPlaying && this.activeInstrument !== 'portamentoMob') {
+            this.synths.portamentoMob?.triggerRelease(time);
+            this.isPortamentoMobPlaying = false;
+        }
+
         score.forEach(note => {
-            const scheduledTime = time + this.Tone.Time(note.time, '4n').toSeconds();
+            const scheduledTime = time + (note.time * this.Tone.Time('4n').toSeconds());
             const duration = this.Tone.Time(note.duration, 'n');
             const velocity = note.velocity;
             const noteName = note.note as string;
 
             console.log('[BASS MANAGER] Scheduling note:', note.note, 'at', scheduledTime, 'with velocity', velocity);
-
-            if (this.isPortamentoPlaying && this.activeInstrument !== 'portamento') {
-                this.synths.portamento?.triggerRelease(time);
-                this.isPortamentoPlaying = false;
-            }
-            if (this.isPortamentoMobPlaying && this.activeInstrument !== 'portamentoMob') {
-                this.synths.portamentoMob?.triggerRelease(time);
-                this.isPortamentoMobPlaying = false;
-            }
-
 
             if (this.activeInstrument === 'portamento' && this.synths.portamento) {
                 if (!this.isPortamentoPlaying) {
