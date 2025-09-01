@@ -151,7 +151,7 @@ export class BassSynthManager {
             const scheduledTime = time + this.Tone.Time(note.time, '4n').toSeconds();
             const duration = this.Tone.Time(note.duration, 'n');
             const velocity = note.velocity;
-            const noteName = note.note;
+            const noteName = note.note as string;
 
             console.log('[BASS MANAGER] Scheduling note:', note.note, 'at', scheduledTime, 'with velocity', velocity);
 
