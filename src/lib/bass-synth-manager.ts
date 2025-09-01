@@ -35,6 +35,7 @@ export class BassSynthManager {
         }).toDestination();
         this.synths.bassGuitar.volume.value = -3;
 
+        const portamentoDistortion = new this.Tone.Distortion(0.1);
         const portamentoReverb = new this.Tone.Reverb({
             decay: 6,
             wet: 0.4
@@ -45,7 +46,7 @@ export class BassSynthManager {
             oscillator: { type: 'fmsine' },
             envelope: { attack: 0.1, decay: 0.3, sustain: 0.9, release: 4.0 },
             filterEnvelope: { attack: 0.06, decay: 0.2, sustain: 0.5, release: 5.0, baseFrequency: 200, octaves: 7 }
-        }).connect(portamentoReverb);
+        }).chain(portamentoDistortion, portamentoReverb);
         this.synths.portamento.volume.value = -3;
         
         this.synths.portamentoMob = new this.Tone.MonoSynth({
@@ -90,8 +91,8 @@ export class BassSynthManager {
 
     public setInstrument(name: BassInstrument) {
        const currentSynth = this.getActiveSynth();
-       if (this.isPlaying) {
-           currentSynth?.triggerRelease();
+       if (this.isPlaying && currentSynth) {
+           currentSynth.triggerRelease();
            this.isPlaying = false;
        }
        this.activeInstrument = name;
@@ -103,8 +104,8 @@ export class BassSynthManager {
         const activeSynth = this.getActiveSynth();
 
         if (this.activeInstrument === 'none' || !activeSynth) {
-             if (this.isPlaying) {
-                this.getActiveSynth()?.triggerRelease(time);
+             if (this.isPlaying && activeSynth) {
+                activeSynth.triggerRelease(time);
                 this.isPlaying = false;
             }
             return;
@@ -152,7 +153,10 @@ export class BassSynthManager {
 
     public stopAll() {
         if (this.isPlaying) {
-           this.getActiveSynth()?.triggerRelease();
+            const activeSynth = this.getActiveSynth();
+            if (activeSynth) {
+                 activeSynth.triggerRelease();
+            }
            this.isPlaying = false;
         }
         this.synths.bassGuitar?.triggerRelease();
