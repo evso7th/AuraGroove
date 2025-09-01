@@ -86,7 +86,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
       const Tone = await import('tone');
       toneRef.current = Tone;
       await Tone.start();
-      console.log('[CONTEXT_TRACE] Tone.js started.');
+      console.log('[MAIN THREAD] Tone.js started.');
 
       // --- Initialize real managers ---
       const T = toneRef.current;
@@ -97,21 +97,23 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
           melodyManager: new MelodySynthManager(T),
           effectsManager: new EffectsSynthManager(T),
       };
-      console.log('[CONTEXT_TRACE] Synth managers created.');
+      console.log('[MAIN THREAD] Synth managers created.');
 
       setLoadingText('Initializing Composer AI...');
       const worker = new Worker(new URL('../lib/ambient.worker.ts', import.meta.url), { type: 'module' });
       workerRef.current = worker;
-      console.log('[CONTEXT_TRACE] Web Worker created.');
+      console.log('[MAIN THREAD] Web Worker created.');
       
       worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
         const message = event.data;
         if (message.type === 'score' && managersRef.current && toneRef.current) {
+            console.log('[MAIN THREAD] Received score from worker:', message.data);
             const T = toneRef.current;
             const { drumMachine, bassManager, melodyManager } = managersRef.current;
             
             // Schedule the received score for the next bar
             T.Transport.scheduleOnce((time) => {
+                console.log(`[MAIN THREAD] Scheduling score with managers for time: ${time}`);
                 drumMachine?.schedule(message.data.drumScore, time);
                 bassManager?.schedule(message.data.bassScore, time);
                 melodyManager?.schedule(message.data.melodyScore, time);
@@ -131,6 +133,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
       tickLoopRef.current = new T.Loop((time) => {
         if (workerRef.current) {
             // This is our "conductor's beat", telling the worker to compose the next measure.
+            console.log('[MAIN THREAD] Sending tick to worker.');
             workerRef.current.postMessage({ command: 'tick' });
         }
       }, '1m'); // The loop triggers every measure.
@@ -148,14 +151,14 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
           const T = toneRef.current;
           
           if (isPlaying) {
-            console.log('[CONTEXT_TRACE] setIsPlaying(true): Attempting to start transport and loop.');
+            console.log('[MAIN THREAD] setIsPlaying(true): Attempting to start transport and loop.');
             if (T.Transport.state !== 'started') {
                  tickLoopRef.current?.start(0);
                  T.Transport.start();
-                 console.log('[CONTEXT_TRACE] Tone.Transport started.');
+                 console.log('[MAIN THREAD] Tone.Transport started.');
             }
           } else {
-             console.log('[CONTEXT_TRACE] setIsPlaying(false): Attempting to stop transport and reset.');
+             console.log('[MAIN THREAD] setIsPlaying(false): Attempting to stop transport and reset.');
              if (T.Transport.state === 'started') {
                 tickLoopRef.current?.stop(0);
                 T.Transport.stop();
@@ -168,7 +171,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
                 // Reset the worker's composition state
                 workerRef.current.postMessage({ command: 'reset' });
 
-                console.log('[CONTEXT_TRACE] Tone.Transport stopped and all sounds/schedules cleared.');
+                console.log('[MAIN THREAD] Tone.Transport stopped and all sounds/schedules cleared.');
              }
           }
         },

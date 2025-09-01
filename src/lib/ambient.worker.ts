@@ -45,6 +45,7 @@ class EvolutionEngine {
     }
     
     public reset() {
+        console.log('[WORKER] EvolutionEngine Reset.');
         this.currentFillInterval = Math.floor(Math.random() * (12 - 6 + 1)) + 6;
         this.nextFillBar = this.currentFillInterval - 1;
 
@@ -94,6 +95,7 @@ class EvolutionEngine {
             time: 0,
             velocity: 0.9 * volume
         }];
+        console.log(`[WORKER] Generated bass score:`, score);
         return score;
     }
 
@@ -113,6 +115,7 @@ class EvolutionEngine {
             time: 0,
             velocity: 0.9 * volume
         }];
+        console.log(`[WORKER] Generated melody score:`, score);
         return score;
     }
 }
@@ -164,6 +167,7 @@ const Scheduler = {
 
     // This is now only called when the main thread commands it.
     tick() {
+        console.log(`[WORKER] Scheduler.tick called for bar ${this.barCount}`);
         let drumScore: DrumNote[] = [];
         let bassScore: SynthNote[] = [];
         let melodyScore: SynthNote[] = [];
@@ -186,6 +190,7 @@ const Scheduler = {
             barDuration: this.barDuration,
         };
         
+        console.log(`[WORKER] Posting score to main thread:`, messageData);
         self.postMessage({ type: 'score', data: messageData });
         
         this.barCount++;
@@ -196,6 +201,7 @@ const Scheduler = {
 // --- MessageBus (The entry point) ---
 self.onmessage = async (event: MessageEvent<WorkerCommand>) => {
     const { command, data } = event.data;
+    console.log(`[WORKER] Received command: ${command}`);
 
     try {
         switch (command) {
