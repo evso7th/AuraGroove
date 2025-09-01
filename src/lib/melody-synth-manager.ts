@@ -8,17 +8,27 @@ export class MelodySynthManager {
     private Tone: ToneJS;
     private synth: any; // A single Tone.MonoSynth
     private isPlaying = false;
-    private activeInstrument: MelodyInstrument = 'portamento';
+    private activeInstrument: MelodyInstrument = 'synth';
+    private presets: Record<MelodyInstrument, any>;
 
 
     constructor(Tone: ToneJS) {
         this.Tone = Tone;
+        
+        this.presets = {
+            synth: { oscillator: { type: 'fatsine', spread: 40, count: 4 }, envelope: { attack: 0.2, decay: 0.5, sustain: 0.8, release: 2.5 } },
+            organ: { oscillator: { type: 'fatsawtooth', count: 3, spread: 20 }, envelope: { attack: 0.4, decay: 0.2, sustain: 0.7, release: 3.2 } },
+            piano: { type: 'FMSynth', harmonicity: 3.01, modulationIndex: 14, envelope: { attack: 0.01, decay: 1.5, sustain: 0.1, release: 2.5 } },
+            mellotron: { type: 'FMSynth', harmonicity: 2, modulationIndex: 0.8, envelope: { attack: 0.3, decay: 0.5, sustain: 0.4, release: 2.8 } },
+            theremin: { oscillator: { type: 'sine' }, envelope: { attack: 0.1, decay: 0.1, sustain: 0.9, release: 0.8 } },
+            none: {}, // Empty preset for 'none' case
+        };
+
         this.synth = new this.Tone.MonoSynth({
-             portamento: 0.2, 
-            oscillator: { type: 'sine' },
-            envelope: { attack: 0.1, decay: 0.2, sustain: 0.8, release: 1.5 },
+             portamento: 0.1, 
         }).toDestination();
         this.synth.volume.value = -9;
+        this.setInstrument('synth'); // Set default instrument
     }
 
     public setInstrument(name: MelodyInstrument) {
@@ -27,8 +37,13 @@ export class MelodySynthManager {
             this.isPlaying = false;
         }
         this.activeInstrument = name;
-        // In a real scenario, we would change synth presets here.
-        // For now, we use one synth for simplicity.
+
+        if (name === 'none') return;
+        
+        const preset = this.presets[name];
+        if (preset) {
+            this.synth.set(preset);
+        }
     }
 
     public schedule(score: SynthNote[], time: number) {

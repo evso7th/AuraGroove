@@ -50,7 +50,7 @@ export type SynthNote = {
 
 // --- UI Types ---
 export type BassInstrument = 'bassGuitar' | 'BassGroove' | 'portamento' | 'portamentoMob' | 'BassGrooveMob' | 'none';
-export type MelodyInstrument = 'portamento' | 'none';
+export type MelodyInstrument = 'synth' | 'organ' | 'piano' | 'mellotron' | 'theremin' | 'none';
 
 
 export type InstrumentSettings = {
