@@ -31,7 +31,15 @@ const PatternProvider = {
 
 // --- 2. Instrument Generators (The Composers) ---
 class EvolutionEngine {
+    private chordProgression: { root: string; notes: string[] }[];
+    
     constructor() {
+        this.chordProgression = [
+            { root: 'C2', notes: ['C4', 'E4', 'G4', 'B4'] }, // I (C Major 7)
+            { root: 'A1', notes: ['A3', 'C4', 'E4', 'G4'] }, // vi (A Minor 7)
+            { root: 'F1', notes: ['F3', 'A3', 'C4', 'E4'] }, // IV (F Major 7)
+            { root: 'G1', notes: ['G3', 'B3', 'D4', 'F4'] }, // V (G Dominant 7)
+        ];
         this.reset();
     }
     
@@ -51,52 +59,50 @@ class EvolutionEngine {
         return score;
     }
 
+    // "Left hand of the pianist"
     generateBassScore(bar: number, settings: WorkerSettings): SynthNote[] {
         const instrumentName = settings.instrumentSettings?.bass?.name;
-        if (instrumentName === 'none') {
-            return [];
-        }
+        if (instrumentName === 'none') return [];
         
         const volume = settings.instrumentSettings?.bass?.volume ?? 0.7;
-        const note = bar % 2 === 0 ? 'C2' : 'G2'; // Simple alternating bass line
+        const currentChord = this.chordProgression[Math.floor(bar / 2) % this.chordProgression.length];
         
-        const score: SynthNote[] = [{
-            note: note,
-            duration: 8.0, // Very long note to ensure portamento overlap
-            time: 0,
-            velocity: volume
-        }];
+        const score: SynthNote[] = [
+            { note: currentChord.root, duration: 4.0, time: 0, velocity: volume },
+            { note: `${currentChord.root.charAt(0)}3`, duration: 2.0, time: 1.5, velocity: volume * 0.7 },
+            { note: `${currentChord.root.charAt(0)}2`, duration: 2.0, time: 3.0, velocity: volume * 0.8 },
+        ];
 
         console.log(`[WORKER] Generated Bass score:`, score);
         return score;
     }
 
-    // This now generates a 4-note loop.
+    // "Right hand of the pianist"
     generateMelodyScore(bar: number, settings: WorkerSettings): SynthNote[] {
         const instrumentName = settings.instrumentSettings?.melody?.name;
-        if (instrumentName === 'none') {
-            return [];
-        }
-
-        const volume = settings.instrumentSettings?.melody?.volume ?? 0.9;
+        if (instrumentName === 'none') return [];
         
-        // A simple 4-note sequence to test the synth manager
-        const melodyLoop: {note: string, duration: number, time: number}[] = [
-            { note: 'C4', duration: 4.0, time: 0 },      // Whole note on beat 1
-            { note: 'E4', duration: 4.0, time: 1 },      // These will now overlap
-            { note: 'G4', duration: 4.0, time: 2 },
-            { note: 'B4', duration: 4.0, time: 3 },
+        const volume = settings.instrumentSettings?.melody?.volume ?? 0.9;
+        const currentChord = this.chordProgression[Math.floor(bar / 2) % this.chordProgression.length];
+        const chordNotes = currentChord.notes;
+
+        // Two interwoven melodic lines
+        const score: SynthNote[] = [
+            // Line 1: Long, sustained notes
+            { note: chordNotes[bar % 4], duration: 8.0, time: 0, velocity: volume * 0.6 },
+            
+            // Line 2: Shorter, moving notes
+            { note: chordNotes[(bar + 2) % 4], duration: 4.0, time: 0.5, velocity: volume * 0.8 },
+            { note: chordNotes[(bar + 1) % 4], duration: 4.0, time: 1.5, velocity: volume * 0.9 },
+            { note: chordNotes[(bar + 3) % 4], duration: 4.0, time: 2.5, velocity: volume * 0.7 },
+            { note: chordNotes[bar % 4], duration: 4.0, time: 3.5, velocity: volume * 0.85 },
         ];
         
-        const score: SynthNote[] = melodyLoop.map(n => ({
-            ...n,
-            velocity: (Math.random() * 0.2 + 0.5) * volume // Softer velocity for ambient
-        }));
-        
-        console.log(`[WORKER] Generated Melody Loop score:`, score);
+        console.log(`[WORKER] Generated Melody score:`, score);
         return score;
     }
 }
+
 
 // Dummy classes for parts that are not yet fully implemented, to avoid breaking changes.
 class OmegaScoreGenerator {
@@ -151,7 +157,6 @@ const Scheduler = {
         let melodyScore: SynthNote[] = [];
 
         if (this.settings.drumSettings.enabled) {
-            // Use a simple drum beat for testing
             drumScore = this.evolutionEngine.generateDrumScore(this.barCount, this.settings.drumSettings);
         }
         
