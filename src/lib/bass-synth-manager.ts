@@ -35,17 +35,9 @@ export class BassSynthManager {
         }).toDestination();
         this.synths.bassGuitar.volume.value = -3;
 
-        const portamentoChorus = new this.Tone.Chorus({
-            frequency: 1.5,
-            delayTime: 3.5,
-            depth: 0.7,
-            feedback: 0.1,
-            spread: 180
-        }).start();
-
         const portamentoReverb = new this.Tone.Reverb({
             decay: 6,
-            wet: 0.4
+            wet: 0.7 // Increased wetness to make it more audible
         }).toDestination();
 
         this.synths.portamento = new this.Tone.MonoSynth({
@@ -53,7 +45,7 @@ export class BassSynthManager {
             oscillator: { type: 'fmsine' },
             envelope: { attack: 0.1, decay: 0.3, sustain: 0.9, release: 4.0 },
             filterEnvelope: { attack: 0.06, decay: 0.2, sustain: 0.5, release: 5.0, baseFrequency: 200, octaves: 7 }
-        }).chain(portamentoChorus, portamentoReverb);
+        }).connect(portamentoReverb); // Connect directly to reverb
         this.synths.portamento.volume.value = -3;
         
         this.synths.portamentoMob = new this.Tone.MonoSynth({
