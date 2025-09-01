@@ -50,8 +50,6 @@ class EvolutionEngine {
 
         this.bassPhraseLength = 0;
         this.maxBassPhraseLength = this.getNewMaxBassPhraseLength();
-
-        console.log('[Worker EvolutionEngine] Reset.');
     }
 
     generateDrumScore(bar: number, settings: {volume: number}): DrumNote[] {
@@ -96,17 +94,35 @@ class EvolutionEngine {
             time: 0,
             velocity: 0.9 * volume
         }];
-        console.log('[WORKER BASS] Generated bass score:', score);
+        return score;
+    }
+
+    generateMelodyScore(bar: number, settings: WorkerSettings): SynthNote[] {
+        const instrumentName = settings.instrumentSettings?.melody?.name;
+        if (instrumentName === 'none') {
+            return [];
+        }
+
+        const volume = settings.instrumentSettings?.melody?.volume ?? 0.9;
+        // Play one octave higher than bass
+        const note = bar % 4 < 2 ? 'C3' : 'A2'; 
+        
+        const score: SynthNote[] = [{
+            note: note,
+            duration: 4,
+            time: 0,
+            velocity: 0.9 * volume
+        }];
         return score;
     }
 }
 
 // Dummy classes for parts that are not yet fully implemented, to avoid breaking changes.
 class OmegaScoreGenerator {
-    generateScore(bar: number, settings: any) { return { bassScore: [] }; }
+    generateScore(bar: number, settings: any) { return { bassScore: [], melodyScore: [] }; }
 }
 class PromenadeScoreGenerator {
-     generateScore(bar: number, settings: any) { return { bassScore: [] }; }
+     generateScore(bar: number, settings: any) { return { bassScore: [], melodyScore: [] }; }
 }
 
 // --- 3. Scheduler (The Conductor) ---
@@ -119,6 +135,7 @@ const Scheduler = {
         drumSettings: { pattern: 'ambient_beat', volume: 0.5, enabled: true },
         instrumentSettings: { 
             bass: { name: "portamento", volume: 0.45 },
+            melody: { name: "portamento", volume: 0.45 },
         },
     } as WorkerSettings,
 
@@ -149,6 +166,7 @@ const Scheduler = {
     tick() {
         let drumScore: DrumNote[] = [];
         let bassScore: SynthNote[] = [];
+        let melodyScore: SynthNote[] = [];
 
         if (this.settings.drumSettings.enabled) {
             if (this.settings.drumSettings.pattern === 'composer') {
@@ -159,11 +177,12 @@ const Scheduler = {
         }
         
         bassScore = this.evolutionEngine.generateBassScore(this.barCount, this.settings);
+        melodyScore = this.evolutionEngine.generateMelodyScore(this.barCount, this.settings);
        
-        console.log('[WORKER SCHEDULER] Posting bass score:', bassScore);
         const messageData = {
             drumScore,
             bassScore,
+            melodyScore,
             barDuration: this.barDuration,
         };
         

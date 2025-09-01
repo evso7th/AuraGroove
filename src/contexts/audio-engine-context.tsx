@@ -9,6 +9,7 @@ import type { ToneJS, WorkerCommand, WorkerSettings, DrumNote, SynthNote, AudioP
 // Import the real managers
 import { DrumMachine } from '@/lib/drum-machine';
 import { BassSynthManager } from '@/lib/bass-synth-manager';
+import { MelodySynthManager } from '@/lib/melody-synth-manager';
 import { EffectsSynthManager } from '@/lib/effects-synth-manager';
 import { useIsMobile } from '@/hooks/use-mobile';
 
@@ -16,6 +17,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 type Score = {
     drumScore: DrumNote[];
     bassScore: SynthNote[];
+    melodyScore: SynthNote[];
     barDuration: number;
 };
 
@@ -33,6 +35,7 @@ export interface AudioEngine {
   getTone: () => ToneJS | null;
   drumMachine: DrumMachine;
   bassManager: BassSynthManager;
+  melodyManager: MelodySynthManager;
   effectsManager: EffectsSynthManager;
 }
 
@@ -65,6 +68,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   const managersRef = useRef<{
       drumMachine?: DrumMachine;
       bassManager?: BassSynthManager;
+      melodyManager?: MelodySynthManager;
       effectsManager?: EffectsSynthManager;
   }>({});
   const tickLoopRef = useRef<Tone.Loop | null>(null);
@@ -90,6 +94,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
       managersRef.current = {
           drumMachine: new DrumMachine(T),
           bassManager: new BassSynthManager(T),
+          melodyManager: new MelodySynthManager(T),
           effectsManager: new EffectsSynthManager(T),
       };
       console.log('[CONTEXT_TRACE] Synth managers created.');
@@ -103,17 +108,14 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         const message = event.data;
         if (message.type === 'score' && managersRef.current && toneRef.current) {
             const T = toneRef.current;
-            const { drumMachine, bassManager } = managersRef.current;
-            console.log('[CONTEXT BASS] Received bass score from worker:', message.data.bassScore);
+            const { drumMachine, bassManager, melodyManager } = managersRef.current;
             
             // Schedule the received score for the next bar
-            const nextBarTime = T.Transport.seconds + message.data.barDuration;
-            
             T.Transport.scheduleOnce((time) => {
-                console.log('[CONTEXT BASS] Scheduling bass score with manager for time:', time);
                 drumMachine?.schedule(message.data.drumScore, time);
                 bassManager?.schedule(message.data.bassScore, time);
-            }, nextBarTime);
+                melodyManager?.schedule(message.data.melodyScore, time);
+            }, `+${message.data.barDuration}`);
 
         } else if (message.type === 'error') {
             console.error('Error from worker:', message.error);
@@ -139,6 +141,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         // Expose managers
         drumMachine: managersRef.current.drumMachine!,
         bassManager: managersRef.current.bassManager!,
+        melodyManager: managersRef.current.melodyManager!,
         effectsManager: managersRef.current.effectsManager!,
         setIsPlaying: (isPlaying: boolean) => {
           if (!workerRef.current || !toneRef.current || !managersRef.current) return;
@@ -160,6 +163,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
 
                 // Command all managers to stop their sounds
                 managersRef.current.bassManager?.stopAll();
+                managersRef.current.melodyManager?.stopAll();
                 
                 // Reset the worker's composition state
                 workerRef.current.postMessage({ command: 'reset' });

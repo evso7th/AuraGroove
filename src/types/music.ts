@@ -49,9 +49,17 @@ export type SynthNote = {
 
 
 // --- UI Types ---
+export type BassInstrument = 'bassGuitar' | 'BassGroove' | 'portamento' | 'portamentoMob' | 'BassGrooveMob' | 'none';
+export type MelodyInstrument = 'bassGuitar' | 'BassGroove' | 'portamento' | 'portamentoMob' | 'BassGrooveMob' | 'none';
+
+
 export type InstrumentSettings = {
   bass: {
-      name: 'bassGuitar' | 'BassGroove' | 'portamento' | 'portamentoMob' | 'BassGrooveMob' | 'none';
+      name: BassInstrument;
+      volume: number; // 0-1
+  };
+  melody: {
+      name: MelodyInstrument;
       volume: number; // 0-1
   };
 };
