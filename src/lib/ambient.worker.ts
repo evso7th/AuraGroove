@@ -30,27 +30,12 @@ const PatternProvider = {
 
 // --- 2. Instrument Generators (The Composers) ---
 class EvolutionEngine {
-    private nextFillBar: number;
-    private currentFillInterval: number;
-
-    private bassPhraseLength: number;
-    private maxBassPhraseLength: number;
-
     constructor() {
         this.reset();
     }
     
-    private getNewMaxBassPhraseLength(): number {
-        return Math.floor(Math.random() * (5 - 2 + 1)) + 2; // Random length from 2 to 4 bars
-    }
-    
     public reset() {
         console.log('[WORKER] EvolutionEngine Reset.');
-        this.currentFillInterval = Math.floor(Math.random() * (12 - 6 + 1)) + 6;
-        this.nextFillBar = this.currentFillInterval - 1;
-
-        this.bassPhraseLength = 0;
-        this.maxBassPhraseLength = this.getNewMaxBassPhraseLength();
     }
 
     generateDrumScore(bar: number, settings: {volume: number}): DrumNote[] {
@@ -61,44 +46,16 @@ class EvolutionEngine {
         score.push({ sample: 'hat', time: 1, velocity: 0.4 * vol });
         score.push({ sample: 'snare', time: 2, velocity: 0.8 * vol });
         score.push({ sample: 'hat', time: 3, velocity: 0.4 * vol });
-
-        // Add fills
-        if (bar === this.nextFillBar) {
-             score.push({ sample: 'kick', time: 1, velocity: 0.7 * vol });
-             score[2] = { sample: 'crash', time: 3, velocity: 0.6 * vol };
-             this.currentFillInterval = Math.floor(Math.random() * (12 - 6 + 1)) + 6;
-             this.nextFillBar += this.currentFillInterval;
-        }
-
+        
         return score;
     }
 
     generateBassScore(bar: number, settings: WorkerSettings): SynthNote[] {
-        const instrumentName = settings.instrumentSettings?.bass?.name;
-        if (instrumentName === 'none') {
-            return [];
-        }
-
-        if (this.bassPhraseLength >= this.maxBassPhraseLength) {
-            this.bassPhraseLength = 0;
-            this.maxBassPhraseLength = this.getNewMaxBassPhraseLength();
-            return [];
-        }
-
-        this.bassPhraseLength++;
-        const volume = settings.instrumentSettings?.bass?.volume ?? 0.9;
-        const note = bar % 4 < 2 ? 'C2' : 'A1'; 
-        
-        const score: SynthNote[] = [{
-            note: note,
-            duration: 4,
-            time: 0,
-            velocity: 0.9 * volume
-        }];
-        console.log(`[WORKER] Generated bass score:`, score);
-        return score;
+        // Return empty score to disable bass
+        return [];
     }
 
+    // This is now our "Hurdy-Gurdy" generator
     generateMelodyScore(bar: number, settings: WorkerSettings): SynthNote[] {
         const instrumentName = settings.instrumentSettings?.melody?.name;
         if (instrumentName === 'none') {
@@ -106,16 +63,16 @@ class EvolutionEngine {
         }
 
         const volume = settings.instrumentSettings?.melody?.volume ?? 0.9;
-        // Play one octave higher than bass
-        const note = bar % 4 < 2 ? 'C3' : 'A2'; 
         
+        // "note-pause-note-pause" rhythm. A quarter note at the start of the bar.
         const score: SynthNote[] = [{
-            note: note,
-            duration: 4,
-            time: 0,
-            velocity: 0.9 * volume
+            note: 'C4',
+            duration: 1, // '4n' is 1 beat
+            time: 0, // at the beginning of the bar
+            velocity: 0.8 * volume
         }];
-        console.log(`[WORKER] Generated melody score:`, score);
+        
+        console.log(`[WORKER] Generated Hurdy-Gurdy score:`, score);
         return score;
     }
 }
@@ -173,11 +130,8 @@ const Scheduler = {
         let melodyScore: SynthNote[] = [];
 
         if (this.settings.drumSettings.enabled) {
-            if (this.settings.drumSettings.pattern === 'composer') {
-               drumScore = this.evolutionEngine.generateDrumScore(this.barCount, this.settings.drumSettings);
-           } else {
-                drumScore = PatternProvider.getDrumPattern(this.settings.drumSettings.pattern);
-           }
+            // Use a simple drum beat for testing
+            drumScore = this.evolutionEngine.generateDrumScore(this.barCount, this.settings.drumSettings);
         }
         
         bassScore = this.evolutionEngine.generateBassScore(this.barCount, this.settings);
