@@ -80,7 +80,9 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
 
   // The main scheduling loop, run by a simple setInterval in the main thread
   const scheduleLoop = useCallback(() => {
-    while (nextBarTime.current < performance.now() + scheduleAheadTime * 1000) {
+    // Correct, non-blocking check.
+    // If the next bar's start time is within our scheduling window, request the next bar.
+    if (nextBarTime.current < performance.now() + scheduleAheadTime * 1000) {
         postToComposerWorker({ command: 'tick' });
     }
   }, []);
@@ -133,7 +135,8 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
                             postToRhythmFrame({ command: 'start' });
                             postToComposerWorker({command: 'reset'});
                             if (scheduleIntervalRef.current) clearInterval(scheduleIntervalRef.current);
-                            scheduleIntervalRef.current = setInterval(scheduleLoop, 25);
+                            // Start the polling loop
+                            scheduleIntervalRef.current = setInterval(scheduleLoop, 50); // check every 50ms
                         } else {
                             if (scheduleIntervalRef.current) clearInterval(scheduleIntervalRef.current);
                             scheduleIntervalRef.current = null;
