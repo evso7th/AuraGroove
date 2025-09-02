@@ -1,6 +1,4 @@
 
-// --- This file defines the data structures for our music application ---
-
 // A unique identifier for a drum sample.
 export type DrumSampleName = 'kick' | 'snare' | 'hat' | 'crash' | 'ride' | 'cymbal_bell1' | 'closed_hi_hat_accented';
 
@@ -24,27 +22,12 @@ export type SynthNote = {
 export type Score = {
     bassScore: SynthNote[];
     drumScore: DrumNote[];
-    melodyScore: SynthNote[]; // Keep for structure, but will be empty
+    melodyScore: SynthNote[];
 };
 
-// --- Types for Main Thread <-> Iframe (Performer) Communication ---
-
-// Commands sent FROM the main thread TO the rhythm iframe.
-export type RhythmFrameCommand = {
-    command: 'init' | 'start' | 'stop' | 'schedule' | 'set_param' | 'report_status';
-    payload?: any; // Can be a score, settings, etc.
-}
-
-// Messages sent FROM an iframe TO the main thread.
-export type FrameMessage = {
-    type: 'rhythm_frame_ready' | 'error' | 'status_report';
-    frame: 'rhythm';
-    state?: string; // For reporting AudioContext.state
-    error?: string;
-}
-
 // --- UI Types ---
-export type BassInstrument = 'bassGuitar' | 'BassGroove' | 'portamento' | 'portamentoMob' | 'BassGrooveMob' | 'none';
+// Bass instrument names are now managed inside the worker. 'none' is for UI state.
+export type BassInstrument = 'portamento' | 'bassGuitar' | 'BassGroove' | 'none';
 
 export type InstrumentSettings = {
   bass: {

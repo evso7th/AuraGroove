@@ -26,8 +26,6 @@ export default function RootLayout({
             {children}
         </AudioEngineProvider>
         <Toaster />
-        {/* The iframes are the "instrument players". They are isolated from the main UI thread. */}
-        <iframe id="rhythm-frame" src="/rhythm-frame.html" style={{ display: 'none' }} title="Rhythm Section Engine"></iframe>
       </body>
     </html>
   );

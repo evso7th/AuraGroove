@@ -1,48 +1,29 @@
 
-
 /**
- * @file AuraGroove Music Worker (Architecture: "Composer-Conductor")
+ * @file AuraGroove Music Worker (Architecture: "Composer")
  *
- * This worker is the "Master of Time" and the "Composer".
- * It is responsible for all musical composition. It uses its own internal,
- * high-precision loop and sends scores (arrays of notes) to the main thread.
+ * This worker's only responsibility is to compose music.
+ * It generates arrays of notes (scores) based on the selected style
+ * and sends them to the main thread for execution.
+ * It is completely passive and only works when commanded.
  */
 
-// --- 1. Composer (Simplified for Test) ---
+// --- Test Composer ---
 class Composer {
     constructor() {}
     
     createScoreForNextBar(barNumber: number, settings: any) {
-        // Generate a very simple score with only one bass note
-        const bassScore = [{
-            note: 'C2',
-            duration: '2n',
-            time: 0, // Play at the start of the bar
-            velocity: 0.5
-        }];
-
-        const drumScore = [
-            { sample: 'kick' as const, time: 0, velocity: 1.0 },
-            { sample: 'hat' as const, time: 0.5, velocity: 0.7 },
-            { sample: 'snare' as const, time: 1, velocity: 0.8 },
-            { sample: 'hat' as const, time: 1.5, velocity: 0.7 },
-            { sample: 'kick' as const, time: 2, velocity: 1.0 },
-            { sample: 'hat' as const, time: 2.5, velocity: 0.7 },
-            { sample: 'snare' as const, time: 3, velocity: 0.8 },
-            { sample: 'hat' as const, time: 3.5, velocity: 0.7 },
-        ];
-        
-        // Melody score is now empty
+        // This is a placeholder. In future steps, this will generate real scores.
+        const bassScore: any[] = [];
+        const drumScore: any[] = [];
         const melodyScore: any[] = [];
-
 
         return { bassScore, drumScore, melodyScore };
     }
 }
 
 
-// --- 2. Scheduler (The Conductor) ---
-
+// --- Scheduler (The Conductor) ---
 const Scheduler = {
     loopId: null as any,
     isRunning: false,
@@ -52,7 +33,7 @@ const Scheduler = {
     settings: {
         bpm: 75,
         score: 'evolve',
-        drumSettings: { pattern: 'none', volume: 0, enabled: false },
+        drumSettings: { pattern: 'none', enabled: false },
         instrumentSettings: { 
             bass: { name: "portamento", volume: 0.5 },
         },
@@ -68,15 +49,14 @@ const Scheduler = {
         this.isRunning = true;
         this.barCount = 0;
         
+        // This is a high-precision, resilient loop using setTimeout.
         const loop = () => {
             if (!this.isRunning) return;
             this.tick();
-            // Use setTimeout for the loop to be resilient to main thread freezes
             this.loopId = setTimeout(loop, this.barDuration * 1000);
         };
         
-        // Start the first tick slightly delayed to ensure everything is set up
-        this.loopId = setTimeout(loop, 100);
+        this.loopId = setTimeout(loop, 50); // Start after a brief delay
     },
 
     stop() {
@@ -90,10 +70,7 @@ const Scheduler = {
     },
     
     updateSettings(settings: any) {
-        if (settings.bpm) this.settings.bpm = settings.bpm;
-        if (settings.drumSettings) this.settings.drumSettings = {...this.settings.drumSettings, ...settings.drumSettings};
-        if (settings.instrumentSettings) this.settings.instrumentSettings = {...this.settings.instrumentSettings, ...settings.instrumentSettings};
-        if (settings.score) this.settings.score = settings.score;
+       Object.assign(this.settings, settings);
     },
 
     tick() {

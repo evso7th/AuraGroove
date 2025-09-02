@@ -1,19 +1,14 @@
 
 'use client';
 
-import React, { createContext, useContext, useState, useRef, useEffect } from 'react';
+import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import type { WorkerSettings } from '@/types/music';
+import type { WorkerSettings, Score } from '@/types/music';
 
 // --- Type Definitions ---
 type WorkerCommand = {
     command: 'start' | 'stop' | 'update_settings';
     data?: any;
-}
-
-type FrameCommand = {
-     command: 'init' | 'start' | 'stop' | 'set_param' | 'report_status';
-     payload?: any;
 }
 
 type WorkerMessage = {
@@ -22,14 +17,6 @@ type WorkerMessage = {
     error?: string;
     message?: string;
 }
-
-type FrameMessage = {
-    type: 'rhythm_frame_ready' | 'error' | 'status_report';
-    frame: 'rhythm'; // Only rhythm frame is left
-    state?: string; // AudioContext.state
-    error?: string;
-};
-
 
 // --- Public Interface ---
 export interface AudioEngine {
@@ -63,92 +50,82 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   const [loadingText, setLoadingText] = useState('');
   
   const workerRef = useRef<Worker | null>(null);
-  const rhythmFrameRef = useRef<HTMLIFrameElement | null>(null);
-
+  const audioContextRef = useRef<AudioContext | null>(null);
+  
   const engineRef = useRef<AudioEngine | null>(null);
   
   const { toast } = useToast();
   
   useEffect(() => {
-    // This effect should run only once to initialize the worker and listeners
+    // This effect runs only once to initialize the worker
     const worker = new Worker(new URL('../lib/ambient.worker.ts', import.meta.url), { type: 'module' });
     workerRef.current = worker;
 
     const handleWorkerMessage = (event: MessageEvent<WorkerMessage>) => {
         const { type, data, error, message } = event.data;
-
         if (message) console.log(`[MSG FROM WORKER] ${message}`);
-
+        
         if (type === 'score' && data) {
-            if (rhythmFrameRef.current && (data.score.bassScore || data.score.drumScore)) {
-                 const rhythmPayload = { 
-                    bar: data.bar, 
-                    score: { bassScore: data.score.bassScore, drumScore: data.score.drumScore } 
-                };
-                rhythmFrameRef.current.contentWindow?.postMessage({ command: 'schedule', payload: rhythmPayload }, '*');
-            }
+            // TODO: In Step 3, this will send the score to the AudioWorklet pool
+            // console.log("Received score for bar:", data.bar);
         } else if (type === 'error') {
             const errorMsg = error || "Unknown error from worker.";
             toast({ variant: "destructive", title: "Worker Error", description: errorMsg });
             console.error("Worker Error:", errorMsg);
         }
     };
-
-    const handleFrameMessage = (event: MessageEvent<FrameMessage>) => {
-        if (event.data.type === 'status_report') {
-            console.log(`[${event.data.frame.toUpperCase()} FRAME STATUS] ${event.data.state}`);
-        }
-    }
     
     worker.onmessage = handleWorkerMessage;
-    window.addEventListener('message', handleFrameMessage);
-
-    // Diagnostic interval
-    const diagnosticInterval = setInterval(() => {
-        rhythmFrameRef.current?.contentWindow?.postMessage({ command: 'report_status' }, '*');
-    }, 2000);
-
 
     return () => {
         worker.terminate();
-        window.removeEventListener('message', handleFrameMessage);
-        clearInterval(diagnosticInterval);
     };
   }, [toast]);
 
 
   const initialize = async () => {
     if (isInitialized || isInitializing) return true;
+    
+    // As per the Advisor's recommendation, we ensure the AudioContext is unlocked
+    // by the user's first gesture.
+    if (!audioContextRef.current) {
+        try {
+            setLoadingText('Waiting for user interaction...');
+            audioContextRef.current = new AudioContext();
+            
+            const unlockAudio = async () => {
+                if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+                    await audioContextRef.current.resume();
+                }
+                window.removeEventListener('click', unlockAudio);
+                window.removeEventListener('touchend', unlockAudio);
+            };
+
+            window.addEventListener('click', unlockAudio);
+            window.addEventListener('touchend', unlockAudio);
+            
+            // Check initial state
+            await unlockAudio();
+
+        } catch (e) {
+            toast({ variant: "destructive", title: "Audio Error", description: "Could not create AudioContext."});
+            console.error(e);
+            return false;
+        }
+    }
+    
     setIsInitializing(true);
     setLoadingText('Initializing audio systems...');
-
-    rhythmFrameRef.current = document.getElementById('rhythm-frame') as HTMLIFrameElement;
     
-    const initRhythm = new Promise<void>(resolve => {
-        const onReady = (e: MessageEvent<FrameMessage>) => {
-            if (e.data.type === 'rhythm_frame_ready') {
-                window.removeEventListener('message', onReady);
-                resolve();
-            }
-        }
-        window.addEventListener('message', onReady);
-        rhythmFrameRef.current?.contentWindow?.postMessage({ command: 'init' }, '*');
-    });
-
-    await initRhythm;
+    // In future steps, we will load the AudioWorklet here.
     
     engineRef.current = {
         setIsPlaying: (isPlaying: boolean) => {
             const command = isPlaying ? 'start' : 'stop';
             workerRef.current?.postMessage({ command });
-            rhythmFrameRef.current?.contentWindow?.postMessage({ command }, '*');
         },
         updateSettings: (settings: Partial<WorkerSettings>) => {
             workerRef.current?.postMessage({ command: 'update_settings', data: settings });
-
-             if (settings.instrumentSettings?.bass?.name) {
-                rhythmFrameRef.current?.contentWindow?.postMessage({ command: 'set_param', payload: { bassInstrument: settings.instrumentSettings.bass.name } }, '*');
-            }
         }
     };
     
