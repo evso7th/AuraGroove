@@ -3,7 +3,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings, AudioProfile, EffectsSettings } from '@/types/music';
+import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings, AudioProfile, EffectsSettings, MelodyTechnique } from '@/types/music';
 import { useAudioEngine } from "@/contexts/audio-engine-context";
 import { useIsMobile } from "@/hooks/use-mobile";
 import * as Tone from 'tone';
@@ -16,7 +16,7 @@ export const useAuraGroove = () => {
   const [drumSettings, setDrumSettings] = useState<DrumSettings>({ pattern: 'composer', volume: 0.5 });
   const [instrumentSettings, setInstrumentSettings] = useState<InstrumentSettings>({
     bass: { name: "portamento", volume: 0.45 },
-    melody: { name: "synth", volume: 0.45 },
+    melody: { name: "synth", volume: 0.45, technique: 'arpeggio' },
   });
   const [effectsSettings, setEffectsSettings] = useState<EffectsSettings>({ enabled: false });
   const [bpm, setBpm] = useState(75);
@@ -34,13 +34,20 @@ export const useAuraGroove = () => {
     };
   }, [bpm, score, instrumentSettings, drumSettings]);
 
-  // Update instrument presets in managers when they change
+  // Update instrument presets and techniques in managers when they change
   useEffect(() => {
       if (engine && isInitialized) {
           engine.bassManager.setInstrument(instrumentSettings.bass.name);
           engine.melodyManager.setInstrument(instrumentSettings.melody.name);
+          engine.melodyManager.setTechnique(instrumentSettings.melody.technique);
       }
-  }, [instrumentSettings.bass.name, instrumentSettings.melody.name, engine, isInitialized]);
+  }, [
+    instrumentSettings.bass.name, 
+    instrumentSettings.melody.name, 
+    instrumentSettings.melody.technique, 
+    engine, 
+    isInitialized
+  ]);
 
   // Update drum volume
   useEffect(() => {

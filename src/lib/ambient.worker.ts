@@ -6,7 +6,7 @@
  * This worker operates on a microservice-style architecture.
  * It is the "Sound Engine", responsible for both composing and rendering audio.
  */
-import type { DrumNote, SynthNote, WorkerCommand, WorkerSettings, DrumSampleName, InstrumentSettings, ScoreName, AudioProfile } from '@/types/music';
+import type { DrumNote, SynthNote, WorkerCommand, WorkerSettings, DrumSampleName, InstrumentSettings, ScoreName, AudioProfile, MelodyTechnique } from '@/types/music';
 
 // --- 1. PatternProvider (The Music Sheet Library) ---
 const PatternProvider = {
@@ -30,6 +30,11 @@ class EvolutionEngine {
     private chordProgression: { root: string; notes: string[] }[];
     private lastMelodyNoteIndex: number = 0;
     
+    // Voice allocation state for melody
+    private readonly MELODY_VOICE_COUNT = 3;
+    private melodyVoiceReleaseTimes: number[] = new Array(this.MELODY_VOICE_COUNT).fill(0);
+
+
     constructor() {
         this.chordProgression = [
             { root: 'C2', notes: ['C3', 'E3', 'G3'] },    // I (C Major)
@@ -43,6 +48,7 @@ class EvolutionEngine {
     public reset() {
         console.log('[WORKER] EvolutionEngine Reset.');
         this.lastMelodyNoteIndex = 0;
+        this.melodyVoiceReleaseTimes.fill(0);
     }
 
     generateComposerDrumScore(bar: number, volume: number): DrumNote[] {
@@ -109,41 +115,68 @@ class EvolutionEngine {
         return score;
     }
 
-    // "Lullaby"
-    generateMelodyScore(bar: number, settings: WorkerSettings): SynthNote[] {
-        const instrumentName = settings.instrumentSettings?.melody?.name;
-        if (instrumentName === 'none') return [];
+    // "Lullaby" - Updated for techniques
+    generateMelodyScore(bar: number, settings: WorkerSettings, currentBarTime: number): SynthNote[] {
+        const melodySettings = settings.instrumentSettings?.melody;
+        if (melodySettings?.name === 'none') return [];
 
-        const volume = settings.instrumentSettings?.melody?.volume ?? 0.9;
+        const volume = melodySettings?.volume ?? 0.9;
+        const technique = melodySettings?.technique ?? 'arpeggio';
+        
+        const score: SynthNote[] = [];
+        const phraseLength = Math.floor(Math.random() * 2) + 2; // 2-3 notes per phrase
+        const noteDuration = 4.0 / phraseLength; // Divide a measure into parts
+
         const currentChord = this.chordProgression[Math.floor(bar / 2) % this.chordProgression.length];
         const chordNotes = currentChord.notes;
+        
+        // Voice allocation logic for Arpeggio
+        if (technique === 'arpeggio') {
+            for (let i = 0; i < phraseLength; i++) {
+                const noteTime = i * noteDuration;
+                
+                // Find an available voice
+                let voiceIndex = -1;
+                for (let v = 0; v < this.MELODY_VOICE_COUNT; v++) {
+                    if (this.melodyVoiceReleaseTimes[v] <= currentBarTime + noteTime) {
+                        voiceIndex = v;
+                        break;
+                    }
+                }
+                if (voiceIndex === -1) continue; // Skip note if no voice is free
 
-        // Ensure lastMelodyNoteIndex is valid for the current chord
-        if (this.lastMelodyNoteIndex >= chordNotes.length) {
-            this.lastMelodyNoteIndex = 0;
-        }
-
-        // Stepwise motion: move to an adjacent note in the chord
-        const direction = Math.random() < 0.5 ? -1 : 1;
-        let nextNoteIndex = this.lastMelodyNoteIndex + direction;
-
-        // Boundary check
-        if (nextNoteIndex < 0) {
-            nextNoteIndex = 1;
-        } else if (nextNoteIndex >= chordNotes.length) {
-            nextNoteIndex = chordNotes.length - 2;
-             if (nextNoteIndex < 0) nextNoteIndex = 0;
+                const note = chordNotes[ (this.lastMelodyNoteIndex + i) % chordNotes.length ];
+                const releaseTime = 2.0; // Based on the synth preset's release
+                
+                score.push({
+                    note: note,
+                    duration: noteDuration * 1.5, // Allow overlap
+                    time: noteTime,
+                    velocity: volume,
+                    voiceIndex: voiceIndex
+                });
+                
+                // Book the voice
+                this.melodyVoiceReleaseTimes[voiceIndex] = currentBarTime + noteTime + noteDuration + releaseTime;
+            }
+        } else { // Portamento / Glissando
+            const voiceIndex = 0; // Use a single voice
+            const phrase: string[] = [];
+            for (let i = 0; i < phraseLength; i++) {
+                 phrase.push(chordNotes[(this.lastMelodyNoteIndex + i) % chordNotes.length]);
+            }
+            score.push({
+                note: phrase,
+                duration: 4.0, // Whole phrase lasts one measure
+                time: 0,
+                velocity: volume,
+                voiceIndex: voiceIndex
+            });
         }
         
-        const nextNote = chordNotes[nextNoteIndex];
-        this.lastMelodyNoteIndex = nextNoteIndex;
+        // Update the starting point for the next phrase
+        this.lastMelodyNoteIndex = (this.lastMelodyNoteIndex + 1) % chordNotes.length;
 
-        const score: SynthNote[] = [
-            // Increased duration from 4.0 to 8.0 for a more sustained sound
-            { note: nextNote, duration: 8.0, time: 0, velocity: volume },
-            // Removed the second, quieter note to simplify and focus on the main melody line.
-        ];
-        
         return score;
     }
 }
@@ -167,7 +200,7 @@ const Scheduler = {
         drumSettings: { pattern: 'ambient_beat', volume: 0.5, enabled: true },
         instrumentSettings: { 
             bass: { name: "portamento", volume: 0.45 },
-            melody: { name: "portamento", volume: 0.45 },
+            melody: { name: "synth", volume: 0.45, technique: 'arpeggio' as MelodyTechnique },
         },
     } as WorkerSettings,
 
@@ -200,6 +233,7 @@ const Scheduler = {
         let drumScore: DrumNote[] = [];
         let bassScore: SynthNote[] = [];
         let melodyScore: SynthNote[] = [];
+        const currentBarTime = this.barCount * this.barDuration;
 
         if (this.settings.drumSettings.enabled) {
             const pattern = this.settings.drumSettings.pattern;
@@ -212,7 +246,7 @@ const Scheduler = {
         }
         
         bassScore = this.evolutionEngine.generateBassScore(this.barCount, this.settings);
-        melodyScore = this.evolutionEngine.generateMelodyScore(this.barCount, this.settings);
+        melodyScore = this.evolutionEngine.generateMelodyScore(this.barCount, this.settings, currentBarTime);
        
         const messageData = {
             drumScore,
@@ -253,4 +287,3 @@ self.onmessage = async (event: MessageEvent<WorkerCommand>) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
-

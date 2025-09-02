@@ -45,12 +45,14 @@ export type SynthNote = {
     duration: number; // in beats
     time: number; // in beats, relative to the start of the bar
     velocity: number;
+    voiceIndex?: number; // Optional: specifies which synth voice to use
 };
 
 
 // --- UI Types ---
 export type BassInstrument = 'bassGuitar' | 'BassGroove' | 'portamento' | 'portamentoMob' | 'BassGrooveMob' | 'none';
-export type MelodyInstrument = 'synth' | 'reversedString' | 'none';
+export type MelodyInstrument = 'synth' | 'reversedString' | 'decayingPad' | 'none';
+export type MelodyTechnique = 'arpeggio' | 'portamento' | 'glissando';
 
 
 export type InstrumentSettings = {
@@ -61,6 +63,7 @@ export type InstrumentSettings = {
   melody: {
       name: MelodyInstrument;
       volume: number; // 0-1
+      technique: MelodyTechnique;
   };
 };
 
