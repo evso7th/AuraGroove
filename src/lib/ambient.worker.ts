@@ -7,20 +7,7 @@
  * and sends them to the main thread for execution.
  * It is completely passive and only works when commanded.
  */
-
-// --- Test Composer ---
-class Composer {
-    constructor() {}
-    
-    createScoreForNextBar(barNumber: number, settings: any) {
-        // This is a placeholder. In future steps, this will generate real scores.
-        const bassScore: any[] = [];
-        const drumScore: any[] = [];
-        const melodyScore: any[] = [];
-
-        return { bassScore, drumScore, melodyScore };
-    }
-}
+import type { WorkerSettings, Score } from '@/types/music';
 
 
 // --- Scheduler (The Conductor) ---
@@ -28,7 +15,6 @@ const Scheduler = {
     loopId: null as any,
     isRunning: false,
     barCount: 0,
-    composer: new Composer(),
     
     settings: {
         bpm: 75,
@@ -37,7 +23,7 @@ const Scheduler = {
         instrumentSettings: { 
             bass: { name: "portamento", volume: 0.5 },
         },
-    } as any,
+    } as WorkerSettings,
 
     get barDuration() { 
         return (60 / this.settings.bpm) * 4; // 4 beats per bar
@@ -45,23 +31,19 @@ const Scheduler = {
 
     start() {
         if (this.isRunning) return;
-        self.postMessage({ type: 'log', message: '[WORKER] Scheduler starting...' });
         this.isRunning = true;
         this.barCount = 0;
         
-        // This is a high-precision, resilient loop using setTimeout.
         const loop = () => {
             if (!this.isRunning) return;
             this.tick();
             this.loopId = setTimeout(loop, this.barDuration * 1000);
         };
         
-        this.loopId = setTimeout(loop, 50); // Start after a brief delay
+        this.loopId = setTimeout(loop, 50);
     },
 
     stop() {
-        if (!this.isRunning) return;
-        self.postMessage({ type: 'log', message: '[WORKER] Scheduler stopping...' });
         this.isRunning = false;
         if (this.loopId) {
             clearTimeout(this.loopId);
@@ -69,21 +51,33 @@ const Scheduler = {
         }
     },
     
-    updateSettings(settings: any) {
-       Object.assign(this.settings, settings);
+    updateSettings(newSettings: Partial<WorkerSettings>) {
+       this.settings = { ...this.settings, ...newSettings };
+    },
+
+    // This is a placeholder composer logic.
+    createScoreForNextBar(barNumber: number): Score {
+        const score: Score = [];
+        const startTime = 0;
+        const step = 0.5; // Every half beat (8th note)
+        const notes = [60, 62, 64, 65, 67, 69, 71, 72]; // C major scale degrees
+
+        for (let i = 0; i < 8; i++) { // Generate 8 notes per bar
+            const time = startTime + i * step;
+            const midi = notes[i % notes.length];
+            score.push({ part: 'bass', midi, time, duration: 0.4, velocity: 0.8 });
+        }
+        return score;
     },
 
     tick() {
         if (!this.isRunning) return;
         
-        const score = this.composer.createScoreForNextBar(this.barCount, this.settings);
+        const score = this.createScoreForNextBar(this.barCount);
         
         self.postMessage({
             type: 'score',
-            data: {
-                bar: this.barCount,
-                score: score
-            }
+            score: score
         });
 
         this.barCount++;

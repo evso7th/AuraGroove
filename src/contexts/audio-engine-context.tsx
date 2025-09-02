@@ -1,36 +1,25 @@
 
 'use client';
 
-import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import type { WorkerSettings, Score } from '@/types/music';
+import type { Score, WorkerSettings } from '@/types/music';
 
 // --- Type Definitions ---
-type WorkerCommand = {
-    command: 'start' | 'stop' | 'update_settings';
-    data?: any;
-}
-
 type WorkerMessage = {
     type: 'score' | 'error' | 'log';
-    data?: any;
+    score?: Score;
     error?: string;
     message?: string;
 }
 
-// --- Public Interface ---
-export interface AudioEngine {
-  setIsPlaying: (isPlaying: boolean) => void;
-  updateSettings: (settings: Partial<WorkerSettings>) => void;
-}
-
 // --- React Context ---
 interface AudioEngineContextType {
-  engine: AudioEngine | null;
   isInitialized: boolean;
-  isInitializing: boolean;
+  isPlaying: boolean;
   initialize: () => Promise<boolean>;
-  loadingText: string;
+  setIsPlaying: (playing: boolean) => void;
+  updateSettings: (settings: Partial<WorkerSettings>) => void;
 }
 
 const AudioEngineContext = createContext<AudioEngineContextType | null>(null);
@@ -46,63 +35,35 @@ export const useAudioEngine = () => {
 // --- Provider Component ---
 export const AudioEngineProvider = ({ children }: { children: React.ReactNode }) => {
   const [isInitialized, setIsInitialized] = useState(false);
-  const [isInitializing, setIsInitializing] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [loadingText, setLoadingText] = useState('');
   
   const workerRef = useRef<Worker | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   
-  const engineRef = useRef<AudioEngine | null>(null);
-  
   const { toast } = useToast();
   
-  useEffect(() => {
-    // This effect runs only once to initialize the worker
-    const worker = new Worker(new URL('../lib/ambient.worker.ts', import.meta.url), { type: 'module' });
-    workerRef.current = worker;
-
-    const handleWorkerMessage = (event: MessageEvent<WorkerMessage>) => {
-        const { type, data, error, message } = event.data;
-        if (message) console.log(`[MSG FROM WORKER] ${message}`);
-        
-        if (type === 'score' && data) {
-            // TODO: In Step 3, this will send the score to the AudioWorklet pool
-            // console.log("Received score for bar:", data.bar);
-        } else if (type === 'error') {
-            const errorMsg = error || "Unknown error from worker.";
-            toast({ variant: "destructive", title: "Worker Error", description: errorMsg });
-            console.error("Worker Error:", errorMsg);
-        }
-    };
+  const initialize = useCallback(async () => {
+    if (isInitialized) return true;
     
-    worker.onmessage = handleWorkerMessage;
-
-    return () => {
-        worker.terminate();
-    };
-  }, [toast]);
-
-
-  const initialize = async () => {
-    if (isInitialized || isInitializing) return true;
-    
-    // As per the Advisor's recommendation, we ensure the AudioContext is unlocked
-    // by the user's first gesture.
+    // Ensure the AudioContext is unlocked by the user's first gesture.
     if (!audioContextRef.current) {
         try {
             setLoadingText('Waiting for user interaction...');
-            audioContextRef.current = new AudioContext();
+            const context = new (window.AudioContext || (window as any).webkitAudioContext)();
+            audioContextRef.current = context;
             
             const unlockAudio = async () => {
-                if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-                    await audioContextRef.current.resume();
+                if (context && context.state === 'suspended') {
+                    await context.resume();
+                    console.log("AudioContext resumed!");
                 }
-                window.removeEventListener('click', unlockAudio);
-                window.removeEventListener('touchend', unlockAudio);
+                window.removeEventListener('click', unlockAudio, true);
+                window.removeEventListener('touchend', unlockAudio, true);
             };
 
-            window.addEventListener('click', unlockAudio);
-            window.addEventListener('touchend', unlockAudio);
+            window.addEventListener('click', unlockAudio, true);
+            window.addEventListener('touchend', unlockAudio, true);
             
             // Check initial state
             await unlockAudio();
@@ -113,31 +74,63 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
             return false;
         }
     }
-    
-    setIsInitializing(true);
-    setLoadingText('Initializing audio systems...');
-    
-    // In future steps, we will load the AudioWorklet here.
-    
-    engineRef.current = {
-        setIsPlaying: (isPlaying: boolean) => {
-            const command = isPlaying ? 'start' : 'stop';
-            workerRef.current?.postMessage({ command });
-        },
-        updateSettings: (settings: Partial<WorkerSettings>) => {
-            workerRef.current?.postMessage({ command: 'update_settings', data: settings });
-        }
-    };
+     
+    // Initialize the worker if it doesn't exist
+    if (!workerRef.current) {
+        setLoadingText("Initializing music composer...");
+        const worker = new Worker(new URL('../lib/ambient.worker.ts', import.meta.url), { type: 'module' });
+        
+        worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
+            const { type, score, error, message } = event.data;
+            if (message) console.log(`[MSG FROM WORKER] ${message}`);
+            
+            if (type === 'score' && score) {
+                console.log("Received score from worker:", score);
+                // In Step 3, this will be sent to the AudioWorklet pool
+            } else if (type === 'error') {
+                const errorMsg = error || "Unknown error from worker.";
+                toast({ variant: "destructive", title: "Worker Error", description: errorMsg });
+                console.error("Worker Error:", errorMsg);
+            }
+        };
+        workerRef.current = worker;
+    }
     
     setLoadingText('Engine initialized.');
     setIsInitialized(true);
-    setIsInitializing(false);
-
     return true;
-  };
+  }, [isInitialized, toast]);
+
+  const setIsPlayingCallback = useCallback((playing: boolean) => {
+    if (!isInitialized || !workerRef.current) return;
+    
+    const command = playing ? 'start' : 'stop';
+    workerRef.current.postMessage({ command });
+    setIsPlaying(playing);
+
+  }, [isInitialized]);
+
+  const updateSettingsCallback = useCallback((settings: Partial<WorkerSettings>) => {
+     if (!isInitialized || !workerRef.current) return;
+     workerRef.current.postMessage({ command: 'update_settings', data: settings });
+  }, [isInitialized]);
+
+
+  useEffect(() => {
+    // Cleanup worker on component unmount
+    return () => {
+        workerRef.current?.terminate();
+    };
+  }, []);
 
   return (
-    <AudioEngineContext.Provider value={{ engine: engineRef.current, isInitialized, isInitializing, initialize, loadingText }}>
+    <AudioEngineContext.Provider value={{
+        isInitialized,
+        isPlaying,
+        initialize,
+        setIsPlaying: setIsPlayingCallback,
+        updateSettings: updateSettingsCallback,
+    }}>
       {children}
     </AudioEngineContext.Provider>
   );
