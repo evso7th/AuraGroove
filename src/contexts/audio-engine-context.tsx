@@ -1,9 +1,10 @@
 
+
 'use client';
 
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import type { WorkerSettings, Score, RhythmFrameCommand, RhythmFrameMessage, MelodyFrameMessage } from '@/types/music';
+import type { WorkerSettings, Score, RhythmFrameCommand, MelodyFrameCommand, FrameMessage } from '@/types/music';
 
 // --- Type Definitions ---
 type WorkerCommand = {
@@ -68,11 +69,10 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
       rhythmFrameRef.current?.contentWindow?.postMessage(message, '*');
   };
 
-  const postToMelodyFrame = (message: MelodyFrameMessage) => {
+  const postToMelodyFrame = (message: MelodyFrameCommand) => {
       melodyFrameRef.current?.contentWindow?.postMessage(message, '*');
   };
 
-    // This function is now defined directly inside the provider
     const checkAllFramesReady = () => {
         if (readyStatesRef.current.rhythm && readyStatesRef.current.melody) {
             console.log('[AudioEngine] All frames are ready.');
@@ -90,6 +90,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
                 },
                 updateSettings: (settings: Partial<WorkerSettings>) => {
                     postToWorker({ command: 'update_settings', data: settings });
+                    // Example of sending specific params, adapt as needed
                     postToRhythmFrame({ command: 'set_param', payload: { bassInstrument: settings.instrumentSettings?.bass.name } });
                     postToMelodyFrame({ command: 'set_param', payload: { melodyInstrument: settings.instrumentSettings?.melody.name } });
                 }
@@ -111,6 +112,10 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
             console.error("Fatal: Timed out waiting for iframes to become ready.");
             toast({ variant: "destructive", title: "Initialization Failed", description: "Timed out waiting for audio engines." });
             setIsInitializing(false);
+            if (timeoutRef.current) {
+                clearTimeout(timeoutRef.current);
+                timeoutRef.current = null;
+            }
             resolve(false);
         }, 5000); // 5 second timeout
 
@@ -139,7 +144,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
 
             switch (type) {
                 case 'score':
-                    if (readyStatesRef.current.rhythm && data.score.bassScore && data.score.drumScore) {
+                    if (readyStatesRef.current.rhythm && data.score.bassScore) {
                         postToRhythmFrame({ command: 'schedule', payload: { bar: data.bar, score: { bassScore: data.score.bassScore, drumScore: data.score.drumScore } } });
                     }
                      if (readyStatesRef.current.melody && data.score.melodyScore) {
@@ -155,24 +160,30 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         };
 
         // --- Iframe Message Handler ---
-        const handleFrameMessage = (event: MessageEvent<RhythmFrameMessage | MelodyFrameMessage>) => {
+        const handleFrameMessage = (event: MessageEvent<FrameMessage>) => {
              if (!event.data || !event.data.type) return;
              const { type, error, frame } = event.data;
 
-             if (type === 'rhythm_frame_ready' || frame === 'rhythm') {
-                 console.log("[AudioEngine] Rhythm frame is ready.");
-                 readyStatesRef.current.rhythm = true;
-                 checkAllFramesReady();
-             } else if (type === 'melody_frame_ready' || frame === 'melody') {
-                 console.log("[AudioEngine] Melody frame is ready.");
-                 readyStatesRef.current.melody = true;
-                 checkAllFramesReady();
-             } else if (type === 'error') {
+             if (frame === 'rhythm') {
+                if (type === 'rhythm_frame_ready') {
+                    console.log("[AudioEngine] Rhythm frame is ready.");
+                    readyStatesRef.current.rhythm = true;
+                    checkAllFramesReady();
+                }
+             } else if (frame === 'melody') {
+                if (type === 'melody_frame_ready') {
+                    console.log("[AudioEngine] Melody frame is ready.");
+                    readyStatesRef.current.melody = true;
+                    checkAllFramesReady();
+                }
+             }
+             
+             if (type === 'error') {
                  const errorMsg = error || "Unknown error from an iframe.";
                  toast({ variant: "destructive", title: "Audio Frame Error", description: errorMsg });
-                 console.error("IFrame Error:", errorMsg);
+                 console.error("IFrame Error:", errorMsg, `(from ${frame})`);
                  setIsInitializing(false);
-                 clearTimeout(timeoutRef.current);
+                 if (timeoutRef.current) clearTimeout(timeoutRef.current);
                  resolve(false);
              }
         };

@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from "react";
-import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings, EffectsSettings } from '@/types/music';
+import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings, EffectsSettings, MelodyInstrument, MelodyTechnique } from '@/types/music';
 import { useAudioEngine } from "@/contexts/audio-engine-context";
 
 export const useAuraGroove = () => {
@@ -50,7 +50,7 @@ export const useAuraGroove = () => {
     
   }, [isInitialized, engine, isPlaying]);
 
-  const isLoading = isInitializing || !isInitialized;
+  const isLoading = isInitializing;
 
   return {
     isInitializing: isLoading,

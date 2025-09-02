@@ -30,17 +30,32 @@ export type Score = {
 
 // --- Types for Main Thread <-> Iframe (Performer) Communication ---
 
-// Commands sent FROM the main thread TO an iframe.
+// Commands sent FROM the main thread TO the rhythm iframe.
 export type RhythmFrameCommand = {
     command: 'init' | 'start' | 'stop' | 'schedule' | 'set_param';
     payload?: any; // Can be a score, settings, etc.
 }
 
 // Messages sent FROM an iframe TO the main thread.
-export type RhythmFrameMessage = {
+export type FrameMessage = {
     type: 'rhythm_frame_ready' | 'melody_frame_ready' | 'error';
+    frame: 'rhythm' | 'melody';
     error?: string;
 }
+
+// Commands sent FROM the main thread TO the melody iframe.
+export type MelodyFrameCommand = {
+    command: 'init' | 'start' | 'stop' | 'schedule' | 'set_param';
+    payload?: any; 
+};
+
+// Messages sent FROM the melody iframe TO the main thread.
+export type MelodyFrameMessage = {
+    type: 'melody_frame_ready' | 'error';
+    frame: 'melody';
+    error?: string;
+}
+
 
 // --- UI Types ---
 export type BassInstrument = 'bassGuitar' | 'BassGroove' | 'portamento' | 'portamentoMob' | 'BassGrooveMob' | 'none';
@@ -78,3 +93,4 @@ export type WorkerSettings = {
     drumSettings: Omit<DrumSettings, 'volume'> & { enabled: boolean };
     instrumentSettings: InstrumentSettings;
 };
+

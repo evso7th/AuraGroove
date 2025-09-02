@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import Image from 'next/image';
 import { Slider } from "@/components/ui/slider";
-import type { DrumSettings, InstrumentSettings, ScoreName, EffectsSettings, MelodyInstrument, MelodyTechnique } from '@/types/music';
+import type { DrumSettings, InstrumentSettings, ScoreName, EffectsSettings, MelodyInstrument, MelodyTechnique, BassInstrument } from '@/types/music';
 
 // This is now a "dumb" UI component controlled by the useAuraGroove hook.
 export type AuraGrooveProps = {
@@ -126,7 +126,7 @@ export function AuraGroove({
                         <Label htmlFor={`${part}-instrument`} className="font-semibold flex items-center gap-2 capitalize"><Music className="h-5 w-5" /> {part}</Label>
                          <Select
                           value={settings.name}
-                          onValueChange={(v) => setInstrumentSettings(i => ({...i, [part]: {...i[part as keyof InstrumentSettings], name: v}}))}
+                          onValueChange={(v) => setInstrumentSettings(i => ({...i, [part]: {...i[part as keyof InstrumentSettings], name: v as any}}))}
                           disabled={isInitializing || isPlaying}
                         >
                           <SelectTrigger id={`${part}-instrument`} className="w-[150px]">
