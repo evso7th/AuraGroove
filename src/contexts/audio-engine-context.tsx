@@ -1,10 +1,9 @@
+
 'use client';
 
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import type { WorkerCommand, WorkerSettings, ScoreName, InstrumentSettings, ComposerWorkerMessage } from '@/types/music';
-import type { RhythmFrameCommand, RhythmFrameMessage } from '@/types/music';
-
+import type { WorkerCommand, WorkerSettings, RhythmFrameCommand, RhythmFrameMessage, ComposerWorkerMessage } from '@/types/music';
 
 // This is the public interface of our audio engine
 export interface AudioEngine {
@@ -37,7 +36,6 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   const [isInitializing, setIsInitializing] = useState(false);
   const [loadingText, setLoadingText] = useState('');
   
-  const engineRef = useRef<AudioEngine | null>(null);
   const composerWorkerRef = useRef<Worker | null>(null);
   const rhythmFrameRef = useRef<HTMLIFrameElement | null>(null);
   
@@ -150,7 +148,9 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         }
     });
   }, [isInitialized, isInitializing, toast]);
-  
+
+  const engineRef = useRef<AudioEngine | null>(null);
+
   // Clean up on unmount
   useEffect(() => {
     return () => {

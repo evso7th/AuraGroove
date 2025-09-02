@@ -43,7 +43,8 @@ export type RhythmFrameCommand = {
     payload?: any;
 }
 export type RhythmFrameMessage = {
-    type: 'request_score' | 'rhythm_frame_ready';
+    type: 'request_score' | 'rhythm_frame_ready' | 'error';
+    error?: string;
 }
 
 

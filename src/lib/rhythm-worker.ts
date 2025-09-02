@@ -1,3 +1,4 @@
+
 /**
  * @file Rhythm Frame Worker
  * This script runs inside the rhythm-frame.html iframe.
@@ -206,12 +207,15 @@ async function initAudio() {
 
 
 window.addEventListener('message', async (event) => {
+    // This is a security measure to ensure messages are from the parent window.
+    // In a real app, you'd want to check event.origin against your app's origin.
     if (!event.data || !event.data.command) return;
 
     const { command, payload } = event.data;
 
     if (command === 'init') {
-        initAudio();
+        // The 'init' command is the user gesture.
+        await initAudio();
         return;
     }
     
@@ -220,32 +224,37 @@ window.addEventListener('message', async (event) => {
         return;
     }
     
-    if (command === 'start') {
-        startEngine();
-    } else if (command === 'stop') {
-        stopEngine();
-    } else if (command === 'schedule' && payload) {
-        if (Tone.Transport.state !== 'started') return; // Don't schedule if stopped
-
-        drumMachine?.schedule(payload.drumScore, scheduledTime);
-        bassManager?.schedule(payload.bassScore, scheduledTime);
-        
-        // Advance the schedule time for the next bar
-        scheduledTime += payload.barDuration;
-
-    } else if (command === 'set_param' && payload) {
-        const { target, key, value } = payload;
-        switch (target) {
-            case 'bass':
-                if (key === 'name' && bassManager) bassManager.setInstrument(value);
-                if (key === 'volume' && channels) channels.bass.volume.value = Tone.gainToDb(value);
-                break;
-            case 'drums':
-                if (key === 'volume' && channels) channels.drums.volume.value = Tone.gainToDb(value);
-                break;
-            case 'transport':
-                 if (key === 'bpm') Tone.Transport.bpm.value = value;
-                break;
-        }
+    switch (command) {
+        case 'start':
+            startEngine();
+            break;
+        case 'stop':
+            stopEngine();
+            break;
+        case 'schedule':
+             if (payload && Tone.Transport.state === 'started') {
+                drumMachine?.schedule(payload.drumScore, scheduledTime);
+                bassManager?.schedule(payload.bassScore, scheduledTime);
+                // Advance the schedule time for the next bar
+                scheduledTime += payload.barDuration;
+            }
+            break;
+        case 'set_param':
+            if (payload) {
+                const { target, key, value } = payload;
+                switch (target) {
+                    case 'bass':
+                        if (key === 'name' && bassManager) bassManager.setInstrument(value);
+                        if (key === 'volume' && channels) channels.bass.volume.value = Tone.gainToDb(value);
+                        break;
+                    case 'drums':
+                        if (key === 'volume' && channels) channels.drums.volume.value = Tone.gainToDb(value);
+                        break;
+                    case 'transport':
+                        if (key === 'bpm') Tone.Transport.bpm.value = value;
+                        break;
+                }
+            }
+            break;
     }
 });
