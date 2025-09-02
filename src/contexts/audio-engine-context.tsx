@@ -154,6 +154,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
       worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
         const message = event.data;
         if (message.type === 'score') {
+            console.log('[MAIN THREAD] Received score from worker:', message.data);
             rhythmContextRef.current.nextScore = message.data;
             melodyContextRef.current.nextScore = message.data;
         } else if (message.type === 'error') {
@@ -166,6 +167,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
       const loop = new Tone.Loop((time) => {
         const { managers: rhythmManagers, nextScore: rhythmScore } = rhythmContextRef.current;
         if (rhythmScore && rhythmManagers.drumMachine && rhythmManagers.bassManager) {
+            console.log('[RHYTHM CONTEXT] Scheduling score for time:', time);
             rhythmManagers.drumMachine.schedule(rhythmScore.drumScore, time);
             rhythmManagers.bassManager.schedule(rhythmScore.bassScore, time);
             rhythmContextRef.current.nextScore = null; 
@@ -173,6 +175,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
 
         const { managers: melodyManagers, nextScore: melodyScore } = melodyContextRef.current;
         if (melodyScore && melodyManagers.melodyManager && melodyManagers.effectsManager) {
+            console.log('[MELODY CONTEXT] Scheduling score for time:', time);
             melodyManagers.melodyManager.schedule(melodyScore.melodyScore, time);
             melodyContextRef.current.nextScore = null;
         }
