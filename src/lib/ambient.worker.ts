@@ -46,7 +46,7 @@ class EvolutionEngine {
     }
     
     public reset() {
-        console.log('[WORKER] EvolutionEngine Reset.');
+        console.log('[COMPOSER WORKER] EvolutionEngine Reset.');
         this.lastMelodyNoteIndex = 0;
         this.melodyVoiceReleaseTimes.fill(0);
         this.nextPhraseStartTime = 0;
@@ -190,12 +190,14 @@ const Scheduler = {
     get barDuration() { return this.beatsPerBar * this.secondsPerBeat; },
 
     reset() {
+      console.log(`[COMPOSER WORKER] Scheduler.reset called.`);
       this.barCount = 0;
       this.evolutionEngine.reset();
       self.postMessage({ type: 'started' });
     },
     
     updateSettings(newSettings: Partial<WorkerSettings>) {
+        console.log(`[COMPOSER WORKER] Scheduler.updateSettings called with:`, newSettings);
         if (newSettings.drumSettings) this.settings.drumSettings = { ...this.settings.drumSettings, ...newSettings.drumSettings };
         if (newSettings.instrumentSettings) this.settings.instrumentSettings = { ...this.settings.instrumentSettings, ...newSettings.instrumentSettings };
         if (newSettings.bpm) this.settings.bpm = newSettings.bpm;
@@ -204,7 +206,7 @@ const Scheduler = {
 
     // This is now only called when the main thread commands it.
     tick() {
-        console.log(`[WORKER] Scheduler.tick called for bar ${this.barCount}`);
+        console.log(`[COMPOSER WORKER] Scheduler.tick called for bar ${this.barCount}`);
         let drumScore: DrumNote[] = [];
         let bassScore: SynthNote[] = [];
         let melodyScore: SynthNote[] = [];
@@ -230,7 +232,7 @@ const Scheduler = {
             barDuration: this.barDuration,
         };
         
-        console.log(`[WORKER] Posting score to main thread:`, messageData);
+        console.log(`[COMPOSER WORKER] > Posting score to main thread for bar ${this.barCount}:`, messageData);
         self.postMessage({ type: 'score', data: messageData });
         
         this.barCount++;
@@ -241,7 +243,7 @@ const Scheduler = {
 // --- MessageBus (The entry point) ---
 self.onmessage = async (event: MessageEvent<WorkerCommand>) => {
     const { command, data } = event.data;
-    console.log(`[WORKER] Received command: ${command}`);
+    console.log(`[COMPOSER WORKER] < Received command: ${command}`);
 
     try {
         switch (command) {

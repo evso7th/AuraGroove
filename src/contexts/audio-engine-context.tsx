@@ -61,6 +61,8 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   const engineRef = useRef<AudioEngine | null>(null);
   const composerWorkerRef = useRef<Worker | null>(null);
   const rhythmFrameRef = useRef<HTMLIFrameElement | null>(null);
+  const scheduleIntervalRef = useRef<any>(null);
+
 
   const nextBarTime = useRef<number>(0);
   const lookahead = 0.1; // seconds
@@ -69,16 +71,19 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   const { toast } = useToast();
   
   const postToRhythmFrame = (message: RhythmFrameCommand) => {
+    console.log(`[MAIN THREAD] > Sending command to RhythmFrame:`, message);
     rhythmFrameRef.current?.contentWindow?.postMessage(message, '*');
   }
   
   const postToComposerWorker = (message: WorkerCommand) => {
+    console.log(`[MAIN THREAD] > Sending command to ComposerWorker:`, message);
     composerWorkerRef.current?.postMessage(message);
   }
 
   // The main scheduling loop, run by a simple setInterval in the main thread
   const scheduleLoop = useCallback(() => {
     while (nextBarTime.current < performance.now() + scheduleAheadTime * 1000) {
+        console.log(`[MAIN THREAD] Scheduler loop: Requesting tick for time ${nextBarTime.current}`);
         postToComposerWorker({ command: 'tick' });
     }
   }, []);
@@ -98,9 +103,9 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
             // --- Set up the message handler from the composer worker ---
             composerWorker.onmessage = (event: MessageEvent<ComposerWorkerMessage>) => {
                 const message = event.data;
+                 console.log(`[MAIN THREAD] < Received message from ComposerWorker:`, message);
                 if (message.type === 'score') {
-                    console.log('[MAIN THREAD] Received score from composer. Scheduling...');
-                     // Send the relevant parts of the score to the rhythm frame
+                    // Send the relevant parts of the score to the rhythm frame
                     postToRhythmFrame({
                         command: 'schedule',
                         payload: {
@@ -119,31 +124,41 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
             setLoadingText('Loading Rhythm Engine...');
             const rhythmFrame = document.getElementById('rhythm-frame') as HTMLIFrameElement;
             rhythmFrameRef.current = rhythmFrame;
+             console.log('[MAIN THREAD] Attempting to find rhythm-frame:', rhythmFrame);
+
 
             // Wait for the iframe to be ready
             const frameLoadHandler = () => {
                 console.log('[MAIN THREAD] Rhythm frame loaded.');
-                postToComposerWorker({ command: 'init' });
+                postToRhythmFrame({ command: 'init' });
                 
                 engineRef.current = {
                     setIsPlaying: (isPlaying: boolean) => {
+                        console.log(`[MAIN THREAD] setIsPlaying called with: ${isPlaying}`);
                         if(isPlaying) {
                             nextBarTime.current = performance.now() + lookahead * 1000;
                             postToRhythmFrame({ command: 'start' });
-                            setInterval(scheduleLoop, 25);
-                        } else {
-                            postToRhythmFrame({ command: 'stop' });
                             postToComposerWorker({command: 'reset'});
-                            // The interval will just stop making progress
+                            if (scheduleIntervalRef.current) clearInterval(scheduleIntervalRef.current);
+                            scheduleIntervalRef.current = setInterval(scheduleLoop, 25);
+                             console.log('[MAIN THREAD] Scheduler interval started.');
+                        } else {
+                            if (scheduleIntervalRef.current) clearInterval(scheduleIntervalRef.current);
+                            scheduleIntervalRef.current = null;
+                            postToRhythmFrame({ command: 'stop' });
+                             console.log('[MAIN THREAD] Scheduler interval stopped.');
                         }
                     },
                     updateSettings: (settings: Partial<WorkerSettings>) => {
+                         console.log('[MAIN THREAD] updateSettings called with:', settings);
                         postToComposerWorker({ command: 'update_settings', data: settings });
                         // Also forward relevant settings to the frame
                         postToRhythmFrame({
                             command: 'payload', // A generic command to update settings
                             payload: {
                                 instrumentSettings: settings.instrumentSettings,
+                                drumSettings: settings.drumSettings,
+                                bpm: settings.bpm,
                             }
                         })
                     }
@@ -157,8 +172,10 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
             };
             
             if (rhythmFrame.contentWindow && rhythmFrame.contentWindow.document.readyState === 'complete') {
+                 console.log('[MAIN THREAD] Rhythm frame already complete.');
                  frameLoadHandler();
             } else {
+                 console.log('[MAIN THREAD] Waiting for rhythm frame to load...');
                 rhythmFrame.addEventListener('load', frameLoadHandler);
             }
 
@@ -177,6 +194,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   useEffect(() => {
     return () => {
         composerWorkerRef.current?.terminate();
+        if(scheduleIntervalRef.current) clearInterval(scheduleIntervalRef.current);
     }
   }, []);
 

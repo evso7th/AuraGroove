@@ -25,11 +25,12 @@ class DrumMachine {
     constructor(channel: Tone.Channel) {
         this.sampler = new Tone.Players(DRUM_SAMPLES, () => {
             this.isReady = true;
-            console.log('[Rhythm-Frame] Drum samples loaded.');
+            console.log('[RHYTHM FRAME] Drum samples loaded.');
         }).connect(channel);
     }
 
     schedule(score: DrumNote[], time: number) {
+        console.log(`[RHYTHM FRAME] Scheduling ${score.length} drum notes for time ${time}`);
         if (!this.isReady || score.length === 0) return;
         score.forEach(note => {
             if (this.sampler.has(note.sample)) {
@@ -45,8 +46,10 @@ class BassSynthManager {
     private synths: Record<string, any> = {};
     private activeInstrument: BassInstrument = 'portamento';
     private isPlaying = false;
+    private channel: Tone.Channel;
 
-    constructor(private channel: Tone.Channel) {
+    constructor(channel: Tone.Channel) {
+        this.channel = channel;
         this.createPresets();
         this.setInstrument(this.activeInstrument);
     }
@@ -57,7 +60,8 @@ class BassSynthManager {
             oscillator: { type: 'fmsine' },
             envelope: { attack: 0.1, decay: 0.3, sustain: 0.9, release: 4.0 },
             filterEnvelope: { attack: 0.06, decay: 0.2, sustain: 0.5, release: 5.0, baseFrequency: 200, octaves: 7 }
-        }).connect(this.channel);
+        });
+         this.synths.portamento.connect(this.channel);
     }
     
     private getActiveSynth() {
@@ -65,6 +69,7 @@ class BassSynthManager {
     }
 
     public setInstrument(name: BassInstrument) {
+       console.log(`[RHYTHM FRAME] Setting bass instrument to: ${name}`);
        const currentSynth = this.getActiveSynth();
        if (this.isPlaying && currentSynth) {
            currentSynth.triggerRelease();
@@ -74,11 +79,13 @@ class BassSynthManager {
     }
 
     public schedule(score: SynthNote[], time: number) {
+        console.log(`[RHYTHM FRAME] Scheduling ${score.length} bass notes for time ${time}`);
         const activeSynth = this.getActiveSynth();
         if (this.activeInstrument === 'none' || !activeSynth) return;
 
         if (score.length === 0) {
             if (this.isPlaying) {
+                 console.log(`[RHYTHM FRAME] No bass notes, releasing synth.`);
                 activeSynth.triggerRelease(time);
                 this.isPlaying = false;
             }
@@ -90,15 +97,18 @@ class BassSynthManager {
             const noteName = note.note as string;
             
              if (!this.isPlaying) {
+                console.log(`[RHYTHM FRAME] Triggering bass attack: ${noteName} at ${scheduledTime}`);
                 activeSynth.triggerAttack(noteName, scheduledTime, note.velocity);
                 this.isPlaying = true;
             } else {
+                 console.log(`[RHYTHM FRAME] Setting bass note: ${noteName} at ${scheduledTime}`);
                 activeSynth.setNote(noteName, scheduledTime);
             }
         });
     }
 
     public stopAll() {
+        console.log('[RHYTHM FRAME] Stopping all bass sounds.');
         if (this.isPlaying) {
             const activeSynth = this.getActiveSynth();
             if (activeSynth) activeSynth.triggerRelease();
@@ -111,10 +121,11 @@ class BassSynthManager {
 // --- Main Logic ---
 
 let isEngineRunning = false;
+let hasAudioContextStarted = false;
 
 const channels = {
-    drums: new Tone.Channel().toDestination(),
-    bass: new Tone.Channel().toDestination(),
+    drums: new Tone.Channel(-6).toDestination(),
+    bass: new Tone.Channel(-6).toDestination(),
 };
 const drumMachine = new DrumMachine(channels.drums);
 const bassManager = new BassSynthManager(channels.bass);
@@ -123,19 +134,40 @@ window.addEventListener('message', async (event) => {
     if (!event.data || !event.data.command) return;
 
     const { command, payload, time } = event.data;
+     console.log(`[RHYTHM FRAME] < Received command: ${command}`, event.data);
+
+    if (command === 'init' && !hasAudioContextStarted) {
+         console.log('[RHYTHM FRAME] Init command received, Tone.js is ready.');
+         // Tone.js is already imported, so we are ready.
+         return;
+    }
 
     if (command === 'start' && !isEngineRunning) {
+         if (!hasAudioContextStarted) {
+            await Tone.start();
+            hasAudioContextStarted = true;
+            console.log('[RHYTHM FRAME] AudioContext started by user interaction.');
+        }
         isEngineRunning = true;
-        await Tone.start();
-        console.log('[Rhythm-Frame] AudioContext started.');
+        console.log('[RHYTHM FRAME] Engine started.');
     } else if (command === 'stop') {
         isEngineRunning = false;
         bassManager.stopAll();
+         console.log('[RHYTHM FRAME] Engine stopped.');
     } else if (command === 'schedule' && isEngineRunning && payload && time) {
         drumMachine.schedule(payload.drumScore, time);
         bassManager.schedule(payload.bassScore, time);
-    } else if (command === 'payload' && payload.instrumentSettings) {
-        const settings = payload.instrumentSettings as InstrumentSettings;
-        bassManager.setInstrument(settings.bass.name);
+    } else if (command === 'payload' && payload) {
+        if(payload.instrumentSettings) {
+             const settings = payload.instrumentSettings as InstrumentSettings;
+             bassManager.setInstrument(settings.bass.name);
+             channels.bass.volume.value = Tone.gainToDb(settings.bass.volume);
+        }
+        if(payload.drumSettings) {
+             channels.drums.volume.value = Tone.gainToDb(payload.drumSettings.volume);
+        }
+         if (payload.bpm) {
+            Tone.Transport.bpm.value = payload.bpm;
+        }
     }
 });
