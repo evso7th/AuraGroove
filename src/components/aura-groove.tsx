@@ -99,6 +99,7 @@ export function AuraGroove({
                         <SelectValue placeholder="Select score" />
                     </SelectTrigger>
                     <SelectContent>
+                        <SelectItem value="dreamtales">Dreamtales (Anchor)</SelectItem>
                         <SelectItem value="evolve">Evolve (L-Logic)</SelectItem>
                         <SelectItem value="omega">Omega (Fractal)</SelectItem>
                         <SelectItem value="promenade">Promenade</SelectItem>

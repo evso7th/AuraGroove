@@ -44,7 +44,7 @@ export type EffectsSettings = {
     enabled: boolean;
 };
 
-export type ScoreName = 'evolve' | 'omega' | 'promenade';
+export type ScoreName = 'evolve' | 'omega' | 'promenade' | 'dreamtales';
 
 // Settings sent from the UI to the main engine/worker.
 export type WorkerSettings = {

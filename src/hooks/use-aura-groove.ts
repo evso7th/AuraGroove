@@ -13,7 +13,7 @@ export const useAuraGroove = () => {
     bass: { name: "portamento", volume: 0.45 },
   });
   const [bpm, setBpm] = useState(75);
-  const [score, setScore] = useState<ScoreName>('evolve');
+  const [score, setScore] = useState<ScoreName>('dreamtales');
   const [density, setDensity] = useState(0.5);
 
   const getFullSettings = useCallback((): WorkerSettings => {

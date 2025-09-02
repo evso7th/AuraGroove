@@ -9,15 +9,89 @@
  */
 import type { WorkerSettings, Score, Note, DrumsScore, EffectsScore } from '@/types/music';
 
+type Phrase = Note[];
+
+class EvolutionEngine {
+    private anchors: Phrase[];
+    private currentPhrase: Phrase;
+    private barSinceAnchor: number;
+    private bassNotes = [36, 38, 40, 41, 43, 45, 47, 48]; // C2 Major
+
+    constructor() {
+        // Simple Anchor Phrase: C major triad arpeggio
+        this.anchors = [
+            [
+                { midi: 60, duration: 0.5, time: 0 },
+                { midi: 64, duration: 0.5, time: 0.5 },
+                { midi: 67, duration: 0.5, time: 1.0 },
+                { midi: 72, duration: 0.5, time: 1.5 },
+            ]
+        ];
+        this.currentPhrase = this.anchors[0];
+        this.barSinceAnchor = 0;
+    }
+
+    private mutate(phrase: Phrase): Phrase {
+        return phrase.map(note => {
+            const newNote = { ...note };
+            const mutationType = Math.random();
+
+            if (mutationType < 0.4) {
+                // Transpose note by one step in the scale
+                const direction = Math.random() < 0.5 ? 1 : -1;
+                const scale = [0, 2, 4, 5, 7, 9, 11]; // C Major scale intervals
+                const currentDegree = note.midi % 12;
+                // Simple transposition for now, doesn't respect scale perfectly but works
+                newNote.midi += direction; 
+            } else if (mutationType < 0.7) {
+                // Change duration
+                newNote.duration *= (0.5 + Math.random());
+            }
+            // 30% chance to keep the note as is
+            return newNote;
+        });
+    }
+
+    generateNextBar(barDuration: number, density: number): { melody: Phrase, bass: Phrase } {
+        this.barSinceAnchor++;
+
+        // Every 8 bars, return to an anchor
+        if (this.barSinceAnchor >= 8) {
+            this.currentPhrase = this.anchors[0];
+            this.barSinceAnchor = 0;
+        } else {
+            // Otherwise, mutate the current phrase
+            this.currentPhrase = this.mutate(this.currentPhrase);
+        }
+        
+        // Generate bass note for the bar
+        const bassMidi = this.bassNotes[Math.floor(Math.random() * this.bassNotes.length)];
+        const bass: Phrase = [{ midi: bassMidi, time: 0, duration: barDuration, velocity: 0.6 }];
+
+        // Assign timings to the melody phrase within the bar
+        const melody = this.currentPhrase.map((note, index) => {
+            return {
+                ...note,
+                time: (index / this.currentPhrase.length) * barDuration,
+                velocity: 0.5 + Math.random() * 0.3
+            };
+        }).filter(() => Math.random() < density); // Apply density
+
+        return { melody, bass };
+    }
+}
+
+
 // --- Scheduler (The Conductor) ---
 const Scheduler = {
     loopId: null as any,
     isRunning: false,
     barCount: 0,
+    evolutionEngine: new EvolutionEngine(),
     
     settings: {
         bpm: 75,
-        score: 'evolve',
+        score: 'dreamtales',
         drumSettings: { pattern: 'none', enabled: false },
         instrumentSettings: { 
             bass: { name: "portamento", volume: 0.5 },
@@ -56,6 +130,12 @@ const Scheduler = {
     },
 
     createScoreForNextBar(): Score {
+        if (this.settings.score === 'dreamtales') {
+            const { melody, bass } = this.evolutionEngine.generateNextBar(this.barDuration, this.settings.density);
+            return { melody, bass }; // Drums and effects can be added here later
+        }
+
+        // --- Fallback to simple generator for other styles ---
         const bass: Note[] = [];
         const melody: Note[] = [];
         const drums: DrumsScore = [];
@@ -72,7 +152,6 @@ const Scheduler = {
         for (let i = 0; i < notesInBar; i++) {
              const time = i * step;
 
-            // Simple generative logic
             // Bass on the downbeat
             if (i % 8 === 0) {
                  if (activeSynthNotes < maxVoices) {
