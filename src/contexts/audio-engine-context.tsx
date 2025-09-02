@@ -11,11 +11,11 @@ type ComposerWorkerMessage = {
   data: {
     drumScore: DrumNote[];
     bassScore: SynthNote[];
-    melodyScore: SynthNote[]; // We'll ignore this for now
+    melodyScore: SynthNote[];
     barDuration: number;
   };
 } | {
-  type: 'started' | 'stopped' | 'error';
+  type: 'error';
   error?: string;
 };
 
@@ -23,7 +23,11 @@ type ComposerWorkerMessage = {
 type RhythmFrameCommand = {
     command: 'init' | 'start' | 'stop' | 'schedule' | 'set_param';
     payload?: any;
-    time?: number; // Absolute time
+}
+
+// This is the structure for messages from the rhythm frame
+type RhythmFrameMessage = {
+    type: 'request_score';
 }
 
 
@@ -61,13 +65,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   const engineRef = useRef<AudioEngine | null>(null);
   const composerWorkerRef = useRef<Worker | null>(null);
   const rhythmFrameRef = useRef<HTMLIFrameElement | null>(null);
-  const scheduleIntervalRef = useRef<any>(null);
-
-
-  const nextBarTime = useRef<number>(0);
-  const lookahead = 0.1; // seconds
-  const scheduleAheadTime = 0.2; // seconds
-
+  
   const { toast } = useToast();
   
   const postToRhythmFrame = (message: RhythmFrameCommand) => {
@@ -77,13 +75,6 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   const postToComposerWorker = (message: WorkerCommand) => {
     composerWorkerRef.current?.postMessage(message);
   }
-
-  // The main scheduling loop, run by a simple setInterval in the main thread
-  const scheduleLoop = useCallback(() => {
-    if (nextBarTime.current < (performance.now() / 1000) + scheduleAheadTime) {
-        postToComposerWorker({ command: 'tick' });
-    }
-  }, []);
 
   const initialize = useCallback(async () => {
     console.log(`[INIT TRACE ${performance.now()}] Initialize started.`);
@@ -104,16 +95,13 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
             console.log(`[INIT TRACE ${performance.now()}] Setting up worker onmessage...`);
             composerWorker.onmessage = (event: MessageEvent<ComposerWorkerMessage>) => {
                 const message = event.data;
+                 console.log(`[MAIN THREAD] Received score from worker:`, message.data);
                  if (message.type === 'score') {
+                    // Forward the complete score to the rhythm frame for scheduling
                     postToRhythmFrame({
                         command: 'schedule',
-                        payload: {
-                            drumScore: message.data.drumScore,
-                            bassScore: message.data.bassScore
-                        },
-                        time: nextBarTime.current
+                        payload: message.data
                     });
-                     nextBarTime.current += message.data.barDuration;
                 } else if (message.type === 'error') {
                     console.error('Error from composer worker:', message.error);
                     toast({ variant: 'destructive', title: 'Composer Error', description: message.error });
@@ -126,6 +114,18 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
             const rhythmFrame = document.getElementById('rhythm-frame') as HTMLIFrameElement;
             console.log(`[INIT TRACE ${performance.now()}] Rhythm frame obtained:`, rhythmFrame);
             rhythmFrameRef.current = rhythmFrame;
+
+             // --- Handler for messages from the iframe ---
+            const handleRhythmFrameMessage = (event: MessageEvent<RhythmFrameMessage>) => {
+                if (event.source !== rhythmFrame.contentWindow) return; // Security check
+                
+                if (event.data.type === 'request_score') {
+                    // The rhythm frame is requesting the next bar, so we tick the composer.
+                    postToComposerWorker({ command: 'tick' });
+                }
+            };
+
+            window.addEventListener('message', handleRhythmFrameMessage);
 
 
             // Wait for the iframe to be ready
@@ -140,14 +140,9 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
                 engineRef.current = {
                     setIsPlaying: (isPlaying: boolean) => {
                         if(isPlaying) {
-                            nextBarTime.current = performance.now()/1000 + lookahead;
                             postToRhythmFrame({ command: 'start' });
                             postToComposerWorker({command: 'reset'});
-                            if (scheduleIntervalRef.current) clearInterval(scheduleIntervalRef.current);
-                            scheduleIntervalRef.current = setInterval(scheduleLoop, 50);
                         } else {
-                            if (scheduleIntervalRef.current) clearInterval(scheduleIntervalRef.current);
-                            scheduleIntervalRef.current = null;
                             postToRhythmFrame({ command: 'stop' });
                         }
                     },
@@ -195,13 +190,12 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
           resolve(false);
         }
     });
-  }, [isInitialized, isInitializing, toast, scheduleLoop]);
+  }, [isInitialized, isInitializing, toast]);
   
   // Clean up on unmount
   useEffect(() => {
     return () => {
         composerWorkerRef.current?.terminate();
-        if(scheduleIntervalRef.current) clearInterval(scheduleIntervalRef.current);
     }
   }, []);
 
