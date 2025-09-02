@@ -25,9 +25,15 @@ export class MelodySynthManager {
              // The filter is set lower and the envelope is less aggressive to avoid harshness.
             pluckLead: {
                 oscillator: { type: 'fatsawtooth', count: 3, spread: 20 },
-                envelope: { attack: 0.02, decay: 0.7, sustain: 0.6, release: 0.5 },
+                envelope: { 
+                    attack: 0.02, 
+                    decay: 0.7, 
+                    sustain: 0.7, 
+                    release: 2.0,
+                    releaseCurve: 'exponential' // This creates the "parabolic" falloff
+                },
                 filter: { type: 'lowpass', Q: 2, rolloff: -12 },
-                filterEnvelope: { attack: 0.03, decay: 0.4, sustain: 0.5, release: 0.8, baseFrequency: 250, octaves: 3.4 }
+                filterEnvelope: { attack: 0.03, decay: 0.4, sustain: 0.5, release: 1.2, baseFrequency: 250, octaves: 3.4 }
             },
             // The 'synth' preset now maps to our new detailed sound
             synth: 'pluckLead' 
