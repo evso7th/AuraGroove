@@ -33,7 +33,6 @@ export interface AudioEngine {
   setIsPlaying: (isPlaying: boolean) => void;
   updateSettings: (settings: Partial<WorkerSettings>) => void;
   toggleEffects: (enabled: boolean) => void;
-  getTone: () => ToneJS | null;
   drumMachine: DrumMachine;
   bassManager: BassSynthManager;
   melodyManager: MelodySynthManager;
@@ -68,17 +67,28 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   // Refs to hold instances that shouldn't trigger re-renders
   const engineRef = useRef<AudioEngine | null>(null);
   const workerRef = useRef<Worker | null>(null);
-  const toneRef = useRef<typeof import('tone') | null>(null);
-  const fxBusRef = useRef<{ reverb?: Tone.Reverb, delay?: Tone.FeedbackDelay }>({});
-  const channelsRef = useRef<Record<string, Tone.Channel>>({});
-  const managersRef = useRef<{
-      drumMachine?: DrumMachine;
-      bassManager?: BassSynthManager;
-      melodyManager?: MelodySynthManager;
-      effectsManager?: EffectsSynthManager;
-  }>({});
-  const tickLoopRef = useRef<Tone.Loop | null>(null);
-  const nextScoreRef = useRef<Score | null>(null);
+  const toneRef = useRef<{ rhythm: ToneJS, melody: ToneJS } | null>(null);
+
+  const rhythmContextRef = useRef<{
+    Tone: ToneJS | null,
+    transport: Tone.Transport | null,
+    fx: { reverb?: Tone.Reverb, delay?: Tone.FeedbackDelay },
+    channels: Record<string, Tone.Channel>,
+    managers: { drumMachine?: DrumMachine, bassManager?: BassSynthManager },
+    tickLoop?: Tone.Loop,
+    nextScore?: Score | null
+  }>({ Tone: null, transport: null, fx: {}, channels: {}, managers: {} });
+
+  const melodyContextRef = useRef<{
+    Tone: ToneJS | null,
+    transport: Tone.Transport | null,
+    fx: { reverb?: Tone.Reverb, delay?: Tone.FeedbackDelay },
+    channels: Record<string, Tone.Channel>,
+    managers: { melodyManager?: MelodySynthManager, effectsManager?: EffectsSynthManager },
+    tickLoop?: Tone.Loop,
+    nextScore?: Score | null
+  }>({ Tone: null, transport: null, fx: {}, channels: {}, managers: {} });
+
 
   const { toast } = useToast();
 
@@ -88,127 +98,140 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     setIsInitializing(true);
     setLoadingText('Loading Audio Libraries...');
     try {
-      // Dynamically import Tone.js
       const Tone = await import('tone');
-      toneRef.current = Tone;
       await Tone.start();
-      console.log('[MAIN THREAD] Tone.js started.');
+      console.log('[MAIN THREAD] Tone.js contexts starting.');
       
-      // --- Create FX Bus ---
-      fxBusRef.current = {
-        reverb: new Tone.Reverb({ decay: 5, wet: 0 }).toDestination(),
-        delay: new Tone.FeedbackDelay({ delayTime: "4n", feedback: 0.3, wet: 0 }).toDestination()
+      // --- Initialize Rhythm Context ---
+      setLoadingText('Initializing Rhythm Engine...');
+      const rhythmTone = Tone; // Using the same library, but could be different instances
+      rhythmContextRef.current.Tone = rhythmTone;
+      rhythmContextRef.current.transport = rhythmTone.Transport;
+      rhythmContextRef.current.fx = {
+        reverb: new rhythmTone.Reverb({ decay: 2, wet: 0 }).toDestination(),
+        delay: new rhythmTone.FeedbackDelay({ delayTime: "8n", feedback: 0.2, wet: 0 }).toDestination()
       };
-      console.log('[MAIN THREAD] FX Bus created.');
-
-      // --- Create Channels ---
-      channelsRef.current = {
-        drums: new Tone.Channel().toDestination(),
-        bass: new Tone.Channel().toDestination(),
-        melody: new Tone.Channel().toDestination(),
-        effects: new Tone.Channel().toDestination()
+      rhythmContextRef.current.channels = {
+        drums: new rhythmTone.Channel().toDestination(),
+        bass: new rhythmTone.Channel().toDestination(),
       };
-      // Connect channels to the FX bus
-      Object.values(channelsRef.current).forEach(channel => channel.connect(fxBusRef.current.reverb!));
-      Object.values(channelsRef.current).forEach(channel => channel.connect(fxBusRef.current.delay!));
-      console.log('[MAIN THREAD] Channels created and connected to FX Bus.');
+      Object.values(rhythmContextRef.current.channels).forEach(ch => {
+        ch.connect(rhythmContextRef.current.fx.reverb!);
+        ch.connect(rhythmContextRef.current.fx.delay!);
+      });
+      rhythmContextRef.current.managers.drumMachine = new DrumMachine(rhythmTone, rhythmContextRef.current.channels.drums);
+      rhythmContextRef.current.managers.bassManager = new BassSynthManager(rhythmTone, rhythmContextRef.current.channels.bass);
+      console.log('[RHYTHM CONTEXT] Initialized.');
 
-
-      // --- Initialize Synth and Drum Managers ---
-      managersRef.current = {
-          drumMachine: new DrumMachine(Tone, channelsRef.current.drums),
-          bassManager: new BassSynthManager(Tone, channelsRef.current.bass),
-          melodyManager: new MelodySynthManager(Tone, channelsRef.current.melody),
-          effectsManager: new EffectsSynthManager(Tone),
+      // --- Initialize Melody Context ---
+      setLoadingText('Initializing Melody Engine...');
+      const melodyTone = Tone; // Using the same library
+      melodyContextRef.current.Tone = melodyTone;
+      melodyContextRef.current.transport = melodyTone.Transport; // Both use the same transport for sync
+      melodyContextRef.current.fx = {
+        reverb: new melodyTone.Reverb({ decay: 6, wet: 0 }).toDestination(),
+        delay: new melodyTone.FeedbackDelay({ delayTime: "4n", feedback: 0.4, wet: 0 }).toDestination()
       };
-      console.log('[MAIN THREAD] Synth managers created.');
+      melodyContextRef.current.channels = {
+        melody: new melodyTone.Channel().toDestination(),
+        effects: new melodyTone.Channel().toDestination()
+      };
+       Object.values(melodyContextRef.current.channels).forEach(ch => {
+        ch.connect(melodyContextRef.current.fx.reverb!);
+        ch.connect(melodyContextRef.current.fx.delay!);
+      });
+      melodyContextRef.current.managers.melodyManager = new MelodySynthManager(melodyTone, melodyContextRef.current.channels.melody);
+      melodyContextRef.current.managers.effectsManager = new EffectsSynthManager(melodyTone);
+       console.log('[MELODY CONTEXT] Initialized.');
+
 
       // --- Initialize Web Worker (The Composer) ---
       setLoadingText('Initializing Composer AI...');
       const worker = new Worker(new URL('../lib/ambient.worker.ts', import.meta.url), { type: 'module' });
       workerRef.current = worker;
-      console.log('[MAIN THREAD] Web Worker created.');
       
       // --- Set up the message handler from the worker ---
       worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
         const message = event.data;
         if (message.type === 'score') {
-            console.log(`[MAIN THREAD] Received score from worker for next measure.`);
-            nextScoreRef.current = message.data;
+            rhythmContextRef.current.nextScore = message.data;
+            melodyContextRef.current.nextScore = message.data;
         } else if (message.type === 'error') {
             console.error('Error from worker:', message.error);
-            toast({
-                variant: 'destructive',
-                title: 'Worker Error',
-                description: message.error,
-            });
+            toast({ variant: 'destructive', title: 'Worker Error', description: message.error });
         }
       };
 
       // --- Create the main transport loop (The Conductor's Heartbeat) ---
-      tickLoopRef.current = new Tone.Loop((time) => {
-        if (nextScoreRef.current && managersRef.current && toneRef.current) {
-            const { drumMachine, bassManager, melodyManager } = managersRef.current;
-            
-            drumMachine?.schedule(nextScoreRef.current.drumScore, time);
-            bassManager?.schedule(nextScoreRef.current.bassScore, time);
-            melodyManager?.schedule(nextScoreRef.current.melodyScore, time);
-            
-            nextScoreRef.current = null; 
+      const loop = new Tone.Loop((time) => {
+        const { managers: rhythmManagers, nextScore: rhythmScore } = rhythmContextRef.current;
+        if (rhythmScore && rhythmManagers.drumMachine && rhythmManagers.bassManager) {
+            rhythmManagers.drumMachine.schedule(rhythmScore.drumScore, time);
+            rhythmManagers.bassManager.schedule(rhythmScore.bassScore, time);
+            rhythmContextRef.current.nextScore = null; 
+        }
+
+        const { managers: melodyManagers, nextScore: melodyScore } = melodyContextRef.current;
+        if (melodyScore && melodyManagers.melodyManager && melodyManagers.effectsManager) {
+            melodyManagers.melodyManager.schedule(melodyScore.melodyScore, time);
+            melodyContextRef.current.nextScore = null;
         }
 
         if (workerRef.current) {
             workerRef.current.postMessage({ command: 'tick' });
         }
-      }, '1m'); // The loop triggers every measure.
+      }, '1m');
+      
+      rhythmContextRef.current.tickLoop = loop;
 
 
       // --- Define the public engine interface ---
       engineRef.current = {
-        getTone: () => toneRef.current,
-        drumMachine: managersRef.current.drumMachine!,
-        bassManager: managersRef.current.bassManager!,
-        melodyManager: managersRef.current.melodyManager!,
-        effectsManager: managersRef.current.effectsManager!,
+        drumMachine: rhythmContextRef.current.managers.drumMachine!,
+        bassManager: rhythmContextRef.current.managers.bassManager!,
+        melodyManager: melodyContextRef.current.managers.melodyManager!,
+        effectsManager: melodyContextRef.current.managers.effectsManager!,
         
         setIsPlaying: (isPlaying: boolean) => {
-          if (!workerRef.current || !toneRef.current || !tickLoopRef.current) return;
-          const T = toneRef.current;
-          
-          if (isPlaying) {
-            if (T.Transport.state !== 'started') {
-                 workerRef.current.postMessage({ command: 'tick' });
-                 tickLoopRef.current.start(0);
-                 T.Transport.start();
-            }
-          } else {
-             if (T.Transport.state === 'started') {
-                tickLoopRef.current.stop(0);
-                T.Transport.stop();
-                T.Transport.cancel(0);
+            const T = Tone.Transport;
+            const loop = rhythmContextRef.current.tickLoop;
+            if (!workerRef.current || !T || !loop) return;
 
-                managersRef.current.bassManager?.stopAll();
-                managersRef.current.melodyManager?.stopAll();
-                
-                workerRef.current.postMessage({ command: 'reset' });
-                nextScoreRef.current = null; 
-             }
-          }
+            if (isPlaying) {
+                if (T.state !== 'started') {
+                    workerRef.current.postMessage({ command: 'tick' });
+                    loop.start(0);
+                    T.start();
+                }
+            } else {
+                if (T.state === 'started') {
+                    loop.stop(0);
+                    T.stop();
+                    T.cancel(0);
+                    
+                    rhythmContextRef.current.managers.bassManager?.stopAll();
+                    melodyContextRef.current.managers.melodyManager?.stopAll();
+
+                    workerRef.current.postMessage({ command: 'reset' });
+                    rhythmContextRef.current.nextScore = null;
+                    melodyContextRef.current.nextScore = null;
+                }
+            }
         },
         
         updateSettings: (settings: Partial<WorkerSettings>) => {
            if (!workerRef.current) return;
            workerRef.current.postMessage({ command: 'update_settings', data: settings });
-           if (toneRef.current && settings.bpm) {
-             toneRef.current.Transport.bpm.value = settings.bpm;
+           if (Tone.Transport && settings.bpm) {
+             Tone.Transport.bpm.value = settings.bpm;
            }
         },
 
         toggleEffects: (enabled: boolean) => {
-            if (fxBusRef.current.reverb && fxBusRef.current.delay) {
-                fxBusRef.current.reverb.wet.value = enabled ? 0.3 : 0;
-                fxBusRef.current.delay.wet.value = enabled ? 0.2 : 0;
-            }
+            if (rhythmContextRef.current.fx.reverb) rhythmContextRef.current.fx.reverb.wet.value = enabled ? 0.15 : 0;
+            if (rhythmContextRef.current.fx.delay) rhythmContextRef.current.fx.delay.wet.value = enabled ? 0.1 : 0;
+            if (melodyContextRef.current.fx.reverb) melodyContextRef.current.fx.reverb.wet.value = enabled ? 0.35 : 0;
+            if (melodyContextRef.current.fx.delay) melodyContextRef.current.fx.delay.wet.value = enabled ? 0.25 : 0;
         },
       };
       

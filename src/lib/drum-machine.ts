@@ -29,8 +29,6 @@ export class DrumMachine {
 
         score.forEach(note => {
             if (this.sampler.has(note.sample)) {
-                // The velocity of the sample is already baked in and multiplied by the worker.
-                // The final volume is controlled by the channel.
                 this.sampler.player(note.sample).start(time + (note.time * this.Tone.Time('4n').toSeconds()));
             }
         });

@@ -1,5 +1,4 @@
 
-
 import type { ToneJS, SynthNote, MelodyInstrument, MelodyTechnique } from '@/types/music';
 
 /**
@@ -64,7 +63,6 @@ export class MelodySynthManager {
         this.activeTechnique = technique;
         const portamentoValue = (technique === 'portamento' || technique === 'glissando') ? 0.2 : 0;
         
-        // Glissando is just a faster portamento
         this.voices.forEach(voice => {
             voice.portamento = portamentoValue;
         });
