@@ -65,7 +65,7 @@ const Scheduler = {
         for (let i = 0; i < 8; i++) { // Generate 8 notes per bar
             const time = startTime + i * step;
             const midi = notes[i % notes.length];
-            score.push({ part: 'bass', midi, time, duration: 0.4, velocity: 0.8 });
+            score.push({ midi, time, duration: 0.4, velocity: 0.8 });
         }
         return score;
     },
