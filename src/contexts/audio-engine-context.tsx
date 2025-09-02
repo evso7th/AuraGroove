@@ -3,21 +3,20 @@
 
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import type { WorkerSettings, Score, Note } from '@/types/music';
+import type { WorkerSettings, Score, Note, DrumsScore, EffectsScore } from '@/types/music';
+import * as Tone from 'tone';
 
 // --- Type Definitions ---
 type WorkerMessage = {
-    type: 'score' | 'error' | 'log';
+    type: 'score' | 'error';
     score?: Score;
     error?: string;
-    message?: string;
-}
+};
 
 const isMobile = () => {
     if (typeof window === 'undefined') return false;
     return /Android|iPhone|iPad|iPod|WebOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 };
-
 
 // --- React Context ---
 interface AudioEngineContextType {
@@ -47,6 +46,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   const workerRef = useRef<Worker | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const synthPoolRef = useRef<AudioWorkletNode[]>([]);
+  const samplerRef = useRef<Tone.Sampler | null>(null);
   const nextVoiceRef = useRef(0);
   
   const { toast } = useToast();
@@ -61,20 +61,10 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
             const context = new (window.AudioContext || (window as any).webkitAudioContext)({
                 sampleRate: isMobile() ? 22050 : 44100,
             });
+            await context.resume();
             audioContextRef.current = context;
+            Tone.setContext(context);
             console.log(`AudioContext initialized with sample rate: ${context.sampleRate}`);
-
-            const unlockAudio = async () => {
-                if (context && context.state === 'suspended') {
-                    await context.resume();
-                }
-                window.removeEventListener('click', unlockAudio, true);
-                window.removeEventListener('touchend', unlockAudio, true);
-            };
-
-            window.addEventListener('click', unlockAudio, true);
-            window.addEventListener('touchend', unlockAudio, true);
-            await unlockAudio();
 
         } catch (e) {
             toast({ variant: "destructive", title: "Audio Error", description: "Could not create AudioContext."});
@@ -88,7 +78,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         const worker = new Worker(new URL('../lib/ambient.worker.ts', import.meta.url), { type: 'module' });
         worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
             if (event.data.type === 'score' && event.data.score) {
-                 if (audioContextRef.current && synthPoolRef.current.length > 0) {
+                 if (audioContextRef.current && (synthPoolRef.current.length > 0 || samplerRef.current)) {
                     scheduleScore(event.data.score, audioContextRef.current);
                  }
             } else if (event.data.type === 'error') {
@@ -101,7 +91,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     if(audioContextRef.current && synthPoolRef.current.length === 0) {
         try {
             await audioContextRef.current.audioWorklet.addModule('/worklets/synth-processor.js');
-            const numVoices = 4; // Start with 4 voices for mobile-first safety
+            const numVoices = isMobile() ? 4 : 6;
             for(let i = 0; i < numVoices; i++) {
                 const node = new AudioWorkletNode(audioContextRef.current, 'synth-processor');
                 node.connect(audioContextRef.current.destination);
@@ -114,6 +104,31 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
             return false;
         }
     }
+
+    if (!samplerRef.current) {
+        try {
+            samplerRef.current = new Tone.Sampler({
+                urls: {
+                    C4: "kick_drum6.wav",
+                    D4: "snare.wav",
+                    E4: "closed_hi_hat_accented.wav",
+                    F4: "crash1.wav",
+                    G4: "hightom.wav",
+                    A4: "cymbal_bell1.wav", // Effect 1
+                    B4: "cymbal_bell2.wav"  // Effect 2
+                },
+                baseUrl: "/assets/drums/",
+                onload: () => {
+                    console.log("Sampler loaded");
+                }
+            }).toDestination();
+        } catch (e) {
+            toast({ variant: "destructive", title: "Sampler Error", description: "Failed to load drum samples." });
+            console.error(e);
+            setIsInitializing(false);
+            return false;
+        }
+    }
     
     setIsInitialized(true);
     setIsInitializing(false);
@@ -121,11 +136,14 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   }, [isInitialized, isInitializing, toast]);
 
   const scheduleScore = (score: Score, audioContext: AudioContext) => {
-    score.forEach(note => {
+    const now = audioContext.currentTime;
+
+    // Schedule synth parts (bass, melody) with AudioWorklet
+    [...(score.bass || []), ...(score.melody || [])].forEach(note => {
         const voice = synthPoolRef.current[nextVoiceRef.current % synthPoolRef.current.length];
         if (voice) {
             const freq = 440 * Math.pow(2, (note.midi - 69) / 12);
-            const noteOnTime = audioContext.currentTime + note.time;
+            const noteOnTime = now + note.time;
 
             voice.port.postMessage({
                 type: 'noteOn',
@@ -135,17 +153,30 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
             });
 
             const noteOffTime = noteOnTime + note.duration;
-            const delayUntilOff = (noteOffTime - audioContext.currentTime) * 1000;
-
-            setTimeout(() => {
-                voice.port.postMessage({
-                    type: 'noteOff'
-                });
-            }, delayUntilOff);
+            const delayUntilOff = (noteOffTime - audioContext.currentTime);
+            
+            if (delayUntilOff > 0) {
+                 setTimeout(() => {
+                    voice.port.postMessage({ type: 'noteOff' });
+                }, delayUntilOff * 1000);
+            } else {
+                 voice.port.postMessage({ type: 'noteOff' });
+            }
         }
         nextVoiceRef.current++;
     });
-  }
+
+    // Schedule sample parts (drums, effects) with Tone.Sampler
+    if (samplerRef.current) {
+        const sampler = samplerRef.current;
+        (score.drums || []).forEach(note => {
+             sampler.triggerAttack(note.note, now + note.time, note.velocity);
+        });
+        (score.effects || []).forEach(note => {
+             sampler.triggerAttack(note.note, now + note.time, note.velocity);
+        });
+    }
+  };
 
   const setIsPlayingCallback = useCallback((playing: boolean) => {
     if (!isInitialized || !workerRef.current || !audioContextRef.current) return;
@@ -169,6 +200,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     return () => {
         workerRef.current?.terminate();
         audioContextRef.current?.close();
+        samplerRef.current?.dispose();
     };
   }, []);
 

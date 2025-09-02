@@ -7,8 +7,23 @@ export type Note = {
     velocity?: number;    // How loud to play it (0-1), optional.
 };
 
-// A score is an array of notes representing a piece of music for a time slice.
-export type Score = Note[];
+// A note for the sampler, identified by a string name.
+export type SamplerNote = {
+    note: string;         // Note name corresponding to the sampler mapping (e.g., 'C4' for kick).
+    time: number;         // When to play it, in seconds, relative to the start of the audio chunk.
+    velocity?: number;    // How loud to play it (0-1), optional.
+};
+
+export type DrumsScore = SamplerNote[];
+export type EffectsScore = SamplerNote[];
+
+// A score is an object containing arrays of notes for each part.
+export type Score = {
+    bass?: Note[];
+    melody?: Note[];
+    drums?: DrumsScore;
+    effects?: EffectsScore;
+};
 
 // --- UI Types ---
 export type BassInstrument = 'portamento' | 'bassGuitar' | 'BassGroove' | 'portamentoMob' | 'BassGrooveMob' | 'none';

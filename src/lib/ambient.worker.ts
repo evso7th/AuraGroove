@@ -1,13 +1,13 @@
 
 /**
- * @file AuraGroove Music Worker (Architecture: "Composer")
+ * @file AuraGroove Music Worker (Architecture: "Hybrid Engine Composer")
  *
- * This worker's only responsibility is to compose music.
- * It generates arrays of notes (scores) based on the selected style
- * and sends them to the main thread for execution.
+ * This worker's only responsibility is to compose music for all parts.
+ * It generates arrays of notes (scores) for synths (bass, melody)
+ * and samplers (drums, effects) and sends them to the main thread for execution.
  * It is completely passive and only works when commanded.
  */
-import type { WorkerSettings, Score, Note } from '@/types/music';
+import type { WorkerSettings, Score, Note, DrumsScore, EffectsScore } from '@/types/music';
 
 // --- Scheduler (The Conductor) ---
 const Scheduler = {
@@ -37,7 +37,6 @@ const Scheduler = {
         const loop = () => {
             if (!this.isRunning) return;
             this.tick();
-            // Use a dynamic timeout based on the bar duration
             this.loopId = setTimeout(loop, this.barDuration * 1000);
         };
         
@@ -56,51 +55,66 @@ const Scheduler = {
        this.settings = { ...this.settings, ...newSettings };
     },
 
-    createScoreForNextBar(barNumber: number): Score {
-        const score: Score = [];
+    createScoreForNextBar(): Score {
+        const bass: Note[] = [];
+        const melody: Note[] = [];
+        const drums: DrumsScore = [];
+        const effects: EffectsScore = [];
+
         const maxVoices = 4;
         const notesInBar = 16; // 16th notes
         const step = this.barDuration / notesInBar;
-        const notes = [60, 62, 64, 65, 67, 69, 71, 72]; // C major scale degrees
+        const bassNotes = [36, 38, 40, 41, 43, 45, 47, 48]; // C2 Major
+        const melodyNotes = [60, 62, 64, 65, 67, 69, 71, 72]; // C4 Major
 
-        let activeNotesAtTime: Record<string, number> = {};
-        const activeNotes: {end: number}[] = [];
+        let activeSynthNotes = 0;
 
         for (let i = 0; i < notesInBar; i++) {
              const time = i * step;
 
-             // Remove notes that have finished playing
-             activeNotes.forEach((note, index) => {
-                if(time >= note.end) {
-                    activeNotes.splice(index, 1);
-                }
-             });
+            // Simple generative logic
+            // Bass on the downbeat
+            if (i % 8 === 0) {
+                 if (activeSynthNotes < maxVoices) {
+                    const midi = bassNotes[Math.floor(this.barCount / 2) % bassNotes.length];
+                    bass.push({ midi, time, duration: this.barDuration / 2, velocity: 0.6 });
+                    activeSynthNotes++;
+                 }
+            }
 
-            if (Math.random() < this.settings.density) {
-                 if (activeNotes.length < maxVoices) {
-                    const midi = notes[Math.floor(Math.random() * notes.length)];
-                    const duration = (Math.floor(Math.random() * 4) + 1) * step;
-                    
-                    const newNote: Note = { midi, time, duration, velocity: 0.7 + Math.random() * 0.3 };
-                    score.push(newNote);
-                    activeNotes.push({end: time + duration});
+            // Melody with density
+            if (Math.random() < this.settings.density / 4) {
+                 if (activeSynthNotes < maxVoices) {
+                    const midi = melodyNotes[Math.floor(Math.random() * melodyNotes.length)];
+                    melody.push({ midi, time, duration: step * (Math.floor(Math.random() * 3) + 2), velocity: 0.5 + Math.random() * 0.3 });
+                    activeSynthNotes++;
                 }
             }
+
+            // Drums
+            if (this.settings.drumSettings.enabled) {
+                if (i % 8 === 0) drums.push({ note: 'C4', time, velocity: 1.0 }); // Kick
+                if (i % 8 === 4) drums.push({ note: 'D4', time, velocity: 0.7 }); // Snare
+                if (i % 2 === 0) drums.push({ note: 'E4', time, velocity: 0.4 }); // Hi-hat
+            }
+
+             // Effects
+            if (i === 0 && this.barCount % 8 === 0 && Math.random() < 0.5) {
+                effects.push({ note: 'A4', time: time + step * 0.5, velocity: 0.3 + Math.random() * 0.3 });
+            }
         }
-        return score;
+        return { bass, melody, drums, effects };
     },
 
     tick() {
         if (!this.isRunning) return;
         
-        const score = this.createScoreForNextBar(this.barCount);
+        const score = this.createScoreForNextBar();
         
-        if(score.length > 0){
-            self.postMessage({
-                type: 'score',
-                score: score
-            });
-        }
+        self.postMessage({
+            type: 'score',
+            score: score
+        });
 
         this.barCount++;
     }
