@@ -54,6 +54,8 @@ export default function Home() {
           </Button>
         </CardFooter>
       </Card>
+      {/* Add the hidden iframe for the rhythm section */}
+      <iframe id="rhythm-frame" src="/rhythm-frame.html" style={{ display: 'none' }} title="Rhythm Engine"></iframe>
     </main>
   );
 }
