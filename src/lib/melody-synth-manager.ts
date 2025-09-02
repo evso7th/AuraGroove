@@ -3,7 +3,7 @@ import type { ToneJS, SynthNote, MelodyInstrument } from '@/types/music';
 
 /**
  * Manages the melody synthesizers.
- * This version is updated to handle complex, layered presets like the "Pluck Lead".
+ * This version is updated to handle complex, layered presets.
  */
 export class MelodySynthManager {
     private Tone: ToneJS;
@@ -11,18 +11,13 @@ export class MelodySynthManager {
     private presets: Record<string, any>;
     private activeInstrument: MelodyInstrument = 'synth';
     
-    // Using a PolySynth to handle multiple overlapping notes from the score gracefully.
     private polySynth: any; 
 
     constructor(Tone: ToneJS, channel: Tone.Channel) {
         this.Tone = Tone;
         this.channel = channel;
         
-        // Define presets for the synths
         this.presets = {
-             // This is a softer, richer version of the analog-style lead.
-             // It uses a "fat" sawtooth wave to create a thick, chorus-like effect.
-             // The filter is set lower and the envelope is less aggressive to avoid harshness.
             pluckLead: {
                 oscillator: { type: 'fatsawtooth', count: 3, spread: 20 },
                 envelope: { 
@@ -30,21 +25,46 @@ export class MelodySynthManager {
                     decay: 0.7, 
                     sustain: 0.7, 
                     release: 2.0,
-                    releaseCurve: 'exponential' // This creates the "parabolic" falloff
+                    releaseCurve: 'exponential'
                 },
                 filter: { type: 'lowpass', Q: 2, rolloff: -12 },
                 filterEnvelope: { attack: 0.03, decay: 0.4, sustain: 0.5, release: 1.2, baseFrequency: 250, octaves: 3.4 }
             },
-            // The 'synth' preset now maps to our new detailed sound
+            reversedString: {
+                oscillator: {
+                    type: 'fatsawtooth',
+                    count: 3,
+                    spread: 30
+                },
+                envelope: {
+                    attack: 0.05,
+                    decay: 1.5,
+                    sustain: 0, // Percussive envelope
+                    release: 0.8
+                },
+                filter: {
+                    type: 'lowpass',
+                    Q: 2,
+                    rolloff: -12
+                },
+                filterEnvelope: {
+                    attack: 1.2, // Slow filter attack
+                    decay: 0.1,
+                    sustain: 1,
+                    release: 0.5,
+                    baseFrequency: 150, // Start dark
+                    octaves: 4, // End bright
+                    exponent: 2
+                }
+            },
             synth: 'pluckLead' 
         };
 
-        // Initialize the PolySynth. It can handle multiple voices.
         this.polySynth = new this.Tone.PolySynth(this.Tone.Synth, {
             maxPolyphony: 8,
         }).connect(this.channel);
 
-        this.setInstrument('synth'); // Set default instrument
+        this.setInstrument('synth');
     }
 
     public setInstrument(name: MelodyInstrument) {
@@ -55,15 +75,13 @@ export class MelodySynthManager {
             return;
         }
 
-        let presetName = this.presets[name];
-        // Handle aliases (like 'synth' pointing to 'pluckLead')
-        if (typeof presetName === 'string') {
-            presetName = this.presets[presetName];
+        let presetNameOrObject = this.presets[name];
+        if (typeof presetNameOrObject === 'string') {
+            presetNameOrObject = this.presets[presetNameOrObject];
         }
 
-        if (presetName) {
-            // Set the new options for all voices in the PolySynth
-            this.polySynth.set(presetName);
+        if (presetNameOrObject) {
+            this.polySynth.set(presetNameOrObject);
         }
     }
 
@@ -77,7 +95,6 @@ export class MelodySynthManager {
             const noteName = note.note as string | string[];
             const duration = this.Tone.Time(note.duration, 'n');
             
-            // PolySynth handles multiple notes gracefully.
             this.polySynth.triggerAttackRelease(noteName, duration, scheduledTime, note.velocity);
         });
     }

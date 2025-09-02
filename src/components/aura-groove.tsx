@@ -134,6 +134,7 @@ export function AuraGroove({
                              {part === 'melody' && (
                                 <>
                                     <SelectItem value="synth">Synth</SelectItem>
+                                    <SelectItem value="reversedString">Reversed String</SelectItem>
                                 </>
                              )}
                              {part === 'bass' && (
