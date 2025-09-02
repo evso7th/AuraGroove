@@ -6,7 +6,6 @@
  * It is now the "Conductor" of the entire application.
  */
 
-import * as Tone from 'tone';
 import type { DrumNote, SynthNote, DrumSampleName } from '@/types/music';
 
 // This makes TypeScript happy, as it doesn't know about the global Tone object from the CDN
@@ -27,9 +26,10 @@ class DrumMachine {
     isReady = false;
 
     constructor(channel: any) { // Tone.Channel
+        console.log('[RHYTHM FRAME] Creating DrumMachine...');
         this.sampler = new Tone.Players(DRUM_SAMPLES, () => {
             this.isReady = true;
-            console.log('[RHYTHM FRAME] Drum samples loaded.');
+            console.log('[RHYTHM FRAME] Drum samples loaded and ready.');
         }).connect(channel);
     }
 
@@ -60,9 +60,11 @@ class BassSynthManager {
     private channel: any; // Tone.Channel
 
     constructor(channel: any) { // Tone.Channel
+        console.log('[RHYTHM FRAME] Creating BassSynthManager...');
         this.channel = channel;
         this.createPresets();
         this.setInstrument(this.activeInstrument);
+        console.log('[RHYTHM FRAME] BassSynthManager ready.');
     }
 
     private createPresets() {
@@ -183,24 +185,31 @@ function stopEngine() {
 
 async function initAudio() {
     try {
-        if (hasAudioContextStarted) return;
+        if (hasAudioContextStarted) {
+             console.log('[RHYTHM FRAME] AudioContext already started.');
+             return;
+        }
+        console.log('[RHYTHM FRAME] Received "init" command. Attempting to start AudioContext...');
         await Tone.start();
+        console.log('[RHYTHM FRAME] SUCCESS: AudioContext started.');
         hasAudioContextStarted = true;
-        console.log('[RHYTHM FRAME] AudioContext started.');
 
         channels = {
             drums: new Tone.Channel(-6).toDestination(),
             bass: new Tone.Channel(-6).toDestination(),
         };
+        console.log('[RHYTHM FRAME] Audio channels created.');
+        
         drumMachine = new DrumMachine(channels.drums);
         bassManager = new BassSynthManager(channels.bass);
 
         // Notify the main app that we are ready
+        console.log('[RHYTHM FRAME] All systems nominal. Posting "rhythm_frame_ready" to parent.');
         parent.postMessage({ type: 'rhythm_frame_ready' }, '*');
 
     } catch (e) {
         const errorMsg = e instanceof Error ? e.message : String(e);
-        console.error('[RHYTHM FRAME] Error starting AudioContext:', errorMsg);
+        console.error('[RHYTHM FRAME] FATAL: Error starting AudioContext:', errorMsg);
         parent.postMessage({ type: 'error', error: errorMsg }, '*');
     }
 }
