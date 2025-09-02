@@ -14,22 +14,26 @@ export const useAuraGroove = () => {
   });
   const [bpm, setBpm] = useState(75);
   const [score, setScore] = useState<ScoreName>('evolve');
+  // Add density to the state, defaulting to a reasonable value.
+  const [density, setDensity] = useState(0.5);
 
   const getFullSettings = useCallback((): WorkerSettings => {
     return {
       bpm,
       score,
       instrumentSettings,
-      drumSettings: { ...drumSettings, enabled: drumSettings.pattern !== 'none' }
+      drumSettings: { ...drumSettings, enabled: drumSettings.pattern !== 'none' },
+      // Pass density to the worker settings
+      density,
     };
-  }, [bpm, score, instrumentSettings, drumSettings]);
+  }, [bpm, score, instrumentSettings, drumSettings, density]);
 
   // Update settings in the worker
   useEffect(() => {
     if (isInitialized) {
         updateSettings(getFullSettings());
     }
-  }, [bpm, drumSettings, instrumentSettings, score, isInitialized, updateSettings, getFullSettings]);
+  }, [isInitialized, updateSettings, getFullSettings]);
   
   const handleTogglePlay = useCallback(async () => {
     if (!isInitialized) {

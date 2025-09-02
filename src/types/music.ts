@@ -1,7 +1,6 @@
 
 // A musical note to be played by a synthesizer.
 export type Note = {
-    part: 'bass' | 'melody' | 'accompaniment' | 'drum'; // Which instrument section this note belongs to.
     midi: number;         // MIDI note number (e.g., 60 for C4).
     time: number;         // When to play it, in seconds, relative to the start of the audio chunk.
     duration: number;     // How long the note should last, in seconds.
@@ -38,4 +37,5 @@ export type WorkerSettings = {
     score: ScoreName;
     drumSettings: Omit<DrumSettings, 'volume'> & { enabled: boolean };
     instrumentSettings: InstrumentSettings;
+    density: number; // Controls musical density, 0 to 1
 };
