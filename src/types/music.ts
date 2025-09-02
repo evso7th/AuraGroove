@@ -8,17 +8,23 @@ export type ToneJS = typeof Tone;
 export type AudioProfile = 'desktop' | 'mobile';
 
 // --- Types for Worker -> Main Thread Communication ---
+export type AudioChunk = {
+    chunk: Float32Array;
+    duration: number; // in seconds
+    startTime: number; // absolute time from AudioContext
+};
+
 export type ComposerWorkerMessage = {
-  type: 'score';
-  data: {
-    drumScore: DrumNote[];
-    bassScore: SynthNote[];
-    melodyScore: SynthNote[];
-    barDuration: number;
-  };
+  type: 'audio_chunk';
+  data: Omit<AudioChunk, 'startTime'>; // startTime is determined by the player
 } | {
   type: 'error';
   error?: string;
+} | {
+  type: 'worker_ready' | 'worker_started';
+} | {
+  type: 'log';
+  message: string;
 };
 
 
@@ -31,13 +37,13 @@ export type WorkerSettings = {
 };
 
 export type WorkerCommand = 
-| { command: 'set_param', data: { key: string, value: any } }
-| { command: 'init' }
-| { command: 'reset' }
-| { command: 'tick' };
+| { command: 'update_settings', data: Partial<WorkerSettings> }
+| { command: 'init', data: { sampleRate: number } }
+| { command: 'start' }
+| { command: 'stop' };
 
 
-// --- Types for Main Thread <-> Iframe Communication ---
+// --- Types for Main Thread <-> Iframe Communication (DEPRECATED but kept for reference) ---
 export type RhythmFrameCommand = {
     command: 'init' | 'start' | 'stop' | 'schedule' | 'set_param';
     payload?: any;
@@ -59,7 +65,7 @@ export type DrumNote = {
 
 export type SynthNote = {
     note: string | string[]; // Can be a single note or an array for a chord
-    duration: number; // in beats
+    duration: number | string; // in Tone.js Time format
     time: number; // in beats, relative to the start of the bar
     velocity: number;
     voiceIndex?: number; // Optional: specifies which synth voice to use

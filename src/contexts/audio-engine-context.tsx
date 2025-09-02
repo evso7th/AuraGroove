@@ -3,15 +3,29 @@
 
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import type { WorkerCommand, WorkerSettings, RhythmFrameCommand, RhythmFrameMessage, ComposerWorkerMessage } from '@/types/music';
+import type { WorkerSettings } from '@/types/music';
+import { AudioPlayer } from '@/lib/audio-player';
 
-// This is the public interface of our audio engine
+// --- Type Definitions ---
+type WorkerCommand = {
+    command: 'init' | 'start' | 'stop' | 'update_settings';
+    data?: any;
+}
+
+type WorkerMessage = {
+    type: 'worker_ready' | 'worker_started' | 'audio_chunk' | 'error' | 'log';
+    data?: any;
+    error?: string;
+    message?: string;
+}
+
+// --- Public Interface ---
 export interface AudioEngine {
   setIsPlaying: (isPlaying: boolean) => void;
   updateSettings: (settings: Partial<WorkerSettings>) => void;
 }
 
-// React Context for the audio engine
+// --- React Context ---
 interface AudioEngineContextType {
   engine: AudioEngine | null;
   isInitialized: boolean;
@@ -30,161 +44,107 @@ export const useAudioEngine = () => {
   return context;
 };
 
-// The provider component that encapsulates all audio logic
+// --- Provider Component ---
 export const AudioEngineProvider = ({ children }: { children: React.ReactNode }) => {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const [loadingText, setLoadingText] = useState('');
   
-  const composerWorkerRef = useRef<Worker | null>(null);
-  const rhythmFrameRef = useRef<HTMLIFrameElement | null>(null);
+  const workerRef = useRef<Worker | null>(null);
+  const audioPlayerRef = useRef<AudioPlayer | null>(null);
+  const engineRef = useRef<AudioEngine | null>(null);
   
   const { toast } = useToast();
   
-  const postToRhythmFrame = (message: RhythmFrameCommand) => {
-    // Ensure the iframe's contentWindow is ready before posting
-    rhythmFrameRef.current?.contentWindow?.postMessage(message, '*');
-  }
-  
-  const postToComposerWorker = (message: WorkerCommand) => {
-    composerWorkerRef.current?.postMessage(message);
-  }
-  
-  const injectScript = (doc: Document, src: string): Promise<void> => {
-    return new Promise((resolve, reject) => {
-        const script = doc.createElement('script');
-        script.src = src;
-        script.onload = () => resolve();
-        script.onerror = (err) => reject(`Failed to load script: ${src}`);
-        doc.head.appendChild(script);
-    });
+  const postToWorker = (message: WorkerCommand) => {
+    workerRef.current?.postMessage(message);
   }
 
   const initialize = useCallback(async () => {
     if (isInitialized || isInitializing) return true;
-
     setIsInitializing(true);
     
     return new Promise<boolean>((resolve) => {
-        try {
-            setLoadingText('Initializing Composer...');
-            const composerWorker = new Worker(new URL('../lib/ambient.worker.ts', import.meta.url), { type: 'module' });
-            composerWorkerRef.current = composerWorker;
-            
-            composerWorker.onmessage = (event: MessageEvent<ComposerWorkerMessage>) => {
-                const message = event.data;
-                 if (message.type === 'score') {
-                    postToRhythmFrame({ command: 'schedule', payload: message.data });
-                } else if (message.type === 'error') {
-                    console.error('Error from composer worker:', message.error);
-                    toast({ variant: 'destructive', title: 'Composer Error', description: message.error });
-                }
-            };
-            
-            setLoadingText('Waiting for Rhythm Engine...');
-            const rhythmFrame = document.getElementById('rhythm-frame') as HTMLIFrameElement;
-            rhythmFrameRef.current = rhythmFrame;
+      try {
+        setLoadingText('Booting worker...');
+        const worker = new Worker(new URL('../lib/ambient.worker.ts', import.meta.url), { type: 'module' });
+        workerRef.current = worker;
 
-            const handleRhythmFrameMessage = (event: MessageEvent<RhythmFrameMessage>) => {
-                if (event.source !== rhythmFrame.contentWindow) return;
-                
-                if (event.data.type === 'rhythm_frame_ready') {
-                    setLoadingText('Rhythm Engine Ready. Finalizing...');
+        const audioPlayer = new AudioPlayer();
+        audioPlayer.init().then(() => {
+            audioPlayerRef.current = audioPlayer;
+            
+            // --- Worker Message Handler ---
+            worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
+                const { type, data, error, message } = event.data;
+
+                if(message) console.log(`[MSG FROM WORKER] ${message}`);
+
+                switch (type) {
+                    case 'worker_ready':
+                        setLoadingText('Worker ready. Engine initialized.');
+                        
+                        engineRef.current = {
+                            setIsPlaying: (isPlaying: boolean) => {
+                                if (isPlaying) {
+                                    audioPlayer.start();
+                                    postToWorker({ command: 'start' });
+                                } else {
+                                    audioPlayer.stop();
+                                    postToWorker({ command: 'stop' });
+                                }
+                            },
+                            updateSettings: (settings: Partial<WorkerSettings>) => {
+                                postToWorker({ command: 'update_settings', data: settings });
+                            }
+                        };
+
+                        setIsInitialized(true);
+                        setIsInitializing(false);
+                        resolve(true);
+                        break;
                     
-                    engineRef.current = {
-                        setIsPlaying: (isPlaying: boolean) => {
-                            if(isPlaying) {
-                                postToRhythmFrame({ command: 'start' });
-                                postToComposerWorker({command: 'reset'});
-                            } else {
-                                postToRhythmFrame({ command: 'stop' });
-                            }
-                        },
-                        updateSettings: (settings: Partial<WorkerSettings>) => {
-                             if (settings.instrumentSettings) {
-                                const { bass, melody } = settings.instrumentSettings;
-                                postToComposerWorker({command: 'set_param', data: {key: 'bass_name', value: bass.name}});
-                                postToComposerWorker({command: 'set_param', data: {key: 'bass_volume', value: bass.volume}});
-                                postToComposerWorker({command: 'set_param', data: {key: 'melody_name', value: melody.name}});
-                                postToComposerWorker({command: 'set_param', data: {key: 'melody_volume', value: melody.volume}});
-                                postToComposerWorker({command: 'set_param', data: {key: 'melody_technique', value: melody.technique}});
-                                postToRhythmFrame({command: 'set_param', payload: {target: 'bass', key: 'name', value: bass.name}});
-                                postToRhythmFrame({command: 'set_param', payload: {target: 'bass', key: 'volume', value: bass.volume}});
-                            }
-                            if (settings.drumSettings) {
-                                 postToComposerWorker({command: 'set_param', data: {key: 'drum_pattern', value: settings.drumSettings.pattern}});
-                                 postToComposerWorker({command: 'set_param', data: {key: 'drum_volume', value: settings.drumSettings.volume}});
-                                 postToRhythmFrame({command: 'set_param', payload: {target: 'drums', key: 'volume', value: settings.drumSettings.volume}});
-                            }
-                            if (settings.bpm) {
-                                postToComposerWorker({command: 'set_param', data: {key: 'bpm', value: settings.bpm}});
-                                postToRhythmFrame({command: 'set_param', payload: {target: 'transport', key: 'bpm', value: settings.bpm}});
-                            }
-                             if (settings.score) {
-                                postToComposerWorker({command: 'set_param', data: {key: 'score', value: settings.score}});
-                            }
-                        }
-                    };
-
-                    setIsInitialized(true);
-                    setIsInitializing(false);
-                    setLoadingText('');
-                    window.removeEventListener('message', handleRhythmFrameMessage); // Clean up listener
-                    resolve(true);
-                } else if (event.data.type === 'error') {
-                     const errorMsg = event.data.error || "Unknown error from rhythm frame.";
-                     toast({ variant: "destructive", title: "Rhythm Engine Error", description: errorMsg });
-                     console.error("Rhythm Engine Error:", errorMsg);
-                     setIsInitializing(false);
-                     setLoadingText('');
-                     resolve(false);
+                    case 'audio_chunk':
+                        audioPlayer.scheduleChunk(data.chunk, data.duration);
+                        break;
+                        
+                    case 'error':
+                        const errorMsg = error || "Unknown error from worker.";
+                        toast({ variant: "destructive", title: "Worker Error", description: errorMsg });
+                        console.error("Worker Error:", errorMsg);
+                        setIsInitializing(false);
+                        resolve(false);
+                        break;
                 }
             };
             
-            window.addEventListener('message', handleRhythmFrameMessage);
+            setLoadingText('Initializing worker...');
+            postToWorker({ command: 'init', data: { sampleRate: audioPlayer.getSampleRate() } });
 
-            const frameDoc = rhythmFrame.contentDocument;
-            if (!frameDoc) {
-                throw new Error("Could not access rhythm frame document.");
-            }
+        }).catch(e => {
+            const errorMsg = e instanceof Error ? e.message : String(e);
+            toast({ variant: "destructive", title: "Audio Player Failed", description: errorMsg });
+            console.error("Audio Player initialization failed:", e);
+            setIsInitializing(false);
+            resolve(false);
+        });
 
-            // Dynamically inject scripts into the iframe
-            setLoadingText('Loading Audio Libraries...');
-            injectScript(frameDoc, '/assets/vendor/tone/Tone.js')
-                .then(() => {
-                    setLoadingText('Loading Rhythm Engine...');
-                    return injectScript(frameDoc, '/assets/workers/rhythm-worker.js');
-                })
-                .then(() => {
-                    setLoadingText('Initializing Rhythm Engine...');
-                    postToRhythmFrame({ command: 'init' });
-                })
-                .catch(error => {
-                    const errorMsg = error instanceof Error ? error.message : String(error);
-                    toast({ variant: "destructive", title: "Initialization Failed", description: errorMsg });
-                    console.error("Initialization failed:", error);
-                    setIsInitializing(false);
-                    setLoadingText('');
-                    resolve(false);
-                });
-
-        } catch (e) {
-          const errorMsg = e instanceof Error ? e.message : String(e);
-          toast({ variant: "destructive", title: "Initialization Failed", description: errorMsg });
-          console.error("Initialization failed:", e);
-          setIsInitializing(false);
-          setLoadingText('');
-          resolve(false);
-        }
+      } catch (e) {
+        const errorMsg = e instanceof Error ? e.message : String(e);
+        toast({ variant: "destructive", title: "Initialization Failed", description: errorMsg });
+        console.error("Initialization failed:", e);
+        workerRef.current?.terminate();
+        setIsInitializing(false);
+        resolve(false);
+      }
     });
   }, [isInitialized, isInitializing, toast]);
-
-  const engineRef = useRef<AudioEngine | null>(null);
 
   // Clean up on unmount
   useEffect(() => {
     return () => {
-        composerWorkerRef.current?.terminate();
+        workerRef.current?.terminate();
+        audioPlayerRef.current?.stop();
     }
   }, []);
 

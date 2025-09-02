@@ -15,18 +15,22 @@ const nextConfig: NextConfig = {
     unoptimized: true,
   },
    webpack: (config, { isServer }) => {
-    if (!isServer) {
-      config.plugins.push(
-        new CopyWebpackPlugin({
-          patterns: [
-            {
-              from: path.join(__dirname, 'node_modules/tone/build/Tone.js'),
-              to: path.join(__dirname, 'public/assets/vendor/tone/Tone.js'),
-            },
-          ],
-        })
-      );
+    // We need to copy the Tone.js file to the public folder for the worker
+    if (!config.plugins) {
+        config.plugins = [];
     }
+    
+    config.plugins.push(
+      new CopyWebpackPlugin({
+        patterns: [
+          {
+            from: path.join(__dirname, 'node_modules/tone/build/Tone.js'),
+            to: path.join(__dirname, 'public/assets/vendor/tone/'),
+          },
+        ],
+      })
+    );
+    
     return config;
   },
 };
