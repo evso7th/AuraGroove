@@ -1,88 +1,81 @@
-
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rhythm Engine</title>
+    <title>Rhythm Frame</title>
     <script src="/assets/vendor/tone/Tone.js"></script>
 </head>
 <body>
     <script>
         console.log('[RHYTHM FRAME] HTML loaded.');
 
-        let isAudioReady = false;
-        let bassSynth = null;
-        
+        let isInitialized = false;
+        let bassSynth;
+
         function setupInstruments() {
             console.log('[RHYTHM FRAME] Setting up instruments...');
             try {
-                // Create a single, simple synth for the test
                 bassSynth = new Tone.MonoSynth({
-                    oscillator: { type: 'sine' },
-                    envelope: { attack: 0.1, decay: 0.2, sustain: 0.5, release: 0.8 }
+                    oscillator: { type: 'fmsine' },
+                    envelope: { attack: 0.1, release: 1 },
                 }).toDestination();
-                
                 console.log('[RHYTHM FRAME] Instruments are ready.');
                 return true;
             } catch (e) {
                 console.error('[RHYTHM FRAME] Error setting up instruments:', e);
-                window.parent.postMessage({ type: 'error', error: 'Failed to create Tone.js instruments: ' + e.message }, '*');
+                window.parent.postMessage({ type: 'error', error: 'Instrument setup failed: ' + e.message }, '*');
                 return false;
             }
         }
-        
+
         function scheduleScore(payload) {
-            if (!isAudioReady || !bassSynth) return;
-            const { score } = payload;
+            if (!isInitialized || !payload || !payload.score || !payload.score.bassScore) return;
             
-            // For this test, we play immediately to check the data pipeline.
-            // We ignore complex transport scheduling for now.
-            if (score && score.bassScore && score.bassScore.length > 0) {
-                const note = score.bassScore[0];
-                try {
-                    bassSynth.triggerAttackRelease(note.note, note.duration, Tone.now(), note.velocity);
-                } catch(e) {
-                     console.error('[RHYTHM FRAME] Error playing note:', e);
-                }
+            const time = Tone.now();
+            const bassScore = payload.score.bassScore;
+
+            if (bassScore.length > 0) {
+                 const note = bassScore[0];
+                 // Play immediately for testing
+                 bassSynth.triggerAttackRelease(note.note, note.duration, time, note.velocity);
             }
         }
 
-        window.addEventListener('message', async (event) => {
-            if (!event.data || !event.data.command) return;
+        window.onmessage = async (event) => {
+             if (!event.data || !event.data.command) return;
+             const { command, payload } = event.data;
 
-            const { command, payload } = event.data;
-            
-            switch (command) {
+            switch(command) {
                 case 'init':
-                    if (isAudioReady) return;
+                    if (isInitialized) return;
                     console.log('[RHYTHM FRAME] Received init. Starting AudioContext...');
                     try {
                         await Tone.start();
                         console.log('[RHYTHM FRAME] AudioContext started.');
                         if (setupInstruments()) {
-                           isAudioReady = true;
+                           isInitialized = true;
                            window.parent.postMessage({ type: 'rhythm_frame_ready' }, '*');
                         }
                     } catch (e) {
                         console.error('[RHYTHM FRAME] Error starting AudioContext:', e);
-                        window.parent.postMessage({ type: 'error', error: e.message }, '*');
+                        window.parent.postMessage({ type: 'error', error: 'AudioContext start failed: ' + e.message }, '*');
                     }
                     break;
+                
                 case 'start':
-                    if (isAudioReady) Tone.Transport.start();
+                    if(isInitialized && Tone.Transport.state !== 'started') Tone.Transport.start();
                     break;
+
                 case 'stop':
-                    if (isAudioReady) {
-                        Tone.Transport.stop();
-                        Tone.Transport.cancel();
-                    }
+                    if(isInitialized && Tone.Transport.state === 'started') Tone.Transport.stop();
                     break;
+
                 case 'schedule':
-                    scheduleScore(payload);
+                    if(isInitialized) {
+                        scheduleScore(payload);
+                    }
                     break;
             }
-        });
+        };
     </script>
 </body>
 </html>
