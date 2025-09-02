@@ -11,9 +11,8 @@ export class MelodySynthManager {
     private presets: Record<string, any>;
     private activeInstrument: MelodyInstrument = 'synth';
     
-    // We now have two synths to create a layered sound.
-    private synth1: any; 
-    private synth2: any;
+    // Using a PolySynth to handle multiple overlapping notes from the score gracefully.
+    private polySynth: any; 
 
     constructor(Tone: ToneJS, channel: Tone.Channel) {
         this.Tone = Tone;
@@ -21,26 +20,23 @@ export class MelodySynthManager {
         
         // Define presets for the synths
         this.presets = {
+             // This is a softer, richer version of the analog-style lead.
+             // It uses a "fat" sawtooth wave to create a thick, chorus-like effect.
+             // The filter is set lower and the envelope is less aggressive to avoid harshness.
             pluckLead: {
-                synth1: { // Sawtooth Lead
-                    oscillator: { type: 'sawtooth' },
-                    envelope: { attack: 0.01, decay: 0.7, sustain: 0.7, release: 0.4 },
-                    filter: { type: 'lowpass', Q: 1, rolloff: -12 },
-                    filterEnvelope: { attack: 0.01, decay: 0.7, sustain: 0.1, release: 0.8, baseFrequency: 300, octaves: 4 }
-                },
-                synth2: { // Square Sub-Oscillator
-                    oscillator: { type: 'square' },
-                    envelope: { attack: 0.01, decay: 0.7, sustain: 0.7, release: 0.4 },
-                    volume: -10 // Quieter than the lead
-                }
+                oscillator: { type: 'fatsawtooth', count: 3, spread: 20 },
+                envelope: { attack: 0.02, decay: 0.7, sustain: 0.6, release: 0.5 },
+                filter: { type: 'lowpass', Q: 2, rolloff: -12 },
+                filterEnvelope: { attack: 0.03, decay: 0.4, sustain: 0.5, release: 0.8, baseFrequency: 250, octaves: 3.4 }
             },
             // The 'synth' preset now maps to our new detailed sound
             synth: 'pluckLead' 
         };
 
-        // Initialize placeholder synths. They will be configured by setInstrument.
-        this.synth1 = new this.Tone.Synth().connect(this.channel);
-        this.synth2 = new this.Tone.Synth().connect(this.channel);
+        // Initialize the PolySynth. It can handle multiple voices.
+        this.polySynth = new this.Tone.PolySynth(this.Tone.Synth, {
+            maxPolyphony: 8,
+        }).connect(this.channel);
 
         this.setInstrument('synth'); // Set default instrument
     }
@@ -60,13 +56,8 @@ export class MelodySynthManager {
         }
 
         if (presetName) {
-            this.synth1.set(presetName.synth1);
-            if (presetName.synth2) {
-                this.synth2.set(presetName.synth2);
-            } else {
-                // If the new preset doesn't have a second layer, silence the old one
-                this.synth2.set({ volume: -Infinity });
-            }
+            // Set the new options for all voices in the PolySynth
+            this.polySynth.set(presetName);
         }
     }
 
@@ -75,27 +66,17 @@ export class MelodySynthManager {
             return;
         }
         
-        const presetName = this.presets[this.activeInstrument];
-        const hasSecondLayer = typeof presetName === 'object' && presetName.synth2;
-
         score.forEach(note => {
             const scheduledTime = time + (note.time * this.Tone.Time('4n').toSeconds());
-            const noteName = note.note as string;
+            const noteName = note.note as string | string[];
             const duration = this.Tone.Time(note.duration, 'n');
             
-            // Trigger the main synth
-            this.synth1.triggerAttackRelease(noteName, duration, scheduledTime, note.velocity);
-
-            // Trigger the second layer if it exists for the current preset
-            if (hasSecondLayer) {
-                const subOctaveNote = this.Tone.Frequency(noteName).transpose(-12).toNote();
-                this.synth2.triggerAttackRelease(subOctaveNote, duration, scheduledTime, note.velocity);
-            }
+            // PolySynth handles multiple notes gracefully.
+            this.polySynth.triggerAttackRelease(noteName, duration, scheduledTime, note.velocity);
         });
     }
 
     public stopAll() {
-        this.synth1?.releaseAll();
-        this.synth2?.releaseAll();
+        this.polySynth?.releaseAll();
     }
 }

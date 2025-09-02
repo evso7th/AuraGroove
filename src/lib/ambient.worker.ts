@@ -139,8 +139,9 @@ class EvolutionEngine {
         this.lastMelodyNoteIndex = nextNoteIndex;
 
         const score: SynthNote[] = [
-            { note: nextNote, duration: 4.0, time: 0, velocity: volume },
-            { note: chordNotes[0], duration: 4.0, time: 2.0, velocity: volume * 0.7 },
+            // Increased duration from 4.0 to 8.0 for a more sustained sound
+            { note: nextNote, duration: 8.0, time: 0, velocity: volume },
+            // Removed the second, quieter note to simplify and focus on the main melody line.
         ];
         
         return score;
