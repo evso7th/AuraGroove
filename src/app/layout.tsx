@@ -1,3 +1,4 @@
+
 import type {Metadata} from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster"
@@ -25,6 +26,8 @@ export default function RootLayout({
             {children}
         </AudioEngineProvider>
         <Toaster />
+        {/* Add the hidden iframe for the rhythm section here */}
+        <iframe id="rhythm-frame" src="/rhythm-frame.html" style={{ display: 'none' }} title="Rhythm Engine"></iframe>
       </body>
     </html>
   );

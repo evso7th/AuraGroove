@@ -13,7 +13,8 @@ type RhythmFrameCommand = {
 
 // This is the structure for messages from the rhythm frame
 type RhythmFrameMessage = {
-    type: 'request_score' | 'rhythm_frame_ready';
+    type: 'request_score' | 'rhythm_frame_ready' | 'error';
+    error?: string;
 }
 
 
@@ -66,42 +67,33 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     if (isInitialized || isInitializing) return true;
 
     setIsInitializing(true);
-    setLoadingText('Initializing AuraGroove...');
     
     return new Promise<boolean>((resolve) => {
         try {
-            // --- Initialize Web Worker (The Composer) ---
+            setLoadingText('Initializing Composer...');
             const composerWorker = new Worker(new URL('../lib/ambient.worker.ts', import.meta.url), { type: 'module' });
             composerWorkerRef.current = composerWorker;
             
-            // --- Set up the message handler from the composer worker ---
             composerWorker.onmessage = (event: MessageEvent<ComposerWorkerMessage>) => {
                 const message = event.data;
                  if (message.type === 'score') {
-                    // Forward the complete score to the rhythm frame for scheduling
-                    postToRhythmFrame({
-                        command: 'schedule',
-                        payload: message.data
-                    });
+                    postToRhythmFrame({ command: 'schedule', payload: message.data });
                 } else if (message.type === 'error') {
                     console.error('Error from composer worker:', message.error);
                     toast({ variant: 'destructive', title: 'Composer Error', description: message.error });
                 }
             };
             
-            setLoadingText('Loading Rhythm Engine...');
+            setLoadingText('Waiting for Rhythm Engine...');
             const rhythmFrame = document.getElementById('rhythm-frame') as HTMLIFrameElement;
             rhythmFrameRef.current = rhythmFrame;
 
-             // --- Handler for messages from the iframe ---
             const handleRhythmFrameMessage = (event: MessageEvent<RhythmFrameMessage>) => {
-                if (event.source !== rhythmFrame.contentWindow) return; // Security check
+                if (event.source !== rhythmFrame.contentWindow) return;
                 
                 if (event.data.type === 'request_score') {
-                    // The rhythm frame is requesting the next bar, so we tick the composer.
                     postToComposerWorker({ command: 'tick' });
                 } else if (event.data.type === 'rhythm_frame_ready') {
-                    // The rhythm frame is loaded and has initialized Tone.js
                     setLoadingText('Rhythm Engine Ready. Finalizing...');
                     
                     engineRef.current = {
@@ -123,7 +115,6 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
                                 postToComposerWorker({command: 'set_param', data: {key: 'melody_technique', value: melody.technique}});
                                 postToRhythmFrame({command: 'set_param', payload: {target: 'bass', key: 'name', value: bass.name}});
                                 postToRhythmFrame({command: 'set_param', payload: {target: 'bass', key: 'volume', value: bass.volume}});
-                                // Future: Send melody settings to melody_frame
                             }
                             if (settings.drumSettings) {
                                  postToComposerWorker({command: 'set_param', data: {key: 'drum_pattern', value: settings.drumSettings.pattern}});
@@ -143,27 +134,23 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
                     setIsInitialized(true);
                     setIsInitializing(false);
                     setLoadingText('');
+                    window.removeEventListener('message', handleRhythmFrameMessage); // Clean up listener
                     resolve(true);
+                } else if (event.data.type === 'error') {
+                     const errorMsg = event.data.error || "Unknown error from rhythm frame.";
+                     toast({ variant: "destructive", title: "Rhythm Engine Error", description: errorMsg });
+                     console.error("Rhythm Engine Error:", errorMsg);
+                     setIsInitializing(false);
+                     setLoadingText('');
+                     resolve(false);
                 }
             };
 
             window.addEventListener('message', handleRhythmFrameMessage);
 
-            // Cleanup function for the event listener
-            const cleanup = () => {
-                window.removeEventListener('message', handleRhythmFrameMessage);
-            };
-
-            // This effect will run once on mount and clean up on unmount
-            const unmountEffect = () => {
-              return () => {
-                cleanup();
-                composerWorkerRef.current?.terminate();
-              };
-            };
-            // This seems incorrect for a hook, but in a provider it's the only way.
-            // A better way would be to return the cleanup function from the useEffect hook.
-            // But since we are in a promise, we will just have to rely on the main useEffect.
+            // Send the init command to the iframe, which will trigger the AudioContext
+            setLoadingText('Initializing Rhythm Engine...');
+            postToRhythmFrame({ command: 'init' });
 
         } catch (e) {
           const errorMsg = e instanceof Error ? e.message : String(e);
