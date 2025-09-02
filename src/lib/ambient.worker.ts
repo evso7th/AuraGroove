@@ -4,7 +4,7 @@
  * @file AuraGroove Ambient Music Worker
  *
  * This worker operates on a microservice-style architecture.
- * It is the "Sound Engine", responsible for both composing and rendering audio.
+ * It is the "Sound Engine", responsible for composing audio.
  */
 import type { DrumNote, SynthNote, WorkerCommand, WorkerSettings, DrumSampleName, InstrumentSettings, ScoreName, AudioProfile, MelodyTechnique } from '@/types/music';
 
@@ -46,7 +46,6 @@ class EvolutionEngine {
     }
     
     public reset() {
-        console.log('[WORKER] EvolutionEngine Reset.');
         this.lastMelodyNoteIndex = 0;
         this.melodyVoiceReleaseTimes.fill(0);
         this.nextPhraseStartTime = 0;
@@ -145,8 +144,8 @@ class EvolutionEngine {
             });
         }
     
-        // Book the voices and schedule the next phrase
-        const phraseEndTime = currentBarTime + (phraseDurationWithAir * (60 / settings.bpm));
+        const secondsPerBeat = 60 / settings.bpm;
+        const phraseEndTime = currentBarTime + (phraseDurationWithAir * secondsPerBeat);
         this.melodyVoiceReleaseTimes.fill(phraseEndTime);
         this.nextPhraseStartTime = phraseEndTime;
     
@@ -196,7 +195,6 @@ const Scheduler = {
     },
     
     updateParam(key: string, value: any) {
-        console.log(`[WORKER] Updating param: ${key} =`, value);
         switch (key) {
             case 'bpm':
                 this.settings.bpm = value;
@@ -232,7 +230,6 @@ const Scheduler = {
 
     // This is now only called when the main thread commands it.
     tick() {
-        console.log(`[WORKER] Scheduler.tick called for bar ${this.barCount}`);
         let drumScore: DrumNote[] = [];
         let bassScore: SynthNote[] = [];
         let melodyScore: SynthNote[] = [];
@@ -258,7 +255,6 @@ const Scheduler = {
             barDuration: this.barDuration,
         };
         
-        console.log(`[WORKER] Posting score to main thread:`, messageData);
         self.postMessage({ type: 'score', data: messageData });
         
         this.barCount++;
@@ -272,7 +268,6 @@ self.onmessage = async (event: MessageEvent<WorkerCommand>) => {
     if (!event.data.command) return;
 
     const { command, data } = event.data;
-    console.log('[WORKER] Received command:', command, data);
 
     try {
         switch (command) {

@@ -12,20 +12,6 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
   },
-  
-  async headers() {
-    return [
-      {
-        source: '/assets/:path*',
-        headers: [
-          {
-            key: 'Access-Control-Allow-Origin',
-            value: '*',
-          },
-        ],
-      },
-    ]
-  },
 };
 
 export default nextConfig;
