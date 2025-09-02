@@ -15,14 +15,14 @@ export class MelodySynthManager {
     private activeTechnique: MelodyTechnique = 'arpeggio';
     
     private voices: any[] = [];
-    private readonly VOICE_COUNT = 4; // Pool of 4 mono synths
+    private readonly VOICE_COUNT = 2; // Pool of 2 mono synths
 
     constructor(Tone: ToneJS, channel: Tone.Channel) {
         this.Tone = Tone;
         this.channel = channel;
         
         this.presets = {
-            pluckLead: {
+            synth: {
                 oscillator: { type: 'fatsawtooth', count: 3, spread: 20 },
                 envelope: { 
                     attack: 0.08, 
@@ -34,20 +34,6 @@ export class MelodySynthManager {
                 filter: { type: 'lowpass', Q: 2, rolloff: -12 },
                 filterEnvelope: { attack: 0.03, decay: 0.4, sustain: 0.5, release: 1.2, baseFrequency: 250, octaves: 3.4 }
             },
-            reversedString: {
-                 oscillator: { type: 'fatsawtooth', count: 3, spread: 30 },
-                 envelope: { attack: 1.2, decay: 1.5, sustain: 0, release: 1.5 },
-                 filter: { type: 'lowpass', Q: 2, rolloff: -12 },
-                 filterEnvelope: { attack: 1.2, decay: 0.1, sustain: 1, release: 0.5, baseFrequency: 150, octaves: 4, exponent: 2 }
-            },
-            decayingPad: {
-                oscillator: { type: 'fatsawtooth', count: 3, spread: 40 },
-                noise: { type: 'pink', playbackRate: 0.2 },
-                envelope: { attack: 0.01, decay: 2.0, sustain: 0, release: 1.5 },
-                filter: { type: 'lowpass', Q: 1 },
-                filterEnvelope: { attack: 1.5, decay: 0.8, sustain: 0.5, release: 1.0, baseFrequency: 200, octaves: 3 }
-            },
-            synth: 'pluckLead' 
         };
 
         // Initialize the voice pool
@@ -67,13 +53,10 @@ export class MelodySynthManager {
             return;
         }
 
-        let presetNameOrObject = this.presets[name];
-        if (typeof presetNameOrObject === 'string') {
-            presetNameOrObject = this.presets[presetNameOrObject];
-        }
-
-        if (presetNameOrObject) {
-            this.voices.forEach(voice => voice.set(presetNameOrObject));
+        let preset = this.presets[name];
+        
+        if (preset) {
+            this.voices.forEach(voice => voice.set(preset));
         }
     }
     
@@ -129,7 +112,8 @@ export class MelodySynthManager {
         // Schedule the sequence of notes on a single synth
         let noteTime = time;
         phrase.forEach((note, index) => {
-            const scheduledTime = noteTime + ( (index > 0 ? score[0].duration / phrase.length : 0) * this.Tone.Time('4n').toSeconds());
+            const beatDuration = this.Tone.Time('4n').toSeconds();
+            const scheduledTime = time + (index * beatDuration);
             if (index === 0) {
                 voice.triggerAttack(note, scheduledTime, score[0].velocity);
             } else {

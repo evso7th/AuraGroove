@@ -30,9 +30,9 @@ class EvolutionEngine {
     private chordProgression: { root: string; notes: string[] }[];
     private lastMelodyNoteIndex: number = 0;
     
-    // Voice allocation state for melody
-    private readonly MELODY_VOICE_COUNT = 3;
+    private readonly MELODY_VOICE_COUNT = 2;
     private melodyVoiceReleaseTimes: number[] = new Array(this.MELODY_VOICE_COUNT).fill(0);
+    private nextPhraseStartTime: number = 0;
 
 
     constructor() {
@@ -49,6 +49,7 @@ class EvolutionEngine {
         console.log('[WORKER] EvolutionEngine Reset.');
         this.lastMelodyNoteIndex = 0;
         this.melodyVoiceReleaseTimes.fill(0);
+        this.nextPhraseStartTime = 0;
     }
 
     generateComposerDrumScore(bar: number, volume: number): DrumNote[] {
@@ -115,68 +116,73 @@ class EvolutionEngine {
         return score;
     }
 
-    // "Lullaby" - Updated for techniques
     generateMelodyScore(bar: number, settings: WorkerSettings, currentBarTime: number): SynthNote[] {
         const melodySettings = settings.instrumentSettings?.melody;
         if (melodySettings?.name === 'none') return [];
-
+    
         const volume = melodySettings?.volume ?? 0.9;
         const technique = melodySettings?.technique ?? 'arpeggio';
-        
         const score: SynthNote[] = [];
-        const phraseLength = Math.floor(Math.random() * 2) + 2; // 2-3 notes per phrase
-        const noteDuration = 4.0 / phraseLength; // Divide a measure into parts
-
+    
+        // If it's not time for the next phrase, return empty
+        if (currentBarTime < this.nextPhraseStartTime) {
+            return [];
+        }
+    
+        const phraseLength = Math.floor(Math.random() * 3) + 2; // 2-4 notes
+        const noteDurationInBeats = 1.0; 
+        const phraseDurationInBeats = phraseLength * noteDurationInBeats;
+    
         const currentChord = this.chordProgression[Math.floor(bar / 2) % this.chordProgression.length];
         const chordNotes = currentChord.notes;
-        
-        // Voice allocation logic for Arpeggio
+    
+        const releaseTimeInBeats = 2.0; // Corresponds to synth release
+        const phraseDurationWithAir = phraseDurationInBeats + releaseTimeInBeats;
+    
+        // Check if both voices are free for the entire duration of the new phrase
+        const isVoice0Free = this.melodyVoiceReleaseTimes[0] <= currentBarTime;
+        const isVoice1Free = this.melodyVoiceReleaseTimes[1] <= currentBarTime;
+    
+        if (!isVoice0Free || !isVoice1Free) {
+            // A voice is still busy, wait for the next bar
+            return [];
+        }
+    
+        const phraseNotes: string[] = [];
+        for (let i = 0; i < phraseLength; i++) {
+            phraseNotes.push(chordNotes[(this.lastMelodyNoteIndex + i) % chordNotes.length]);
+        }
+    
         if (technique === 'arpeggio') {
             for (let i = 0; i < phraseLength; i++) {
-                const noteTime = i * noteDuration;
-                
-                // Find an available voice
-                let voiceIndex = -1;
-                for (let v = 0; v < this.MELODY_VOICE_COUNT; v++) {
-                    if (this.melodyVoiceReleaseTimes[v] <= currentBarTime + noteTime) {
-                        voiceIndex = v;
-                        break;
-                    }
-                }
-                if (voiceIndex === -1) continue; // Skip note if no voice is free
-
-                const note = chordNotes[ (this.lastMelodyNoteIndex + i) % chordNotes.length ];
-                const releaseTime = 2.0; // Based on the synth preset's release
-                
+                const voiceIndex = i % this.MELODY_VOICE_COUNT;
+                const noteTime = i * noteDurationInBeats;
+    
                 score.push({
-                    note: note,
-                    duration: noteDuration * 1.5, // Allow overlap
+                    note: phraseNotes[i],
+                    duration: noteDurationInBeats * 1.5, // Overlap for legato
                     time: noteTime,
                     velocity: volume,
                     voiceIndex: voiceIndex
                 });
-                
-                // Book the voice
-                this.melodyVoiceReleaseTimes[voiceIndex] = currentBarTime + noteTime + noteDuration + releaseTime;
             }
         } else { // Portamento / Glissando
-            const voiceIndex = 0; // Use a single voice
-            const phrase: string[] = [];
-            for (let i = 0; i < phraseLength; i++) {
-                 phrase.push(chordNotes[(this.lastMelodyNoteIndex + i) % chordNotes.length]);
-            }
             score.push({
-                note: phrase,
-                duration: 4.0, // Whole phrase lasts one measure
+                note: phraseNotes,
+                duration: phraseDurationInBeats,
                 time: 0,
                 velocity: volume,
-                voiceIndex: voiceIndex
+                voiceIndex: 0 // Use the first voice for the whole phrase
             });
         }
-        
-        // Update the starting point for the next phrase
-        this.lastMelodyNoteIndex = (this.lastMelodyNoteIndex + 1) % chordNotes.length;
-
+    
+        // Book the voices and schedule the next phrase
+        const phraseEndTime = currentBarTime + (phraseDurationWithAir * (60 / settings.bpm));
+        this.melodyVoiceReleaseTimes.fill(phraseEndTime);
+        this.nextPhraseStartTime = phraseEndTime;
+    
+        this.lastMelodyNoteIndex = (this.lastMelodyNoteIndex + phraseLength) % chordNotes.length;
+    
         return score;
     }
 }
