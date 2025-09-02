@@ -42,6 +42,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   const { toast } = useToast();
   
   const postToRhythmFrame = (message: RhythmFrameCommand) => {
+    // Ensure the iframe's contentWindow is ready before posting
     rhythmFrameRef.current?.contentWindow?.postMessage(message, '*');
   }
   
