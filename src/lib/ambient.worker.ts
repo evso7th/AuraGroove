@@ -32,12 +32,8 @@ class Composer {
             { sample: 'hat' as const, time: 3.5, velocity: 0.7 },
         ];
         
-        const melodyScore = [{
-            note: 'C4',
-            duration: '4n',
-            time: barNumber % 4, // Play on a different beat each bar
-            velocity: 0.6
-        }];
+        // Melody score is now empty
+        const melodyScore: any[] = [];
 
 
         return { bassScore, drumScore, melodyScore };
@@ -59,7 +55,6 @@ const Scheduler = {
         drumSettings: { pattern: 'none', volume: 0, enabled: false },
         instrumentSettings: { 
             bass: { name: "portamento", volume: 0.5 },
-            melody: { name: "none", volume: 0, technique: 'arpeggio' },
         },
     } as any,
 

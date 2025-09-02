@@ -24,8 +24,8 @@ type WorkerMessage = {
 }
 
 type FrameMessage = {
-    type: 'rhythm_frame_ready' | 'melody_frame_ready' | 'error' | 'status_report';
-    frame: 'rhythm' | 'melody';
+    type: 'rhythm_frame_ready' | 'error' | 'status_report';
+    frame: 'rhythm'; // Only rhythm frame is left
     state?: string; // AudioContext.state
     error?: string;
 };
@@ -64,7 +64,6 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   
   const workerRef = useRef<Worker | null>(null);
   const rhythmFrameRef = useRef<HTMLIFrameElement | null>(null);
-  const melodyFrameRef = useRef<HTMLIFrameElement | null>(null);
 
   const engineRef = useRef<AudioEngine | null>(null);
   
@@ -88,13 +87,6 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
                 };
                 rhythmFrameRef.current.contentWindow?.postMessage({ command: 'schedule', payload: rhythmPayload }, '*');
             }
-             if (melodyFrameRef.current && data.score.melodyScore) {
-                 const melodyPayload = { 
-                    bar: data.bar, 
-                    score: data.score.melodyScore
-                };
-                melodyFrameRef.current.contentWindow?.postMessage({ command: 'schedule', payload: melodyPayload }, '*');
-            }
         } else if (type === 'error') {
             const errorMsg = error || "Unknown error from worker.";
             toast({ variant: "destructive", title: "Worker Error", description: errorMsg });
@@ -114,7 +106,6 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     // Diagnostic interval
     const diagnosticInterval = setInterval(() => {
         rhythmFrameRef.current?.contentWindow?.postMessage({ command: 'report_status' }, '*');
-        melodyFrameRef.current?.contentWindow?.postMessage({ command: 'report_status' }, '*');
     }, 2000);
 
 
@@ -132,7 +123,6 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     setLoadingText('Initializing audio systems...');
 
     rhythmFrameRef.current = document.getElementById('rhythm-frame') as HTMLIFrameElement;
-    melodyFrameRef.current = document.getElementById('melody-frame') as HTMLIFrameElement;
     
     const initRhythm = new Promise<void>(resolve => {
         const onReady = (e: MessageEvent<FrameMessage>) => {
@@ -145,35 +135,19 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         rhythmFrameRef.current?.contentWindow?.postMessage({ command: 'init' }, '*');
     });
 
-    const initMelody = new Promise<void>(resolve => {
-        const onReady = (e: MessageEvent<FrameMessage>) => {
-            if (e.data.type === 'melody_frame_ready') {
-                window.removeEventListener('message', onReady);
-                resolve();
-            }
-        }
-        window.addEventListener('message', onReady);
-        melodyFrameRef.current?.contentWindow?.postMessage({ command: 'init' }, '*');
-    });
-
-    await Promise.all([initRhythm, initMelody]);
+    await initRhythm;
     
     engineRef.current = {
         setIsPlaying: (isPlaying: boolean) => {
             const command = isPlaying ? 'start' : 'stop';
             workerRef.current?.postMessage({ command });
             rhythmFrameRef.current?.contentWindow?.postMessage({ command }, '*');
-            melodyFrameRef.current?.contentWindow?.postMessage({ command }, '*');
         },
         updateSettings: (settings: Partial<WorkerSettings>) => {
             workerRef.current?.postMessage({ command: 'update_settings', data: settings });
 
              if (settings.instrumentSettings?.bass?.name) {
                 rhythmFrameRef.current?.contentWindow?.postMessage({ command: 'set_param', payload: { bassInstrument: settings.instrumentSettings.bass.name } }, '*');
-            }
-            if (settings.instrumentSettings?.melody?.name) {
-                const payload = { melodyInstrument: settings.instrumentSettings.melody.name };
-                melodyFrameRef.current?.contentWindow?.postMessage({ command: 'set_param', payload }, '*');
             }
         }
     };

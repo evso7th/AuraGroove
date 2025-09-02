@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import Image from 'next/image';
 import { Slider } from "@/components/ui/slider";
-import type { DrumSettings, InstrumentSettings, ScoreName, EffectsSettings, MelodyInstrument, MelodyTechnique, BassInstrument } from '@/types/music';
+import type { DrumSettings, InstrumentSettings, ScoreName, EffectsSettings, BassInstrument } from '@/types/music';
 
 // This is now a "dumb" UI component controlled by the useAuraGroove hook.
 export type AuraGrooveProps = {
@@ -118,7 +118,6 @@ export function AuraGroove({
         <div className="space-y-4 rounded-lg border p-4">
            <h3 className="text-lg font-medium text-primary flex items-center gap-2"><SlidersHorizontal className="h-5 w-5" /> Instrument Channels</h3>
             {Object.entries(instrumentSettings).map(([part, settings]) => {
-                const isMelody = part === 'melody';
                 return (
                  <div key={part} className="space-y-3 rounded-md border p-3">
                      <div className="flex justify-between items-center">
@@ -133,11 +132,6 @@ export function AuraGroove({
                           </SelectTrigger>
                           <SelectContent>
                              <SelectItem value="none">None</SelectItem>
-                             {isMelody && (
-                                <>
-                                    <SelectItem value="synth">Synth</SelectItem>
-                                </>
-                             )}
                              {part === 'bass' && (
                                 <>
                                     <SelectItem value="portamento">Portamento</SelectItem>
@@ -150,25 +144,6 @@ export function AuraGroove({
                           </SelectContent>
                         </Select>
                     </div>
-                     {isMelody && (
-                        <div className="flex justify-between items-center pt-2">
-                            <Label htmlFor="melody-technique" className="font-semibold flex items-center gap-2 capitalize"><GitBranch className="h-5 w-5" /> Technique</Label>
-                            <Select
-                                value={settings.technique}
-                                onValueChange={(v: MelodyTechnique) => setInstrumentSettings(i => ({...i, melody: {...i.melody, technique: v}}))}
-                                disabled={isInitializing || isPlaying}
-                            >
-                                <SelectTrigger id="melody-technique" className="w-[150px]">
-                                    <SelectValue placeholder="Select technique" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="arpeggio">Arpeggio</SelectItem>
-                                    <SelectItem value="portamento">Portamento</SelectItem>
-                                    <SelectItem value="glissando">Glissando</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                     )}
                      <div className="space-y-2 pt-2">
                          <div className="flex items-center justify-between">
                              <Label className="text-xs text-muted-foreground flex items-center gap-1.5"><Speaker className="h-4 w-4"/> Volume</Label>

@@ -24,7 +24,7 @@ export type SynthNote = {
 export type Score = {
     bassScore: SynthNote[];
     drumScore: DrumNote[];
-    melodyScore: SynthNote[];
+    melodyScore: SynthNote[]; // Keep for structure, but will be empty
 };
 
 // --- Types for Main Thread <-> Iframe (Performer) Communication ---
@@ -37,42 +37,19 @@ export type RhythmFrameCommand = {
 
 // Messages sent FROM an iframe TO the main thread.
 export type FrameMessage = {
-    type: 'rhythm_frame_ready' | 'melody_frame_ready' | 'error' | 'status_report';
-    frame: 'rhythm' | 'melody';
+    type: 'rhythm_frame_ready' | 'error' | 'status_report';
+    frame: 'rhythm';
     state?: string; // For reporting AudioContext.state
     error?: string;
 }
 
-// Commands sent FROM the main thread TO the melody iframe.
-export type MelodyFrameCommand = {
-    command: 'init' | 'start' | 'stop' | 'schedule' | 'set_param' | 'report_status';
-    payload?: any; 
-};
-
-// Messages sent FROM the melody iframe TO the main thread.
-export type MelodyFrameMessage = {
-    type: 'melody_frame_ready' | 'error' | 'status_report';
-    frame: 'melody';
-    state?: string;
-    error?: string;
-}
-
-
 // --- UI Types ---
 export type BassInstrument = 'bassGuitar' | 'BassGroove' | 'portamento' | 'portamentoMob' | 'BassGrooveMob' | 'none';
-export type MelodyInstrument = 'synth' | 'none';
-export type MelodyTechnique = 'arpeggio' | 'portamento' | 'glissando';
-
 
 export type InstrumentSettings = {
   bass: {
       name: BassInstrument;
       volume: number; // 0-1
-  };
-  melody: {
-      name: MelodyInstrument;
-      volume: number; // 0-1
-      technique: MelodyTechnique;
   };
 };
 

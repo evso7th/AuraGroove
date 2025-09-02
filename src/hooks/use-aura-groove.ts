@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from "react";
-import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings, EffectsSettings, MelodyInstrument, MelodyTechnique, BassInstrument } from '@/types/music';
+import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings, EffectsSettings, BassInstrument } from '@/types/music';
 import { useAudioEngine } from "@/contexts/audio-engine-context";
 
 export const useAuraGroove = () => {
@@ -12,7 +12,6 @@ export const useAuraGroove = () => {
   const [drumSettings, setDrumSettings] = useState<DrumSettings>({ pattern: 'none', volume: 0.5 });
   const [instrumentSettings, setInstrumentSettings] = useState<InstrumentSettings>({
     bass: { name: "none", volume: 0.45 },
-    melody: { name: "none", volume: 0.45, technique: 'arpeggio' },
   });
   const [effectsSettings, setEffectsSettings] = useState<EffectsSettings>({ enabled: false });
   const [bpm, setBpm] = useState(75);
