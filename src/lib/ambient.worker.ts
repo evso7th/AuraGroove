@@ -7,7 +7,7 @@
  * and samplers (drums, effects) and sends them to the main thread for execution.
  * It is completely passive and only works when commanded.
  */
-import type { WorkerSettings, Score, Note, DrumsScore, EffectsScore } from '@/types/music';
+import type { WorkerSettings, Score, Note, DrumsScore, EffectsScore, BassInstrument } from '@/types/music';
 
 type Phrase = Note[];
 
@@ -39,8 +39,6 @@ class EvolutionEngine {
             if (mutationType < 0.4) {
                 // Transpose note by one step in the scale
                 const direction = Math.random() < 0.5 ? 1 : -1;
-                const scale = [0, 2, 4, 5, 7, 9, 11]; // C Major scale intervals
-                const currentDegree = note.midi % 12;
                 // Simple transposition for now, doesn't respect scale perfectly but works
                 newNote.midi += direction; 
             } else if (mutationType < 0.7) {
@@ -94,7 +92,7 @@ const Scheduler = {
         score: 'dreamtales',
         drumSettings: { pattern: 'none', enabled: false },
         instrumentSettings: { 
-            bass: { name: "portamento", volume: 0.5 },
+            bass: { name: "portamento" as BassInstrument, volume: 0.5 },
         },
         density: 0.5,
     } as WorkerSettings,
