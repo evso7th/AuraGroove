@@ -1,17 +1,21 @@
-
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
     <title>Rhythm Engine</title>
-    <script src="https://unpkg.com/tone@15.0.4/build/Tone.js"></script>
+    <meta charset="UTF-8" />
+    <style>
+        body { margin: 0; background: #111; color: #eee; font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; }
+        #status { font-size: 12px; }
+    </style>
 </head>
 <body>
-    <!-- This script is now self-contained and handles its own logic -->
-    <script src="/assets/workers/rhythm-worker.js"></script>
+    <div id="status">Rhythm Frame Loaded. Waiting for initialization...</div>
+    <!-- Load Tone.js from local vendor folder -->
+    <script src="/assets/vendor/tone/Tone.js"></script>
     <script>
-        // Let the parent know that the iframe is loaded and Tone.js should be available
         console.log('[RHYTHM FRAME] Frame loaded, Tone.js available.');
     </script>
+    <!-- The actual worker logic -->
+    <script type="module" src="/assets/workers/rhythm-worker.js"></script>
 </body>
 </html>
