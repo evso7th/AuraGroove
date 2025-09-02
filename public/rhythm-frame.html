@@ -1,21 +1,14 @@
+
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rhythm Engine</title>
-    <meta charset="UTF-8" />
-    <style>
-        body { margin: 0; background: #111; color: #eee; font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; }
-        #status { font-size: 12px; }
-    </style>
 </head>
 <body>
-    <div id="status">Rhythm Frame Loaded. Waiting for initialization...</div>
-    <!-- Load Tone.js from local vendor folder -->
-    <script src="/assets/vendor/tone/Tone.js"></script>
-    <script>
-        console.log('[RHYTHM FRAME] Frame loaded, Tone.js available.');
-    </script>
-    <!-- The actual worker logic -->
-    <script type="module" src="/assets/workers/rhythm-worker.js"></script>
+    <!-- This is a blank canvas. 
+         The main application will dynamically inject the necessary scripts (Tone.js, rhythm-worker.js)
+         only after a user interaction on the main page. -->
 </body>
 </html>

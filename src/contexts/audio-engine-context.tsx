@@ -49,6 +49,16 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   const postToComposerWorker = (message: WorkerCommand) => {
     composerWorkerRef.current?.postMessage(message);
   }
+  
+  const injectScript = (doc: Document, src: string): Promise<void> => {
+    return new Promise((resolve, reject) => {
+        const script = doc.createElement('script');
+        script.src = src;
+        script.onload = () => resolve();
+        script.onerror = (err) => reject(`Failed to load script: ${src}`);
+        doc.head.appendChild(script);
+    });
+  }
 
   const initialize = useCallback(async () => {
     if (isInitialized || isInitializing) return true;
@@ -78,9 +88,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
             const handleRhythmFrameMessage = (event: MessageEvent<RhythmFrameMessage>) => {
                 if (event.source !== rhythmFrame.contentWindow) return;
                 
-                if (event.data.type === 'request_score') {
-                    postToComposerWorker({ command: 'tick' });
-                } else if (event.data.type === 'rhythm_frame_ready') {
+                if (event.data.type === 'rhythm_frame_ready') {
                     setLoadingText('Rhythm Engine Ready. Finalizing...');
                     
                     engineRef.current = {
@@ -132,12 +140,33 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
                      resolve(false);
                 }
             };
-
+            
             window.addEventListener('message', handleRhythmFrameMessage);
 
-            // Send the init command to the iframe, which will trigger the AudioContext
-            setLoadingText('Initializing Rhythm Engine...');
-            postToRhythmFrame({ command: 'init' });
+            const frameDoc = rhythmFrame.contentDocument;
+            if (!frameDoc) {
+                throw new Error("Could not access rhythm frame document.");
+            }
+
+            // Dynamically inject scripts into the iframe
+            setLoadingText('Loading Audio Libraries...');
+            injectScript(frameDoc, '/assets/vendor/tone/Tone.js')
+                .then(() => {
+                    setLoadingText('Loading Rhythm Engine...');
+                    return injectScript(frameDoc, '/assets/workers/rhythm-worker.js');
+                })
+                .then(() => {
+                    setLoadingText('Initializing Rhythm Engine...');
+                    postToRhythmFrame({ command: 'init' });
+                })
+                .catch(error => {
+                    const errorMsg = error instanceof Error ? error.message : String(error);
+                    toast({ variant: "destructive", title: "Initialization Failed", description: errorMsg });
+                    console.error("Initialization failed:", error);
+                    setIsInitializing(false);
+                    setLoadingText('');
+                    resolve(false);
+                });
 
         } catch (e) {
           const errorMsg = e instanceof Error ? e.message : String(e);
