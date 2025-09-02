@@ -2,16 +2,16 @@
 'use client';
 
 import { useState, useEffect, useCallback } from "react";
-import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings, EffectsSettings, MelodyInstrument, MelodyTechnique } from '@/types/music';
+import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings, EffectsSettings, MelodyInstrument, MelodyTechnique, BassInstrument } from '@/types/music';
 import { useAudioEngine } from "@/contexts/audio-engine-context";
 
 export const useAuraGroove = () => {
   const { isInitializing, isInitialized, engine, loadingText: engineLoadingText } = useAudioEngine();
   const [isPlaying, setIsPlaying] = useState(false);
   
-  const [drumSettings, setDrumSettings] = useState<DrumSettings>({ pattern: 'composer', volume: 0.5 });
+  const [drumSettings, setDrumSettings] = useState<DrumSettings>({ pattern: 'none', volume: 0.5 });
   const [instrumentSettings, setInstrumentSettings] = useState<InstrumentSettings>({
-    bass: { name: "portamento", volume: 0.45 },
+    bass: { name: "none", volume: 0.45 },
     melody: { name: "none", volume: 0.45, technique: 'arpeggio' },
   });
   const [effectsSettings, setEffectsSettings] = useState<EffectsSettings>({ enabled: false });
@@ -31,7 +31,6 @@ export const useAuraGroove = () => {
   // Update settings in the worker/frames in realtime
   useEffect(() => {
     if (engine && isInitialized) {
-        console.log("[useAuraGroove] SYNC SETTINGS:", getFullSettings());
         engine.updateSettings(getFullSettings());
     }
   }, [bpm, drumSettings, instrumentSettings, score, engine, isInitialized, getFullSettings]);

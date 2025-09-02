@@ -120,7 +120,6 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
             melodyFrameRef.current?.contentWindow?.postMessage({ command }, '*');
         },
         updateSettings: (settings: Partial<WorkerSettings>) => {
-            console.log('[AudioEngineProvider] updateSettings called with:', settings);
             workerRef.current?.postMessage({ command: 'update_settings', data: settings });
 
              if (settings.instrumentSettings?.bass?.name) {
@@ -128,7 +127,6 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
             }
             if (settings.instrumentSettings?.melody?.name) {
                 const payload = { melodyInstrument: settings.instrumentSettings.melody.name };
-                console.log('[AudioEngineProvider] POSTING to melody-frame:', { command: 'set_param', payload });
                 melodyFrameRef.current?.contentWindow?.postMessage({ command: 'set_param', payload }, '*');
             }
         }

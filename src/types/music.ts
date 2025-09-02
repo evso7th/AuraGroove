@@ -92,4 +92,3 @@ export type WorkerSettings = {
     drumSettings: Omit<DrumSettings, 'volume'> & { enabled: boolean };
     instrumentSettings: InstrumentSettings;
 };
-
