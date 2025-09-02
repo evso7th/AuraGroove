@@ -18,7 +18,7 @@ export class MelodySynthManager {
         this.channel = channel;
         
         this.presets = {
-            synth: { oscillator: { type: 'fatsine', spread: 40, count: 4 }, envelope: { attack: 0.2, decay: 0.5, sustain: 0.8, release: 2.5 } },
+            synth: { volume: -6, oscillator: { type: 'fatsine', spread: 40, count: 4 }, envelope: { attack: 0.2, decay: 0.5, sustain: 0.8, release: 2.5 } },
             organ: { oscillator: { type: 'fatsawtooth', count: 3, spread: 20 }, envelope: { attack: 0.4, decay: 0.2, sustain: 0.7, release: 3.2 } },
             piano: { type: 'FMSynth', harmonicity: 3.01, modulationIndex: 14, envelope: { attack: 0.01, decay: 1.5, sustain: 0.1, release: 2.5 } },
             mellotron: { type: 'FMSynth', harmonicity: 2, modulationIndex: 0.8, envelope: { attack: 0.3, decay: 0.5, sustain: 0.4, release: 2.8 } },
