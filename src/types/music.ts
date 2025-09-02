@@ -1,5 +1,4 @@
 
-
 // --- This file defines the data structures for our music application ---
 
 // A unique identifier for a drum sample.

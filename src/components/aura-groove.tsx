@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { Loader2, Music, Pause, Speaker, FileMusic, Drum, SlidersHorizontal, Waves, GitBranch } from "lucide-react";
