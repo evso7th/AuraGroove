@@ -26,7 +26,7 @@ export class MelodySynthManager {
             pluckLead: {
                 oscillator: { type: 'fatsawtooth', count: 3, spread: 20 },
                 envelope: { 
-                    attack: 0.02, 
+                    attack: 0.08, 
                     decay: 0.7, 
                     sustain: 0.7, 
                     release: 2.0,
