@@ -3,7 +3,7 @@
 
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import type { WorkerSettings, Score, Note, DrumsScore, EffectsScore } from '@/types/music';
+import type { WorkerSettings, Score, Note, DrumsScore, EffectsScore, BassInstrument } from '@/types/music';
 import * as Tone from 'tone';
 
 // --- Type Definitions ---
@@ -48,6 +48,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   const synthPoolRef = useRef<AudioWorkletNode[]>([]);
   const samplerRef = useRef<Tone.Sampler | null>(null);
   const nextVoiceRef = useRef(0);
+  const settingsRef = useRef<WorkerSettings | null>(null);
   
   const { toast } = useToast();
   
@@ -135,33 +136,93 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     return true;
   }, [isInitialized, isInitializing, toast]);
 
+  const getPresetParams = (instrumentName: BassInstrument, note: Note) => {
+    const isMob = isMobile();
+    switch (instrumentName) {
+        case 'portamento':
+        case 'portamentoMob':
+            return {
+                type: 'noteOn',
+                frequency: 440 * Math.pow(2, (note.midi - 69) / 12),
+                velocity: note.velocity || 0.8,
+                attack: 0.1,
+                release: isMob ? 2.0 : 4.0,
+                portamento: 0.05,
+                filterCutoff: 1000,
+                oscType: 'triangle'
+            };
+        case 'bassGuitar':
+            return {
+                type: 'noteOn',
+                frequency: 440 * Math.pow(2, (note.midi - 69) / 12),
+                velocity: note.velocity || 0.9,
+                attack: 0.01,
+                release: 0.8,
+                portamento: 0,
+                filterCutoff: 2500,
+                oscType: 'sawtooth' // Brighter sound for pluck
+            };
+        case 'BassGroove':
+        case 'BassGrooveMob':
+            return {
+                type: 'noteOn',
+                frequency: 440 * Math.pow(2, (note.midi - 69) / 12),
+                velocity: note.velocity || 0.85,
+                attack: 0.05,
+                release: isMob ? 1.6 : 3.0,
+                portamento: 0,
+                filterCutoff: 1800,
+                oscType: 'sawtooth'
+            };
+        default: // 'none' or other cases
+             return null;
+    }
+  }
+
+
   const scheduleScore = (score: Score, audioContext: AudioContext) => {
     const now = audioContext.currentTime;
-
-    // Schedule synth parts (bass, melody) with AudioWorklet
-    [...(score.bass || []), ...(score.melody || [])].forEach(note => {
+    const currentSettings = settingsRef.current;
+    
+    // --- Schedule Synth Parts (Bass & Melody) with AudioWorklet ---
+    
+    // Combine bass and melody for scheduling, but apply bass-specific presets
+    const synthNotes = [...(score.bass || []), ...(score.melody || [])];
+    
+    synthNotes.forEach(note => {
+        const isBassNote = score.bass?.includes(note);
         const voice = synthPoolRef.current[nextVoiceRef.current % synthPoolRef.current.length];
+        
         if (voice) {
-            const freq = 440 * Math.pow(2, (note.midi - 69) / 12);
+            let params;
+            if (isBassNote && currentSettings) {
+                params = getPresetParams(currentSettings.instrumentSettings.bass.name, note);
+            } else {
+                // Default params for melody
+                params = {
+                     type: 'noteOn',
+                     frequency: 440 * Math.pow(2, (note.midi - 69) / 12),
+                     velocity: note.velocity || 0.6,
+                     attack: 0.05,
+                     release: 1.5,
+                     portamento: 0,
+                     filterCutoff: 2000,
+                     oscType: 'triangle'
+                };
+            }
+            
+            if (!params) return; // Skip if preset is 'none'
+
             const noteOnTime = now + note.time;
 
-            voice.port.postMessage({
-                type: 'noteOn',
-                frequency: freq,
-                velocity: note.velocity || 0.8,
-                when: noteOnTime,
-            });
+            voice.port.postMessage({ ...params, when: noteOnTime });
 
             const noteOffTime = noteOnTime + note.duration;
             const delayUntilOff = (noteOffTime - audioContext.currentTime);
             
-            if (delayUntilOff > 0) {
-                 setTimeout(() => {
-                    voice.port.postMessage({ type: 'noteOff' });
-                }, delayUntilOff * 1000);
-            } else {
-                 voice.port.postMessage({ type: 'noteOff' });
-            }
+            setTimeout(() => {
+                voice.port.postMessage({ type: 'noteOff' });
+            }, delayUntilOff > 0 ? delayUntilOff * 1000 : 0);
         }
         nextVoiceRef.current++;
     });
@@ -178,6 +239,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     }
   };
 
+
   const setIsPlayingCallback = useCallback((playing: boolean) => {
     if (!isInitialized || !workerRef.current || !audioContextRef.current) return;
     
@@ -193,6 +255,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
 
   const updateSettingsCallback = useCallback((settings: Partial<WorkerSettings>) => {
      if (!isInitialized || !workerRef.current) return;
+     settingsRef.current = { ...settingsRef.current, ...settings } as WorkerSettings;
      workerRef.current.postMessage({ command: 'update_settings', data: settings });
   }, [isInitialized]);
 

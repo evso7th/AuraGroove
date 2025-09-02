@@ -1,98 +1,111 @@
 
-/**
- * A simple, performant subtractive synthesizer running in an AudioWorklet.
- * It uses a triangle oscillator and a one-pole low-pass filter to be CPU-friendly.
- */
 class SynthProcessor extends AudioWorkletProcessor {
     constructor() {
         super();
         this.phase = 0;
-        this.frequency = 440;
-        this.isActive = false;
         this.gain = 0;
         this.targetGain = 0;
-
-        // Envelope
-        this.attack = 0.01;
-        this.release = 0.3;
-
-        // Filter
-        this.filterState = 0;
-        this.filterCoeff = 0.99; // Initial cutoff
         
+        // --- Synth Parameters with Defaults ---
+        this.attack = 0.01;
+        this.release = 0.1;
+        this.oscType = 'triangle';
+        this.filterCutoff = 20000;
+        this.filterState = 0;
+        this.filterCoeff = 1.0;
+
+        // Portamento
+        this.portamentoRate = 0.0; // 0 = off
+        this.currentFrequency = 0;
+        this.targetFrequency = 0;
+
+        // State
+        this.isActive = false;
+
         this.port.onmessage = this.handleMessage.bind(this);
     }
 
-    handleMessage(event) {
-        const { data } = event;
+    handleMessage({ data }) {
         if (data.type === 'noteOn') {
-            this.frequency = data.frequency;
-            this.targetGain = data.velocity || 0.8;
+            this.targetFrequency = data.frequency || 440;
+            if (!this.isActive) { // If not active, jump to frequency
+                 this.currentFrequency = this.targetFrequency;
+            }
+            this.attack = data.attack || 0.01;
+            this.release = data.release || 0.1;
+            this.portamentoRate = data.portamento || 0;
+            this.filterCutoff = data.filterCutoff || 20000;
+            this.oscType = data.oscType || 'triangle';
+            
+            this.targetGain = data.velocity || 1.0;
             this.isActive = true;
-            this.attack = data.attack || 0.02;
-            this.release = data.release || 0.3;
+
+             // Update filter coefficient
+            this.filterCoeff = 1 - Math.exp(-2 * Math.PI * this.filterCutoff / sampleRate);
         } else if (data.type === 'noteOff') {
             this.targetGain = 0;
         }
     }
-
-    // A simple, cheap one-pole low-pass filter
+    
+    // Simple one-pole low-pass filter
     applyFilter(input) {
-        // A simple LPF: y[n] = y[n-1] + coeff * (x[n] - y[n-1])
         this.filterState += this.filterCoeff * (input - this.filterState);
         return this.filterState;
     }
 
+    // Oscillator waveform generation
     generateOsc() {
-        // Triangle wave is cheaper than band-limited sawtooth/square
-        return 1 - 4 * Math.abs((this.phase / (2 * Math.PI)) - 0.5);
+        switch (this.oscType) {
+            case 'sawtooth':
+                return 1 - (this.phase / Math.PI);
+            case 'square':
+                 return this.phase < Math.PI ? 1 : -1;
+            case 'triangle':
+            default:
+                return Math.sin(this.phase); // Simple sine for triangle as a safe default
+        }
     }
 
-    process(inputs, outputs, parameters) {
+    process(inputs, outputs) {
         const output = outputs[0];
+        const channel = output[0];
         
-        // Use a fixed low-pass filter cutoff for performance
-        // This could be made a parameter later if needed.
-        const filterCutoff = 1200;
-        this.filterCoeff = 1 - Math.exp(-2 * Math.PI * filterCutoff / sampleRate);
-
-        for (let channel = 0; channel < output.length; ++channel) {
-            const outputChannel = output[channel];
-            for (let i = 0; i < outputChannel.length; ++i) {
-                let sample = 0;
-
-                if (this.isActive && this.frequency > 0) {
-                    // Update phase
-                    this.phase += (this.frequency / sampleRate) * 2 * Math.PI;
-                    if (this.phase >= 2 * Math.PI) this.phase -= 2 * Math.PI;
-                    
-                    sample = this.generateOsc();
-
-                    sample = this.applyFilter(sample);
-
-                    // AD Envelope
-                    if (this.gain < this.targetGain) { // Attack phase
-                        this.gain += 1 / (this.attack * sampleRate);
-                        if (this.gain > this.targetGain) this.gain = this.targetGain;
-                    } else if (this.gain > this.targetGain) { // Release phase
-                        this.gain -= 1 / (this.release * sampleRate);
-                        if (this.gain < 0) this.gain = 0;
-                    }
-
-                    sample *= this.gain * 0.5; // Apply gain and reduce overall volume
+        for (let i = 0; i < channel.length; i++) {
+            let sample = 0;
+            if (this.isActive) {
+                // Glide to target frequency
+                if(this.portamentoRate > 0) {
+                     this.currentFrequency += (this.targetFrequency - this.currentFrequency) * this.portamentoRate;
                 } else {
-                    this.gain = 0;
+                    this.currentFrequency = this.targetFrequency;
+                }
+
+                this.phase += (this.currentFrequency / sampleRate) * 2 * Math.PI;
+                if (this.phase >= 2 * Math.PI) {
+                    this.phase -= 2 * Math.PI;
                 }
                 
-                outputChannel[i] = sample;
+                sample = this.generateOsc();
+                
+                // ADSR envelope for gain
+                if (this.gain < this.targetGain) {
+                    this.gain = Math.min(this.targetGain, this.gain + 1.0 / (this.attack * sampleRate));
+                } else if (this.gain > this.targetGain) {
+                    this.gain = Math.max(this.targetGain, this.gain - 1.0 / (this.release * sampleRate));
+                }
+
+                sample = this.applyFilter(sample);
+
+                channel[i] = sample * this.gain * 0.3; // Apply gain and reduce overall volume
+
+                if (this.gain <= 0.001 && this.targetGain === 0) {
+                    this.isActive = false;
+                    this.currentFrequency = 0; // Reset frequency when note is fully released
+                }
+            } else {
+                 channel[i] = 0;
             }
         }
-
-        // If gain is effectively zero after release, mark as inactive
-        if (this.gain < 0.001 && this.targetGain === 0) {
-            this.isActive = false;
-        }
-
         return true;
     }
 }

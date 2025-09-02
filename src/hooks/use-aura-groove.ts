@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from "react";
-import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings } from '@/types/music';
+import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings, BassInstrument } from '@/types/music';
 import { useAudioEngine } from "@/contexts/audio-engine-context";
 
 export const useAuraGroove = () => {
@@ -14,7 +14,6 @@ export const useAuraGroove = () => {
   });
   const [bpm, setBpm] = useState(75);
   const [score, setScore] = useState<ScoreName>('evolve');
-  // Add density to the state, defaulting to a reasonable value.
   const [density, setDensity] = useState(0.5);
 
   const getFullSettings = useCallback((): WorkerSettings => {
@@ -23,12 +22,10 @@ export const useAuraGroove = () => {
       score,
       instrumentSettings,
       drumSettings: { ...drumSettings, enabled: drumSettings.pattern !== 'none' },
-      // Pass density to the worker settings
       density,
     };
   }, [bpm, score, instrumentSettings, drumSettings, density]);
 
-  // Update settings in the worker
   useEffect(() => {
     if (isInitialized) {
         updateSettings(getFullSettings());
@@ -42,6 +39,13 @@ export const useAuraGroove = () => {
     setEngineIsPlaying(!isPlaying);
   }, [isInitialized, isPlaying, initialize, setEngineIsPlaying]);
 
+  const handleInstrumentChange = (part: keyof InstrumentSettings, name: BassInstrument) => {
+    setInstrumentSettings(prev => ({
+      ...prev,
+      [part]: { ...prev[part], name }
+    }));
+  };
+
   return {
     isInitializing: !isInitialized, // Simplified loading state
     isPlaying,
@@ -50,12 +54,14 @@ export const useAuraGroove = () => {
     drumSettings,
     setDrumSettings,
     instrumentSettings,
-    setInstrumentSettings,
+    setInstrumentSettings: handleInstrumentChange,
     effectsSettings: { enabled: false }, // Placeholder
     handleToggleEffects: () => {}, // Placeholder
     bpm,
     handleBpmChange: setBpm,
     score,
     handleScoreChange: setScore,
+    density,
+    setDensity,
   };
 };

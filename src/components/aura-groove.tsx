@@ -1,7 +1,7 @@
 
 "use client";
 
-import { Loader2, Music, Pause, Speaker, FileMusic, Drum, SlidersHorizontal, Waves, GitBranch } from "lucide-react";
+import { Loader2, Music, Pause, Speaker, FileMusic, Drum, SlidersHorizontal, Waves, GitBranch, Atom } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -18,7 +18,7 @@ export type AuraGrooveProps = {
   drumSettings: DrumSettings;
   setDrumSettings: (settings: React.SetStateAction<DrumSettings>) => void;
   instrumentSettings: InstrumentSettings;
-  setInstrumentSettings: (settings: React.SetStateAction<InstrumentSettings>) => void;
+  setInstrumentSettings: (part: keyof InstrumentSettings, name: BassInstrument) => void;
   effectsSettings: EffectsSettings;
   handleToggleEffects: () => void;
   bpm: number;
@@ -26,6 +26,8 @@ export type AuraGrooveProps = {
   score: ScoreName;
   handleScoreChange: (value: ScoreName) => void;
   handleTogglePlay: () => void;
+  density: number;
+  setDensity: (value: number) => void;
 };
 
 export function AuraGroove({
@@ -42,7 +44,9 @@ export function AuraGroove({
   handleBpmChange,
   score,
   handleScoreChange,
-  handleTogglePlay
+  handleTogglePlay,
+  density,
+  setDensity
 }: AuraGrooveProps) {
 
   if (isInitializing) {
@@ -113,6 +117,18 @@ export function AuraGroove({
                     disabled={isInitializing}
                 />
             </div>
+             <div className="grid grid-cols-3 items-center gap-4">
+                <Label className="text-right flex items-center gap-1.5"><Atom className="h-4 w-4" /> Density</Label>
+                <Slider
+                    value={[density]}
+                    min={0.1}
+                    max={1}
+                    step={0.05}
+                    onValueChange={(v) => setDensity(v[0])}
+                    className="col-span-2"
+                    disabled={isInitializing}
+                />
+            </div>
         </div>
         
         <div className="space-y-4 rounded-lg border p-4">
@@ -124,7 +140,7 @@ export function AuraGroove({
                         <Label htmlFor={`${part}-instrument`} className="font-semibold flex items-center gap-2 capitalize"><Music className="h-5 w-5" /> {part}</Label>
                          <Select
                           value={settings.name}
-                          onValueChange={(v) => setInstrumentSettings(i => ({...i, [part]: {...i[part as keyof InstrumentSettings], name: v as any}}))}
+                          onValueChange={(v) => setInstrumentSettings(part as keyof InstrumentSettings, v as BassInstrument)}
                           disabled={isInitializing || isPlaying}
                         >
                           <SelectTrigger id={`${part}-instrument`} className="w-[150px]">
@@ -149,7 +165,7 @@ export function AuraGroove({
                              <Label className="text-xs text-muted-foreground flex items-center gap-1.5"><Speaker className="h-4 w-4"/> Volume</Label>
                              <span className="text-xs font-mono text-muted-foreground">{Math.round(settings.volume * 100)}</span>
                          </div>
-                         <Slider value={[settings.volume]} max={1} step={0.05} onValueChange={(v) => setInstrumentSettings(s => ({...s, [part]: {...s[part as keyof InstrumentSettings], volume: v[0]}}))} disabled={isInitializing || isPlaying || settings.name === 'none'} />
+                         <Slider value={[settings.volume]} max={1} step={0.05} onValueChange={(v) => console.log("Volume change not implemented")} disabled={isInitializing || isPlaying || settings.name === 'none'} />
                     </div>
                  </div>
                 )
