@@ -31,7 +31,7 @@ export const useAuraGroove = () => {
   // Update settings in the worker/frames in realtime
   useEffect(() => {
     if (engine && isInitialized) {
-        console.log("[useAuraGroove] Syncing settings with engine");
+        console.log("[useAuraGroove] SYNC SETTINGS:", getFullSettings());
         engine.updateSettings(getFullSettings());
     }
   }, [bpm, drumSettings, instrumentSettings, score, engine, isInitialized, getFullSettings]);
