@@ -125,9 +125,10 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
 
     engineRef.current = {
         setIsPlaying: (isPlaying: boolean) => {
-            workerRef.current?.postMessage({ command: isPlaying ? 'start' : 'stop' });
-            rhythmFrameRef.current?.contentWindow?.postMessage({ command: isPlaying ? 'start' : 'stop' }, '*');
-            melodyFrameRef.current?.contentWindow?.postMessage({ command: isPlaying ? 'start' : 'stop' }, '*');
+            const command = isPlaying ? 'start' : 'stop';
+            workerRef.current?.postMessage({ command });
+            rhythmFrameRef.current?.contentWindow?.postMessage({ command }, '*');
+            melodyFrameRef.current?.contentWindow?.postMessage({ command }, '*');
         },
         updateSettings: (settings: Partial<WorkerSettings>) => {
             workerRef.current?.postMessage({ command: 'update_settings', data: settings });
