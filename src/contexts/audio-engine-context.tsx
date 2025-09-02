@@ -3,17 +3,16 @@
 
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import type { WorkerSettings } from '@/types/music';
-import { AudioPlayer } from '@/lib/audio-player';
+import type { WorkerSettings, Score, RhythmFrameCommand } from '@/types/music';
 
 // --- Type Definitions ---
 type WorkerCommand = {
-    command: 'init' | 'start' | 'stop' | 'update_settings';
+    command: 'start' | 'stop' | 'update_settings';
     data?: any;
 }
 
 type WorkerMessage = {
-    type: 'worker_ready' | 'worker_started' | 'audio_chunk' | 'error' | 'log';
+    type: 'score' | 'error' | 'log';
     data?: any;
     error?: string;
     message?: string;
@@ -51,92 +50,115 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   const [loadingText, setLoadingText] = useState('');
   
   const workerRef = useRef<Worker | null>(null);
-  const audioPlayerRef = useRef<AudioPlayer | null>(null);
+  const rhythmFrameRef = useRef<HTMLIFrameElement | null>(null);
   const engineRef = useRef<AudioEngine | null>(null);
+  const isRhythmFrameReady = useRef(false);
   
   const { toast } = useToast();
-  
+
   const postToWorker = (message: WorkerCommand) => {
     workerRef.current?.postMessage(message);
-  }
+  };
+
+  const postToRhythmFrame = (message: RhythmFrameCommand) => {
+      rhythmFrameRef.current?.contentWindow?.postMessage(message, '*');
+  };
 
   const initialize = useCallback(async () => {
     if (isInitialized || isInitializing) return true;
     setIsInitializing(true);
-    
+    setLoadingText('Initializing audio systems...');
+
     return new Promise<boolean>((resolve) => {
-      try {
-        setLoadingText('Booting worker...');
+        // --- Get Iframe ---
+        const iframe = document.getElementById('rhythm-frame') as HTMLIFrameElement;
+        if (!iframe) {
+            console.error("Fatal: Rhythm frame not found in DOM.");
+            toast({ variant: "destructive", title: "Initialization Failed", description: "Rhythm frame not found." });
+            setIsInitializing(false);
+            resolve(false);
+            return;
+        }
+        rhythmFrameRef.current = iframe;
+
+        // --- Setup Worker ---
         const worker = new Worker(new URL('../lib/ambient.worker.ts', import.meta.url), { type: 'module' });
         workerRef.current = worker;
 
-        const audioPlayer = new AudioPlayer();
-        audioPlayer.init().then(() => {
-            audioPlayerRef.current = audioPlayer;
-            
-            // --- Worker Message Handler ---
-            worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
-                const { type, data, error, message } = event.data;
+        // --- Worker Message Handler ---
+        worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
+            const { type, data, error, message } = event.data;
 
-                if(message) console.log(`[MSG FROM WORKER] ${message}`);
+            if(message) console.log(`[MSG FROM WORKER] ${message}`);
 
-                switch (type) {
-                    case 'worker_ready':
-                        setLoadingText('Worker ready. Engine initialized.');
-                        
-                        engineRef.current = {
-                            setIsPlaying: (isPlaying: boolean) => {
-                                if (isPlaying) {
-                                    audioPlayer.start();
-                                    postToWorker({ command: 'start' });
-                                } else {
-                                    audioPlayer.stop();
-                                    postToWorker({ command: 'stop' });
-                                }
-                            },
-                            updateSettings: (settings: Partial<WorkerSettings>) => {
-                                postToWorker({ command: 'update_settings', data: settings });
-                            }
-                        };
+            switch (type) {
+                case 'score':
+                    if (isRhythmFrameReady.current) {
+                        postToRhythmFrame({ command: 'schedule', payload: data });
+                    }
+                    break;
+                case 'error':
+                    const errorMsg = error || "Unknown error from worker.";
+                    toast({ variant: "destructive", title: "Worker Error", description: errorMsg });
+                    console.error("Worker Error:", errorMsg);
+                    break;
+            }
+        };
 
-                        setIsInitialized(true);
-                        setIsInitializing(false);
-                        resolve(true);
-                        break;
-                    
-                    case 'audio_chunk':
-                        audioPlayer.scheduleChunk(data.chunk, data.duration);
-                        break;
-                        
-                    case 'error':
-                        const errorMsg = error || "Unknown error from worker.";
-                        toast({ variant: "destructive", title: "Worker Error", description: errorMsg });
-                        console.error("Worker Error:", errorMsg);
-                        setIsInitializing(false);
-                        resolve(false);
-                        break;
-                }
-            };
-            
-            setLoadingText('Initializing worker...');
-            postToWorker({ command: 'init', data: { sampleRate: audioPlayer.getSampleRate() } });
+        // --- Iframe Message Handler ---
+        const handleFrameMessage = (event: MessageEvent) => {
+             if (!event.data || !event.data.type) return;
+             const { type, error } = event.data;
 
-        }).catch(e => {
-            const errorMsg = e instanceof Error ? e.message : String(e);
-            toast({ variant: "destructive", title: "Audio Player Failed", description: errorMsg });
-            console.error("Audio Player initialization failed:", e);
-            setIsInitializing(false);
-            resolve(false);
-        });
+             if(type === 'rhythm_frame_ready'){
+                 console.log("[AudioEngine] Rhythm frame is ready for commands.");
+                 isRhythmFrameReady.current = true;
+                 
+                 engineRef.current = {
+                    setIsPlaying: (isPlaying: boolean) => {
+                        postToWorker({ command: isPlaying ? 'start' : 'stop' });
+                        postToRhythmFrame({ command: isPlaying ? 'start' : 'stop' });
+                    },
+                    updateSettings: (settings: Partial<WorkerSettings>) => {
+                        postToWorker({ command: 'update_settings', data: settings });
+                        // We can also send relevant settings to the frame if needed, e.g., for effects
+                        postToRhythmFrame({command: 'set_param', payload: {
+                            bassInstrument: settings.instrumentSettings?.bass.name,
+                            melodyInstrument: settings.instrumentSettings?.melody.name
+                        }});
+                    }
+                 };
 
-      } catch (e) {
-        const errorMsg = e instanceof Error ? e.message : String(e);
-        toast({ variant: "destructive", title: "Initialization Failed", description: errorMsg });
-        console.error("Initialization failed:", e);
-        workerRef.current?.terminate();
-        setIsInitializing(false);
-        resolve(false);
-      }
+                 setLoadingText('Engine initialized.');
+                 setIsInitialized(true);
+                 setIsInitializing(false);
+                 resolve(true);
+
+             } else if (type === 'error') {
+                 const errorMsg = error || "Unknown error from rhythm frame.";
+                 toast({ variant: "destructive", title: "Rhythm Frame Error", description: errorMsg });
+                 console.error("Rhythm Frame Error:", errorMsg);
+                 setIsInitializing(false);
+                 resolve(false);
+             }
+        };
+
+        window.addEventListener('message', handleFrameMessage);
+
+        setLoadingText('Initializing Rhythm Engine...');
+        // The iframe will load its own scripts. Once it's ready, it sends 'rhythm_frame_ready'
+        // But we need to tell it to start its own initialization once it has loaded.
+        iframe.onload = () => {
+             console.log('[AudioEngine] Iframe loaded. Sending init command...');
+             postToRhythmFrame({ command: 'init' });
+        };
+        // If the iframe is already loaded by the time this runs
+        if (iframe.contentWindow && iframe.contentDocument?.readyState === 'complete') {
+            console.log('[AudioEngine] Iframe already loaded. Sending init command...');
+            postToRhythmFrame({ command: 'init' });
+        }
+
+
     });
   }, [isInitialized, isInitializing, toast]);
 
@@ -144,7 +166,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   useEffect(() => {
     return () => {
         workerRef.current?.terminate();
-        audioPlayerRef.current?.stop();
+        // The iframe will be removed with the component
     }
   }, []);
 

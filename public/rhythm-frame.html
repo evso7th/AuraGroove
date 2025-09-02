@@ -1,0 +1,126 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Rhythm Frame</title>
+</head>
+<body>
+    <script src="/assets/vendor/tone/Tone.js"></script>
+    <script>
+        // This script runs inside the iframe's main thread.
+        // It acts as a passive "Performer".
+
+        let isReady = false;
+        let drumMachine = null;
+        let bassSynth = null;
+        
+        console.log('[RHYTHM FRAME] HTML loaded.');
+
+        // --- Instrument Setup ---
+        function setupInstruments() {
+            try {
+                console.log('[RHYTHM FRAME] Setting up instruments...');
+                
+                drumMachine = new Tone.Players({
+                    urls: {
+                        kick: '/assets/drums/kick_drum6.wav',
+                        snare: '/assets/drums/snare.wav',
+                        hat: '/assets/drums/closed_hi_hat_accented.wav',
+                        crash: '/assets/drums/crash1.wav',
+                        ride: '/assets/drums/cymbal_bell1.wav',
+                    },
+                    volume: -3,
+                }).toDestination();
+                
+                bassSynth = new Tone.MonoSynth({
+                     portamento: 0.08,
+                     oscillator: { type: 'fmsine' },
+                     envelope: { attack: 0.05, decay: 0.3, sustain: 0.4, release: 1.0 },
+                     filterEnvelope: { attack: 0.06, decay: 0.2, sustain: 0.5, release: 1.5, baseFrequency: 200, octaves: 6 }
+                }).toDestination();
+                
+                console.log('[RHYTHM FRAME] Instruments are ready.');
+            } catch (e) {
+                console.error('[RHYTHM FRAME] Error setting up instruments:', e);
+                window.parent.postMessage({ type: 'error', error: 'Failed to create instruments: ' + e.message }, '*');
+            }
+        }
+
+        // --- Audio Initialization ---
+        async function initAudio() {
+            if (isReady) return;
+            try {
+                console.log('[RHYTHM FRAME] Received init. Starting AudioContext...');
+                await Tone.start();
+                console.log('[RHYTHM FRAME] AudioContext started.');
+                setupInstruments();
+                isReady = true;
+                window.parent.postMessage({ type: 'rhythm_frame_ready' }, '*');
+            } catch (e) {
+                 console.error('[RHYTHM FRAME] Error starting AudioContext:', e);
+                 window.parent.postMessage({ type: 'error', error: 'AudioContext start failed: ' + e.message }, '*');
+            }
+        }
+        
+        // --- Scheduling Logic ---
+        function scheduleScore(scoreData, time) {
+            if (!isReady || !drumMachine || !bassSynth) return;
+            
+            const { score, bar } = scoreData;
+
+            // Calculate the absolute time for the start of the bar
+            const barStartTime = time;
+
+            // Schedule drum notes
+            if (score.drumScore) {
+                score.drumScore.forEach(note => {
+                    if (drumMachine.has(note.sample)) {
+                        const noteTime = barStartTime + Tone.Time(note.time + 'i').toSeconds();
+                        drumMachine.player(note.sample).start(noteTime);
+                    }
+                });
+            }
+
+            // Schedule bass notes
+            if (score.bassScore) {
+                score.bassScore.forEach(note => {
+                    const noteTime = barStartTime + Tone.Time(note.time + 'i').toSeconds();
+                    bassSynth.triggerAttackRelease(note.note, note.duration, noteTime, note.velocity);
+                });
+            }
+        }
+
+        // --- Message Listener ---
+        window.addEventListener('message', (event) => {
+            if (!event.data || !event.data.command) return;
+
+            const { command, payload } = event.data;
+
+            switch(command) {
+                case 'init':
+                    initAudio();
+                    break;
+                case 'start':
+                    if (isReady) Tone.Transport.start();
+                    break;
+                case 'stop':
+                    if (isReady) Tone.Transport.stop();
+                    break;
+                case 'schedule':
+                    if (isReady) {
+                        // Schedule the score for the next bar
+                        Tone.Transport.scheduleOnce((time) => {
+                           scheduleScore(payload, time);
+                        }, "1m"); // Schedule at the beginning of the next measure
+                    }
+                    break;
+                 case 'set_param':
+                    // Placeholder for setting instrument parameters later
+                    break;
+            }
+        });
+
+    </script>
+</body>
+</html>
