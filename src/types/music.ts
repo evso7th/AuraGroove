@@ -8,10 +8,17 @@ export type ToneJS = typeof Tone;
 export type AudioProfile = 'desktop' | 'mobile';
 
 // --- Types for Worker -> Main Thread Communication ---
-export type AudioChunk = {
-    chunk: Float32Array;
-    startTime: number; // Absolute time from audioContext.currentTime
-    duration: number;
+export type ComposerWorkerMessage = {
+  type: 'score';
+  data: {
+    drumScore: DrumNote[];
+    bassScore: SynthNote[];
+    melodyScore: SynthNote[];
+    barDuration: number;
+  };
+} | {
+  type: 'error';
+  error?: string;
 };
 
 
@@ -28,6 +35,16 @@ export type WorkerCommand =
 | { command: 'init' }
 | { command: 'reset' }
 | { command: 'tick' };
+
+
+// --- Types for Main Thread <-> Iframe Communication ---
+export type RhythmFrameCommand = {
+    command: 'init' | 'start' | 'stop' | 'schedule' | 'set_param';
+    payload?: any;
+}
+export type RhythmFrameMessage = {
+    type: 'request_score';
+}
 
 
 // --- Types for internal Worker logic ---

@@ -268,6 +268,9 @@ const Scheduler = {
 
 // --- MessageBus (The entry point) ---
 self.onmessage = async (event: MessageEvent<WorkerCommand>) => {
+    // This check is important to filter out messages from other sources like hot-module-reloading
+    if (!event.data.command) return;
+
     const { command, data } = event.data;
     console.log('[WORKER] Received command:', command, data);
 
