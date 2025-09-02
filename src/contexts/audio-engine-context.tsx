@@ -1,21 +1,9 @@
-
 'use client';
 
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import type { WorkerCommand, WorkerSettings, DrumNote, SynthNote, ScoreName, InstrumentSettings, ComposerWorkerMessage } from '@/types/music';
-
-// This is the structure for commands to the rhythm frame
-type RhythmFrameCommand = {
-    command: 'init' | 'start' | 'stop' | 'schedule' | 'set_param';
-    payload?: any;
-}
-
-// This is the structure for messages from the rhythm frame
-type RhythmFrameMessage = {
-    type: 'request_score' | 'rhythm_frame_ready' | 'error';
-    error?: string;
-}
+import type { WorkerCommand, WorkerSettings, ScoreName, InstrumentSettings, ComposerWorkerMessage } from '@/types/music';
+import type { RhythmFrameCommand, RhythmFrameMessage } from '@/types/music';
 
 
 // This is the public interface of our audio engine
