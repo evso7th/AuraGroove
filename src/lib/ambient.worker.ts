@@ -40,7 +40,8 @@ const Scheduler = {
             this.loopId = setTimeout(loop, this.barDuration * 1000);
         };
         
-        this.loopId = setTimeout(loop, 50);
+        // Start the first tick immediately, then set the interval
+        loop();
     },
 
     stop() {
@@ -55,7 +56,6 @@ const Scheduler = {
        this.settings = { ...this.settings, ...newSettings };
     },
 
-    // This is a placeholder composer logic.
     createScoreForNextBar(barNumber: number): Score {
         const score: Score = [];
         const startTime = 0;

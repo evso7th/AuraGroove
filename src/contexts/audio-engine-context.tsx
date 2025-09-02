@@ -3,7 +3,7 @@
 
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import type { Score, WorkerSettings } from '@/types/music';
+import type { Score, WorkerSettings, Note } from '@/types/music';
 
 // --- Type Definitions ---
 type WorkerMessage = {
@@ -36,23 +36,22 @@ export const useAudioEngine = () => {
 export const AudioEngineProvider = ({ children }: { children: React.ReactNode }) => {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [loadingText, setLoadingText] = useState('');
   
   const workerRef = useRef<Worker | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const synthPoolRef = useRef<AudioWorkletNode[]>([]);
+  const nextVoiceRef = useRef(0);
   
   const { toast } = useToast();
   
   const initialize = useCallback(async () => {
     if (isInitialized) return true;
     
-    // Ensure the AudioContext is unlocked by the user's first gesture.
     if (!audioContextRef.current) {
         try {
-            setLoadingText('Waiting for user interaction...');
             const context = new (window.AudioContext || (window as any).webkitAudioContext)();
             audioContextRef.current = context;
-            
+
             const unlockAudio = async () => {
                 if (context && context.state === 'suspended') {
                     await context.resume();
@@ -64,8 +63,6 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
 
             window.addEventListener('click', unlockAudio, true);
             window.addEventListener('touchend', unlockAudio, true);
-            
-            // Check initial state
             await unlockAudio();
 
         } catch (e) {
@@ -74,37 +71,66 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
             return false;
         }
     }
-     
-    // Initialize the worker if it doesn't exist
+    
     if (!workerRef.current) {
-        setLoadingText("Initializing music composer...");
         const worker = new Worker(new URL('../lib/ambient.worker.ts', import.meta.url), { type: 'module' });
-        
         worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
-            const { type, score, error, message } = event.data;
-            if (message) console.log(`[MSG FROM WORKER] ${message}`);
-            
-            if (type === 'score' && score) {
-                console.log("Received score from worker:", score);
-                // In Step 3, this will be sent to the AudioWorklet pool
-            } else if (type === 'error') {
-                const errorMsg = error || "Unknown error from worker.";
-                toast({ variant: "destructive", title: "Worker Error", description: errorMsg });
-                console.error("Worker Error:", errorMsg);
+            if (event.data.type === 'score' && event.data.score) {
+                 if (audioContextRef.current && synthPoolRef.current.length > 0) {
+                    scheduleScore(event.data.score, audioContextRef.current.currentTime);
+                 }
+            } else if (event.data.type === 'error') {
+                 toast({ variant: "destructive", title: "Worker Error", description: event.data.error });
             }
         };
         workerRef.current = worker;
     }
     
-    setLoadingText('Engine initialized.');
+    if(audioContextRef.current && synthPoolRef.current.length === 0) {
+        try {
+            await audioContextRef.current.audioWorklet.addModule('/worklets/synth-processor.js');
+            const numVoices = 4; // Start with 4 voices
+            for(let i = 0; i < numVoices; i++) {
+                const node = new AudioWorkletNode(audioContextRef.current, 'synth-processor');
+                node.connect(audioContextRef.current.destination);
+                synthPoolRef.current.push(node);
+            }
+        } catch(e) {
+            toast({ variant: "destructive", title: "Audio Worklet Error", description: "Failed to load synth processor." });
+            console.error(e);
+            return false;
+        }
+    }
+    
     setIsInitialized(true);
     return true;
   }, [isInitialized, toast]);
 
+  const scheduleScore = (score: Score, now: number) => {
+    score.forEach(note => {
+        const voice = synthPoolRef.current[nextVoiceRef.current % synthPoolRef.current.length];
+        if (voice) {
+            const freq = 440 * Math.pow(2, (note.midi - 69) / 12);
+            voice.port.postMessage({
+                type: 'noteOn',
+                frequency: freq,
+                velocity: note.velocity || 0.8,
+                when: now + note.time,
+                duration: note.duration,
+            });
+        }
+        nextVoiceRef.current++;
+    });
+  }
+
   const setIsPlayingCallback = useCallback((playing: boolean) => {
-    if (!isInitialized || !workerRef.current) return;
+    if (!isInitialized || !workerRef.current || !audioContextRef.current) return;
     
     const command = playing ? 'start' : 'stop';
+    if(playing && audioContextRef.current.state === 'suspended') {
+      audioContextRef.current.resume();
+    }
+
     workerRef.current.postMessage({ command });
     setIsPlaying(playing);
 
@@ -115,9 +141,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
      workerRef.current.postMessage({ command: 'update_settings', data: settings });
   }, [isInitialized]);
 
-
   useEffect(() => {
-    // Cleanup worker on component unmount
     return () => {
         workerRef.current?.terminate();
     };
