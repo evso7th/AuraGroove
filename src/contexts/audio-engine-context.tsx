@@ -3,7 +3,7 @@
 
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import type { WorkerSettings, Score, RhythmFrameCommand, RhythmFrameMessage } from '@/types/music';
+import type { WorkerSettings, Score, RhythmFrameCommand, RhythmFrameMessage, MelodyFrameCommand } from '@/types/music';
 
 // --- Type Definitions ---
 type WorkerCommand = {
@@ -56,6 +56,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   const engineRef = useRef<AudioEngine | null>(null);
   
   const readyStatesRef = useRef({ rhythm: false, melody: false });
+  const iFrameTimeoutRef = useRef<any>(null);
   
   const { toast } = useToast();
 
@@ -67,7 +68,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
       rhythmFrameRef.current?.contentWindow?.postMessage(message, '*');
   };
 
-  const postToMelodyFrame = (message: RhythmFrameCommand) => {
+  const postToMelodyFrame = (message: MelodyFrameCommand) => {
       melodyFrameRef.current?.contentWindow?.postMessage(message, '*');
   };
 
@@ -75,6 +76,11 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     if (readyStatesRef.current.rhythm && readyStatesRef.current.melody) {
         console.log('[AudioEngine] All frames are ready.');
         
+        if (iFrameTimeoutRef.current) {
+            clearTimeout(iFrameTimeoutRef.current);
+            iFrameTimeoutRef.current = null;
+        }
+
         engineRef.current = {
             setIsPlaying: (isPlaying: boolean) => {
                 postToWorker({ command: isPlaying ? 'start' : 'stop' });
@@ -100,7 +106,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     setLoadingText('Initializing audio systems...');
 
     return new Promise<boolean>((resolve) => {
-        const iFrameTimeout = setTimeout(() => {
+        iFrameTimeoutRef.current = setTimeout(() => {
             console.error("Fatal: Timed out waiting for iframes to become ready.");
             toast({ variant: "destructive", title: "Initialization Failed", description: "Timed out waiting for audio engines." });
             setIsInitializing(false);
@@ -115,7 +121,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
             console.error("Fatal: One or more iframes not found in DOM.");
             toast({ variant: "destructive", title: "Initialization Failed", description: "Audio engine frames not found." });
             setIsInitializing(false);
-            clearTimeout(iFrameTimeout);
+            clearTimeout(iFrameTimeoutRef.current);
             resolve(false);
             return;
         }
@@ -132,13 +138,11 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
 
             switch (type) {
                 case 'score':
-                    if (readyStatesRef.current.rhythm) {
-                        const { bassScore, drumScore } = data.score;
-                        postToRhythmFrame({ command: 'schedule', payload: { bar: data.bar, score: { bassScore, drumScore } } });
+                    if (readyStatesRef.current.rhythm && data.score.bassScore && data.score.drumScore) {
+                        postToRhythmFrame({ command: 'schedule', payload: { bar: data.bar, score: { bassScore: data.score.bassScore, drumScore: data.score.drumScore } } });
                     }
-                     if (readyStatesRef.current.melody) {
-                        const { melodyScore } = data.score;
-                        postToMelodyFrame({ command: 'schedule', payload: { bar: data.bar, score: { melodyScore } } });
+                     if (readyStatesRef.current.melody && data.score.melodyScore) {
+                        postToMelodyFrame({ command: 'schedule', payload: { bar: data.bar, score: { melodyScore: data.score.melodyScore } } });
                     }
                     break;
                 case 'error':
@@ -150,7 +154,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         };
 
         // --- Iframe Message Handler ---
-        const handleFrameMessage = (event: MessageEvent<RhythmFrameMessage>) => {
+        const handleFrameMessage = (event: MessageEvent<RhythmFrameMessage | MelodyFrameMessage>) => {
              if (!event.data || !event.data.type) return;
              const { type, error } = event.data;
 
@@ -167,7 +171,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
                  toast({ variant: "destructive", title: "Audio Frame Error", description: errorMsg });
                  console.error("IFrame Error:", errorMsg);
                  setIsInitializing(false);
-                 clearTimeout(iFrameTimeout);
+                 clearTimeout(iFrameTimeoutRef.current);
                  resolve(false);
              }
         };
@@ -197,6 +201,9 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   useEffect(() => {
     return () => {
         workerRef.current?.terminate();
+        if (iFrameTimeoutRef.current) {
+            clearTimeout(iFrameTimeoutRef.current);
+        }
     }
   }, []);
 
