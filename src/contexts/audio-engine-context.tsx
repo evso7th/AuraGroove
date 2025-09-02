@@ -80,14 +80,13 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
 
   // The main scheduling loop, run by a simple setInterval in the main thread
   const scheduleLoop = useCallback(() => {
-    // Correct, non-blocking check.
-    // If the next bar's start time is within our scheduling window, request the next bar.
-    if (nextBarTime.current < performance.now() + scheduleAheadTime * 1000) {
+    if (nextBarTime.current < (performance.now() / 1000) + scheduleAheadTime) {
         postToComposerWorker({ command: 'tick' });
     }
   }, []);
 
   const initialize = useCallback(async () => {
+    console.log(`[INIT TRACE ${performance.now()}] Initialize started.`);
     if (isInitialized || isInitializing) return true;
 
     setIsInitializing(true);
@@ -96,47 +95,56 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     return new Promise<boolean>((resolve) => {
         try {
             // --- Initialize Web Worker (The Composer) ---
+            console.log(`[INIT TRACE ${performance.now()}] Creating worker...`);
             const composerWorker = new Worker(new URL('../lib/ambient.worker.ts', import.meta.url), { type: 'module' });
+            console.log(`[INIT TRACE ${performance.now()}] Worker created.`);
             composerWorkerRef.current = composerWorker;
             
             // --- Set up the message handler from the composer worker ---
+            console.log(`[INIT TRACE ${performance.now()}] Setting up worker onmessage...`);
             composerWorker.onmessage = (event: MessageEvent<ComposerWorkerMessage>) => {
                 const message = event.data;
-                if (message.type === 'score') {
-                    // Send the relevant parts of the score to the rhythm frame
+                 if (message.type === 'score') {
                     postToRhythmFrame({
                         command: 'schedule',
                         payload: {
                             drumScore: message.data.drumScore,
                             bassScore: message.data.bassScore
                         },
-                        time: nextBarTime.current / 1000 // convert ms to seconds
+                        time: nextBarTime.current
                     });
-                     nextBarTime.current += message.data.barDuration * 1000;
+                     nextBarTime.current += message.data.barDuration;
                 } else if (message.type === 'error') {
                     console.error('Error from composer worker:', message.error);
                     toast({ variant: 'destructive', title: 'Composer Error', description: message.error });
                 }
             };
+            console.log(`[INIT TRACE ${performance.now()}] Worker onmessage set.`);
             
             setLoadingText('Loading Rhythm Engine...');
+            console.log(`[INIT TRACE ${performance.now()}] Getting rhythm frame...`);
             const rhythmFrame = document.getElementById('rhythm-frame') as HTMLIFrameElement;
+            console.log(`[INIT TRACE ${performance.now()}] Rhythm frame obtained:`, rhythmFrame);
             rhythmFrameRef.current = rhythmFrame;
 
 
             // Wait for the iframe to be ready
             const frameLoadHandler = () => {
-                postToRhythmFrame({ command: 'init' });
+                console.log(`[INIT TRACE ${performance.now()}] frameLoadHandler started.`);
                 
+                console.log(`[INIT TRACE ${performance.now()}] Posting 'init' to rhythm frame.`);
+                postToRhythmFrame({ command: 'init' });
+                console.log(`[INIT TRACE ${performance.now()}] 'init' posted.`);
+                
+                console.log(`[INIT TRACE ${performance.now()}] Creating engineRef.`);
                 engineRef.current = {
                     setIsPlaying: (isPlaying: boolean) => {
                         if(isPlaying) {
-                            nextBarTime.current = performance.now() + lookahead * 1000;
+                            nextBarTime.current = performance.now()/1000 + lookahead;
                             postToRhythmFrame({ command: 'start' });
                             postToComposerWorker({command: 'reset'});
                             if (scheduleIntervalRef.current) clearInterval(scheduleIntervalRef.current);
-                            // Start the polling loop
-                            scheduleIntervalRef.current = setInterval(scheduleLoop, 50); // check every 50ms
+                            scheduleIntervalRef.current = setInterval(scheduleLoop, 50);
                         } else {
                             if (scheduleIntervalRef.current) clearInterval(scheduleIntervalRef.current);
                             scheduleIntervalRef.current = null;
@@ -145,9 +153,8 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
                     },
                     updateSettings: (settings: Partial<WorkerSettings>) => {
                         postToComposerWorker({ command: 'update_settings', data: settings });
-                        // Also forward relevant settings to the frame
                         postToRhythmFrame({
-                            command: 'payload', // A generic command to update settings
+                            command: 'payload',
                             payload: {
                                 instrumentSettings: settings.instrumentSettings,
                                 drumSettings: settings.drumSettings,
@@ -156,17 +163,21 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
                         })
                     }
                 };
+                console.log(`[INIT TRACE ${performance.now()}] engineRef created.`);
 
                 setIsInitialized(true);
                 setIsInitializing(false);
                 setLoadingText('');
                 rhythmFrame.removeEventListener('load', frameLoadHandler);
+                console.log(`[INIT TRACE ${performance.now()}] frameLoadHandler finished.`);
                 resolve(true);
             };
             
             if (rhythmFrame.contentWindow && rhythmFrame.contentWindow.document.readyState === 'complete') {
+                 console.log(`[INIT TRACE ${performance.now()}] Frame already loaded, calling handler directly.`);
                  frameLoadHandler();
             } else {
+                console.log(`[INIT TRACE ${performance.now()}] Frame not loaded, adding event listener.`);
                 rhythmFrame.addEventListener('load', frameLoadHandler);
             }
 
