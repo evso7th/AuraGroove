@@ -1,13 +1,9 @@
 
-
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from "react";
-import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings, AudioProfile, EffectsSettings, MelodyTechnique } from '@/types/music';
+import { useState, useEffect, useCallback } from "react";
+import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings, EffectsSettings } from '@/types/music';
 import { useAudioEngine } from "@/contexts/audio-engine-context";
-import { useIsMobile } from "@/hooks/use-mobile";
-import * as Tone from 'tone';
-
 
 export const useAuraGroove = () => {
   const { isInitializing, isInitialized, engine, loadingText: engineLoadingText } = useAudioEngine();
@@ -21,9 +17,6 @@ export const useAuraGroove = () => {
   const [effectsSettings, setEffectsSettings] = useState<EffectsSettings>({ enabled: false });
   const [bpm, setBpm] = useState(75);
   const [score, setScore] = useState<ScoreName>('evolve');
-  const isMobile = useIsMobile();
-  const [audioProfile, setAudioProfile] = useState<AudioProfile>(isMobile ? 'mobile' : 'desktop');
-
 
   const getFullSettings = useCallback((): WorkerSettings => {
     return {
@@ -34,44 +27,19 @@ export const useAuraGroove = () => {
     };
   }, [bpm, score, instrumentSettings, drumSettings]);
 
-  // Update instrument presets and techniques in managers when they change
-  useEffect(() => {
-      if (engine && isInitialized) {
-          engine.bassManager.setInstrument(instrumentSettings.bass.name);
-          engine.melodyManager.setInstrument(instrumentSettings.melody.name);
-          engine.melodyManager.setTechnique(instrumentSettings.melody.technique);
-      }
-  }, [
-    instrumentSettings.bass.name, 
-    instrumentSettings.melody.name, 
-    instrumentSettings.melody.technique, 
-    engine, 
-    isInitialized
-  ]);
 
-  // Update drum volume
-  useEffect(() => {
-      if(engine && isInitialized) {
-          engine.drumMachine.channel.volume.value = Tone.gainToDb(drumSettings.volume);
-      }
-  }, [drumSettings.volume, engine, isInitialized]);
-
-
-  // Update settings in the worker in realtime
+  // Update settings in the worker/frames in realtime
   useEffect(() => {
     if (engine && isInitialized) {
-        console.log("[useAuraGroove] Syncing settings with worker");
+        console.log("[useAuraGroove] Syncing settings with engine");
         engine.updateSettings(getFullSettings());
     }
   }, [bpm, drumSettings, instrumentSettings, score, engine, isInitialized, getFullSettings]);
   
   const handleToggleEffects = useCallback(() => {
-    if (!engine) return;
-    const newSettings = { ...effectsSettings, enabled: !effectsSettings.enabled };
-    setEffectsSettings(newSettings);
-    engine.toggleEffects(newSettings.enabled);
-  }, [engine, effectsSettings]);
-
+    // This will be re-implemented when the melody frame is added
+    console.log("Effects toggled");
+  }, []);
 
   const handleTogglePlay = useCallback(async () => {
     if (!isInitialized || !engine) return;

@@ -1,5 +1,4 @@
 
-
 // This imports the full type definition for the Tone.js library.
 // It's a heavy import, so we only use it in type-checking, not runtime.
 import type * as Tone from 'tone';
@@ -20,7 +19,7 @@ export type AudioChunk = {
 export type WorkerSettings = {
     bpm: number;
     score: ScoreName;
-    drumSettings: Omit<DrumSettings, 'volume'> & { enabled: boolean, volume: number };
+    drumSettings: Omit<DrumSettings, 'volume'> & { enabled: boolean };
     instrumentSettings: InstrumentSettings;
 };
 
