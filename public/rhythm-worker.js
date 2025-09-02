@@ -73,6 +73,7 @@ class BassSynthManager {
     }
 
     public setInstrument(name: BassInstrument) {
+       console.log(`[RHYTHM FRAME] Setting bass instrument to: ${name}`);
        const currentSynth = this.getActiveSynth();
        if (this.isPlaying && currentSynth) {
            currentSynth.triggerRelease();
@@ -164,17 +165,19 @@ window.addEventListener('message', async (event) => {
         console.log(`[RHYTHM FRAME] Processing schedule command for time ${time}`);
         drumMachine.schedule(payload.drumScore, time);
         bassManager.schedule(payload.bassScore, time);
-    } else if (command === 'payload' && payload) {
-        if(payload.instrumentSettings) {
-             const settings = payload.instrumentSettings as InstrumentSettings;
-             bassManager.setInstrument(settings.bass.name);
-             channels.bass.volume.value = Tone.gainToDb(settings.bass.volume);
-        }
-        if(payload.drumSettings) {
-             channels.drums.volume.value = Tone.gainToDb(payload.drumSettings.volume);
-        }
-         if (payload.bpm) {
-            Tone.Transport.bpm.value = payload.bpm;
+    } else if (command === 'set_param' && payload) {
+        const { target, key, value } = payload;
+        switch (target) {
+            case 'bass':
+                if (key === 'name') bassManager.setInstrument(value);
+                if (key === 'volume') channels.bass.volume.value = Tone.gainToDb(value);
+                break;
+            case 'drums':
+                if (key === 'volume') channels.drums.volume.value = Tone.gainToDb(value);
+                break;
+            case 'transport':
+                 if (key === 'bpm') Tone.Transport.bpm.value = value;
+                break;
         }
     }
 });

@@ -3,7 +3,7 @@
 
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import type { WorkerCommand, WorkerSettings, DrumNote, SynthNote, ScoreName } from '@/types/music';
+import type { WorkerCommand, WorkerSettings, DrumNote, SynthNote, ScoreName, InstrumentSettings } from '@/types/music';
 
 // This is the structure of messages from the composer worker
 type ComposerWorkerMessage = {
@@ -21,7 +21,7 @@ type ComposerWorkerMessage = {
 
 // This is the structure for commands to the rhythm frame
 type RhythmFrameCommand = {
-    command: 'init' | 'start' | 'stop' | 'schedule';
+    command: 'init' | 'start' | 'stop' | 'schedule' | 'set_param';
     payload?: any;
     time?: number; // Absolute time
 }
@@ -153,14 +153,19 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
                     },
                     updateSettings: (settings: Partial<WorkerSettings>) => {
                         postToComposerWorker({ command: 'update_settings', data: settings });
-                        postToRhythmFrame({
-                            command: 'payload',
-                            payload: {
-                                instrumentSettings: settings.instrumentSettings,
-                                drumSettings: settings.drumSettings,
-                                bpm: settings.bpm,
-                            }
-                        })
+                        
+                        // Break down settings into atomic commands for the rhythm frame
+                        if (settings.instrumentSettings) {
+                            const { bass } = settings.instrumentSettings;
+                            postToRhythmFrame({command: 'set_param', payload: {target: 'bass', key: 'name', value: bass.name}});
+                            postToRhythmFrame({command: 'set_param', payload: {target: 'bass', key: 'volume', value: bass.volume}});
+                        }
+                        if (settings.drumSettings) {
+                             postToRhythmFrame({command: 'set_param', payload: {target: 'drums', key: 'volume', value: settings.drumSettings.volume}});
+                        }
+                        if (settings.bpm) {
+                            postToRhythmFrame({command: 'set_param', payload: {target: 'transport', key: 'bpm', value: settings.bpm}});
+                        }
                     }
                 };
                 console.log(`[INIT TRACE ${performance.now()}] engineRef created.`);
