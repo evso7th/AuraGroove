@@ -195,12 +195,40 @@ const Scheduler = {
       self.postMessage({ type: 'started' });
     },
     
-    updateSettings(newSettings: Partial<WorkerSettings>) {
-        if (newSettings.drumSettings) this.settings.drumSettings = { ...this.settings.drumSettings, ...newSettings.drumSettings };
-        if (newSettings.instrumentSettings) this.settings.instrumentSettings = { ...this.settings.instrumentSettings, ...newSettings.instrumentSettings };
-        if (newSettings.bpm) this.settings.bpm = newSettings.bpm;
-        if (newSettings.score) this.settings.score = newSettings.score;
+    updateParam(key: string, value: any) {
+        console.log(`[WORKER] Updating param: ${key} =`, value);
+        switch (key) {
+            case 'bpm':
+                this.settings.bpm = value;
+                break;
+            case 'score':
+                this.settings.score = value;
+                break;
+            case 'bass_name':
+                this.settings.instrumentSettings.bass.name = value;
+                break;
+            case 'bass_volume':
+                this.settings.instrumentSettings.bass.volume = value;
+                break;
+            case 'melody_name':
+                this.settings.instrumentSettings.melody.name = value;
+                break;
+            case 'melody_volume':
+                this.settings.instrumentSettings.melody.volume = value;
+                break;
+            case 'melody_technique':
+                this.settings.instrumentSettings.melody.technique = value;
+                break;
+            case 'drum_pattern':
+                this.settings.drumSettings.pattern = value;
+                this.settings.drumSettings.enabled = value !== 'none';
+                break;
+            case 'drum_volume':
+                this.settings.drumSettings.volume = value;
+                break;
+        }
     },
+
 
     // This is now only called when the main thread commands it.
     tick() {
@@ -251,8 +279,10 @@ self.onmessage = async (event: MessageEvent<WorkerCommand>) => {
             case 'tick':
                  Scheduler.tick();
                  break;
-            case 'update_settings':
-                 Scheduler.updateSettings(data);
+            case 'set_param':
+                 if(data) {
+                    Scheduler.updateParam(data.key, data.value);
+                 }
                 break;
             case 'reset':
                  Scheduler.reset();
@@ -263,4 +293,3 @@ self.onmessage = async (event: MessageEvent<WorkerCommand>) => {
     }
 };
 
-    

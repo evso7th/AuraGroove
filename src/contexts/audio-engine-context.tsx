@@ -147,19 +147,35 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
                         }
                     },
                     updateSettings: (settings: Partial<WorkerSettings>) => {
-                        postToComposerWorker({ command: 'update_settings', data: settings });
-                        
-                        // Break down settings into atomic commands for the rhythm frame
+                        // NEW: Send atomic commands instead of one large object
                         if (settings.instrumentSettings) {
-                            const { bass } = settings.instrumentSettings;
+                            const { bass, melody } = settings.instrumentSettings;
+                            // For Composer
+                            postToComposerWorker({command: 'set_param', data: {key: 'bass_name', value: bass.name}});
+                            postToComposerWorker({command: 'set_param', data: {key: 'bass_volume', value: bass.volume}});
+                            postToComposerWorker({command: 'set_param', data: {key: 'melody_name', value: melody.name}});
+                            postToComposerWorker({command: 'set_param', data: {key: 'melody_volume', value: melody.volume}});
+                            postToComposerWorker({command: 'set_param', data: {key: 'melody_technique', value: melody.technique}});
+                            
+                            // For Rhythm Frame
                             postToRhythmFrame({command: 'set_param', payload: {target: 'bass', key: 'name', value: bass.name}});
                             postToRhythmFrame({command: 'set_param', payload: {target: 'bass', key: 'volume', value: bass.volume}});
                         }
                         if (settings.drumSettings) {
+                             // For Composer
+                             postToComposerWorker({command: 'set_param', data: {key: 'drum_pattern', value: settings.drumSettings.pattern}});
+                             postToComposerWorker({command: 'set_param', data: {key: 'drum_volume', value: settings.drumSettings.volume}});
+                             // For Rhythm Frame
                              postToRhythmFrame({command: 'set_param', payload: {target: 'drums', key: 'volume', value: settings.drumSettings.volume}});
                         }
                         if (settings.bpm) {
+                             // For Composer
+                            postToComposerWorker({command: 'set_param', data: {key: 'bpm', value: settings.bpm}});
+                             // For Rhythm Frame
                             postToRhythmFrame({command: 'set_param', payload: {target: 'transport', key: 'bpm', value: settings.bpm}});
+                        }
+                         if (settings.score) {
+                            postToComposerWorker({command: 'set_param', data: {key: 'score', value: settings.score}});
                         }
                     }
                 };
