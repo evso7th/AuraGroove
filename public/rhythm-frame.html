@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html>
 <head>
@@ -8,71 +9,101 @@
     <script>
         console.log('[RHYTHM FRAME] HTML loaded.');
 
-        let isInitialized = false;
         let bassSynth;
+        let drumMachine;
+        let isInitialized = false;
 
-        function setupInstruments() {
-            console.log('[RHYTHM FRAME] Setting up instruments...');
-            try {
-                bassSynth = new Tone.MonoSynth({
-                    oscillator: { type: 'fmsine' },
-                    envelope: { attack: 0.1, release: 1 },
+        class DrumMachine {
+            constructor(samples, callback) {
+                console.log('[RHYTHM FRAME] Setting up instruments...');
+                this.players = new Tone.Players(samples, {
+                    onload: () => {
+                        console.log('[RHYTHM FRAME] Drum samples loaded.');
+                        callback(); // Notify that setup is complete
+                    },
+                    onerror: (error) => {
+                         console.error('[RHYTHM FRAME] Error loading drum samples:', error);
+                    },
+                    baseUrl: '/assets/drums/'
                 }).toDestination();
-                console.log('[RHYTHM FRAME] Instruments are ready.');
-                return true;
-            } catch (e) {
-                console.error('[RHYTHM FRAME] Error setting up instruments:', e);
-                window.parent.postMessage({ type: 'error', error: 'Instrument setup failed: ' + e.message }, '*');
-                return false;
+            }
+
+            schedule(drumScore, time) {
+                drumScore.forEach(note => {
+                    const player = this.players.player(note.sample);
+                    if (player) {
+                        player.start(time + (note.time * (60 / Tone.Transport.bpm.value)), 0, undefined, 0, note.velocity);
+                    }
+                });
             }
         }
+
+
+        async function setupInstruments() {
+            if (isInitialized) return true;
+            console.log('[RHYTHM FRAME] Setting up instruments...');
+            bassSynth = new Tone.MonoSynth().toDestination();
+            
+            return new Promise((resolve) => {
+                drumMachine = new DrumMachine({
+                    kick: 'kick_drum6.wav',
+                    snare: 'snare.wav',
+                    hat: 'closed_hi_hat_accented.wav',
+                    crash: 'crash1.wav',
+                }, () => {
+                     isInitialized = true;
+                     console.log('[RHYTHM FRAME] Instruments are ready.');
+                     resolve(true);
+                });
+            });
+        }
+
 
         function scheduleScore(payload) {
-            if (!isInitialized || !payload || !payload.score || !payload.score.bassScore) return;
+             if (!isInitialized || !payload || !payload.score) return;
+             
+             const { score, bar } = payload;
+             const time = Tone.now();
             
-            const time = Tone.now();
-            const bassScore = payload.score.bassScore;
+            // For now, schedule immediately. Later we will sync with transport.
+             if (score.bassScore && score.bassScore.length > 0) {
+                 const bassNote = score.bassScore[0];
+                 bassSynth.triggerAttackRelease(bassNote.note, bassNote.duration, time, bassNote.velocity);
+             }
 
-            if (bassScore.length > 0) {
-                 const note = bassScore[0];
-                 // Play immediately for testing
-                 bassSynth.triggerAttackRelease(note.note, note.duration, time, note.velocity);
-            }
+             if (score.drumScore && score.drumScore.length > 0) {
+                 drumMachine.schedule(score.drumScore, time);
+             }
         }
 
-        window.onmessage = async (event) => {
-             if (!event.data || !event.data.command) return;
-             const { command, payload } = event.data;
+        async function init() {
+             if (isInitialized) return;
+             console.log('[RHYTHM FRAME] Received init. Starting AudioContext...');
+             await Tone.start();
+             console.log('[RHYTHM FRAME] AudioContext started.');
+             await setupInstruments();
+             parent.postMessage({ type: 'rhythm_frame_ready' }, '*');
+        }
 
-            switch(command) {
+        window.onmessage = (event) => {
+            if (!event.data || !event.data.command) return;
+            const { command, payload } = event.data;
+
+            switch (command) {
                 case 'init':
-                    if (isInitialized) return;
-                    console.log('[RHYTHM FRAME] Received init. Starting AudioContext...');
-                    try {
-                        await Tone.start();
-                        console.log('[RHYTHM FRAME] AudioContext started.');
-                        if (setupInstruments()) {
-                           isInitialized = true;
-                           window.parent.postMessage({ type: 'rhythm_frame_ready' }, '*');
-                        }
-                    } catch (e) {
-                        console.error('[RHYTHM FRAME] Error starting AudioContext:', e);
-                        window.parent.postMessage({ type: 'error', error: 'AudioContext start failed: ' + e.message }, '*');
-                    }
+                    init();
                     break;
-                
                 case 'start':
-                    if(isInitialized && Tone.Transport.state !== 'started') Tone.Transport.start();
+                    if (isInitialized) Tone.Transport.start();
                     break;
-
                 case 'stop':
-                    if(isInitialized && Tone.Transport.state === 'started') Tone.Transport.stop();
+                    if (isInitialized) Tone.Transport.stop();
                     break;
-
                 case 'schedule':
-                    if(isInitialized) {
-                        scheduleScore(payload);
-                    }
+                    scheduleScore(payload);
+                    break;
+                case 'set_param':
+                    // Later for instrument/effect changes
                     break;
             }
         };

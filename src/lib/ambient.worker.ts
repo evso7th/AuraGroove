@@ -1,4 +1,5 @@
 
+
 /**
  * @file AuraGroove Music Worker (Architecture: "Composer-Conductor")
  *
@@ -20,8 +21,13 @@ class Composer {
             velocity: 0.5
         }];
 
-        // Other scores are empty for this test
-        const drumScore: any[] = [];
+        const drumScore = [
+            { sample: 'kick' as const, time: 0, velocity: 1.0 },
+            { sample: 'hat' as const, time: 0.5, velocity: 0.7 },
+            { sample: 'snare' as const, time: 1, velocity: 0.8 },
+            { sample: 'hat' as const, time: 1.5, velocity: 0.7 },
+        ];
+        
         const melodyScore: any[] = [];
 
         return { bassScore, drumScore, melodyScore };
