@@ -31,27 +31,29 @@ export type Score = {
 
 // Commands sent FROM the main thread TO the rhythm iframe.
 export type RhythmFrameCommand = {
-    command: 'init' | 'start' | 'stop' | 'schedule' | 'set_param';
+    command: 'init' | 'start' | 'stop' | 'schedule' | 'set_param' | 'report_status';
     payload?: any; // Can be a score, settings, etc.
 }
 
 // Messages sent FROM an iframe TO the main thread.
 export type FrameMessage = {
-    type: 'rhythm_frame_ready' | 'melody_frame_ready' | 'error';
+    type: 'rhythm_frame_ready' | 'melody_frame_ready' | 'error' | 'status_report';
     frame: 'rhythm' | 'melody';
+    state?: string; // For reporting AudioContext.state
     error?: string;
 }
 
 // Commands sent FROM the main thread TO the melody iframe.
 export type MelodyFrameCommand = {
-    command: 'init' | 'start' | 'stop' | 'schedule' | 'set_param';
+    command: 'init' | 'start' | 'stop' | 'schedule' | 'set_param' | 'report_status';
     payload?: any; 
 };
 
 // Messages sent FROM the melody iframe TO the main thread.
 export type MelodyFrameMessage = {
-    type: 'melody_frame_ready' | 'error';
+    type: 'melody_frame_ready' | 'error' | 'status_report';
     frame: 'melody';
+    state?: string;
     error?: string;
 }
 

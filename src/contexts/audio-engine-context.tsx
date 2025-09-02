@@ -3,12 +3,17 @@
 
 import React, { createContext, useContext, useState, useRef, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import type { WorkerSettings, FrameMessage } from '@/types/music';
+import type { WorkerSettings } from '@/types/music';
 
 // --- Type Definitions ---
 type WorkerCommand = {
     command: 'start' | 'stop' | 'update_settings';
     data?: any;
+}
+
+type FrameCommand = {
+     command: 'init' | 'start' | 'stop' | 'set_param' | 'report_status';
+     payload?: any;
 }
 
 type WorkerMessage = {
@@ -17,6 +22,14 @@ type WorkerMessage = {
     error?: string;
     message?: string;
 }
+
+type FrameMessage = {
+    type: 'rhythm_frame_ready' | 'melody_frame_ready' | 'error' | 'status_report';
+    frame: 'rhythm' | 'melody';
+    state?: string; // AudioContext.state
+    error?: string;
+};
+
 
 // --- Public Interface ---
 export interface AudioEngine {
@@ -68,14 +81,14 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         if (message) console.log(`[MSG FROM WORKER] ${message}`);
 
         if (type === 'score' && data) {
-            if (rhythmFrameRef.current && data.score.bassScore) {
-                const rhythmPayload = { 
+            if (rhythmFrameRef.current && (data.score.bassScore || data.score.drumScore)) {
+                 const rhythmPayload = { 
                     bar: data.bar, 
                     score: { bassScore: data.score.bassScore, drumScore: data.score.drumScore } 
                 };
                 rhythmFrameRef.current.contentWindow?.postMessage({ command: 'schedule', payload: rhythmPayload }, '*');
             }
-            if (melodyFrameRef.current && data.score.melodyScore) {
+             if (melodyFrameRef.current && data.score.melodyScore) {
                  const melodyPayload = { 
                     bar: data.bar, 
                     score: data.score.melodyScore
@@ -88,11 +101,27 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
             console.error("Worker Error:", errorMsg);
         }
     };
+
+    const handleFrameMessage = (event: MessageEvent<FrameMessage>) => {
+        if (event.data.type === 'status_report') {
+            console.log(`[${event.data.frame.toUpperCase()} FRAME STATUS] ${event.data.state}`);
+        }
+    }
     
     worker.onmessage = handleWorkerMessage;
+    window.addEventListener('message', handleFrameMessage);
+
+    // Diagnostic interval
+    const diagnosticInterval = setInterval(() => {
+        rhythmFrameRef.current?.contentWindow?.postMessage({ command: 'report_status' }, '*');
+        melodyFrameRef.current?.contentWindow?.postMessage({ command: 'report_status' }, '*');
+    }, 2000);
+
 
     return () => {
         worker.terminate();
+        window.removeEventListener('message', handleFrameMessage);
+        clearInterval(diagnosticInterval);
     };
   }, [toast]);
 
@@ -102,19 +131,36 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     setIsInitializing(true);
     setLoadingText('Initializing audio systems...');
 
-    // Get iframe elements from the DOM
     rhythmFrameRef.current = document.getElementById('rhythm-frame') as HTMLIFrameElement;
     melodyFrameRef.current = document.getElementById('melody-frame') as HTMLIFrameElement;
     
-    // Immediately send init commands. We trust the frames will be ready.
-    rhythmFrameRef.current.contentWindow?.postMessage({ command: 'init' }, '*');
-    melodyFrameRef.current.contentWindow?.postMessage({ command: 'init' }, '*');
+    const initRhythm = new Promise<void>(resolve => {
+        const onReady = (e: MessageEvent<FrameMessage>) => {
+            if (e.data.type === 'rhythm_frame_ready') {
+                window.removeEventListener('message', onReady);
+                resolve();
+            }
+        }
+        window.addEventListener('message', onReady);
+        rhythmFrameRef.current?.contentWindow?.postMessage({ command: 'init' }, '*');
+    });
 
-    // Define the engine functions
+    const initMelody = new Promise<void>(resolve => {
+        const onReady = (e: MessageEvent<FrameMessage>) => {
+            if (e.data.type === 'melody_frame_ready') {
+                window.removeEventListener('message', onReady);
+                resolve();
+            }
+        }
+        window.addEventListener('message', onReady);
+        melodyFrameRef.current?.contentWindow?.postMessage({ command: 'init' }, '*');
+    });
+
+    await Promise.all([initRhythm, initMelody]);
+    
     engineRef.current = {
         setIsPlaying: (isPlaying: boolean) => {
             const command = isPlaying ? 'start' : 'stop';
-            // Also send start/stop to frames to handle AudioContext resume
             workerRef.current?.postMessage({ command });
             rhythmFrameRef.current?.contentWindow?.postMessage({ command }, '*');
             melodyFrameRef.current?.contentWindow?.postMessage({ command }, '*');
@@ -132,7 +178,6 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         }
     };
     
-    // Assume initialization is successful and let the user proceed.
     setLoadingText('Engine initialized.');
     setIsInitialized(true);
     setIsInitializing(false);
