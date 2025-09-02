@@ -55,43 +55,12 @@ class EvolutionEngine {
     generateComposerDrumScore(bar: number, volume: number): DrumNote[] {
         const score: DrumNote[] = [];
         
-        score.push({ sample: 'kick', time: 0, velocity: 1.0 * volume });
-        score.push({ sample: 'snare', time: 2.0, velocity: 0.7 * volume });
+        // Sparse kick on the 2nd beat
+        score.push({ sample: 'kick', time: 1.0, velocity: 0.8 * volume });
+        // Very light hats on off-beats
+        score.push({ sample: 'hat', time: 0.5, velocity: 0.2 * volume });
+        score.push({ sample: 'hat', time: 2.5, velocity: 0.2 * volume });
 
-        const hatPattern = bar % 4;
-        switch(hatPattern) {
-            case 0:
-                score.push({ sample: 'hat', time: 0.5, velocity: 0.4 * volume });
-                score.push({ sample: 'hat', time: 1.5, velocity: 0.4 * volume });
-                score.push({ sample: 'hat', time: 2.5, velocity: 0.4 * volume });
-                score.push({ sample: 'hat', time: 3.5, velocity: 0.4 * volume });
-                break;
-            case 1: 
-                for(let i=0; i<4; i++) {
-                    score.push({ sample: 'hat', time: i + 0.5, velocity: 0.3 * volume });
-                }
-                break;
-            case 2:
-                 score.push({ sample: 'hat', time: 0.75, velocity: 0.35 * volume });
-                 score.push({ sample: 'hat', time: 1.5, velocity: 0.35 * volume });
-                 score.push({ sample: 'hat', time: 2.25, velocity: 0.35 * volume });
-                 score.push({ sample: 'hat', time: 3.75, velocity: 0.35 * volume });
-                break;
-            case 3:
-                if(bar % 8 < 4) {
-                    score.push({ sample: 'ride', time: 1.0, velocity: 0.5 * volume });
-                    score.push({ sample: 'ride', time: 3.0, velocity: 0.5 * volume });
-                } else {
-                    score.push({ sample: 'hat', time: 1.0, velocity: 0.4 * volume });
-                    score.push({ sample: 'hat', time: 3.0, velocity: 0.4 * volume });
-                }
-                break;
-        }
-
-        if (bar % 8 === 0) {
-            score.push({ sample: 'crash', time: 0, velocity: 0.6 * volume });
-        }
-        
         return score;
     }
 
