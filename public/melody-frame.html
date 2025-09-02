@@ -1,0 +1,108 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AuraGroove Melody Engine</title>
+    <script src="/assets/vendor/tone/Tone.js"></script>
+</head>
+<body>
+    <script>
+        console.log("[MELODY FRAME] HTML loaded.");
+
+        // --- Global State ---
+        let audioContext;
+        let melodySynth;
+        let isReady = false;
+
+        // --- Melody Synth Manager ---
+        class MelodySynthManager {
+            constructor() {
+                this.synth = new Tone.MonoSynth({
+                    oscillator: { type: 'triangle' },
+                    envelope: { attack: 0.1, decay: 0.2, sustain: 0.5, release: 0.8 }
+                }).toDestination();
+                console.log("[MELODY FRAME] MelodySynthManager created.");
+            }
+
+            schedule(score, time) {
+                if (!score || !this.synth) return;
+                score.forEach(note => {
+                    this.synth.triggerAttackRelease(note.note, note.duration, time + note.time, note.velocity);
+                });
+            }
+             setInstrument(instrumentName) {
+                // This is a placeholder for future instrument switching
+                console.log(`[MELODY FRAME] Instrument set to: ${instrumentName}`);
+            }
+        }
+
+        // --- Core Functions ---
+        async function setup() {
+            console.log("[MELODY FRAME] Setting up instruments...");
+            melodySynth = new MelodySynthManager();
+            await Tone.start();
+            console.log("[MELODY FRAME] Instruments are ready.");
+            isReady = true;
+            window.parent.postMessage({ type: 'melody_frame_ready' }, '*');
+        }
+
+        function scheduleScore(payload) {
+            if (!isReady || !payload || !payload.score) return;
+            
+            const time = Tone.Transport.seconds;
+            const barOffset = (payload.bar * (240 / Tone.Transport.bpm.value)); // 240 = 4 beats * 60s
+            const scheduledTime = barOffset > time ? barOffset : time + 0.1; // Schedule ahead
+
+            Tone.Transport.scheduleOnce((transportTime) => {
+                 if (melodySynth && payload.score.melodyScore) {
+                    melodySynth.schedule(payload.score.melodyScore, transportTime);
+                }
+            }, `${payload.bar}:0:0`);
+        }
+
+        async function init() {
+            try {
+                console.log("[MELODY FRAME] Received init. Starting AudioContext...");
+                if (!audioContext) {
+                    audioContext = new Tone.Context();
+                    await Tone.setContext(audioContext);
+                }
+                 if (Tone.context.state !== 'running') {
+                    await Tone.start();
+                }
+                console.log("[MELODY FRAME] AudioContext started.");
+                await setup();
+            } catch (e) {
+                console.error("[MELODY FRAME] Error initializing:", e);
+                window.parent.postMessage({ type: 'error', error: e.message }, '*');
+            }
+        }
+        
+        // --- MessageBus (Entry Point) ---
+        window.onmessage = async (event) => {
+            if (!event.data || !event.data.command) return;
+            const { command, payload } = event.data;
+
+            switch (command) {
+                case 'init':
+                    await init();
+                    break;
+                case 'start':
+                    if (isReady && Tone.Transport.state !== 'started') Tone.Transport.start();
+                    break;
+                case 'stop':
+                    if (isReady && Tone.Transport.state === 'started') Tone.Transport.stop();
+                    break;
+                case 'schedule':
+                    scheduleScore(payload);
+                    break;
+                case 'set_param':
+                    if (isReady && payload.melodyInstrument) {
+                        melodySynth.setInstrument(payload.melodyInstrument);
+                    }
+                    break;
+            }
+        };
+    </script>
+</body>
+</html>

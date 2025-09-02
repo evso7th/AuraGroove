@@ -15,8 +15,8 @@ class Composer {
     createScoreForNextBar(barNumber: number, settings: any) {
         // Generate a very simple score with only one bass note
         const bassScore = [{
-            note: 'C3',
-            duration: '4n',
+            note: 'C2',
+            duration: '2n',
             time: 0, // Play at the start of the bar
             velocity: 0.5
         }];
@@ -26,9 +26,19 @@ class Composer {
             { sample: 'hat' as const, time: 0.5, velocity: 0.7 },
             { sample: 'snare' as const, time: 1, velocity: 0.8 },
             { sample: 'hat' as const, time: 1.5, velocity: 0.7 },
+            { sample: 'kick' as const, time: 2, velocity: 1.0 },
+            { sample: 'hat' as const, time: 2.5, velocity: 0.7 },
+            { sample: 'snare' as const, time: 3, velocity: 0.8 },
+            { sample: 'hat' as const, time: 3.5, velocity: 0.7 },
         ];
         
-        const melodyScore: any[] = [];
+        const melodyScore = [{
+            note: 'C4',
+            duration: '4n',
+            time: barNumber % 4, // Play on a different beat each bar
+            velocity: 0.6
+        }];
+
 
         return { bassScore, drumScore, melodyScore };
     }

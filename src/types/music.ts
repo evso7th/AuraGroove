@@ -3,7 +3,7 @@
 // --- This file defines the data structures for our music application ---
 
 // A unique identifier for a drum sample.
-export type DrumSampleName = 'kick' | 'snare' | 'hat' | 'crash';
+export type DrumSampleName = 'kick' | 'snare' | 'hat' | 'crash' | 'ride' | 'cymbal_bell1' | 'closed_hi_hat_accented';
 
 // Represents a single drum hit in a score.
 export type DrumNote = {
@@ -38,7 +38,7 @@ export type RhythmFrameCommand = {
 
 // Messages sent FROM an iframe TO the main thread.
 export type RhythmFrameMessage = {
-    type: 'rhythm_frame_ready' | 'error';
+    type: 'rhythm_frame_ready' | 'melody_frame_ready' | 'error';
     error?: string;
 }
 

@@ -3,7 +3,7 @@
 
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import type { WorkerSettings, Score, RhythmFrameCommand } from '@/types/music';
+import type { WorkerSettings, Score, RhythmFrameCommand, RhythmFrameMessage } from '@/types/music';
 
 // --- Type Definitions ---
 type WorkerCommand = {
@@ -51,8 +51,11 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   
   const workerRef = useRef<Worker | null>(null);
   const rhythmFrameRef = useRef<HTMLIFrameElement | null>(null);
+  const melodyFrameRef = useRef<HTMLIFrameElement | null>(null);
+
   const engineRef = useRef<AudioEngine | null>(null);
-  const isRhythmFrameReady = useRef(false);
+  
+  const readyStatesRef = useRef({ rhythm: false, melody: false });
   
   const { toast } = useToast();
 
@@ -64,22 +67,58 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
       rhythmFrameRef.current?.contentWindow?.postMessage(message, '*');
   };
 
+  const postToMelodyFrame = (message: RhythmFrameCommand) => {
+      melodyFrameRef.current?.contentWindow?.postMessage(message, '*');
+  };
+
+  const checkAllFramesReady = useCallback(() => {
+    if (readyStatesRef.current.rhythm && readyStatesRef.current.melody) {
+        console.log('[AudioEngine] All frames are ready.');
+        
+        engineRef.current = {
+            setIsPlaying: (isPlaying: boolean) => {
+                postToWorker({ command: isPlaying ? 'start' : 'stop' });
+                postToRhythmFrame({ command: isPlaying ? 'start' : 'stop' });
+                postToMelodyFrame({ command: isPlaying ? 'start' : 'stop' });
+            },
+            updateSettings: (settings: Partial<WorkerSettings>) => {
+                postToWorker({ command: 'update_settings', data: settings });
+                postToRhythmFrame({ command: 'set_param', payload: { bassInstrument: settings.instrumentSettings?.bass.name } });
+                postToMelodyFrame({ command: 'set_param', payload: { melodyInstrument: settings.instrumentSettings?.melody.name } });
+            }
+        };
+
+        setLoadingText('Engine initialized.');
+        setIsInitialized(true);
+        setIsInitializing(false);
+    }
+  }, []);
+
   const initialize = useCallback(async () => {
     if (isInitialized || isInitializing) return true;
     setIsInitializing(true);
     setLoadingText('Initializing audio systems...');
 
     return new Promise<boolean>((resolve) => {
-        // --- Get Iframe ---
-        const iframe = document.getElementById('rhythm-frame') as HTMLIFrameElement;
-        if (!iframe) {
-            console.error("Fatal: Rhythm frame not found in DOM.");
-            toast({ variant: "destructive", title: "Initialization Failed", description: "Rhythm frame not found." });
+        const iFrameTimeout = setTimeout(() => {
+            console.error("Fatal: Timed out waiting for iframes to become ready.");
+            toast({ variant: "destructive", title: "Initialization Failed", description: "Timed out waiting for audio engines." });
             setIsInitializing(false);
+            resolve(false);
+        }, 5000); // 5 second timeout
+
+        // --- Get Iframes ---
+        rhythmFrameRef.current = document.getElementById('rhythm-frame') as HTMLIFrameElement;
+        melodyFrameRef.current = document.getElementById('melody-frame') as HTMLIFrameElement;
+
+        if (!rhythmFrameRef.current || !melodyFrameRef.current) {
+            console.error("Fatal: One or more iframes not found in DOM.");
+            toast({ variant: "destructive", title: "Initialization Failed", description: "Audio engine frames not found." });
+            setIsInitializing(false);
+            clearTimeout(iFrameTimeout);
             resolve(false);
             return;
         }
-        rhythmFrameRef.current = iframe;
 
         // --- Setup Worker ---
         const worker = new Worker(new URL('../lib/ambient.worker.ts', import.meta.url), { type: 'module' });
@@ -93,8 +132,13 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
 
             switch (type) {
                 case 'score':
-                    if (isRhythmFrameReady.current) {
-                        postToRhythmFrame({ command: 'schedule', payload: data });
+                    if (readyStatesRef.current.rhythm) {
+                        const { bassScore, drumScore } = data.score;
+                        postToRhythmFrame({ command: 'schedule', payload: { bar: data.bar, score: { bassScore, drumScore } } });
+                    }
+                     if (readyStatesRef.current.melody) {
+                        const { melodyScore } = data.score;
+                        postToMelodyFrame({ command: 'schedule', payload: { bar: data.bar, score: { melodyScore } } });
                     }
                     break;
                 case 'error':
@@ -106,67 +150,53 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         };
 
         // --- Iframe Message Handler ---
-        const handleFrameMessage = (event: MessageEvent) => {
+        const handleFrameMessage = (event: MessageEvent<RhythmFrameMessage>) => {
              if (!event.data || !event.data.type) return;
              const { type, error } = event.data;
 
-             if(type === 'rhythm_frame_ready'){
-                 console.log("[AudioEngine] Rhythm frame is ready for commands.");
-                 isRhythmFrameReady.current = true;
-                 
-                 engineRef.current = {
-                    setIsPlaying: (isPlaying: boolean) => {
-                        postToWorker({ command: isPlaying ? 'start' : 'stop' });
-                        postToRhythmFrame({ command: isPlaying ? 'start' : 'stop' });
-                    },
-                    updateSettings: (settings: Partial<WorkerSettings>) => {
-                        postToWorker({ command: 'update_settings', data: settings });
-                        // We can also send relevant settings to the frame if needed, e.g., for effects
-                        postToRhythmFrame({command: 'set_param', payload: {
-                            bassInstrument: settings.instrumentSettings?.bass.name,
-                            melodyInstrument: settings.instrumentSettings?.melody.name
-                        }});
-                    }
-                 };
-
-                 setLoadingText('Engine initialized.');
-                 setIsInitialized(true);
-                 setIsInitializing(false);
-                 resolve(true);
-
+             if (type === 'rhythm_frame_ready') {
+                 console.log("[AudioEngine] Rhythm frame is ready.");
+                 readyStatesRef.current.rhythm = true;
+                 checkAllFramesReady();
+             } else if (type === 'melody_frame_ready') {
+                 console.log("[AudioEngine] Melody frame is ready.");
+                 readyStatesRef.current.melody = true;
+                 checkAllFramesReady();
              } else if (type === 'error') {
-                 const errorMsg = error || "Unknown error from rhythm frame.";
-                 toast({ variant: "destructive", title: "Rhythm Frame Error", description: errorMsg });
-                 console.error("Rhythm Frame Error:", errorMsg);
+                 const errorMsg = error || "Unknown error from an iframe.";
+                 toast({ variant: "destructive", title: "Audio Frame Error", description: errorMsg });
+                 console.error("IFrame Error:", errorMsg);
                  setIsInitializing(false);
+                 clearTimeout(iFrameTimeout);
                  resolve(false);
              }
         };
 
         window.addEventListener('message', handleFrameMessage);
 
-        setLoadingText('Initializing Rhythm Engine...');
-        // The iframe will load its own scripts. Once it's ready, it sends 'rhythm_frame_ready'
-        // But we need to tell it to start its own initialization once it has loaded.
-        iframe.onload = () => {
-             console.log('[AudioEngine] Iframe loaded. Sending init command...');
-             postToRhythmFrame({ command: 'init' });
+        const initFrame = (frame: HTMLIFrameElement | null, frameName: string) => {
+            if (!frame) return;
+             const initFn = () => {
+                 console.log(`[AudioEngine] ${frameName} loaded. Sending init command...`);
+                 frame.contentWindow?.postMessage({ command: 'init' }, '*');
+            };
+            if (frame.contentWindow && frame.contentDocument?.readyState === 'complete') {
+                initFn();
+            } else {
+                frame.onload = initFn;
+            }
         };
-        // If the iframe is already loaded by the time this runs
-        if (iframe.contentWindow && iframe.contentDocument?.readyState === 'complete') {
-            console.log('[AudioEngine] Iframe already loaded. Sending init command...');
-            postToRhythmFrame({ command: 'init' });
-        }
 
+        initFrame(rhythmFrameRef.current, "Rhythm frame");
+        initFrame(melodyFrameRef.current, "Melody frame");
 
     });
-  }, [isInitialized, isInitializing, toast]);
+  }, [isInitialized, isInitializing, toast, checkAllFramesReady]);
 
   // Clean up on unmount
   useEffect(() => {
     return () => {
         workerRef.current?.terminate();
-        // The iframe will be removed with the component
     }
   }, []);
 
