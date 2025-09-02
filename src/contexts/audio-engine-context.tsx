@@ -3,7 +3,7 @@
 
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import type { Score, WorkerSettings, Note } from '@/types/music';
+import type { WorkerSettings, Score, Note } from '@/types/music';
 
 // --- Type Definitions ---
 type WorkerMessage = {
@@ -12,6 +12,12 @@ type WorkerMessage = {
     error?: string;
     message?: string;
 }
+
+const isMobile = () => {
+    if (typeof window === 'undefined') return false;
+    return /Android|iPhone|iPad|iPod|WebOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+};
+
 
 // --- React Context ---
 interface AudioEngineContextType {
@@ -52,13 +58,15 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     
     if (!audioContextRef.current) {
         try {
-            const context = new (window.AudioContext || (window as any).webkitAudioContext)();
+            const context = new (window.AudioContext || (window as any).webkitAudioContext)({
+                sampleRate: isMobile() ? 22050 : 44100,
+            });
             audioContextRef.current = context;
+            console.log(`AudioContext initialized with sample rate: ${context.sampleRate}`);
 
             const unlockAudio = async () => {
                 if (context && context.state === 'suspended') {
                     await context.resume();
-                    console.log("AudioContext resumed!");
                 }
                 window.removeEventListener('click', unlockAudio, true);
                 window.removeEventListener('touchend', unlockAudio, true);
@@ -81,7 +89,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
             if (event.data.type === 'score' && event.data.score) {
                  if (audioContextRef.current && synthPoolRef.current.length > 0) {
-                    scheduleScore(event.data.score, audioContextRef.current.currentTime);
+                    scheduleScore(event.data.score, audioContextRef.current);
                  }
             } else if (event.data.type === 'error') {
                  toast({ variant: "destructive", title: "Worker Error", description: event.data.error });
@@ -112,28 +120,28 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     return true;
   }, [isInitialized, isInitializing, toast]);
 
-  const scheduleScore = (score: Score, now: number) => {
+  const scheduleScore = (score: Score, audioContext: AudioContext) => {
     score.forEach(note => {
         const voice = synthPoolRef.current[nextVoiceRef.current % synthPoolRef.current.length];
         if (voice) {
             const freq = 440 * Math.pow(2, (note.midi - 69) / 12);
-            
-            // Send noteOn message
+            const noteOnTime = audioContext.currentTime + note.time;
+
             voice.port.postMessage({
                 type: 'noteOn',
                 frequency: freq,
                 velocity: note.velocity || 0.8,
-                when: now + note.time,
+                when: noteOnTime,
             });
 
-            // Schedule noteOff message from the main thread
-            const noteOffTime = (note.time + note.duration) * 1000;
+            const noteOffTime = noteOnTime + note.duration;
+            const delayUntilOff = (noteOffTime - audioContext.currentTime) * 1000;
+
             setTimeout(() => {
                 voice.port.postMessage({
-                    type: 'noteOff',
-                    frequency: freq, // To identify which note to turn off if needed
+                    type: 'noteOff'
                 });
-            }, noteOffTime);
+            }, delayUntilOff);
         }
         nextVoiceRef.current++;
     });
@@ -160,6 +168,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   useEffect(() => {
     return () => {
         workerRef.current?.terminate();
+        audioContextRef.current?.close();
     };
   }, []);
 
