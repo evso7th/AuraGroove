@@ -35,6 +35,7 @@ export const useAudioEngine = () => {
 // --- Provider Component ---
 export const AudioEngineProvider = ({ children }: { children: React.ReactNode }) => {
   const [isInitialized, setIsInitialized] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   
   const workerRef = useRef<Worker | null>(null);
@@ -45,7 +46,9 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   const { toast } = useToast();
   
   const initialize = useCallback(async () => {
-    if (isInitialized) return true;
+    if (isInitialized || isInitializing) return true;
+    
+    setIsInitializing(true);
     
     if (!audioContextRef.current) {
         try {
@@ -68,6 +71,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         } catch (e) {
             toast({ variant: "destructive", title: "Audio Error", description: "Could not create AudioContext."});
             console.error(e);
+            setIsInitializing(false);
             return false;
         }
     }
@@ -89,7 +93,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     if(audioContextRef.current && synthPoolRef.current.length === 0) {
         try {
             await audioContextRef.current.audioWorklet.addModule('/worklets/synth-processor.js');
-            const numVoices = 4; // Start with 4 voices
+            const numVoices = 4; // Start with 4 voices for mobile-first safety
             for(let i = 0; i < numVoices; i++) {
                 const node = new AudioWorkletNode(audioContextRef.current, 'synth-processor');
                 node.connect(audioContextRef.current.destination);
@@ -98,26 +102,38 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         } catch(e) {
             toast({ variant: "destructive", title: "Audio Worklet Error", description: "Failed to load synth processor." });
             console.error(e);
+            setIsInitializing(false);
             return false;
         }
     }
     
     setIsInitialized(true);
+    setIsInitializing(false);
     return true;
-  }, [isInitialized, toast]);
+  }, [isInitialized, isInitializing, toast]);
 
   const scheduleScore = (score: Score, now: number) => {
     score.forEach(note => {
         const voice = synthPoolRef.current[nextVoiceRef.current % synthPoolRef.current.length];
         if (voice) {
             const freq = 440 * Math.pow(2, (note.midi - 69) / 12);
+            
+            // Send noteOn message
             voice.port.postMessage({
                 type: 'noteOn',
                 frequency: freq,
                 velocity: note.velocity || 0.8,
                 when: now + note.time,
-                duration: note.duration,
             });
+
+            // Schedule noteOff message from the main thread
+            const noteOffTime = (note.time + note.duration) * 1000;
+            setTimeout(() => {
+                voice.port.postMessage({
+                    type: 'noteOff',
+                    frequency: freq, // To identify which note to turn off if needed
+                });
+            }, noteOffTime);
         }
         nextVoiceRef.current++;
     });
@@ -149,7 +165,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
 
   return (
     <AudioEngineContext.Provider value={{
-        isInitialized,
+        isInitialized: isInitialized && !isInitializing,
         isPlaying,
         initialize,
         setIsPlaying: setIsPlayingCallback,
