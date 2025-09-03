@@ -69,7 +69,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     if (!audioContextRef.current) {
         try {
             const context = new (window.AudioContext || (window as any).webkitAudioContext)({
-                sampleRate: isMobile() ? 44100 : 44100, // Sticking to 44100 for better quality
+                sampleRate: isMobile() ? 44100 : 44100,
             });
              if (context.state === 'suspended') {
                 console.log('[AudioEngine] AudioContext is suspended, resuming...');
@@ -86,6 +86,18 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         }
     }
     
+     // Create GainNodes before worker and synths
+    if (audioContextRef.current && !gainNodesRef.current.bass) {
+        console.log('[AudioEngine] Creating GainNodes');
+        const context = audioContextRef.current;
+        const parts: InstrumentPart[] = ['bass', 'melody', 'drums', 'effects'];
+        parts.forEach(part => {
+            const gainNode = context.createGain();
+            gainNode.connect(context.destination);
+            gainNodesRef.current[part] = gainNode;
+        });
+    }
+
     if (!workerRef.current) {
         const worker = new Worker(new URL('../lib/ambient.worker.ts', import.meta.url), { type: 'module' });
         worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
@@ -101,32 +113,19 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         };
         workerRef.current = worker;
     }
-
-     // Create GainNodes
-    if (audioContextRef.current && !gainNodesRef.current.bass) {
-        console.log('[AudioEngine] Creating GainNodes');
-        const context = audioContextRef.current;
-        const parts: InstrumentPart[] = ['bass', 'melody', 'drums', 'effects'];
-        parts.forEach(part => {
-            const gainNode = context.createGain();
-            gainNode.connect(context.destination);
-            gainNodesRef.current[part] = gainNode;
-        });
-    }
     
     if(audioContextRef.current && synthPoolRef.current.length === 0) {
         try {
             await audioContextRef.current.audioWorklet.addModule('/worklets/synth-processor.js');
             const numVoices = isMobile() ? 6 : 8;
             console.log(`[AudioEngine] Creating synth pool with ${numVoices} voices`);
+            const melodyGain = gainNodesRef.current.melody;
+            if (!melodyGain) throw new Error("Melody gain node not initialized");
+
             for(let i = 0; i < numVoices; i++) {
                 const node = new AudioWorkletNode(audioContextRef.current, 'synth-processor');
-                // We connect the synth to the melody gain node by default.
-                // The actual connection will be determined during scheduling.
-                const melodyGain = gainNodesRef.current.melody;
-                if (melodyGain) {
-                  node.connect(melodyGain);
-                }
+                // Connect to a default gain node. It will be reconnected in scheduleScore.
+                node.connect(melodyGain);
                 synthPoolRef.current.push(node);
             }
              console.log('[AudioEngine] Synth pool created', { voices: synthPoolRef.current.length });
@@ -145,6 +144,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   }, [isInitialized, isInitializing, toast]);
 
   const getPresetParams = (instrumentName: BassInstrument, note: Note) => {
+    console.log('[AudioEngine] getPresetParams called for', { instrumentName });
     const isMob = isMobile();
     let freq = 0;
     try {
@@ -187,7 +187,6 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
             let params;
             if (currentSettings) {
                 params = getPresetParams(currentSettings.instrumentSettings.bass.name, note);
-                 console.log('[AudioEngine] getPresetParams called for', { instrumentName: currentSettings.instrumentSettings.bass.name });
             } else {
                  console.warn("[AudioEngine] No settings found for bass note scheduling");
                  return;
