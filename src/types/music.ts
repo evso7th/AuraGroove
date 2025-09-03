@@ -1,4 +1,5 @@
 
+
 // A musical note to be played by a synthesizer.
 export type Note = {
     midi: number;         // MIDI note number (e.g., 60 for C4).
@@ -26,13 +27,17 @@ export type Score = {
 };
 
 // --- UI Types ---
-export type BassInstrument = 'portamento' | 'bassGuitar' | 'BassGroove' | 'portamentoMob' | 'BassGrooveMob' | 'none';
+export type BassInstrument = 'portamento' | 'none';
+export type InstrumentPart = 'bass' | 'melody' | 'drums' | 'effects';
+
 
 export type InstrumentSettings = {
   bass: {
       name: BassInstrument;
       volume: number; // 0-1
   };
+  // Future parts can be added here
+  // melody: { ... }
 };
 
 export type DrumSettings = {

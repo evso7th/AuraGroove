@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import Image from 'next/image';
 import { Slider } from "@/components/ui/slider";
-import type { DrumSettings, InstrumentSettings, ScoreName, EffectsSettings, BassInstrument } from '@/types/music';
+import type { DrumSettings, InstrumentSettings, ScoreName, EffectsSettings, BassInstrument, InstrumentPart } from '@/types/music';
 
 // This is now a "dumb" UI component controlled by the useAuraGroove hook.
 export type AuraGrooveProps = {
@@ -19,6 +19,7 @@ export type AuraGrooveProps = {
   setDrumSettings: (settings: React.SetStateAction<DrumSettings>) => void;
   instrumentSettings: InstrumentSettings;
   setInstrumentSettings: (part: keyof InstrumentSettings, name: BassInstrument) => void;
+  handleVolumeChange: (part: InstrumentPart, value: number) => void;
   effectsSettings: EffectsSettings;
   handleToggleEffects: () => void;
   bpm: number;
@@ -38,6 +39,7 @@ export function AuraGroove({
   setDrumSettings,
   instrumentSettings,
   setInstrumentSettings,
+  handleVolumeChange,
   effectsSettings,
   handleToggleEffects,
   bpm,
@@ -152,10 +154,6 @@ export function AuraGroove({
                              {part === 'bass' && (
                                 <>
                                     <SelectItem value="portamento">Portamento</SelectItem>
-                                    <SelectItem value="portamentoMob">Portamento (Mobile)</SelectItem>
-                                    <SelectItem value="bassGuitar">Bass Guitar</SelectItem>
-                                    <SelectItem value="BassGroove">Bass Groove</SelectItem>
-                                    <SelectItem value="BassGrooveMob">Bass Groove (Mobile)</SelectItem>
                                 </>
                              )}
                           </SelectContent>
@@ -166,7 +164,12 @@ export function AuraGroove({
                              <Label className="text-xs text-muted-foreground flex items-center gap-1.5"><Speaker className="h-4 w-4"/> Volume</Label>
                              <span className="text-xs font-mono text-muted-foreground">{Math.round(settings.volume * 100)}</span>
                          </div>
-                         <Slider value={[settings.volume]} max={1} step={0.05} onValueChange={(v) => console.log("Volume change not implemented")} disabled={isInitializing || isPlaying || settings.name === 'none'} />
+                         <Slider 
+                            value={[settings.volume]} 
+                            max={1} 
+                            step={0.05} 
+                            onValueChange={(v) => handleVolumeChange(part as InstrumentPart, v[0])} 
+                            disabled={isInitializing || settings.name === 'none'} />
                     </div>
                  </div>
                 )

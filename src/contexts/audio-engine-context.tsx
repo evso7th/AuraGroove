@@ -3,14 +3,15 @@
 
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import type { WorkerSettings, Score, Note, DrumsScore, EffectsScore, BassInstrument } from '@/types/music';
-import * as Tone from 'tone';
+import type { WorkerSettings, Score, Note, DrumsScore, EffectsScore, BassInstrument, InstrumentPart } from '@/types/music';
 
 // --- Type Definitions ---
 type WorkerMessage = {
-    type: 'score' | 'error';
+    type: 'score' | 'error' | 'debug';
     score?: Score;
     error?: string;
+    message?: string;
+    data?: any;
 };
 
 const isMobile = () => {
@@ -25,6 +26,7 @@ interface AudioEngineContextType {
   initialize: () => Promise<boolean>;
   setIsPlaying: (playing: boolean) => void;
   updateSettings: (settings: Partial<WorkerSettings>) => void;
+  setVolume: (part: InstrumentPart, volume: number) => void;
 }
 
 const AudioEngineContext = createContext<AudioEngineContextType | null>(null);
@@ -46,13 +48,20 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   const workerRef = useRef<Worker | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const synthPoolRef = useRef<AudioWorkletNode[]>([]);
-  const samplerRef = useRef<Tone.Sampler | null>(null);
   const nextVoiceRef = useRef(0);
   const settingsRef = useRef<WorkerSettings | null>(null);
+
+  const gainNodesRef = useRef<Record<InstrumentPart, GainNode | null>>({
+    bass: null,
+    melody: null,
+    drums: null,
+    effects: null,
+  });
   
   const { toast } = useToast();
   
   const initialize = useCallback(async () => {
+    console.log('[AudioEngine] Initialize called');
     if (isInitialized || isInitializing) return true;
     
     setIsInitializing(true);
@@ -60,12 +69,14 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     if (!audioContextRef.current) {
         try {
             const context = new (window.AudioContext || (window as any).webkitAudioContext)({
-                sampleRate: isMobile() ? 22050 : 44100,
+                sampleRate: isMobile() ? 44100 : 44100, // Sticking to 44100 for better quality
             });
-            await context.resume();
+             if (context.state === 'suspended') {
+                console.log('[AudioEngine] AudioContext is suspended, resuming...');
+                await context.resume();
+            }
             audioContextRef.current = context;
-            Tone.setContext(context);
-            console.log(`AudioContext initialized with sample rate: ${context.sampleRate}`);
+            console.log(`[AudioEngine] Initialized`, { context: context.state, sampleRate: context.sampleRate });
 
         } catch (e) {
             toast({ variant: "destructive", title: "Audio Error", description: "Could not create AudioContext."});
@@ -79,52 +90,48 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         const worker = new Worker(new URL('../lib/ambient.worker.ts', import.meta.url), { type: 'module' });
         worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
             if (event.data.type === 'score' && event.data.score) {
-                 if (audioContextRef.current && (synthPoolRef.current.length > 0 || samplerRef.current)) {
+                 if (audioContextRef.current && (synthPoolRef.current.length > 0)) {
                     scheduleScore(event.data.score, audioContextRef.current);
                  }
             } else if (event.data.type === 'error') {
                  toast({ variant: "destructive", title: "Worker Error", description: event.data.error });
+            } else if (event.data.type === 'debug') {
+                 console.log(`[Worker DBG] ${event.data.message}`, event.data.data);
             }
         };
         workerRef.current = worker;
+    }
+
+     // Create GainNodes
+    if (audioContextRef.current && !gainNodesRef.current.bass) {
+        console.log('[AudioEngine] Creating GainNodes');
+        const context = audioContextRef.current;
+        const parts: InstrumentPart[] = ['bass', 'melody', 'drums', 'effects'];
+        parts.forEach(part => {
+            const gainNode = context.createGain();
+            gainNode.connect(context.destination);
+            gainNodesRef.current[part] = gainNode;
+        });
     }
     
     if(audioContextRef.current && synthPoolRef.current.length === 0) {
         try {
             await audioContextRef.current.audioWorklet.addModule('/worklets/synth-processor.js');
-            const numVoices = isMobile() ? 4 : 6;
+            const numVoices = isMobile() ? 6 : 8;
+            console.log(`[AudioEngine] Creating synth pool with ${numVoices} voices`);
             for(let i = 0; i < numVoices; i++) {
                 const node = new AudioWorkletNode(audioContextRef.current, 'synth-processor');
-                node.connect(audioContextRef.current.destination);
+                // We connect the synth to the melody gain node by default.
+                // The actual connection will be determined during scheduling.
+                const melodyGain = gainNodesRef.current.melody;
+                if (melodyGain) {
+                  node.connect(melodyGain);
+                }
                 synthPoolRef.current.push(node);
             }
+             console.log('[AudioEngine] Synth pool created', { voices: synthPoolRef.current.length });
         } catch(e) {
             toast({ variant: "destructive", title: "Audio Worklet Error", description: "Failed to load synth processor." });
-            console.error(e);
-            setIsInitializing(false);
-            return false;
-        }
-    }
-
-    if (!samplerRef.current) {
-        try {
-            samplerRef.current = new Tone.Sampler({
-                urls: {
-                    C4: "kick_drum6.wav",
-                    D4: "snare.wav",
-                    E4: "closed_hi_hat_accented.wav",
-                    F4: "crash1.wav",
-                    G4: "hightom.wav",
-                    A4: "cymbal_bell1.wav", // Effect 1
-                    B4: "cymbal_bell2.wav"  // Effect 2
-                },
-                baseUrl: "/assets/drums/",
-                onload: () => {
-                    console.log("Sampler loaded");
-                }
-            }).toDestination();
-        } catch (e) {
-            toast({ variant: "destructive", title: "Sampler Error", description: "Failed to load drum samples." });
             console.error(e);
             setIsInitializing(false);
             return false;
@@ -133,46 +140,31 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     
     setIsInitialized(true);
     setIsInitializing(false);
+    console.log('[AudioEngine] Initialization complete.');
     return true;
   }, [isInitialized, isInitializing, toast]);
 
   const getPresetParams = (instrumentName: BassInstrument, note: Note) => {
     const isMob = isMobile();
+    let freq = 0;
+    try {
+        freq = 440 * Math.pow(2, (note.midi - 69) / 12);
+    } catch(e) {
+        console.error("Failed to calculate frequency for note:", note, e);
+        return null;
+    }
+
     switch (instrumentName) {
         case 'portamento':
-        case 'portamentoMob':
             return {
                 type: 'noteOn',
-                frequency: 440 * Math.pow(2, (note.midi - 69) / 12),
+                frequency: freq,
                 velocity: note.velocity || 0.8,
                 attack: 0.1,
                 release: isMob ? 2.0 : 4.0,
                 portamento: 0.05,
                 filterCutoff: 1000,
                 oscType: 'triangle'
-            };
-        case 'bassGuitar':
-            return {
-                type: 'noteOn',
-                frequency: 440 * Math.pow(2, (note.midi - 69) / 12),
-                velocity: note.velocity || 0.9,
-                attack: 0.01,
-                release: 0.8,
-                portamento: 0,
-                filterCutoff: 2500,
-                oscType: 'sawtooth' // Brighter sound for pluck
-            };
-        case 'BassGroove':
-        case 'BassGrooveMob':
-            return {
-                type: 'noteOn',
-                frequency: 440 * Math.pow(2, (note.midi - 69) / 12),
-                velocity: note.velocity || 0.85,
-                attack: 0.05,
-                release: isMob ? 1.6 : 3.0,
-                portamento: 0,
-                filterCutoff: 1800,
-                oscType: 'sawtooth'
             };
         default: // 'none' or other cases
              return null;
@@ -181,40 +173,36 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
 
 
   const scheduleScore = (score: Score, audioContext: AudioContext) => {
+    console.log('[AudioEngine] Scheduling score', { score });
     const now = audioContext.currentTime;
     const currentSettings = settingsRef.current;
     
-    // --- Schedule Synth Parts (Bass & Melody) with AudioWorklet ---
+    const bassNotes = score.bass || [];
     
-    // Combine bass and melody for scheduling, but apply bass-specific presets
-    const synthNotes = [...(score.bass || []), ...(score.melody || [])];
-    
-    synthNotes.forEach(note => {
-        const isBassNote = score.bass?.includes(note);
+    bassNotes.forEach(note => {
         const voice = synthPoolRef.current[nextVoiceRef.current % synthPoolRef.current.length];
+        const bassGainNode = gainNodesRef.current.bass;
         
-        if (voice) {
+        if (voice && bassGainNode) {
             let params;
-            if (isBassNote && currentSettings) {
+            if (currentSettings) {
                 params = getPresetParams(currentSettings.instrumentSettings.bass.name, note);
+                 console.log('[AudioEngine] getPresetParams called for', { instrumentName: currentSettings.instrumentSettings.bass.name });
             } else {
-                // Default params for melody
-                params = {
-                     type: 'noteOn',
-                     frequency: 440 * Math.pow(2, (note.midi - 69) / 12),
-                     velocity: note.velocity || 0.6,
-                     attack: 0.05,
-                     release: 1.5,
-                     portamento: 0,
-                     filterCutoff: 2000,
-                     oscType: 'triangle'
-                };
+                 console.warn("[AudioEngine] No settings found for bass note scheduling");
+                 return;
             }
             
-            if (!params) return; // Skip if preset is 'none'
+            if (!params) {
+                console.log("[AudioEngine] Skipping note, no params returned from getPresetParams (likely instrument is 'none')");
+                return;
+            }
+
+            voice.disconnect();
+            voice.connect(bassGainNode);
 
             const noteOnTime = now + note.time;
-
+            console.log('[AudioEngine] Posting message to worklet', { params: {...params, when: noteOnTime} });
             voice.port.postMessage({ ...params, when: noteOnTime });
 
             const noteOffTime = noteOnTime + note.duration;
@@ -226,17 +214,6 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         }
         nextVoiceRef.current++;
     });
-
-    // Schedule sample parts (drums, effects) with Tone.Sampler
-    if (samplerRef.current) {
-        const sampler = samplerRef.current;
-        (score.drums || []).forEach(note => {
-             sampler.triggerAttack(note.note, now + note.time, note.velocity);
-        });
-        (score.effects || []).forEach(note => {
-             sampler.triggerAttack(note.note, now + note.time, note.velocity);
-        });
-    }
   };
 
 
@@ -245,25 +222,39 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     
     const command = playing ? 'start' : 'stop';
     if(playing && audioContextRef.current.state === 'suspended') {
+      console.log("[AudioEngine] Resuming AudioContext on play");
       audioContextRef.current.resume();
     }
 
     workerRef.current.postMessage({ command });
     setIsPlaying(playing);
+     console.log(`[AudioEngine] Playback ${playing ? 'started' : 'stopped'}`);
 
   }, [isInitialized]);
 
   const updateSettingsCallback = useCallback((settings: Partial<WorkerSettings>) => {
      if (!isInitialized || !workerRef.current) return;
-     settingsRef.current = { ...settingsRef.current, ...settings } as WorkerSettings;
-     workerRef.current.postMessage({ command: 'update_settings', data: settings });
+     const newSettings = { ...settingsRef.current, ...settings } as WorkerSettings;
+     settingsRef.current = newSettings;
+     workerRef.current.postMessage({ command: 'update_settings', data: newSettings });
+     console.log('[AudioEngine] Settings updated', newSettings);
   }, [isInitialized]);
+
+  const setVolumeCallback = useCallback((part: InstrumentPart, volume: number) => {
+    const gainNode = gainNodesRef.current[part];
+    if (gainNode) {
+        gainNode.gain.value = volume;
+        console.log(`[AudioEngine] Volume change`, { part, volume });
+    } else {
+        console.warn(`[AudioEngine] Attempted to set volume for non-existent part: ${part}`);
+    }
+  }, []);
 
   useEffect(() => {
     return () => {
+        console.log('[AudioEngine] Cleaning up...');
         workerRef.current?.terminate();
         audioContextRef.current?.close();
-        samplerRef.current?.dispose();
     };
   }, []);
 
@@ -274,6 +265,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         initialize,
         setIsPlaying: setIsPlayingCallback,
         updateSettings: updateSettingsCallback,
+        setVolume: setVolumeCallback,
     }}>
       {children}
     </AudioEngineContext.Provider>
