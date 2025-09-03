@@ -116,6 +116,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     
     if(audioContextRef.current && synthPoolRef.current.length === 0) {
         try {
+            // This file is in /public/worklets/ and is not part of the build process
             await audioContextRef.current.audioWorklet.addModule('/worklets/synth-processor.js');
             const numVoices = isMobile() ? 6 : 8;
             console.log(`[AudioEngine] Creating synth pool with ${numVoices} voices`);
@@ -124,7 +125,6 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
 
             for(let i = 0; i < numVoices; i++) {
                 const node = new AudioWorkletNode(audioContextRef.current, 'synth-processor');
-                // Connect to a default gain node. It will be reconnected in scheduleScore.
                 node.connect(melodyGain);
                 synthPoolRef.current.push(node);
             }
@@ -148,9 +148,15 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     const isMob = isMobile();
     let freq = 0;
     try {
+        // Corrected from note.note.midi
         freq = 440 * Math.pow(2, (note.midi - 69) / 12);
     } catch(e) {
         console.error("Failed to calculate frequency for note:", note, e);
+        return null;
+    }
+
+    if (isNaN(freq)) {
+        console.error("Calculated frequency is NaN for note:", note);
         return null;
     }
 
@@ -227,7 +233,11 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
 
     workerRef.current.postMessage({ command });
     setIsPlaying(playing);
-     console.log(`[AudioEngine] Playback ${playing ? 'started' : 'stopped'}`);
+    if (playing) {
+      console.log(`[AudioEngine] Playback started`);
+    } else {
+      console.log(`[AudioEngine] Playback stopped`);
+    }
 
   }, [isInitialized]);
 
