@@ -4,6 +4,7 @@
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import type { WorkerSettings, Score, Note, DrumsScore, EffectsScore, BassInstrument, InstrumentPart } from '@/types/music';
+import { DrumMachine } from '@/lib/drum-machine';
 
 // --- Type Definitions ---
 type WorkerMessage = {
@@ -50,6 +51,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   const synthPoolRef = useRef<AudioWorkletNode[]>([]);
   const nextVoiceRef = useRef(0);
   const settingsRef = useRef<WorkerSettings | null>(null);
+  const drumMachineRef = useRef<DrumMachine | null>(null);
 
   const gainNodesRef = useRef<Record<InstrumentPart, GainNode | null>>({
     bass: null,
@@ -90,7 +92,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     if (audioContextRef.current && !gainNodesRef.current.bass) {
         console.log('[AudioEngine] Creating GainNodes');
         const context = audioContextRef.current;
-        const parts: InstrumentPart[] = ['bass', 'melody', 'drums', 'effects'];
+        const parts: InstrumentPart[] = ['bass', 'melody', 'effects']; // drums is handled by DrumMachine
         parts.forEach(part => {
             const gainNode = context.createGain();
             gainNode.connect(context.destination);
@@ -98,11 +100,19 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         });
     }
 
+    if (!drumMachineRef.current && audioContextRef.current) {
+        console.log('[AudioEngine] Creating DrumMachine');
+        drumMachineRef.current = new DrumMachine(audioContextRef.current);
+        await drumMachineRef.current.init();
+        gainNodesRef.current.drums = drumMachineRef.current.getVolumeNode();
+        console.log('[AudioEngine] DrumMachine created');
+    }
+
     if (!workerRef.current) {
         const worker = new Worker(new URL('../lib/ambient.worker.ts', import.meta.url), { type: 'module' });
         worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
             if (event.data.type === 'score' && event.data.score) {
-                 if (audioContextRef.current && (synthPoolRef.current.length > 0)) {
+                 if (audioContextRef.current && (synthPoolRef.current.length > 0 || drumMachineRef.current)) {
                     scheduleScore(event.data.score, audioContextRef.current);
                  }
             } else if (event.data.type === 'error') {
@@ -116,16 +126,15 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     
     if(audioContextRef.current && synthPoolRef.current.length === 0) {
         try {
-            // This file is in /public/worklets/ and is not part of the build process
             await audioContextRef.current.audioWorklet.addModule('/worklets/synth-processor.js');
             const numVoices = isMobile() ? 6 : 8;
             console.log(`[AudioEngine] Creating synth pool with ${numVoices} voices`);
-            const melodyGain = gainNodesRef.current.melody;
-            if (!melodyGain) throw new Error("Melody gain node not initialized");
-
+            
             for(let i = 0; i < numVoices; i++) {
                 const node = new AudioWorkletNode(audioContextRef.current, 'synth-processor');
-                node.connect(melodyGain);
+                // We connect to a default gain node here. It will be reconnected in scheduleScore.
+                const melodyGain = gainNodesRef.current.melody;
+                if(melodyGain) node.connect(melodyGain);
                 synthPoolRef.current.push(node);
             }
              console.log('[AudioEngine] Synth pool created', { voices: synthPoolRef.current.length });
@@ -144,11 +153,8 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   }, [isInitialized, isInitializing, toast]);
 
   const getPresetParams = (instrumentName: BassInstrument, note: Note) => {
-    console.log('[AudioEngine] getPresetParams called for', { instrumentName });
-    const isMob = isMobile();
     let freq = 0;
     try {
-        // Corrected from note.note.midi
         freq = 440 * Math.pow(2, (note.midi - 69) / 12);
     } catch(e) {
         console.error("Failed to calculate frequency for note:", note, e);
@@ -167,7 +173,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
                 frequency: freq,
                 velocity: note.velocity || 0.8,
                 attack: 0.1,
-                release: isMob ? 2.0 : 4.0,
+                release: isMobile() ? 2.0 : 4.0,
                 portamento: 0.05,
                 filterCutoff: 1000,
                 oscType: 'triangle'
@@ -199,7 +205,6 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
             }
             
             if (!params) {
-                console.log("[AudioEngine] Skipping note, no params returned from getPresetParams (likely instrument is 'none')");
                 return;
             }
 
@@ -219,6 +224,11 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         }
         nextVoiceRef.current++;
     });
+
+    const drumScore = score.drums || [];
+    if (drumScore.length > 0 && drumMachineRef.current) {
+        drumMachineRef.current.schedule(drumScore, now);
+    }
   };
 
 

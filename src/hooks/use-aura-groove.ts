@@ -64,8 +64,17 @@ export const useAuraGroove = () => {
         ...prev,
         bass: { ...prev.bass, volume: value }
       }));
+    } else if (part === 'drums') {
+        setDrumSettings(prev => ({ ...prev, volume: value }));
     }
     setVolume(part, value);
+  };
+
+  const handleDrumSettingsChange = (settings: React.SetStateAction<DrumSettings>) => {
+    const newSettings = typeof settings === 'function' ? settings(drumSettings) : settings;
+    setDrumSettings(newSettings);
+    // Also update the gain node volume immediately
+    setVolume('drums', newSettings.volume);
   };
 
 
@@ -75,7 +84,7 @@ export const useAuraGroove = () => {
     loadingText: !isInitialized ? 'Click to initialize audio' : 'Ready',
     handleTogglePlay,
     drumSettings,
-    setDrumSettings,
+    setDrumSettings: handleDrumSettingsChange,
     instrumentSettings,
     setInstrumentSettings: handleInstrumentChange,
     handleVolumeChange,
