@@ -35,7 +35,7 @@ export type BassInstrument = 'classicBass' | 'glideBass' | 'ambientDrone' | 'res
 export type MelodyInstrument = 'synth' | 'organ' | 'mellotron' | 'theremin' | 'none';
 export type AccompanimentInstrument = MelodyInstrument;
 export type InstrumentPart = 'bass' | 'melody' | 'accompaniment' | 'drums' | 'effects' | 'sparkles' | 'pads';
-export type BassTechnique = 'arpeggio' | 'portamento' | 'glissando' | 'glide';
+export type BassTechnique = 'arpeggio' | 'portamento' | 'glissando' | 'glide' | 'pulse';
 
 
 export type InstrumentSettings = {

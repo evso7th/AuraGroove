@@ -208,6 +208,7 @@ export function AuraGroove({
                                     <SelectItem value="portamento">Portamento</SelectItem>
                                     <SelectItem value="glissando">Glissando</SelectItem>
                                     <SelectItem value="glide">Glide</SelectItem>
+                                    <SelectItem value="pulse">Pulse</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
