@@ -19,11 +19,11 @@ const KEY_ROOT_MIDI = 40; // E2
 const SCALE_INTERVALS = [0, 2, 3, 5, 7, 8, 10]; // E Natural Minor
 
 const PADS_BY_STAGE: Record<string, string> = {
-    intro: 'MelancholicPad.ogg',
+    intro: 'livecircle.mp3',
     development: 'livecircle.mp3',
-    climax: 'Fearsome.ogg',
-    density: 'Abstruse.ogg',
-    return: 'SalvingPad.ogg'
+    climax: 'livecircle.mp3',
+    density: 'livecircle.mp3',
+    return: 'livecircle.mp3'
 };
 
 // --- "Sparkle" (In-krap-le-ni-ye) Logic ---
@@ -270,3 +270,4 @@ self.onmessage = async (event: MessageEvent) => {
     
 
     
+
