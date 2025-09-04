@@ -78,7 +78,7 @@ const Composer = {
 
     generateMelody(barIndex: number, stage: { name: string, complexity: number }): Note[] {
        if (stage.name === 'return') return [];
-       if (stage.name === 'intro' && Math.random() > stage.complexity * 2) return []; // Sparse melody in intro
+       if (Math.random() > stage.complexity * 4) return []; // Sparse melody in intro, more likely as it progresses
 
        const notes: Note[] = [];
        const notesInBar = Math.floor(2 + stage.complexity * 14); // From 2 to 16 notes
@@ -106,7 +106,7 @@ const Composer = {
         // Don't play on climax/density for contrast
         if (stage.name === 'climax' || stage.name === 'density') return [];
         
-        const playChance = stage.name === 'intro' ? stage.complexity : 1;
+        const playChance = stage.complexity + 0.1; // Make it more likely to play from the start
         if (Math.random() > playChance) return [];
 
         if (stage.complexity >= 0.05) { // Start very sparsely
@@ -132,17 +132,20 @@ const Composer = {
     },
 
     generateDrums(barIndex: number, stage: { name: string, complexity: number }): DrumsScore {
-        if (stage.name === 'intro' || stage.name === 'return' || !Scheduler.settings.drumSettings.enabled) return [];
+        if (stage.name === 'return' || !Scheduler.settings.drumSettings.enabled) return [];
         const drums: DrumsScore = [];
         const step = BAR_DURATION / 16;
         
-        if (stage.complexity > 0.2) {
+        const playChance = stage.complexity;
+        if (Math.random() > playChance) return [];
+
+        if (stage.complexity > 0.1) {
              for (let i = 0; i < 16; i++) {
                  if (i % 8 === 0) drums.push({ note: 'C4', time: i * step, velocity: 0.8 * stage.complexity }); // Kick
                  if (i % 8 === 4) drums.push({ note: 'D4', time: i * step, velocity: 0.6 * stage.complexity }); // Snare
              }
         }
-        if (stage.complexity > 0.4) {
+        if (stage.complexity > 0.3) {
             for (let i = 0; i < 16; i++) {
                  if (i % 2 === 1) drums.push({ note: 'E4', time: i * step, velocity: 0.3 * stage.complexity }); // Hihat
             }
