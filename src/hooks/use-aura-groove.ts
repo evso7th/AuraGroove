@@ -2,11 +2,13 @@
 'use client';
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings, BassInstrument, InstrumentPart, MelodyInstrument, AccompanimentInstrument, BassTechnique } from '@/types/music';
 import { useAudioEngine } from "@/contexts/audio-engine-context";
 
 export const useAuraGroove = () => {
   const { isInitialized, isPlaying, initialize, setIsPlaying: setEngineIsPlaying, updateSettings, setVolume, setInstrument, setBassTechnique } = useAudioEngine();
+  const router = useRouter();
   
   const [drumSettings, setDrumSettings] = useState<DrumSettings>({ pattern: 'composer', volume: 0.5 });
   const [instrumentSettings, setInstrumentSettings] = useState<InstrumentSettings>({
@@ -98,6 +100,15 @@ export const useAuraGroove = () => {
     setVolume('drums', newSettings.volume);
   };
 
+  const handleGoHome = () => {
+    router.push('/');
+  };
+
+  const handleExit = () => {
+    setEngineIsPlaying(false);
+    router.push('/');
+  };
+
 
   return {
     isInitializing: !isInitialized,
@@ -118,5 +129,7 @@ export const useAuraGroove = () => {
     handleScoreChange: setScore,
     density,
     setDensity,
+    handleGoHome,
+    handleExit,
   };
 };
