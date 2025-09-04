@@ -15,8 +15,8 @@ const SCALE_INTERVALS = [0, 2, 3, 5, 7, 8, 10]; // E Natural Minor
 const PADS_BY_STYLE: Record<ScoreName, string> = {
     dreamtales: 'livecircle.mp3',
     evolve: 'Tibetan bowls.mp3',
-    omega: 'Grounding.ogg',
-    promenade: 'Starter.ogg',
+    omega: 'things.mp3',
+    promenade: 'pure_energy.mp3',
 };
 
 // --- "Sparkle" (In-krap-le-ni-ye) Logic ---

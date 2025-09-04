@@ -29,6 +29,8 @@ const PAD_SAMPLES: Record<string, string> = {
     'Sleep.ogg': '/assets/music/pads/Sleep.ogg',
     'Grounding.ogg': '/assets/music/pads/Grounding.ogg',
     'livecircle.mp3': '/assets/music/pads/livecircle.mp3',
+    'things.mp3': '/assets/music/pads/things.mp3',
+    'pure_energy.mp3': '/assets/music/pads/pure_energy.mp3',
     'Tibetan bowls.mp3': '/assets/music/pads/Tibetan bowls.mp3',
 };
 
