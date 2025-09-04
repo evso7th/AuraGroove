@@ -7,7 +7,7 @@
  * and samplers (drums, effects) and sends them to the main thread for execution.
  * It is completely passive and only works when commanded.
  */
-import type { WorkerSettings, Score, Note, DrumsScore, EffectsScore, BassInstrument, MelodyInstrument, AccompanimentInstrument, DrumSettings } from '@/types/music';
+import type { WorkerSettings, Score, Note, DrumsScore, EffectsScore, BassInstrument, MelodyInstrument, AccompanimentInstrument, DrumSettings, InstrumentPart } from '@/types/music';
 
 type Phrase = Note[];
 
