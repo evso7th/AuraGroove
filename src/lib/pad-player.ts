@@ -28,6 +28,7 @@ const PAD_SAMPLES: Record<string, string> = {
     'Tubator.ogg': '/assets/music/pads/Tubator.ogg',
     'Sleep.ogg': '/assets/music/pads/Sleep.ogg',
     'Grounding.ogg': '/assets/music/pads/Grounding.ogg',
+    'livecircle.mp3': '/assets/music/pads/livecircle.mp3',
 };
 
 export class PadPlayer {

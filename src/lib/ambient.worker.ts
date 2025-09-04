@@ -1,5 +1,4 @@
 
-
 /**
  * @file AuraGroove Music Worker (Architecture: "The Trance Architect")
  *
@@ -21,7 +20,7 @@ const SCALE_INTERVALS = [0, 2, 3, 5, 7, 8, 10]; // E Natural Minor
 
 const PADS_BY_STAGE: Record<string, string> = {
     intro: 'MelancholicPad.ogg',
-    development: 'BladeWalker.ogg',
+    development: 'livecircle.mp3',
     climax: 'Fearsome.ogg',
     density: 'Abstruse.ogg',
     return: 'SalvingPad.ogg'
@@ -101,15 +100,21 @@ const Composer = {
     
     generateAccompaniment(barIndex: number, stage: { name: string, complexity: number }): Note[] {
         const notes: Note[] = [];
-        const beatDuration = BAR_DURATION / 4;
-        const rootMidi = KEY_ROOT_MIDI + 12; // E3
-        
         if (stage.name === 'climax' || stage.name === 'density') return [];
         
+        const beatDuration = BAR_DURATION / 4;
+        const rootMidi = KEY_ROOT_MIDI + 12; // E3
         const arpPattern = [rootMidi, rootMidi + 3, rootMidi + 7]; // E3, G3, B3
-        for (let i = 0; i < 4; i++) {
-            if (i % 2 == 0) { // Play on beats 1 and 3
-                notes.push({ midi: arpPattern[i % 3], time: i * beatDuration, duration: beatDuration * 1.5, velocity: 0.4 });
+
+        // Play on beats 1 and 3
+        if (barIndex % 2 === 0) { 
+            for (let i = 0; i < 3; i++) {
+                notes.push({ 
+                    midi: arpPattern[i], 
+                    time: i * (beatDuration / 3), // Arpeggiate
+                    duration: beatDuration * 1.5, 
+                    velocity: 0.4 
+                });
             }
         }
         
@@ -122,9 +127,11 @@ const Composer = {
         const step = BAR_DURATION / 16;
         
         // Simple Kick & Snare pattern
-        for (let i = 0; i < 16; i++) {
-            if (i % 8 === 0) drums.push({ note: 'C4', time: i * step, velocity: 0.8 }); // Kick on 1 and 3
-            if (i % 8 === 4) drums.push({ note: 'D4', time: i * step, velocity: 0.6 }); // Snare on 2 and 4
+        if (stage.complexity > 0.1) {
+            for (let i = 0; i < 16; i++) {
+                if (i % 8 === 0) drums.push({ note: 'C4', time: i * step, velocity: 0.8 }); // Kick on 1 and 3
+                if (i % 8 === 4) drums.push({ note: 'D4', time: i * step, velocity: 0.6 }); // Snare on 2 and 4
+            }
         }
 
         // Add hi-hats based on complexity
@@ -208,7 +215,6 @@ const Scheduler = {
         
         const score: Score = { bass, melody, accompaniment, drums };
 
-        console.log('Worker sending score:', score);
         self.postMessage({ type: 'score', score });
 
         const currentTime = this.barCount * this.barDuration;
