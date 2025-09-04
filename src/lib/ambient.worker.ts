@@ -54,7 +54,7 @@ const Composer = {
     },
 
     generateBass(barIndex: number, stage: { name: string, complexity: number }): Note[] {
-        const riffPattern = [28, 28, 28, 31]; // E1, E1, E1, G1
+        const riffPattern = [40, 40, 40, 43]; // E2, E2, E2, G2
         const beatDuration = BAR_DURATION / 4;
         let notes: Note[] = [];
 
@@ -66,7 +66,7 @@ const Composer = {
              notes.push({ midi: riffPattern[barIndex % 4] + 12, time: (barIndex % 4) * beatDuration, duration: beatDuration, velocity: 0.5 });
         }
         if (stage.complexity > 0.6) { // Level 3: Arpeggio
-            const arpNotes = [28, 31, 35]; // E1, G1, B1
+            const arpNotes = [40, 43, 47]; // E2, G2, B2
             const step = beatDuration / 3;
             for(let i=0; i<3; i++) {
                 notes.push({ midi: arpNotes[i], time: (barIndex % 4) * beatDuration + i * step, duration: step, velocity: 0.6});
@@ -274,5 +274,7 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
+
+    
 
     
