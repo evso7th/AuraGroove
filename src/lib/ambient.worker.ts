@@ -6,7 +6,7 @@
  * Its purpose is to generate a hypnotic, gradually evolving piece of music.
  * It is completely passive and only composes the next bar when commanded via a 'tick'.
  */
-import type { WorkerSettings, Score, Note, DrumsScore } from '@/types/music';
+import type { WorkerSettings, Score, Note, DrumsScore, ScoreName } from '@/types/music';
 
 const TOTAL_DURATION_SECONDS = 12 * 60; // 12 minutes
 const BPM = 60;
@@ -18,13 +18,13 @@ const TOTAL_BARS = TOTAL_DURATION_SECONDS / BAR_DURATION;
 const KEY_ROOT_MIDI = 40; // E2
 const SCALE_INTERVALS = [0, 2, 3, 5, 7, 8, 10]; // E Natural Minor
 
-const PADS_BY_STAGE: Record<string, string> = {
-    intro: 'livecircle.mp3',
-    development: 'livecircle.mp3',
-    climax: 'livecircle.mp3',
-    density: 'livecircle.mp3',
-    return: 'livecircle.mp3'
+const PADS_BY_STYLE: Record<ScoreName, string> = {
+    dreamtales: 'livecircle.mp3',
+    evolve: 'HousedBass7.ogg',
+    omega: 'Grounding.ogg',
+    promenade: 'Starter.ogg',
 };
+
 
 // --- "Sparkle" (In-krap-le-ni-ye) Logic ---
 let lastSparkleTime = -Infinity;
@@ -77,25 +77,25 @@ const Composer = {
 
     generateMelody(barIndex: number, stage: { name: string, complexity: number }): Note[] {
        const notes: Note[] = [];
-       if (stage.name === 'return' || barIndex % 2 !== 0) return notes; // Play melody every other bar
+        if (stage.name === 'return' || barIndex % 2 !== 0) return notes; // Play melody every other bar
 
-       const notesInBar = 4; // Simpler melody
-       const step = BAR_DURATION / notesInBar;
-       let lastMidi = 60 + SCALE_INTERVALS[barIndex % SCALE_INTERVALS.length]; 
+        const notesInBar = (stage.complexity > 0.5) ? 8 : 4; // More notes in complex stages
+        const step = BAR_DURATION / notesInBar;
+        let lastMidi = 60 + SCALE_INTERVALS[barIndex % SCALE_INTERVALS.length];
 
-       for (let i = 0; i < notesInBar; i++) {
-           if (Math.random() < 0.7) { // Always a high chance to play
+        for (let i = 0; i < notesInBar; i++) {
+            if (Math.random() < 0.8) { // High chance to play
                 const direction = Math.random() < 0.6 ? 1 : -1;
                 const scaleIndex = (lastMidi - KEY_ROOT_MIDI + direction + SCALE_INTERVALS.length) % SCALE_INTERVALS.length;
                 const nextMidi = KEY_ROOT_MIDI + 24 + SCALE_INTERVALS[scaleIndex];
 
-                if (nextMidi < 79) { 
+                if (nextMidi < 79) {
                     lastMidi = nextMidi;
                 }
                 notes.push({ midi: lastMidi, time: i * step, duration: step, velocity: 0.5 });
-           }
-       }
-       return notes;
+            }
+        }
+        return notes;
     },
     
     generateAccompaniment(barIndex: number, stage: { name: string, complexity: number }): Note[] {
@@ -106,8 +106,8 @@ const Composer = {
         const rootMidi = KEY_ROOT_MIDI + 12; // E3
         const arpPattern = [rootMidi, rootMidi + 3, rootMidi + 7]; // E3, G3, B3
 
-        // Play on beats 1 and 3
-        if (barIndex % 2 === 0) { 
+        // Play on beats 1 and 3, more frequently in development
+        if (barIndex % 2 === 0 || stage.complexity > 0.4) { 
             for (let i = 0; i < 3; i++) {
                 notes.push({ 
                     midi: arpPattern[i], 
@@ -146,7 +146,7 @@ const Composer = {
 
 
 // --- Scheduler (The Conductor) ---
-let lastPadStage: string | null = null;
+let lastPadStyle: ScoreName | null = null;
 
 const Scheduler = {
     loopId: null as any,
@@ -179,7 +179,7 @@ const Scheduler = {
         this.isRunning = true;
         this.barCount = 0;
         lastSparkleTime = -Infinity;
-        lastPadStage = null;
+        lastPadStyle = null; // Reset on start
         
         const loop = () => {
             if (!this.isRunning) return;
@@ -233,9 +233,10 @@ const Scheduler = {
         }
         
         if (this.settings.textureSettings.pads.enabled) {
-            if (stage.name !== lastPadStage) {
-                self.postMessage({ type: 'pad', padName: PADS_BY_STAGE[stage.name], time: 0 });
-                lastPadStage = stage.name;
+            const currentStyle = this.settings.score;
+            if (currentStyle !== lastPadStyle) {
+                self.postMessage({ type: 'pad', padName: PADS_BY_STYLE[currentStyle], time: 0 });
+                lastPadStyle = currentStyle;
             }
         }
 
@@ -270,4 +271,5 @@ self.onmessage = async (event: MessageEvent) => {
     
 
     
+
 
