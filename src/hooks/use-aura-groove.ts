@@ -10,7 +10,7 @@ export const useAuraGroove = () => {
   
   const [drumSettings, setDrumSettings] = useState<DrumSettings>({ pattern: 'none', volume: 0.5 });
   const [instrumentSettings, setInstrumentSettings] = useState<InstrumentSettings>({
-    bass: { name: "portamento", volume: 0.7 },
+    bass: { name: "glideBass", volume: 0.7 },
     melody: { name: "synth", volume: 0.6 },
     accompaniment: { name: "organ", volume: 0.5 },
   });
@@ -31,7 +31,6 @@ export const useAuraGroove = () => {
   // Initial settings sync
   useEffect(() => {
     if (isInitialized) {
-        console.log('[UI] Initializing settings for worker');
         updateSettings(getFullSettings());
         
         // Set initial volumes
@@ -39,6 +38,12 @@ export const useAuraGroove = () => {
             setVolume(part as InstrumentPart, settings.volume);
         });
         setVolume('drums', drumSettings.volume);
+        
+        // Set initial instruments
+        setInstrument('bass', instrumentSettings.bass.name);
+        setInstrument('melody', instrumentSettings.melody.name);
+        setInstrument('accompaniment', instrumentSettings.accompaniment.name);
+
     }
   }, [isInitialized]);
 
@@ -51,7 +56,6 @@ export const useAuraGroove = () => {
 
   
   const handleTogglePlay = useCallback(async () => {
-    console.log('[UI] Play button pressed', { currentIsPlaying: isPlaying });
     if (!isInitialized) {
       await initialize();
     }
@@ -63,11 +67,10 @@ export const useAuraGroove = () => {
       ...prev,
       [part]: { ...prev[part], name }
     }));
-    setInstrument(part, name);
+    setInstrument(part as 'bass' | 'melody' | 'accompaniment', name);
   };
 
   const handleVolumeChange = (part: InstrumentPart, value: number) => {
-    console.log(`[UI] Volume slider changed`, { part, volume: value });
     if (part === 'bass' || part === 'melody' || part === 'accompaniment') {
       setInstrumentSettings(prev => ({
         ...prev,

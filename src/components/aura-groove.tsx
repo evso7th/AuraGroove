@@ -147,9 +147,12 @@ export function AuraGroove({
         <div className="space-y-4 rounded-lg border p-4">
            <h3 className="text-lg font-medium text-primary flex items-center gap-2"><SlidersHorizontal className="h-5 w-5" /> Instrument Channels</h3>
             {Object.entries(instrumentSettings).map(([part, settings]) => {
-                const instrumentList: (BassInstrument | MelodyInstrument | AccompanimentInstrument)[] = 
-                    part === 'bass' ? ['portamento', 'none'] :
-                    ['synth', 'organ', 'mellotron', 'theremin', 'none'];
+                let instrumentList: (BassInstrument | MelodyInstrument | AccompanimentInstrument | 'none')[] = [];
+                if (part === 'bass') {
+                    instrumentList = ['classicBass', 'glideBass', 'ambientDrone', 'resonantGliss', 'none'];
+                } else {
+                    instrumentList = ['synth', 'organ', 'mellotron', 'theremin', 'none'];
+                }
 
                 return (
                  <div key={part} className="space-y-3 rounded-md border p-3">
