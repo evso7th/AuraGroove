@@ -126,12 +126,10 @@ const Composer = {
         const drums: DrumsScore = [];
         const step = BAR_DURATION / 16;
         
-        // Simple Kick & Snare pattern
-        if (stage.complexity > 0.1) {
-            for (let i = 0; i < 16; i++) {
-                if (i % 8 === 0) drums.push({ note: 'C4', time: i * step, velocity: 0.8 }); // Kick on 1 and 3
-                if (i % 8 === 4) drums.push({ note: 'D4', time: i * step, velocity: 0.6 }); // Snare on 2 and 4
-            }
+        // Simple Kick & Snare pattern - plays from the start
+        for (let i = 0; i < 16; i++) {
+            if (i % 8 === 0) drums.push({ note: 'C4', time: i * step, velocity: 0.8 }); // Kick on 1 and 3
+            if (i % 8 === 4) drums.push({ note: 'D4', time: i * step, velocity: 0.6 }); // Snare on 2 and 4
         }
 
         // Add hi-hats based on complexity
@@ -271,5 +269,6 @@ self.onmessage = async (event: MessageEvent) => {
     
 
     
+
 
 

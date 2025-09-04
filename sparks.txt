@@ -16,6 +16,7 @@ public/assets/music/pads/Starter.ogg
 public/assets/music/pads/Electricity.ogg
 public/assets/music/pads/SalvingPad.ogg
 public/assets/music/pads/Gulls.ogg
+public/assets/music/pads/livecircle.mp3
 public/assets/music/pads/BirdFX.ogg
 public/assets/music/pads/Confusion.ogg
 public/assets/music/pads/Abstruse.ogg
