@@ -24,7 +24,7 @@ class EvolutionEngine {
                 { midi: 48, duration: 0.5, time: 0 }, // C3
                 { midi: 52, duration: 0.5, time: 0.5 }, // E3
                 { midi: 55, duration: 0.5, time: 1.0 }, // G3
-                { midi: 60, duration: 0.5, time: 1.5 }, // C4
+                { midi: 57, duration: 0.5, time: 1.5 }, // A3 - was C4 (60)
             ]
         ];
         this.currentPhrase = this.anchors[0];
@@ -36,16 +36,19 @@ class EvolutionEngine {
             const newNote = { ...note };
             const mutationType = Math.random();
             const MIN_MIDI = 48; // C3
-            const MAX_MIDI = 71; // B4
+            const MAX_MIDI = 67; // G4 - Keep it from being too piercing
 
             if (mutationType < 0.4) {
                 const direction = Math.random() < 0.5 ? 1 : -1;
                 const potentialMidi = newNote.midi + direction;
                 
-                // Restrict melody to 3rd and 4th octaves (48-71)
                 if (potentialMidi >= MIN_MIDI && potentialMidi <= MAX_MIDI) {
                     newNote.midi = potentialMidi;
+                } else {
+                    // If we hit the boundary, bounce back
+                    newNote.midi = newNote.midi - direction;
                 }
+
             } else if (mutationType < 0.7) {
                 newNote.duration *= (0.5 + Math.random());
             }
@@ -309,5 +312,7 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
+
+    
 
     
