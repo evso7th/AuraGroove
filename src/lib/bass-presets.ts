@@ -72,9 +72,9 @@ export const BASS_PRESETS: Record<string, BassPreset> = {
     wave2: 'triangle',
     attack2: 0.1,
     release2: 2.0,
-    cutoff: 150, // lower cutoff for drone
-    stagger: 0.015, // 15ms
-    color: '#483D8B', // Dark Slate Blue
+    cutoff: 150,
+    stagger: 0.015,
+    color: '#483D8B',
     description: 'Вибрация земли со стерео-движением'
   },
   livingRiff: {
@@ -86,8 +86,8 @@ export const BASS_PRESETS: Record<string, BassPreset> = {
     release2: 1.5,
     distortion: 0.1,
     cutoff: 350,
-    stagger: 0.005, // 5ms
-    color: '#FF4500', // Orange Red
+    stagger: 0.005,
+    color: '#FF4500',
     description: 'Живой, дышащий рифф с характером'
   }
 };

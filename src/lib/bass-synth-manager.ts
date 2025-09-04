@@ -41,7 +41,7 @@ export class BassSynthManager {
         
         this.workletNode.port.postMessage({
             type: 'playNotes',
-            notes: notes.map(n => ({ midi: n.midi, duration: n.duration })),
+            notes: notes.map(n => ({ midi: n.midi, duration: n.duration, velocity: n.velocity })),
             when: time
         });
     }
