@@ -7,7 +7,7 @@
  * Its purpose is to generate a hypnotic, gradually evolving piece of music.
  * It is completely passive and only composes the next bar when commanded via a 'tick'.
  */
-import type { WorkerSettings, Score, Note, DrumsScore, InstrumentPart, TextureSettings } from '@/types/music';
+import type { WorkerSettings, Score, Note, DrumsScore } from '@/types/music';
 
 const TOTAL_DURATION_SECONDS = 12 * 60; // 12 minutes
 const BPM = 60;
@@ -222,33 +222,29 @@ const Scheduler = {
         
         const score: Score = { bass, melody, accompaniment, drums };
 
+        self.postMessage({ type: 'score', score });
+
         const currentTime = this.barCount * this.barDuration;
         
         if (this.settings.textureSettings.sparkles.enabled) {
             // Anchor Chime
-            if (stage.name === 'return' && this.barCount % 8 === 0) { // On every 8th bar of the return stage
-                 score.sparkle = true;
+            if (stage.name === 'return' && this.barCount % 8 === 0) {
+                 self.postMessage({ type: 'sparkle', time: 0.5 });
                  lastSparkleTime = currentTime;
             } 
             // Random sparkles
             else if (shouldAddSparkle(currentTime, this.settings.density)) {
-                 score.sparkle = true;
+                 self.postMessage({ type: 'sparkle', time: 0 });
                  lastSparkleTime = currentTime;
             }
         }
         
         if (this.settings.textureSettings.pads.enabled) {
             if (stage.name !== lastPadStage) {
-                score.pad = PADS_BY_STAGE[stage.name];
+                self.postMessage({ type: 'pad', padName: PADS_BY_STAGE[stage.name], time: 0 });
                 lastPadStage = stage.name;
             }
         }
-
-
-        self.postMessage({
-            type: 'score',
-            score: score
-        });
 
         this.barCount++;
     }

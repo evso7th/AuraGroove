@@ -1,39 +1,34 @@
 
-import * as Tone from 'tone';
 
-const SPARKLE_SAMPLES = {
-    'merimbo': '/assets/music/droplets/merimbo.ogg',
-    'icepad': '/assets/music/droplets/icepad.ogg',
-    'vibes_a': '/assets/music/droplets/vibes_a.ogg',
-    'sweepingbells': '/assets/music/droplets/sweepingbells.ogg',
-    'belldom': '/assets/music/droplets/belldom.ogg',
-};
+const SPARKLE_SAMPLES = [
+    '/assets/music/droplets/merimbo.ogg',
+    '/assets/music/droplets/icepad.ogg',
+    '/assets/music/droplets/vibes_a.ogg',
+    '/assets/music/droplets/sweepingbells.ogg',
+    '/assets/music/droplets/belldom.ogg',
+];
 
 export class SparklePlayer {
     private audioContext: AudioContext;
-    private players: Tone.Players;
-    private outputNode: AudioNode;
+    private gainNode: GainNode;
+    private buffers: AudioBuffer[] = [];
     public isInitialized = false;
-    private sampleKeys: string[];
 
     constructor(audioContext: AudioContext, destination: AudioNode) {
         this.audioContext = audioContext;
-        this.outputNode = destination;
-        this.players = new Tone.Players().connect(this.outputNode);
-        this.sampleKeys = Object.keys(SPARKLE_SAMPLES);
+        this.gainNode = this.audioContext.createGain();
+        this.gainNode.connect(destination);
     }
 
     async init() {
         if (this.isInitialized) return;
         try {
-            await new Promise((resolve, reject) => {
-                this.players.add('merimbo', SPARKLE_SAMPLES.merimbo);
-                this.players.add('icepad', SPARKLE_SAMPLES.icepad);
-                this.players.add('vibes_a', SPARKLE_SAMPLES.vibes_a);
-                this.players.add('sweepingbells', SPARKLE_SAMPLES.sweepingbells);
-                this.players.add('belldom', SPARKLE_SAMPLES.belldom);
-                Tone.loaded().then(resolve).catch(reject);
+            const loadPromises = SPARKLE_SAMPLES.map(async (url) => {
+                const response = await fetch(url);
+                const arrayBuffer = await response.arrayBuffer();
+                return this.audioContext.decodeAudioData(arrayBuffer);
             });
+            this.buffers = await Promise.all(loadPromises);
             this.isInitialized = true;
             console.log('[SparklePlayer] Initialized and samples loaded.');
         } catch (e) {
@@ -42,25 +37,22 @@ export class SparklePlayer {
     }
 
     public playRandomSparkle(time: number) {
-        if (!this.isInitialized || this.sampleKeys.length === 0) return;
+        if (!this.isInitialized || this.buffers.length === 0) return;
         
-        const randomKey = this.sampleKeys[Math.floor(Math.random() * this.sampleKeys.length)];
-        const player = this.players.player(randomKey);
-
-        if (player.loaded) {
-            player.start(time);
-        } else {
-            console.warn(`[SparklePlayer] Sample not loaded: ${randomKey}`);
-        }
+        const buffer = this.buffers[Math.floor(Math.random() * this.buffers.length)];
+        const source = this.audioContext.createBufferSource();
+        source.buffer = buffer;
+        source.connect(this.gainNode);
+        source.start(time);
     }
     
     public setVolume(volume: number) {
-        if (this.outputNode instanceof GainNode) {
-            this.outputNode.gain.setTargetAtTime(volume, this.audioContext.currentTime, 0.01);
-        }
+        this.gainNode.gain.setTargetAtTime(volume, this.audioContext.currentTime, 0.01);
     }
 
     public dispose() {
-        this.players.dispose();
+        this.gainNode.disconnect();
     }
 }
+
+    

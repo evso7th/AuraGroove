@@ -14,11 +14,13 @@ import { getPresetParams } from '@/lib/presets';
 
 // --- Type Definitions ---
 type WorkerMessage = {
-    type: 'score' | 'error' | 'debug';
+    type: 'score' | 'error' | 'debug' | 'sparkle' | 'pad';
     score?: Score;
     error?: string;
     message?: string;
     data?: any;
+    padName?: string;
+    time?: number;
 };
 
 // --- Constants ---
@@ -146,10 +148,17 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         if (!workerRef.current) {
             const worker = new Worker(new URL('../lib/ambient.worker.ts', import.meta.url), { type: 'module' });
             worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
+                const now = audioContextRef.current?.currentTime ?? 0;
+                const scheduleTime = event.data.time ? now + event.data.time : now;
+
                 if (event.data.type === 'score' && event.data.score) {
                     if (audioContextRef.current) {
                         scheduleScore(event.data.score, audioContextRef.current);
                     }
+                } else if (event.data.type === 'sparkle') {
+                     sparklePlayerRef.current?.playRandomSparkle(scheduleTime);
+                } else if (event.data.type === 'pad' && event.data.padName) {
+                     padPlayerRef.current?.setPad(event.data.padName, scheduleTime);
                 } else if (event.data.type === 'error') {
                     toast({ variant: "destructive", title: "Worker Error", description: event.data.error });
                 } else if (event.data.type === 'debug') {
@@ -225,14 +234,6 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         if (currentSettings?.drumSettings.enabled) {
             drumMachineRef.current.schedule(drumScore, now);
         }
-    }
-
-    if (score.sparkle && sparklePlayerRef.current) {
-        sparklePlayerRef.current.playRandomSparkle(now);
-    }
-
-    if (score.pad && padPlayerRef.current) {
-        padPlayerRef.current.setPad(score.pad, now);
     }
   };
 
@@ -358,3 +359,5 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     </AudioEngineContext.Provider>
   );
 };
+
+    

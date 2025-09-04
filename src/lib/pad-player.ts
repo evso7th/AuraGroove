@@ -1,5 +1,4 @@
 
-import * as Tone from 'tone';
 
 const PAD_SAMPLES: Record<string, string> = {
     'Drill.ogg': '/assets/music/pads/Drill.ogg',
@@ -31,90 +30,107 @@ const PAD_SAMPLES: Record<string, string> = {
     'Grounding.ogg': '/assets/music/pads/Grounding.ogg',
 };
 
-
 export class PadPlayer {
     private audioContext: AudioContext;
-    private players: [Tone.Player, Tone.Player];
-    private crossFade: Tone.CrossFade;
-    private activePlayerIndex: number = 0;
-    private outputNode: AudioNode;
+    private gainA: GainNode;
+    private gainB: GainNode;
+    private masterGain: GainNode;
+    private sourceA: AudioBufferSourceNode | null = null;
+    private sourceB: AudioBufferSourceNode | null = null;
+    private buffers: Map<string, AudioBuffer> = new Map();
+    private activeGain: 'A' | 'B' = 'A';
     public isInitialized = false;
 
     constructor(audioContext: AudioContext, destination: AudioNode) {
         this.audioContext = audioContext;
-        this.outputNode = destination;
-        
-        this.players = [
-            new Tone.Player({ loop: true }),
-            new Tone.Player({ loop: true })
-        ];
+        this.masterGain = this.audioContext.createGain();
+        this.masterGain.connect(destination);
 
-        this.crossFade = new Tone.CrossFade(0).connect(this.outputNode);
-        this.players[0].connect(this.crossFade.a);
-        this.players[1].connect(this.crossFade.b);
+        this.gainA = audioContext.createGain();
+        this.gainB = audioContext.createGain();
+        
+        this.gainA.connect(this.masterGain);
+        this.gainB.connect(this.masterGain);
+
+        this.gainA.gain.value = 1;
+        this.gainB.gain.value = 0;
     }
 
     async init() {
         if (this.isInitialized) return;
         try {
-            await Tone.loaded();
-            console.log('[PadPlayer] Initialized successfully.');
+            const loadPromises = Object.entries(PAD_SAMPLES).map(async ([name, url]) => {
+                const buffer = await this.loadBuffer(url);
+                this.buffers.set(name, buffer);
+            });
+            await Promise.all(loadPromises);
             this.isInitialized = true;
+            console.log('[PadPlayer] Initialized and all pads loaded.');
         } catch (e) {
             console.error('[PadPlayer] Failed to initialize:', e);
         }
     }
+
+    private async loadBuffer(url: string): Promise<AudioBuffer> {
+        const response = await fetch(url);
+        const arrayBuffer = await response.arrayBuffer();
+        return this.audioContext.decodeAudioData(arrayBuffer);
+    }
     
-    private async loadAndPlay(player: Tone.Player, padName: string, time: number) {
-        const url = PAD_SAMPLES[padName];
-        if (!url) {
-            console.warn(`[PadPlayer] Pad sample not found: ${padName}`);
-            return;
-        }
-        
-        try {
-            if (player.loaded) {
-                 player.stop(time);
-            }
-            await player.load(url);
-            player.start(time);
-        } catch (error) {
-            console.error(`[PadPlayer] Error loading or playing pad ${padName}:`, error);
-        }
+    private play(buffer: AudioBuffer, gainNode: GainNode): AudioBufferSourceNode {
+        const source = this.audioContext.createBufferSource();
+        source.buffer = buffer;
+        source.loop = true;
+        source.connect(gainNode);
+        source.start(this.audioContext.currentTime);
+        return source;
     }
 
     public setPad(padName: string, time: number) {
         if (!this.isInitialized) return;
 
-        const inactivePlayerIndex = 1 - this.activePlayerIndex;
-        const inactivePlayer = this.players[inactivePlayerIndex];
-        
-        this.loadAndPlay(inactivePlayer, padName, time);
+        const buffer = this.buffers.get(padName);
+        if (!buffer) {
+            console.warn(`[PadPlayer] Pad sample not found: ${padName}`);
+            return;
+        }
 
-        // Schedule the crossfade
-        this.crossFade.fade.linearRampTo(inactivePlayerIndex, 2, time);
+        const fadeDuration = 5; // 5 second crossfade
 
-        this.activePlayerIndex = inactivePlayerIndex;
+        if (this.activeGain === 'A') {
+            // Fade to B
+            this.sourceB?.stop();
+            this.sourceB = this.play(buffer, this.gainB);
+            this.gainA.gain.linearRampToValueAtTime(0, time + fadeDuration);
+            this.gainB.gain.linearRampToValueAtTime(1, time + fadeDuration);
+            this.activeGain = 'B';
+        } else {
+            // Fade to A
+            this.sourceA?.stop();
+            this.sourceA = this.play(buffer, this.gainA);
+            this.gainA.gain.linearRampToValueAtTime(1, time + fadeDuration);
+            this.gainB.gain.linearRampToValueAtTime(0, time + fadeDuration);
+            this.activeGain = 'A';
+        }
     }
     
     public setVolume(volume: number) {
-        if (this.outputNode instanceof GainNode) {
-            this.outputNode.gain.setTargetAtTime(volume, this.audioContext.currentTime, 0.01);
-        }
+        this.masterGain.gain.setTargetAtTime(volume, this.audioContext.currentTime, 0.01);
     }
 
     public stop() {
-        const now = this.audioContext.currentTime;
-        this.players.forEach(p => {
-            if(p.state === 'started'){
-                p.stop(now);
-            }
-        });
+        this.sourceA?.stop();
+        this.sourceB?.stop();
+        this.sourceA = null;
+        this.sourceB = null;
     }
 
     public dispose() {
         this.stop();
-        this.players.forEach(p => p.dispose());
-        this.crossFade.dispose();
+        this.gainA.disconnect();
+        this.gainB.disconnect();
+        this.masterGain.disconnect();
     }
 }
+
+    
