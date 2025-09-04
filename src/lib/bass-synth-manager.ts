@@ -7,6 +7,7 @@ export class BassSynthManager {
     private workletNode: AudioWorkletNode | null = null;
     private outputNode: GainNode;
     public isInitialized = false;
+    private scheduledTimeouts = new Set<NodeJS.Timeout>();
 
     constructor(audioContext: AudioContext, destination: AudioNode) {
         this.audioContext = audioContext;
@@ -35,16 +36,39 @@ export class BassSynthManager {
         }
     }
 
-    public schedule(notes: Note[], time: number) {
+    public schedule(notes: Note[], startTime: number) {
         if (!this.workletNode || !this.isInitialized) {
             console.warn('[BassSynthManager] Tried to schedule before initialized.');
             return;
         }
         
-        this.workletNode.port.postMessage({
-            type: 'playNotes',
-            notes: notes.map(n => ({ midi: n.midi, duration: n.duration, velocity: n.velocity })),
-            when: time
+        notes.forEach(note => {
+            const freq = 440 * Math.pow(2, (note.midi - 69) / 12);
+            if (isNaN(freq)) return;
+
+            const noteOnTime = startTime + note.time;
+            const noteOffTime = noteOnTime + note.duration;
+
+            // Schedule Note On
+            this.workletNode!.port.postMessage({
+                type: 'noteOn',
+                frequency: freq,
+                velocity: note.velocity,
+                when: noteOnTime
+            });
+
+            // Schedule Note Off using main thread's setTimeout, ensuring it's sample-accurate with audioContext.currentTime
+            const delayUntilOff = (noteOffTime - this.audioContext.currentTime) * 1000;
+
+            if (delayUntilOff > 0) {
+                const timeoutId = setTimeout(() => {
+                    if (this.workletNode) {
+                        this.workletNode.port.postMessage({ type: 'noteOff' });
+                    }
+                    this.scheduledTimeouts.delete(timeoutId);
+                }, delayUntilOff);
+                this.scheduledTimeouts.add(timeoutId);
+            }
         });
     }
 
@@ -70,6 +94,11 @@ export class BassSynthManager {
     }
 
     public stop() {
+        // Clear all scheduled note-off events
+        this.scheduledTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
+        this.scheduledTimeouts.clear();
+        
+        // Immediately stop any currently playing note in the worklet
         if (this.workletNode) {
             this.workletNode.port.postMessage({ type: 'noteOff' });
         }

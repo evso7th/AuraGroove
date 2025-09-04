@@ -226,20 +226,6 @@ const Scheduler = {
         }
 
         self.postMessage({
-            type: 'debug',
-            message: `[Worker Tick #${this.barCount}] Generated Score`,
-            data: {
-                bassNotes: score.bass?.length ?? 0,
-                melodyNotes: score.melody?.length ?? 0,
-                accompanimentNotes: score.accompaniment?.length ?? 0,
-                drumNotes: score.drums?.length ?? 0,
-                effectNotes: score.effects?.length ?? 0,
-                stage: stage.name,
-                progress: progress.toFixed(2)
-            }
-        });
-
-        self.postMessage({
             type: 'score',
             score: score
         });

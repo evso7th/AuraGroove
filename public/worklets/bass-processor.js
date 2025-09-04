@@ -1,136 +1,104 @@
 
 // public/worklets/bass-processor.js
 
-class Voice {
-    constructor() {
-        this.isActive = false;
-        this.midi = 0;
-        this.frequency = 0;
-        this.currentFrequency = 0;
-        this.targetGain = 0;
-        this.gain = 0;
-        this.phase = Math.random() * 2 * Math.PI;
-        this.filterState = 0;
-        this.portamentoRate = 0.05;
-        this.attack = 0.01;
-        this.release = 0.5;
-    }
-}
-
-
+/**
+ * A simplified bass synthesizer processor.
+ * It only handles noteOn, noteOff, and preset changes.
+ * All timing and scheduling is handled by the main thread.
+ */
 class BassProcessor extends AudioWorkletProcessor {
-    constructor() {
-        super();
-        this.voices = [new Voice(), new Voice()]; // Two layers for bass
-        this.wave = ['sine', 'sine'];
-        this.cutoff = 800;
-        this.filterQ = 0.7;
-        this.distortion = 0;
-        this.stagger = 0.01; // 10ms default stagger
-        
-        this.sampleRate = sampleRate;
+  constructor() {
+    super();
+    this.phase = 0;
+    this.frequency = 0;
+    this.isActive = false;
 
-        this.port.onmessage = (e) => {
-            const { type, notes, when, ...params } = e.data;
-            if (type === 'setPreset') {
-                this.wave = [params.wave1, params.wave2 || params.wave1];
-                this.cutoff = params.cutoff;
-                this.filterQ = params.filterQ || 0.7;
-                this.distortion = params.distortion || 0;
-                this.stagger = params.stagger || 0.01;
+    // Default ADSR
+    this.attack = 0.01;
+    this.release = 0.1;
+    this.gain = 0;
+    this.targetGain = 0;
+    
+    // Default Filter
+    this.filterState = 0;
+    this.filterCutoff = 20000; // wide open by default
+    this.filterCoeff = 1; // calculated from cutoff
 
-                this.voices[0].attack = params.attack1;
-                this.voices[0].release = params.release1;
-                this.voices[0].portamentoRate = params.portamento1 || 0.05;
-                
-                this.voices[1].attack = params.attack2 || params.attack1;
-                this.voices[1].release = params.release2 || params.release1;
-                this.voices[1].portamentoRate = params.portamento2 || params.portamento1 || 0.05;
-
-            } else if (type === 'playNotes') {
-                const note = notes[0]; // Bass is monophonic
-                if (!note) return;
-
-                const freq = 440 * Math.pow(2, (note.midi - 69) / 12);
-                
-                // Layer 1
-                this.voices[0].frequency = freq;
-                this.voices[0].targetGain = 1.0;
-                this.voices[0].isActive = true;
-
-                // Layer 2 with stagger
-                setTimeout(() => {
-                    this.voices[1].frequency = freq;
-                    this.voices[1].targetGain = 1.0;
-                    this.voices[1].isActive = true;
-                }, this.stagger * 1000);
-
-
-            } else if (type === 'noteOff') {
-                this.voices.forEach(v => v.targetGain = 0);
-            }
-        };
-    }
-
-    generateOsc(phase, waveType) {
-        switch (waveType) {
-            case 'sine': return Math.sin(phase);
-            case 'triangle': return 1 - 4 * Math.abs((phase / (2 * Math.PI)) - 0.5);
-            case 'sawtooth': return 1 - (phase / Math.PI);
-            default: return Math.sin(phase);
+    this.port.onmessage = (e) => {
+        const { type, ...data } = e.data;
+        switch(type) {
+            case 'noteOn':
+                this.frequency = data.frequency;
+                this.targetGain = data.velocity || 0.7;
+                this.isActive = true;
+                break;
+            case 'noteOff':
+                this.targetGain = 0; // Start release phase
+                break;
+            case 'setPreset':
+                this.attack = data.attack1 || 0.01;
+                this.release = data.release1 || 0.1;
+                this.filterCutoff = data.cutoff || 20000;
+                // Add other preset params here if needed
+                break;
+            case 'setMode':
+                 // Future implementation for different techniques
+                break;
         }
-    }
+    };
+  }
 
-    process(inputs, outputs) {
-        const output = outputs[0];
-        const coeff = 1 - Math.exp(-2 * Math.PI * this.cutoff / this.sampleRate);
+  static get parameterDescriptors() {
+    return []; // No custom AudioParams needed for this version
+  }
 
-        for (let channel = 0; channel < output.length; channel++) {
-            for (let i = 0; i < output[channel].length; i++) {
-                let mixed = 0;
+  applyFilter(input) {
+    this.filterState += this.filterCoeff * (input - this.filterState);
+    return this.filterState;
+  }
 
-                for (let v = 0; v < this.voices.length; v++) {
-                    const voice = this.voices[v];
-                    if (!voice.isActive || voice.frequency <= 0) continue;
+  generateOsc() {
+      // Simple sine wave for bass
+      return Math.sin(this.phase);
+  }
 
-                     if (Math.abs(voice.currentFrequency - voice.frequency) > 1) {
-                        voice.currentFrequency += (voice.frequency - voice.currentFrequency) * voice.portamentoRate;
-                    } else {
-                        voice.currentFrequency = voice.frequency;
-                    }
+  process(inputs, outputs, parameters) {
+    const output = outputs[0];
+    
+    this.filterCoeff = 1 - Math.exp(-2 * Math.PI * this.filterCutoff / sampleRate);
 
-                    voice.phase += (voice.currentFrequency / this.sampleRate) * 2 * Math.PI;
-                    if (voice.phase >= 2 * Math.PI) voice.phase -= 2 * Math.PI;
+    for (let channel = 0; channel < output.length; ++channel) {
+      for (let i = 0; i < output[channel].length; ++i) {
+        let sample = 0;
 
-                    let sample = this.generateOsc(voice.phase, this.wave[v]);
-                    
-                    if(this.distortion > 0) {
-                        sample = Math.tanh(sample * (1 + this.distortion * 5));
-                    }
+        if (this.isActive && this.frequency > 0) {
+          this.phase += (this.frequency / sampleRate) * 2 * Math.PI;
+          if (this.phase >= 2 * Math.PI) this.phase -= 2 * Math.PI;
 
-                    voice.filterState += coeff * (sample - voice.filterState);
-                    sample = voice.filterState;
+          sample = this.generateOsc();
+          sample = this.applyFilter(sample);
 
-                    if (voice.gain < voice.targetGain) {
-                        voice.gain += 1 / (voice.attack * this.sampleRate);
-                        if (voice.gain > voice.targetGain) voice.gain = voice.targetGain;
-                    } else if (voice.gain > 0) {
-                        voice.gain -= 1 / (voice.release * this.sampleRate);
-                        if (voice.gain < 0) voice.gain = 0;
-                    }
-                    
-                    if(voice.gain <= 0 && voice.targetGain === 0) {
-                        voice.isActive = false;
-                    }
+          // Simple linear envelope
+          if (this.gain < this.targetGain) {
+            this.gain = Math.min(this.targetGain, this.gain + 1 / (this.attack * sampleRate));
+          } else if (this.gain > this.targetGain) {
+            this.gain = Math.max(this.targetGain, this.gain - 1 / (this.release * sampleRate));
+          }
 
-                    mixed += sample * voice.gain;
-                }
+          if (this.gain <= 0.0001 && this.targetGain === 0) {
+              this.isActive = false;
+              this.gain = 0;
+          }
 
-                output[channel][i] = mixed * 0.25; // Normalize to prevent clipping
-            }
+          sample *= this.gain;
         }
-        return true;
+
+        output[channel][i] = sample;
+      }
     }
+
+    return true; // Keep processor alive
+  }
 }
 
 registerProcessor('bass-processor', BassProcessor);

@@ -138,19 +138,12 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
             if (event.data.type === 'score' && event.data.score) {
                  if (audioContextRef.current) {
-                    console.log('[AudioEngine] Received score from worker:', { 
-                        bass: event.data.score.bass?.length,
-                        melody: event.data.score.melody?.length,
-                        accompaniment: event.data.score.accompaniment?.length,
-                        drums: event.data.score.drums?.length,
-                        effects: event.data.score.effects?.length,
-                    });
                     scheduleScore(event.data.score, audioContextRef.current);
                  }
             } else if (event.data.type === 'error') {
                  toast({ variant: "destructive", title: "Worker Error", description: event.data.error });
             } else if (event.data.type === 'debug') {
-                 console.log(`[Worker DBG] ${event.data.message}`, event.data.data);
+                 // console.log(`[Worker DBG] ${event.data.message}`, event.data.data);
             }
         };
         workerRef.current = worker;
@@ -185,7 +178,6 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     // --- Bass Scheduling (Polyphonic Worklet) ---
     const bassScore = score.bass || [];
     if (bassScore.length > 0 && bassManagerRef.current && currentSettings?.instrumentSettings.bass.name !== 'none') {
-        console.log(`[AudioEngine] Scheduling ${bassScore.length} bass notes.`);
         bassManagerRef.current.schedule(bassScore, now);
     }
     
@@ -200,7 +192,6 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         const effectsGainNode = gainNodesRef.current.effects;
         
         if (instrumentName !== 'none' && gainNode && effectsGainNode) {
-            console.log(`[AudioEngine] Scheduling ${combinedMelody.length} melody/effects notes.`);
             combinedMelody.forEach(note => {
                 const voice = synthPoolRef.current[nextVoiceRef.current % synthPoolRef.current.length];
                 nextVoiceRef.current++;
@@ -230,7 +221,6 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     // --- Accompaniment Scheduling (Polyphonic Worklet) ---
     const accompanimentScore = score.accompaniment || [];
     if (accompanimentScore.length > 0 && accompanimentManagerRef.current && currentSettings?.instrumentSettings.accompaniment.name !== 'none') {
-        console.log(`[AudioEngine] Scheduling ${accompanimentScore.length} accompaniment notes.`);
         accompanimentManagerRef.current.schedule(accompanimentScore, now);
     }
 
@@ -238,7 +228,6 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     const drumScore = score.drums || [];
     if (drumScore.length > 0 && drumMachineRef.current) {
         if (currentSettings?.drumSettings.enabled) {
-            console.log(`[AudioEngine] Scheduling ${drumScore.length} drum notes.`);
             drumMachineRef.current.schedule(drumScore, now);
         }
     }
