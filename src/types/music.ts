@@ -29,8 +29,8 @@ export type Score = {
 
 // --- UI Types ---
 export type BassInstrument = 'portamento' | 'none';
-export type MelodyInstrument = 'synth' | 'none';
-export type AccompanimentInstrument = 'poly_synth' | 'none';
+export type MelodyInstrument = 'synth' | 'organ' | 'mellotron' | 'theremin' | 'none';
+export type AccompanimentInstrument = MelodyInstrument;
 export type InstrumentPart = 'bass' | 'melody' | 'accompaniment' | 'drums' | 'effects';
 
 

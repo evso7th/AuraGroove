@@ -6,13 +6,13 @@ import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings, BassI
 import { useAudioEngine } from "@/contexts/audio-engine-context";
 
 export const useAuraGroove = () => {
-  const { isInitialized, isPlaying, initialize, setIsPlaying: setEngineIsPlaying, updateSettings, setVolume } = useAudioEngine();
+  const { isInitialized, isPlaying, initialize, setIsPlaying: setEngineIsPlaying, updateSettings, setVolume, setInstrument } = useAudioEngine();
   
   const [drumSettings, setDrumSettings] = useState<DrumSettings>({ pattern: 'none', volume: 0.5 });
   const [instrumentSettings, setInstrumentSettings] = useState<InstrumentSettings>({
     bass: { name: "portamento", volume: 0.7 },
     melody: { name: "synth", volume: 0.6 },
-    accompaniment: { name: "poly_synth", volume: 0.5 },
+    accompaniment: { name: "organ", volume: 0.5 },
   });
   const [bpm, setBpm] = useState(75);
   const [score, setScore] = useState<ScoreName>('dreamtales');
@@ -63,6 +63,7 @@ export const useAuraGroove = () => {
       ...prev,
       [part]: { ...prev[part], name }
     }));
+    setInstrument(part, name);
   };
 
   const handleVolumeChange = (part: InstrumentPart, value: number) => {

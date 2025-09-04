@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { WorkerSettings, Score, Note, DrumsScore, InstrumentPart, BassInstrument, MelodyInstrument, AccompanimentInstrument } from '@/types/music';
 import { DrumMachine } from '@/lib/drum-machine';
 import { AccompanimentSynthManager } from '@/lib/accompaniment-synth-manager';
+import { getPresetParams } from '@/lib/presets';
 
 // --- Type Definitions ---
 type WorkerMessage = {
@@ -38,6 +39,7 @@ interface AudioEngineContextType {
   setIsPlaying: (playing: boolean) => void;
   updateSettings: (settings: Partial<WorkerSettings>) => void;
   setVolume: (part: InstrumentPart, volume: number) => void;
+  setInstrument: (part: 'bass' | 'melody' | 'accompaniment', name: BassInstrument | MelodyInstrument | AccompanimentInstrument) => void;
 }
 
 const AudioEngineContext = createContext<AudioEngineContextType | null>(null);
@@ -105,9 +107,11 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         const context = audioContextRef.current;
         const parts: InstrumentPart[] = ['bass', 'melody', 'accompaniment', 'effects', 'drums'];
         parts.forEach(part => {
-            const gainNode = context.createGain();
-            gainNode.connect(context.destination);
-            gainNodesRef.current[part] = gainNode;
+            if (!gainNodesRef.current[part]) {
+                const gainNode = context.createGain();
+                gainNode.connect(context.destination);
+                gainNodesRef.current[part] = gainNode;
+            }
         });
     }
 
@@ -147,7 +151,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     if(audioContextRef.current && synthPoolRef.current.length === 0) {
         try {
             await audioContextRef.current.audioWorklet.addModule('/worklets/synth-processor.js');
-            const numVoices = isMobile() ? 4 : 6; // Reduced pool for bass/melody
+            const numVoices = isMobile() ? 4 : 8;
             console.log(`[AudioEngine] Creating synth pool with ${numVoices} voices`);
             
             for(let i = 0; i < numVoices; i++) {
@@ -168,50 +172,6 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     console.log('[AudioEngine] Initialization complete.');
     return true;
   }, [isInitialized, isInitializing, toast]);
-
-  const getPresetParams = (instrumentName: BassInstrument | MelodyInstrument, note: Note) => {
-    let freq = 0;
-    try {
-        freq = 440 * Math.pow(2, (note.midi - 69) / 12);
-    } catch(e) {
-        console.error("Failed to calculate frequency for note:", note, e);
-        return null;
-    }
-
-    if (isNaN(freq)) {
-        console.error("Calculated frequency is NaN for note:", note);
-        return null;
-    }
-
-    switch (instrumentName) {
-        case 'portamento':
-            return {
-                type: 'noteOn',
-                frequency: freq,
-                velocity: note.velocity || 0.8,
-                attack: 0.1,
-                release: isMobile() ? 2.0 : 4.0,
-                portamento: 0.05,
-                filterCutoff: 1000,
-                oscType: 'triangle'
-            };
-        case 'synth': // For melody
-             return {
-                type: 'noteOn',
-                frequency: freq,
-                velocity: note.velocity || 0.7,
-                attack: 0.02,
-                release: 0.8,
-                portamento: 0,
-                filterCutoff: 4000,
-                q: 1.0,
-                oscType: 'fatsine'
-            };
-        default:
-             return null;
-    }
-  }
-
 
   const scheduleScore = (score: Score, audioContext: AudioContext) => {
     const now = audioContext.currentTime;
@@ -236,7 +196,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
             nextVoiceRef.current++;
 
             if (voice) {
-                 const params = getPresetParams(instrumentName, note);
+                 const params = getPresetParams(instrumentName as MelodyInstrument, note);
                 if (!params) return;
 
                 voice.disconnect();
@@ -307,12 +267,29 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         const balancedVolume = volume * (VOICE_BALANCE[part as keyof typeof VOICE_BALANCE] ?? 1);
         gainNode.gain.setTargetAtTime(balancedVolume, audioContextRef.current?.currentTime ?? 0, 0.01);
         console.log(`[AudioEngine] Volume change`, { part, raw: volume, balanced: balancedVolume });
-    } else if (part === 'accompaniment' && accompanimentManagerRef.current) {
-        const balancedVolume = volume * (VOICE_BALANCE.accompaniment);
-        accompanimentManagerRef.current.setVolume(balancedVolume);
-        console.log(`[AudioEngine] Volume change`, { part, raw: volume, balanced: balancedVolume });
     }
   }, []);
+
+  const setInstrumentCallback = useCallback((part: 'bass' | 'melody' | 'accompaniment', name: BassInstrument | MelodyInstrument | AccompanimentInstrument) => {
+    if (part === 'accompaniment' && accompanimentManagerRef.current) {
+        accompanimentManagerRef.current.setPreset(name as MelodyInstrument);
+    }
+    // For bass/melody, the preset is chosen on-the-fly in scheduleScore,
+    // so we just need to update the settings that the worker uses.
+    if (settingsRef.current) {
+      const newSettings = {
+        ...settingsRef.current,
+        instrumentSettings: {
+          ...settingsRef.current.instrumentSettings,
+          [part]: {
+            ...settingsRef.current.instrumentSettings[part],
+            name,
+          }
+        }
+      };
+      updateSettingsCallback(newSettings);
+    }
+  }, [updateSettingsCallback]);
 
   useEffect(() => {
     return () => {
@@ -331,6 +308,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         setIsPlaying: setIsPlayingCallback,
         updateSettings: updateSettingsCallback,
         setVolume: setVolumeCallback,
+        setInstrument: setInstrumentCallback,
     }}>
       {children}
     </AudioEngineContext.Provider>

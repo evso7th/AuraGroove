@@ -147,6 +147,10 @@ export function AuraGroove({
         <div className="space-y-4 rounded-lg border p-4">
            <h3 className="text-lg font-medium text-primary flex items-center gap-2"><SlidersHorizontal className="h-5 w-5" /> Instrument Channels</h3>
             {Object.entries(instrumentSettings).map(([part, settings]) => {
+                const instrumentList: (BassInstrument | MelodyInstrument | AccompanimentInstrument)[] = 
+                    part === 'bass' ? ['portamento', 'none'] :
+                    ['synth', 'organ', 'mellotron', 'theremin', 'none'];
+
                 return (
                  <div key={part} className="space-y-3 rounded-md border p-3">
                      <div className="flex justify-between items-center">
@@ -162,22 +166,9 @@ export function AuraGroove({
                             <SelectValue placeholder="Select instrument" />
                           </SelectTrigger>
                           <SelectContent>
-                             <SelectItem value="none">None</SelectItem>
-                             {part === 'bass' && (
-                                <>
-                                    <SelectItem value="portamento">Portamento</SelectItem>
-                                </>
-                             )}
-                             {part === 'melody' && (
-                                <>
-                                    <SelectItem value="synth">Synth</SelectItem>
-                                </>
-                             )}
-                             {part === 'accompaniment' && (
-                                <>
-                                    <SelectItem value="poly_synth">Poly Synth</SelectItem>
-                                </>
-                              )}
+                             {instrumentList.map(instrument => (
+                                <SelectItem key={instrument} value={instrument}>{instrument.charAt(0).toUpperCase() + instrument.slice(1)}</SelectItem>
+                             ))}
                           </SelectContent>
                         </Select>
                     </div>

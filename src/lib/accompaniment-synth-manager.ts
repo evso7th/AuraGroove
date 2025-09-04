@@ -1,5 +1,6 @@
 
-import type { Note } from "@/types/music";
+import type { Note, MelodyInstrument } from "@/types/music";
+import { getPresetParams } from "./presets";
 
 export class AccompanimentSynthManager {
     private audioContext: AudioContext;
@@ -20,7 +21,7 @@ export class AccompanimentSynthManager {
             this.workletNode = new AudioWorkletNode(this.audioContext, 'chord-processor');
             this.workletNode.connect(this.gainNode);
             this.isInitialized = true;
-            this.setPreset(); // Set a default preset
+            this.setPreset('organ'); // Set a default preset
             console.log('[AccompanimentManager] Initialized successfully.');
         } catch (e) {
             console.error('[AccompanimentManager] Failed to initialize:', e);
@@ -47,16 +48,23 @@ export class AccompanimentSynthManager {
         });
     }
 
-    public setPreset() {
-        if (!this.workletNode) return;
-        this.workletNode.port.postMessage({
-            type: 'setPreset',
-            wave: 'triangle',
-            cutoff: 800,
-            attack: 0.1,
-            release: 2.5,
-            portamento: 0
-        });
+    public setPreset(instrumentName: MelodyInstrument) {
+        if (!this.workletNode || instrumentName === 'none') return;
+        // We use a placeholder note because getPresetParams needs one, but the chord processor
+        // only cares about the preset parameters, not the note-specific ones.
+        const placeholderNote: Note = { midi: 60, time: 0, duration: 1 };
+        const params = getPresetParams(instrumentName, placeholderNote);
+        
+        if (params) {
+             this.workletNode.port.postMessage({
+                type: 'setPreset',
+                wave: params.oscType,
+                cutoff: params.filterCutoff,
+                attack: params.attack,
+                release: params.release,
+                portamento: params.portamento,
+             });
+        }
     }
 
     public stop() {
