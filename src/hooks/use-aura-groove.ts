@@ -100,13 +100,19 @@ export const useAuraGroove = () => {
     setVolume('drums', newSettings.volume);
   };
 
-  const handleGoHome = () => {
-    router.push('/');
-  };
-
   const handleExit = () => {
     setEngineIsPlaying(false);
-    router.push('/');
+    // Use a small timeout to ensure the engine has a moment to process the stop command
+    // before the page reloads.
+    setTimeout(() => {
+        router.push('/');
+        // A full reload ensures all states and audio contexts are cleared.
+        window.location.reload();
+    }, 50); 
+  };
+
+  const handleGoHome = () => {
+    handleExit();
   };
 
 
