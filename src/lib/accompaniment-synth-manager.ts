@@ -33,6 +33,7 @@ export class AccompanimentSynthManager {
     }
 
     public schedule(notes: Note[], time: number) {
+        console.log('[AccompanimentManager] Scheduling notes:', notes);
         if (!this.workletNode || !this.isInitialized) {
             console.warn('[AccompanimentManager] Tried to schedule before initialized.');
             return;

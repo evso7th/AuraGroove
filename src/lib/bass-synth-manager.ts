@@ -37,6 +37,7 @@ export class BassSynthManager {
     }
 
     public schedule(notes: Note[], startTime: number) {
+        console.log('[BassSynthManager] Scheduling notes:', notes);
         if (!this.workletNode || !this.isInitialized) {
             console.warn('[BassSynthManager] Tried to schedule before initialized.');
             return;

@@ -77,6 +77,7 @@ export class DrumMachine {
     }
 
     schedule(score: SamplerNote[], time: number) {
+        console.log('[DrumMachine] Scheduling score:', score);
         if (!this.sampler || !this.isInitialized) {
             console.warn('[DrumMachine] Tried to schedule score before initialization.');
             return;

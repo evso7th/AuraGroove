@@ -222,6 +222,7 @@ const Scheduler = {
         
         const score: Score = { bass, melody, accompaniment, drums };
 
+        console.log('Worker sending score:', score);
         self.postMessage({ type: 'score', score });
 
         const currentTime = this.barCount * this.barDuration;
