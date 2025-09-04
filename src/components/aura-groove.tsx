@@ -1,14 +1,16 @@
 
+
 "use client";
 
-import { Loader2, Music, Pause, Speaker, FileMusic, Drum, SlidersHorizontal, Waves, GitBranch, Atom, Piano, Home, X } from "lucide-react";
+import { Loader2, Music, Pause, Speaker, FileMusic, Drum, SlidersHorizontal, Waves, GitBranch, Atom, Piano, Home, X, Sparkles, Sprout } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import Image from 'next/image';
 import { Slider } from "@/components/ui/slider";
-import type { DrumSettings, InstrumentSettings, ScoreName, EffectsSettings, BassInstrument, InstrumentPart, MelodyInstrument, AccompanimentInstrument, BassTechnique } from '@/types/music';
+import { Switch } from "@/components/ui/switch";
+import type { DrumSettings, InstrumentSettings, ScoreName, BassInstrument, InstrumentPart, MelodyInstrument, AccompanimentInstrument, BassTechnique, TextureSettings } from '@/types/music';
 
 // This is now a "dumb" UI component controlled by the useAuraGroove hook.
 export type AuraGrooveProps = {
@@ -21,8 +23,8 @@ export type AuraGrooveProps = {
   setInstrumentSettings: (part: keyof InstrumentSettings, name: BassInstrument | MelodyInstrument | AccompanimentInstrument) => void;
   handleBassTechniqueChange: (technique: BassTechnique) => void;
   handleVolumeChange: (part: InstrumentPart, value: number) => void;
-  effectsSettings: EffectsSettings;
-  handleToggleEffects: () => void;
+  textureSettings: TextureSettings;
+  handleTextureEnabledChange: (part: 'sparkles' | 'pads', enabled: boolean) => void;
   bpm: number;
   handleBpmChange: (value: number) => void;
   score: ScoreName;
@@ -44,8 +46,8 @@ export function AuraGroove({
   setInstrumentSettings,
   handleBassTechniqueChange,
   handleVolumeChange,
-  effectsSettings,
-  handleToggleEffects,
+  textureSettings,
+  handleTextureEnabledChange,
   bpm,
   handleBpmChange,
   score,
@@ -229,6 +231,64 @@ export function AuraGroove({
             })}
         </div>
 
+        <div className="space-y-4 rounded-lg border p-4">
+          <h3 className="text-lg font-medium text-primary flex items-center gap-2"><Sprout className="h-5 w-5" /> Textures</h3>
+          
+          <div className="space-y-3 rounded-md border p-3">
+              <div className="flex justify-between items-center">
+                  <Label htmlFor="sparkles-switch" className="font-semibold flex items-center gap-2">
+                      <Sparkles className="h-5 w-5" /> Sparkles
+                  </Label>
+                  <Switch
+                      id="sparkles-switch"
+                      checked={textureSettings.sparkles.enabled}
+                      onCheckedChange={(checked) => handleTextureEnabledChange('sparkles', checked)}
+                      disabled={isInitializing}
+                  />
+              </div>
+              <div className="space-y-2 pt-2">
+                  <div className="flex items-center justify-between">
+                      <Label className="text-xs text-muted-foreground flex items-center gap-1.5"><Speaker className="h-4 w-4"/> Volume</Label>
+                      <span className="text-xs font-mono text-muted-foreground">{Math.round(textureSettings.sparkles.volume * 100)}</span>
+                  </div>
+                  <Slider 
+                      value={[textureSettings.sparkles.volume]} 
+                      max={1} 
+                      step={0.05} 
+                      onValueChange={(v) => handleVolumeChange('sparkles', v[0])}
+                      disabled={isInitializing || !textureSettings.sparkles.enabled}
+                  />
+              </div>
+          </div>
+          
+          <div className="space-y-3 rounded-md border p-3">
+              <div className="flex justify-between items-center">
+                  <Label htmlFor="pads-switch" className="font-semibold flex items-center gap-2">
+                      <Waves className="h-5 w-5" /> Pads
+                  </Label>
+                  <Switch
+                      id="pads-switch"
+                      checked={textureSettings.pads.enabled}
+                      onCheckedChange={(checked) => handleTextureEnabledChange('pads', checked)}
+                      disabled={isInitializing}
+                  />
+              </div>
+              <div className="space-y-2 pt-2">
+                  <div className="flex items-center justify-between">
+                      <Label className="text-xs text-muted-foreground flex items-center gap-1.5"><Speaker className="h-4 w-4"/> Volume</Label>
+                      <span className="text-xs font-mono text-muted-foreground">{Math.round(textureSettings.pads.volume * 100)}</span>
+                  </div>
+                  <Slider 
+                      value={[textureSettings.pads.volume]} 
+                      max={1} 
+                      step={0.05} 
+                      onValueChange={(v) => handleVolumeChange('pads', v[0])}
+                      disabled={isInitializing || !textureSettings.pads.enabled}
+                  />
+              </div>
+          </div>
+        </div>
+
         <div className="space-y-3 rounded-lg border p-4">
             <h3 className="text-lg font-medium text-primary flex items-center gap-2"><Drum className="h-5 w-5" /> Drums</h3>
              <div className="space-y-3 rounded-md border p-3">
@@ -256,15 +316,6 @@ export function AuraGroove({
                      </div>
                      <Slider value={[drumSettings.volume]} max={1} step={0.05} onValueChange={(v) => setDrumSettings(d => ({...d, volume: v[0]}))} disabled={isInitializing || drumSettings.pattern === 'none'} />
                 </div>
-             </div>
-        </div>
-         
-        <div className="space-y-3 rounded-lg border p-4">
-            <h3 className="text-lg font-medium text-primary flex items-center gap-2"><Waves className="h-5 w-5" /> Effects</h3>
-             <div className="space-y-3 rounded-md border p-3">
-                <Button onClick={handleToggleEffects} variant="outline" className="w-full">
-                    {effectsSettings.enabled ? 'Disable Effects' : 'Enable Effects'}
-                </Button>
              </div>
         </div>
 

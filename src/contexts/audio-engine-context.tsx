@@ -1,12 +1,15 @@
 
+
 'use client';
 
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import type { WorkerSettings, Score, Note, DrumsScore, InstrumentPart, BassInstrument, MelodyInstrument, AccompanimentInstrument, BassTechnique } from '@/types/music';
+import type { WorkerSettings, Score, Note, DrumsScore, InstrumentPart, BassInstrument, MelodyInstrument, AccompanimentInstrument, BassTechnique, TextureSettings } from '@/types/music';
 import { DrumMachine } from '@/lib/drum-machine';
 import { AccompanimentSynthManager } from '@/lib/accompaniment-synth-manager';
 import { BassSynthManager } from '@/lib/bass-synth-manager';
+import { SparklePlayer } from '@/lib/sparkle-player';
+import { PadPlayer } from '@/lib/pad-player';
 import { getPresetParams } from '@/lib/presets';
 
 // --- Type Definitions ---
@@ -25,6 +28,8 @@ const VOICE_BALANCE = {
   accompaniment: 0.6,
   drums: 0.8,
   effects: 0.6,
+  sparkles: 0.7,
+  pads: 0.9,
 };
 
 const isMobile = () => {
@@ -42,6 +47,7 @@ interface AudioEngineContextType {
   setVolume: (part: InstrumentPart, volume: number) => void;
   setInstrument: (part: 'bass' | 'melody' | 'accompaniment', name: BassInstrument | MelodyInstrument | AccompanimentInstrument) => void;
   setBassTechnique: (technique: BassTechnique) => void;
+  setTextureSettings: (settings: TextureSettings) => void;
 }
 
 const AudioEngineContext = createContext<AudioEngineContextType | null>(null);
@@ -65,9 +71,12 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   const synthPoolRef = useRef<AudioWorkletNode[]>([]);
   const nextVoiceRef = useRef(0);
   const settingsRef = useRef<WorkerSettings | null>(null);
+  
   const drumMachineRef = useRef<DrumMachine | null>(null);
   const accompanimentManagerRef = useRef<AccompanimentSynthManager | null>(null);
   const bassManagerRef = useRef<BassSynthManager | null>(null);
+  const sparklePlayerRef = useRef<SparklePlayer | null>(null);
+  const padPlayerRef = useRef<PadPlayer | null>(null);
 
   const gainNodesRef = useRef<Record<InstrumentPart, GainNode | null>>({
     bass: null,
@@ -75,6 +84,8 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     accompaniment: null,
     drums: null,
     effects: null,
+    sparkles: null,
+    pads: null,
   });
   
   const { toast } = useToast();
@@ -104,7 +115,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     
     if (audioContextRef.current && !gainNodesRef.current.bass) {
         const context = audioContextRef.current;
-        const parts: InstrumentPart[] = ['bass', 'melody', 'accompaniment', 'effects', 'drums'];
+        const parts: InstrumentPart[] = ['bass', 'melody', 'accompaniment', 'effects', 'drums', 'sparkles', 'pads'];
         parts.forEach(part => {
             if (!gainNodesRef.current[part]) {
                 const gainNode = context.createGain();
@@ -115,21 +126,28 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     }
 
     if (!drumMachineRef.current && audioContextRef.current) {
-        const drumGainNode = gainNodesRef.current.drums!;
-        drumMachineRef.current = new DrumMachine(audioContextRef.current, drumGainNode);
+        drumMachineRef.current = new DrumMachine(audioContextRef.current, gainNodesRef.current.drums!);
         await drumMachineRef.current.init();
     }
     
     if (!accompanimentManagerRef.current && audioContextRef.current) {
-        const accompGainNode = gainNodesRef.current.accompaniment!;
-        accompanimentManagerRef.current = new AccompanimentSynthManager(audioContextRef.current, accompGainNode);
+        accompanimentManagerRef.current = new AccompanimentSynthManager(audioContextRef.current, gainNodesRef.current.accompaniment!);
         await accompanimentManagerRef.current.init();
     }
     
     if (!bassManagerRef.current && audioContextRef.current) {
-        const bassGainNode = gainNodesRef.current.bass!;
-        bassManagerRef.current = new BassSynthManager(audioContextRef.current, bassGainNode);
+        bassManagerRef.current = new BassSynthManager(audioContextRef.current, gainNodesRef.current.bass!);
         await bassManagerRef.current.init();
+    }
+
+    if (!sparklePlayerRef.current && audioContextRef.current) {
+        sparklePlayerRef.current = new SparklePlayer(audioContextRef.current, gainNodesRef.current.sparkles!);
+        await sparklePlayerRef.current.init();
+    }
+    
+    if (!padPlayerRef.current && audioContextRef.current) {
+        padPlayerRef.current = new PadPlayer(audioContextRef.current, gainNodesRef.current.pads!);
+        await padPlayerRef.current.init();
     }
 
 
@@ -151,7 +169,6 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     
     if(audioContextRef.current && synthPoolRef.current.length === 0) {
         try {
-            // This pool is now only for the monophonic melody line
             await audioContextRef.current.audioWorklet.addModule('/worklets/synth-processor.js');
             const numVoices = isMobile() ? 4 : 8;
             for(let i = 0; i < numVoices; i++) {
@@ -175,41 +192,28 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     const now = audioContext.currentTime;
     const currentSettings = settingsRef.current;
     
-    // --- Bass Scheduling (Polyphonic Worklet) ---
     const bassScore = score.bass || [];
     if (bassScore.length > 0 && bassManagerRef.current && currentSettings?.instrumentSettings.bass.name !== 'none') {
         bassManagerRef.current.schedule(bassScore, now);
     }
     
-    // --- Melody Scheduling (Monophonic Pool) ---
     const melodyScore = score.melody || [];
-    const effectsScore = score.effects || [];
-    const combinedMelody = [...melodyScore, ...effectsScore];
-
-    if (combinedMelody.length > 0) {
+    if (melodyScore.length > 0) {
         const instrumentName = currentSettings?.instrumentSettings.melody.name;
         const gainNode = gainNodesRef.current.melody;
-        const effectsGainNode = gainNodesRef.current.effects;
-        
-        if (instrumentName !== 'none' && gainNode && effectsGainNode) {
-            combinedMelody.forEach(note => {
+        if (instrumentName !== 'none' && gainNode) {
+            melodyScore.forEach(note => {
                 const voice = synthPoolRef.current[nextVoiceRef.current % synthPoolRef.current.length];
                 nextVoiceRef.current++;
-
                 if (voice) {
-                    const isEffect = 'part' in note && note.part === 'spark';
-                    const params = getPresetParams(isEffect ? 'theremin' : (instrumentName as MelodyInstrument), note);
+                    const params = getPresetParams(instrumentName as MelodyInstrument, note);
                     if (!params) return;
-
                     voice.disconnect();
-                    voice.connect(isEffect ? effectsGainNode : gainNode);
-
+                    voice.connect(gainNode);
                     const noteOnTime = now + note.time;
                     voice.port.postMessage({ ...params, when: noteOnTime });
-
                     const noteOffTime = noteOnTime + note.duration;
                     const delayUntilOff = (noteOffTime - audioContext.currentTime);
-                    
                     setTimeout(() => {
                         voice.port.postMessage({ type: 'noteOff', release: params.release });
                     }, delayUntilOff > 0 ? delayUntilOff * 1000 : 0);
@@ -218,18 +222,24 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         }
     }
     
-    // --- Accompaniment Scheduling (Polyphonic Worklet) ---
     const accompanimentScore = score.accompaniment || [];
     if (accompanimentScore.length > 0 && accompanimentManagerRef.current && currentSettings?.instrumentSettings.accompaniment.name !== 'none') {
         accompanimentManagerRef.current.schedule(accompanimentScore, now);
     }
 
-    // --- Drum Scheduling ---
     const drumScore = score.drums || [];
     if (drumScore.length > 0 && drumMachineRef.current) {
         if (currentSettings?.drumSettings.enabled) {
             drumMachineRef.current.schedule(drumScore, now);
         }
+    }
+
+    if (score.sparkle && sparklePlayerRef.current) {
+        sparklePlayerRef.current.playRandomSparkle(now);
+    }
+
+    if (score.pad && padPlayerRef.current) {
+        padPlayerRef.current.setPad(score.pad, now);
     }
   };
 
@@ -247,6 +257,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     if (!playing) {
         accompanimentManagerRef.current?.stop();
         bassManagerRef.current?.stop();
+        padPlayerRef.current?.stop();
     }
 
   }, [isInitialized]);
@@ -308,11 +319,28 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     }
   }, [updateSettingsCallback]);
 
+  const setTextureSettingsCallback = useCallback((settings: TextureSettings) => {
+    setVolumeCallback('sparkles', settings.sparkles.volume);
+    setVolumeCallback('pads', settings.pads.volume);
+    
+    if (settingsRef.current) {
+        const newSettings = {
+            ...settingsRef.current,
+            textureSettings: {
+                sparkles: { enabled: settings.sparkles.enabled },
+                pads: { enabled: settings.pads.enabled },
+            }
+        };
+        updateSettingsCallback(newSettings);
+    }
+  }, [updateSettingsCallback, setVolumeCallback]);
+
   useEffect(() => {
     return () => {
         workerRef.current?.terminate();
         accompanimentManagerRef.current?.dispose();
         bassManagerRef.current?.dispose();
+        padPlayerRef.current?.dispose();
         audioContextRef.current?.close();
     };
   }, []);
@@ -327,6 +355,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         setVolume: setVolumeCallback,
         setInstrument: setInstrumentCallback,
         setBassTechnique: setBassTechniqueCallback,
+        setTextureSettings: setTextureSettingsCallback,
     }}>
       {children}
     </AudioEngineContext.Provider>

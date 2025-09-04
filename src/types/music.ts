@@ -1,10 +1,12 @@
 
+
 // A musical note to be played by a synthesizer.
 export type Note = {
     midi: number;         // MIDI note number (e.g., 60 for C4).
     time: number;         // When to play it, in seconds, relative to the start of the audio chunk.
     duration: number;     // How long the note should last, in seconds.
     velocity?: number;    // How loud to play it (0-1), optional.
+    part?: 'spark';       // Optional identifier for special notes
 };
 
 // A note for the sampler, identified by a string name.
@@ -24,13 +26,15 @@ export type Score = {
     accompaniment?: Note[];
     drums?: DrumsScore;
     effects?: EffectsScore;
+    sparkle?: boolean; // Command to play a sparkle
+    pad?: string; // Command to change pad
 };
 
 // --- UI Types ---
 export type BassInstrument = 'classicBass' | 'glideBass' | 'ambientDrone' | 'resonantGliss' | 'hypnoticDrone' | 'livingRiff' | 'none';
 export type MelodyInstrument = 'synth' | 'organ' | 'mellotron' | 'theremin' | 'none';
 export type AccompanimentInstrument = MelodyInstrument;
-export type InstrumentPart = 'bass' | 'melody' | 'accompaniment' | 'drums' | 'effects';
+export type InstrumentPart = 'bass' | 'melody' | 'accompaniment' | 'drums' | 'effects' | 'sparkles' | 'pads';
 export type BassTechnique = 'arpeggio' | 'portamento' | 'glissando' | 'glide';
 
 
@@ -59,6 +63,17 @@ export type EffectsSettings = {
     enabled: boolean;
 };
 
+export type TextureSettings = {
+    sparkles: {
+        enabled: boolean;
+        volume: number;
+    };
+    pads: {
+        enabled: boolean;
+        volume: number;
+    };
+};
+
 export type ScoreName = 'evolve' | 'omega' | 'promenade' | 'dreamtales';
 
 // Settings sent from the UI to the main engine/worker.
@@ -67,5 +82,6 @@ export type WorkerSettings = {
     score: ScoreName;
     drumSettings: Omit<DrumSettings, 'volume'> & { enabled: boolean };
     instrumentSettings: InstrumentSettings;
+    textureSettings: Omit<TextureSettings, 'volume'>;
     density: number; // Controls musical density, 0 to 1
 };

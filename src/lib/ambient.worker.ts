@@ -1,4 +1,5 @@
 
+
 /**
  * @file AuraGroove Music Worker (Architecture: "The Trance Architect")
  *
@@ -6,7 +7,7 @@
  * Its purpose is to generate a hypnotic, gradually evolving piece of music.
  * It is completely passive and only composes the next bar when commanded via a 'tick'.
  */
-import type { WorkerSettings, Score, Note, DrumsScore, InstrumentPart } from '@/types/music';
+import type { WorkerSettings, Score, Note, DrumsScore, InstrumentPart, TextureSettings } from '@/types/music';
 
 const TOTAL_DURATION_SECONDS = 12 * 60; // 12 minutes
 const BPM = 60;
@@ -18,43 +19,29 @@ const TOTAL_BARS = TOTAL_DURATION_SECONDS / BAR_DURATION;
 const KEY_ROOT_MIDI = 40; // E2
 const SCALE_INTERVALS = [0, 2, 3, 5, 7, 8, 10]; // E Natural Minor
 
+const PADS_BY_STAGE: Record<string, string> = {
+    intro: 'MelancholicPad.ogg',
+    development: 'BladeWalker.ogg',
+    climax: 'Fearsome.ogg',
+    density: 'Abstruse.ogg',
+    return: 'SalvingPad.ogg'
+};
+
 // --- "Sparkle" (In-krap-le-ni-ye) Logic ---
 let lastSparkleTime = -Infinity;
 
 function shouldAddSparkle(currentTime: number, density: number): boolean {
     const timeSinceLast = currentTime - lastSparkleTime;
-    const minTime = 60;       // 1 minute
-    const maxTime = 3 * 60;   // 3 minutes
+    const minTime = 45; 
+    const maxTime = 2 * 60; 
 
     if (timeSinceLast < minTime) return false;
-    if (density > 0.3) return false; // Only when quiet
+    if (density > 0.4) return false; // Only when quiet
 
     // Chance increases over time
     const chance = (timeSinceLast - minTime) / (maxTime - minTime);
     return Math.random() < chance;
 }
-
-function createSparkleScore(): Note[] {
-    const notes: Note[] = [];
-    let currentTime = 0;
-    const duration = 3 + Math.random() * 5; // 3-8 seconds
-    // G3 to C4
-    const midiRange = [55, 57, 59, 60]; 
-
-    while (currentTime < duration) {
-        const midi = midiRange[Math.floor(Math.random() * midiRange.length)];
-        const velocity = 0.3 + Math.random() * 0.2; // 0.3-0.5
-        const noteDuration = 0.5 + Math.random() * 1.5;
-        const gap = 0.5 + Math.random();
-
-        if (currentTime + noteDuration <= duration) {
-            notes.push({ midi, time: currentTime, duration: noteDuration, velocity, part: 'spark' });
-        }
-        currentTime += noteDuration + gap;
-    }
-    return notes;
-}
-
 
 // --- Main Composition Engine ---
 const Composer = {
@@ -166,6 +153,8 @@ const Composer = {
 
 
 // --- Scheduler (The Conductor) ---
+let lastPadStage: string | null = null;
+
 const Scheduler = {
     loopId: null as any,
     isRunning: false,
@@ -173,12 +162,16 @@ const Scheduler = {
     
     settings: {
         bpm: 60,
-        score: 'dreamtales', // This setting is now conceptual, as we follow the 12-min score
+        score: 'dreamtales', 
         drumSettings: { pattern: 'none', enabled: false },
         instrumentSettings: { 
             bass: { name: "glideBass", volume: 0.5, technique: 'arpeggio' },
             melody: { name: "synth", volume: 0.5 },
             accompaniment: { name: "synth", volume: 0.5 },
+        },
+        textureSettings: {
+            sparkles: { enabled: true },
+            pads: { enabled: true }
         },
         density: 0.5,
     } as WorkerSettings,
@@ -193,6 +186,7 @@ const Scheduler = {
         this.isRunning = true;
         this.barCount = 0;
         lastSparkleTime = -Infinity;
+        lastPadStage = null;
         
         const loop = () => {
             if (!this.isRunning) return;
@@ -226,13 +220,30 @@ const Scheduler = {
         const accompaniment = Composer.generateAccompaniment(this.barCount, stage);
         const drums = Composer.generateDrums(this.barCount, stage);
         
-        const score: Score = { bass, melody, accompaniment, drums, effects: [] };
+        const score: Score = { bass, melody, accompaniment, drums };
 
         const currentTime = this.barCount * this.barDuration;
-        if (shouldAddSparkle(currentTime, this.settings.density)) {
-             score.effects?.push(...createSparkleScore());
-             lastSparkleTime = currentTime;
+        
+        if (this.settings.textureSettings.sparkles.enabled) {
+            // Anchor Chime
+            if (stage.name === 'return' && this.barCount % 8 === 0) { // On every 8th bar of the return stage
+                 score.sparkle = true;
+                 lastSparkleTime = currentTime;
+            } 
+            // Random sparkles
+            else if (shouldAddSparkle(currentTime, this.settings.density)) {
+                 score.sparkle = true;
+                 lastSparkleTime = currentTime;
+            }
         }
+        
+        if (this.settings.textureSettings.pads.enabled) {
+            if (stage.name !== lastPadStage) {
+                score.pad = PADS_BY_STAGE[stage.name];
+                lastPadStage = stage.name;
+            }
+        }
+
 
         self.postMessage({
             type: 'score',

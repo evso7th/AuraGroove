@@ -1,13 +1,25 @@
 
+
 'use client';
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings, BassInstrument, InstrumentPart, MelodyInstrument, AccompanimentInstrument, BassTechnique } from '@/types/music';
+import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings, BassInstrument, InstrumentPart, MelodyInstrument, AccompanimentInstrument, BassTechnique, TextureSettings } from '@/types/music';
 import { useAudioEngine } from "@/contexts/audio-engine-context";
 
 export const useAuraGroove = () => {
-  const { isInitialized, isPlaying, initialize, setIsPlaying: setEngineIsPlaying, updateSettings, setVolume, setInstrument, setBassTechnique } = useAudioEngine();
+  const { 
+    isInitialized, 
+    isPlaying, 
+    initialize, 
+    setIsPlaying: setEngineIsPlaying, 
+    updateSettings, 
+    setVolume, 
+    setInstrument, 
+    setBassTechnique,
+    setTextureSettings: setEngineTextureSettings
+  } = useAudioEngine();
+  
   const router = useRouter();
   
   const [drumSettings, setDrumSettings] = useState<DrumSettings>({ pattern: 'composer', volume: 0.5 });
@@ -15,6 +27,10 @@ export const useAuraGroove = () => {
     bass: { name: "glideBass", volume: 0.7, technique: 'arpeggio' },
     melody: { name: "synth", volume: 0.6 },
     accompaniment: { name: "synth", volume: 0.5 },
+  });
+  const [textureSettings, setTextureSettings] = useState<TextureSettings>({
+      sparkles: { enabled: true, volume: 0.6 },
+      pads: { enabled: true, volume: 0.8 },
   });
   const [bpm, setBpm] = useState(75);
   const [score, setScore] = useState<ScoreName>('dreamtales');
@@ -26,9 +42,13 @@ export const useAuraGroove = () => {
       score,
       instrumentSettings,
       drumSettings: { ...drumSettings, enabled: drumSettings.pattern !== 'none' },
+      textureSettings: {
+          sparkles: { enabled: textureSettings.sparkles.enabled },
+          pads: { enabled: textureSettings.pads.enabled },
+      },
       density,
     };
-  }, [bpm, score, instrumentSettings, drumSettings, density]);
+  }, [bpm, score, instrumentSettings, drumSettings, textureSettings, density]);
 
   // Initial settings sync
   useEffect(() => {
@@ -40,13 +60,13 @@ export const useAuraGroove = () => {
             setVolume(part as InstrumentPart, settings.volume);
         });
         setVolume('drums', drumSettings.volume);
+        setEngineTextureSettings(textureSettings);
         
         // Set initial instruments
         setInstrument('bass', instrumentSettings.bass.name);
         setInstrument('melody', instrumentSettings.melody.name);
         setInstrument('accompaniment', instrumentSettings.accompaniment.name);
         
-        // Set initial bass technique
         setBassTechnique(instrumentSettings.bass.technique);
     }
   }, [isInitialized]);
@@ -56,7 +76,7 @@ export const useAuraGroove = () => {
       if (isInitialized) {
           updateSettings(getFullSettings());
       }
-  }, [bpm, score, density, drumSettings, instrumentSettings, isInitialized, updateSettings, getFullSettings]);
+  }, [bpm, score, density, drumSettings, instrumentSettings, textureSettings, isInitialized, updateSettings, getFullSettings]);
 
   
   const handleTogglePlay = useCallback(async () => {
@@ -84,14 +104,21 @@ export const useAuraGroove = () => {
 
   const handleVolumeChange = (part: InstrumentPart, value: number) => {
     if (part === 'bass' || part === 'melody' || part === 'accompaniment') {
-      setInstrumentSettings(prev => ({
-        ...prev,
-        [part]: { ...prev[part], volume: value }
-      }));
+      setInstrumentSettings(prev => ({ ...prev, [part]: { ...prev[part], volume: value }}));
     } else if (part === 'drums') {
         setDrumSettings(prev => ({ ...prev, volume: value }));
+    } else if (part === 'sparkles' || part === 'pads') {
+        setTextureSettings(prev => ({ ...prev, [part]: { ...prev[part], volume: value }}));
     }
     setVolume(part, value);
+  };
+
+  const handleTextureEnabledChange = (part: 'sparkles' | 'pads', enabled: boolean) => {
+      setTextureSettings(prev => {
+          const newSettings = { ...prev, [part]: { ...prev[part], enabled }};
+          setEngineTextureSettings(newSettings);
+          return newSettings;
+      });
   };
 
   const handleDrumSettingsChange = (settings: React.SetStateAction<DrumSettings>) => {
@@ -102,7 +129,6 @@ export const useAuraGroove = () => {
 
   const handleExit = () => {
     setEngineIsPlaying(false);
-    // Directly setting the href is the most reliable way to navigate and force a full page reload.
     window.location.href = '/';
   };
 
@@ -122,8 +148,8 @@ export const useAuraGroove = () => {
     setInstrumentSettings: handleInstrumentChange,
     handleBassTechniqueChange,
     handleVolumeChange,
-    effectsSettings: { enabled: false }, // Placeholder
-    handleToggleEffects: () => {}, // Placeholder
+    textureSettings,
+    handleTextureEnabledChange,
     bpm,
     handleBpmChange: setBpm,
     score,
