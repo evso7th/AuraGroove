@@ -95,97 +95,90 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     
     setIsInitializing(true);
     
-    if (!audioContextRef.current) {
-        try {
-            const context = new (window.AudioContext || (window as any).webkitAudioContext)({
-                sampleRate: isMobile() ? 44100 : 44100,
+    try {
+        if (!audioContextRef.current) {
+            audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({
+                 sampleRate: isMobile() ? 44100 : 44100,
             });
-             if (context.state === 'suspended') {
-                await context.resume();
-            }
-            audioContextRef.current = context;
-
-        } catch (e) {
-            toast({ variant: "destructive", title: "Audio Error", description: "Could not create AudioContext."});
-            console.error(e);
-            setIsInitializing(false);
-            return false;
         }
-    }
-    
-    if (audioContextRef.current && !gainNodesRef.current.bass) {
-        const context = audioContextRef.current;
-        const parts: InstrumentPart[] = ['bass', 'melody', 'accompaniment', 'effects', 'drums', 'sparkles', 'pads'];
-        parts.forEach(part => {
-            if (!gainNodesRef.current[part]) {
-                const gainNode = context.createGain();
-                gainNode.connect(context.destination);
-                gainNodesRef.current[part] = gainNode;
-            }
-        });
-    }
 
-    if (!drumMachineRef.current && audioContextRef.current) {
-        drumMachineRef.current = new DrumMachine(audioContextRef.current, gainNodesRef.current.drums!);
-        await drumMachineRef.current.init();
-    }
-    
-    if (!accompanimentManagerRef.current && audioContextRef.current) {
-        accompanimentManagerRef.current = new AccompanimentSynthManager(audioContextRef.current, gainNodesRef.current.accompaniment!);
-        await accompanimentManagerRef.current.init();
-    }
-    
-    if (!bassManagerRef.current && audioContextRef.current) {
-        bassManagerRef.current = new BassSynthManager(audioContextRef.current, gainNodesRef.current.bass!);
-        await bassManagerRef.current.init();
-    }
+        if (audioContextRef.current.state === 'suspended') {
+            await audioContextRef.current.resume();
+        }
 
-    if (!sparklePlayerRef.current && audioContextRef.current) {
-        sparklePlayerRef.current = new SparklePlayer(audioContextRef.current, gainNodesRef.current.sparkles!);
-        await sparklePlayerRef.current.init();
-    }
-    
-    if (!padPlayerRef.current && audioContextRef.current) {
-        padPlayerRef.current = new PadPlayer(audioContextRef.current, gainNodesRef.current.pads!);
-        await padPlayerRef.current.init();
-    }
+        if (!gainNodesRef.current.bass) {
+            const context = audioContextRef.current;
+            const parts: InstrumentPart[] = ['bass', 'melody', 'accompaniment', 'effects', 'drums', 'sparkles', 'pads'];
+            parts.forEach(part => {
+                if (!gainNodesRef.current[part]) {
+                    const gainNode = context.createGain();
+                    gainNode.connect(context.destination);
+                    gainNodesRef.current[part] = gainNode;
+                }
+            });
+        }
 
+        if (!drumMachineRef.current) {
+            drumMachineRef.current = new DrumMachine(audioContextRef.current, gainNodesRef.current.drums!);
+            await drumMachineRef.current.init();
+        }
+        
+        if (!accompanimentManagerRef.current) {
+            accompanimentManagerRef.current = new AccompanimentSynthManager(audioContextRef.current, gainNodesRef.current.accompaniment!);
+            await accompanimentManagerRef.current.init();
+        }
+        
+        if (!bassManagerRef.current) {
+            bassManagerRef.current = new BassSynthManager(audioContextRef.current, gainNodesRef.current.bass!);
+            await bassManagerRef.current.init();
+        }
 
-    if (!workerRef.current) {
-        const worker = new Worker(new URL('../lib/ambient.worker.ts', import.meta.url), { type: 'module' });
-        worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
-            if (event.data.type === 'score' && event.data.score) {
-                 if (audioContextRef.current) {
-                    scheduleScore(event.data.score, audioContextRef.current);
-                 }
-            } else if (event.data.type === 'error') {
-                 toast({ variant: "destructive", title: "Worker Error", description: event.data.error });
-            } else if (event.data.type === 'debug') {
-                 // console.log(`[Worker DBG] ${event.data.message}`, event.data.data);
-            }
-        };
-        workerRef.current = worker;
-    }
-    
-    if(audioContextRef.current && synthPoolRef.current.length === 0) {
-        try {
+        if (!sparklePlayerRef.current) {
+            sparklePlayerRef.current = new SparklePlayer(audioContextRef.current, gainNodesRef.current.sparkles!);
+            await sparklePlayerRef.current.init();
+        }
+        
+        if (!padPlayerRef.current) {
+            padPlayerRef.current = new PadPlayer(audioContextRef.current, gainNodesRef.current.pads!);
+            await padPlayerRef.current.init();
+        }
+
+        if (!workerRef.current) {
+            const worker = new Worker(new URL('../lib/ambient.worker.ts', import.meta.url), { type: 'module' });
+            worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
+                if (event.data.type === 'score' && event.data.score) {
+                    if (audioContextRef.current) {
+                        scheduleScore(event.data.score, audioContextRef.current);
+                    }
+                } else if (event.data.type === 'error') {
+                    toast({ variant: "destructive", title: "Worker Error", description: event.data.error });
+                } else if (event.data.type === 'debug') {
+                    // console.log(`[Worker DBG] ${event.data.message}`, event.data.data);
+                }
+            };
+            workerRef.current = worker;
+        }
+        
+        if(synthPoolRef.current.length === 0) {
             await audioContextRef.current.audioWorklet.addModule('/worklets/synth-processor.js');
             const numVoices = isMobile() ? 4 : 8;
             for(let i = 0; i < numVoices; i++) {
                 const node = new AudioWorkletNode(audioContextRef.current, 'synth-processor');
                 synthPoolRef.current.push(node);
             }
-        } catch(e) {
-            toast({ variant: "destructive", title: "Audio Worklet Error", description: "Failed to load synth processor." });
-            console.error(e);
-            setIsInitializing(false);
-            return false;
         }
+        
+        setIsInitialized(true);
+        setIsInitializing(false);
+        return true;
+
+    } catch (e) {
+        const errorMessage = e instanceof Error ? e.message : String(e);
+        toast({ variant: "destructive", title: "Audio Initialization Error", description: `Could not start audio: ${errorMessage}`});
+        console.error(e);
+        setIsInitializing(false);
+        return false;
     }
-    
-    setIsInitialized(true);
-    setIsInitializing(false);
-    return true;
   }, [isInitialized, isInitializing, toast]);
 
   const scheduleScore = (score: Score, audioContext: AudioContext) => {
@@ -320,8 +313,12 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   }, [updateSettingsCallback]);
 
   const setTextureSettingsCallback = useCallback((settings: TextureSettings) => {
-    setVolumeCallback('sparkles', settings.sparkles.volume);
-    setVolumeCallback('pads', settings.pads.volume);
+    if (sparklePlayerRef.current) {
+        sparklePlayerRef.current.setVolume(settings.sparkles.volume);
+    }
+    if (padPlayerRef.current) {
+        padPlayerRef.current.setVolume(settings.pads.volume);
+    }
     
     if (settingsRef.current) {
         const newSettings = {
@@ -333,7 +330,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         };
         updateSettingsCallback(newSettings);
     }
-  }, [updateSettingsCallback, setVolumeCallback]);
+  }, [updateSettingsCallback]);
 
   useEffect(() => {
     return () => {
