@@ -3,8 +3,9 @@
 
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import type { WorkerSettings, Score, Note, DrumsScore, EffectsScore, BassInstrument, InstrumentPart, MelodyInstrument } from '@/types/music';
+import type { WorkerSettings, Score, Note, DrumsScore, InstrumentPart, BassInstrument, MelodyInstrument, AccompanimentInstrument } from '@/types/music';
 import { DrumMachine } from '@/lib/drum-machine';
+import { AccompanimentSynthManager } from '@/lib/accompaniment-synth-manager';
 
 // --- Type Definitions ---
 type WorkerMessage = {
@@ -18,7 +19,8 @@ type WorkerMessage = {
 // --- Constants ---
 const VOICE_BALANCE = {
   bass: 1.0,
-  melody: 0.5, // Higher frequencies are perceived as louder
+  melody: 0.5,
+  accompaniment: 0.6,
   drums: 0.8,
   effects: 0.6,
 };
@@ -60,10 +62,12 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   const nextVoiceRef = useRef(0);
   const settingsRef = useRef<WorkerSettings | null>(null);
   const drumMachineRef = useRef<DrumMachine | null>(null);
+  const accompanimentManagerRef = useRef<AccompanimentSynthManager | null>(null);
 
   const gainNodesRef = useRef<Record<InstrumentPart, GainNode | null>>({
     bass: null,
     melody: null,
+    accompaniment: null,
     drums: null,
     effects: null,
   });
@@ -96,11 +100,10 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         }
     }
     
-     // Create GainNodes before worker and synths
     if (audioContextRef.current && !gainNodesRef.current.bass) {
         console.log('[AudioEngine] Creating GainNodes');
         const context = audioContextRef.current;
-        const parts: InstrumentPart[] = ['bass', 'melody', 'effects', 'drums'];
+        const parts: InstrumentPart[] = ['bass', 'melody', 'accompaniment', 'effects', 'drums'];
         parts.forEach(part => {
             const gainNode = context.createGain();
             gainNode.connect(context.destination);
@@ -110,16 +113,18 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
 
     if (!drumMachineRef.current && audioContextRef.current) {
         console.log('[AudioEngine] Creating DrumMachine');
-        // The drum machine now gets its dedicated GainNode from the pre-created map
-        const drumGainNode = gainNodesRef.current.drums;
-        if (!drumGainNode) {
-            console.error("[AudioEngine] Drum gain node not found during initialization.");
-            setIsInitializing(false);
-            return false;
-        }
+        const drumGainNode = gainNodesRef.current.drums!;
         drumMachineRef.current = new DrumMachine(audioContextRef.current, drumGainNode);
         await drumMachineRef.current.init();
         console.log('[AudioEngine] DrumMachine created');
+    }
+    
+    if (!accompanimentManagerRef.current && audioContextRef.current) {
+        console.log('[AudioEngine] Creating AccompanimentManager');
+        const accompGainNode = gainNodesRef.current.accompaniment!;
+        accompanimentManagerRef.current = new AccompanimentSynthManager(audioContextRef.current, accompGainNode);
+        await accompanimentManagerRef.current.init();
+        console.log('[AudioEngine] AccompanimentManager created');
     }
 
 
@@ -142,12 +147,11 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     if(audioContextRef.current && synthPoolRef.current.length === 0) {
         try {
             await audioContextRef.current.audioWorklet.addModule('/worklets/synth-processor.js');
-            const numVoices = isMobile() ? 6 : 8;
+            const numVoices = isMobile() ? 4 : 6; // Reduced pool for bass/melody
             console.log(`[AudioEngine] Creating synth pool with ${numVoices} voices`);
             
             for(let i = 0; i < numVoices; i++) {
                 const node = new AudioWorkletNode(audioContextRef.current, 'synth-processor');
-                // Don't connect here, connect on demand
                 synthPoolRef.current.push(node);
             }
              console.log('[AudioEngine] Synth pool created', { voices: synthPoolRef.current.length });
@@ -191,19 +195,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
                 filterCutoff: 1000,
                 oscType: 'triangle'
             };
-        case 'synth':
-             return {
-                type: 'noteOn',
-                frequency: freq,
-                velocity: note.velocity || 0.7,
-                attack: 0.05,
-                release: 1.5,
-                portamento: 0,
-                filterCutoff: 2500,
-                q: 1.2,
-                oscType: 'sawtooth'
-            };
-        case 'melody_synth':
+        case 'synth': // For melody
              return {
                 type: 'noteOn',
                 frequency: freq,
@@ -213,9 +205,9 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
                 portamento: 0,
                 filterCutoff: 4000,
                 q: 1.0,
-                oscType: 'fatsine' // A slightly richer sine wave
+                oscType: 'fatsine'
             };
-        default: // 'none' or other cases
+        default:
              return null;
     }
   }
@@ -225,12 +217,13 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     const now = audioContext.currentTime;
     const currentSettings = settingsRef.current;
     
-    const parts: { partName: 'bass' | 'melody', notes: Note[] }[] = [
+    // --- Bass and Melody Scheduling (Monophonic Pool) ---
+    const monoParts: { partName: 'bass' | 'melody', notes: Note[] }[] = [
         { partName: 'bass', notes: score.bass || [] },
         { partName: 'melody', notes: score.melody || [] },
     ];
     
-    parts.forEach(({ partName, notes }) => {
+    monoParts.forEach(({ partName, notes }) => {
         if (!currentSettings) return;
 
         const instrumentName = currentSettings.instrumentSettings[partName].name;
@@ -243,8 +236,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
             nextVoiceRef.current++;
 
             if (voice) {
-                 const finalInstrument = partName === 'melody' ? 'melody_synth' : instrumentName;
-                 const params = getPresetParams(finalInstrument as MelodyInstrument, note);
+                 const params = getPresetParams(instrumentName, note);
                 if (!params) return;
 
                 voice.disconnect();
@@ -263,6 +255,13 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         });
     });
     
+    // --- Accompaniment Scheduling (Polyphonic Worklet) ---
+    const accompanimentScore = score.accompaniment || [];
+    if (accompanimentScore.length > 0 && accompanimentManagerRef.current && currentSettings?.instrumentSettings.accompaniment.name !== 'none') {
+        accompanimentManagerRef.current.schedule(accompanimentScore, now);
+    }
+
+    // --- Drum Scheduling ---
     const drumScore = score.drums || [];
     if (drumScore.length > 0 && drumMachineRef.current) {
         if (currentSettings?.drumSettings.enabled) {
@@ -283,6 +282,9 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
 
     workerRef.current.postMessage({ command });
     setIsPlaying(playing);
+    if (!playing) {
+        accompanimentManagerRef.current?.stop();
+    }
     if (playing) {
       console.log(`[AudioEngine] Playback started`);
     } else {
@@ -302,12 +304,13 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   const setVolumeCallback = useCallback((part: InstrumentPart, volume: number) => {
     const gainNode = gainNodesRef.current[part];
     if (gainNode) {
-        // Apply balancing coefficient
         const balancedVolume = volume * (VOICE_BALANCE[part as keyof typeof VOICE_BALANCE] ?? 1);
-        gainNode.gain.value = balancedVolume;
+        gainNode.gain.setTargetAtTime(balancedVolume, audioContextRef.current?.currentTime ?? 0, 0.01);
         console.log(`[AudioEngine] Volume change`, { part, raw: volume, balanced: balancedVolume });
-    } else {
-        console.warn(`[AudioEngine] Attempted to set volume for non-existent part: ${part}`);
+    } else if (part === 'accompaniment' && accompanimentManagerRef.current) {
+        const balancedVolume = volume * (VOICE_BALANCE.accompaniment);
+        accompanimentManagerRef.current.setVolume(balancedVolume);
+        console.log(`[AudioEngine] Volume change`, { part, raw: volume, balanced: balancedVolume });
     }
   }, []);
 
@@ -315,6 +318,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     return () => {
         console.log('[AudioEngine] Cleaning up...');
         workerRef.current?.terminate();
+        accompanimentManagerRef.current?.dispose();
         audioContextRef.current?.close();
     };
   }, []);

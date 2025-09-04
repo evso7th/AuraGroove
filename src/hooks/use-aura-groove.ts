@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from "react";
-import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings, BassInstrument, InstrumentPart, MelodyInstrument } from '@/types/music';
+import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings, BassInstrument, InstrumentPart, MelodyInstrument, AccompanimentInstrument } from '@/types/music';
 import { useAudioEngine } from "@/contexts/audio-engine-context";
 
 export const useAuraGroove = () => {
@@ -12,6 +12,7 @@ export const useAuraGroove = () => {
   const [instrumentSettings, setInstrumentSettings] = useState<InstrumentSettings>({
     bass: { name: "portamento", volume: 0.7 },
     melody: { name: "synth", volume: 0.6 },
+    accompaniment: { name: "poly_synth", volume: 0.5 },
   });
   const [bpm, setBpm] = useState(75);
   const [score, setScore] = useState<ScoreName>('dreamtales');
@@ -32,6 +33,12 @@ export const useAuraGroove = () => {
     if (isInitialized) {
         console.log('[UI] Initializing settings for worker');
         updateSettings(getFullSettings());
+        
+        // Set initial volumes
+        Object.entries(instrumentSettings).forEach(([part, settings]) => {
+            setVolume(part as InstrumentPart, settings.volume);
+        });
+        setVolume('drums', drumSettings.volume);
     }
   }, [isInitialized]);
 
@@ -51,7 +58,7 @@ export const useAuraGroove = () => {
     setEngineIsPlaying(!isPlaying);
   }, [isInitialized, isPlaying, initialize, setEngineIsPlaying]);
 
-  const handleInstrumentChange = (part: keyof InstrumentSettings, name: BassInstrument | MelodyInstrument) => {
+  const handleInstrumentChange = (part: keyof InstrumentSettings, name: BassInstrument | MelodyInstrument | AccompanimentInstrument) => {
     setInstrumentSettings(prev => ({
       ...prev,
       [part]: { ...prev[part], name }
@@ -60,7 +67,7 @@ export const useAuraGroove = () => {
 
   const handleVolumeChange = (part: InstrumentPart, value: number) => {
     console.log(`[UI] Volume slider changed`, { part, volume: value });
-    if (part === 'bass' || part === 'melody') {
+    if (part === 'bass' || part === 'melody' || part === 'accompaniment') {
       setInstrumentSettings(prev => ({
         ...prev,
         [part]: { ...prev[part], volume: value }
@@ -74,13 +81,12 @@ export const useAuraGroove = () => {
   const handleDrumSettingsChange = (settings: React.SetStateAction<DrumSettings>) => {
     const newSettings = typeof settings === 'function' ? settings(drumSettings) : settings;
     setDrumSettings(newSettings);
-    // Also update the gain node volume immediately
     setVolume('drums', newSettings.volume);
   };
 
 
   return {
-    isInitializing: !isInitialized, // Simplified loading state
+    isInitializing: !isInitialized,
     isPlaying,
     loadingText: !isInitialized ? 'Click to initialize audio' : 'Ready',
     handleTogglePlay,

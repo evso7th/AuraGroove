@@ -1,14 +1,14 @@
 
 "use client";
 
-import { Loader2, Music, Pause, Speaker, FileMusic, Drum, SlidersHorizontal, Waves, GitBranch, Atom } from "lucide-react";
+import { Loader2, Music, Pause, Speaker, FileMusic, Drum, SlidersHorizontal, Waves, GitBranch, Atom, Piano } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import Image from 'next/image';
 import { Slider } from "@/components/ui/slider";
-import type { DrumSettings, InstrumentSettings, ScoreName, EffectsSettings, BassInstrument, InstrumentPart, MelodyInstrument } from '@/types/music';
+import type { DrumSettings, InstrumentSettings, ScoreName, EffectsSettings, BassInstrument, InstrumentPart, MelodyInstrument, AccompanimentInstrument } from '@/types/music';
 
 // This is now a "dumb" UI component controlled by the useAuraGroove hook.
 export type AuraGrooveProps = {
@@ -18,7 +18,7 @@ export type AuraGrooveProps = {
   drumSettings: DrumSettings;
   setDrumSettings: (settings: React.SetStateAction<DrumSettings>) => void;
   instrumentSettings: InstrumentSettings;
-  setInstrumentSettings: (part: keyof InstrumentSettings, name: BassInstrument | MelodyInstrument) => void;
+  setInstrumentSettings: (part: keyof InstrumentSettings, name: BassInstrument | MelodyInstrument | AccompanimentInstrument) => void;
   handleVolumeChange: (part: InstrumentPart, value: number) => void;
   effectsSettings: EffectsSettings;
   handleToggleEffects: () => void;
@@ -50,6 +50,16 @@ export function AuraGroove({
   density,
   setDensity
 }: AuraGrooveProps) {
+
+  const PartIcon = ({ part }: { part: string }) => {
+    switch (part) {
+        case 'bass': return <Waves className="h-5 w-5" />;
+        case 'melody': return <GitBranch className="h-5 w-5" />;
+        case 'accompaniment': return <Piano className="h-5 w-5" />;
+        default: return <Music className="h-5 w-5" />;
+    }
+  };
+
 
   if (isInitializing) {
     return (
@@ -140,7 +150,9 @@ export function AuraGroove({
                 return (
                  <div key={part} className="space-y-3 rounded-md border p-3">
                      <div className="flex justify-between items-center">
-                        <Label htmlFor={`${part}-instrument`} className="font-semibold flex items-center gap-2 capitalize"><Music className="h-5 w-5" /> {part}</Label>
+                        <Label htmlFor={`${part}-instrument`} className="font-semibold flex items-center gap-2 capitalize">
+                           <PartIcon part={part} /> {part}
+                        </Label>
                          <Select
                           value={settings.name}
                           onValueChange={(v) => setInstrumentSettings(part as keyof InstrumentSettings, v as any)}
@@ -161,6 +173,11 @@ export function AuraGroove({
                                     <SelectItem value="synth">Synth</SelectItem>
                                 </>
                              )}
+                             {part === 'accompaniment' && (
+                                <>
+                                    <SelectItem value="poly_synth">Poly Synth</SelectItem>
+                                </>
+                              )}
                           </SelectContent>
                         </Select>
                     </div>

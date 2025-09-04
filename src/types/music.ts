@@ -22,6 +22,7 @@ export type EffectsScore = SamplerNote[];
 export type Score = {
     bass?: Note[];
     melody?: Note[];
+    accompaniment?: Note[];
     drums?: DrumsScore;
     effects?: EffectsScore;
 };
@@ -29,7 +30,8 @@ export type Score = {
 // --- UI Types ---
 export type BassInstrument = 'portamento' | 'none';
 export type MelodyInstrument = 'synth' | 'none';
-export type InstrumentPart = 'bass' | 'melody' | 'drums' | 'effects';
+export type AccompanimentInstrument = 'poly_synth' | 'none';
+export type InstrumentPart = 'bass' | 'melody' | 'accompaniment' | 'drums' | 'effects';
 
 
 export type InstrumentSettings = {
@@ -39,6 +41,10 @@ export type InstrumentSettings = {
   };
   melody: {
       name: MelodyInstrument;
+      volume: number; // 0-1
+  };
+  accompaniment: {
+      name: AccompanimentInstrument;
       volume: number; // 0-1
   };
 };

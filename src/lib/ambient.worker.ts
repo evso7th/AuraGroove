@@ -3,11 +3,11 @@
  * @file AuraGroove Music Worker (Architecture: "Hybrid Engine Composer")
  *
  * This worker's only responsibility is to compose music for all parts.
- * It generates arrays of notes (scores) for synths (bass, melody)
+ * It generates arrays of notes (scores) for synths (bass, melody, accompaniment)
  * and samplers (drums, effects) and sends them to the main thread for execution.
  * It is completely passive and only works when commanded.
  */
-import type { WorkerSettings, Score, Note, DrumsScore, EffectsScore, BassInstrument, DrumSettings } from '@/types/music';
+import type { WorkerSettings, Score, Note, DrumsScore, EffectsScore, BassInstrument, MelodyInstrument, AccompanimentInstrument, DrumSettings } from '@/types/music';
 
 type Phrase = Note[];
 
@@ -15,11 +15,10 @@ class EvolutionEngine {
     private anchors: Phrase[];
     private currentPhrase: Phrase;
     private barSinceAnchor: number;
-    // Bass notes restricted to the 2nd octave (C2 to B2)
     private bassNotes = [36, 38, 40, 41, 43, 45, 47]; // C-Major scale in 2nd octave
+    private chordProgression = [0, 4, 5, 3]; // I-V-vi-IV in C Major scale degrees
 
     constructor() {
-        // Anchor Phrase lowered by one octave to be primarily in the 3rd, touching the 4th.
         this.anchors = [
             [
                 { midi: 48, duration: 0.5, time: 0 }, // C3
@@ -40,63 +39,79 @@ class EvolutionEngine {
             const MAX_MIDI = 71; // B4
 
             if (mutationType < 0.4) {
-                // Transpose note by one semitone
                 const direction = Math.random() < 0.5 ? 1 : -1;
                 const potentialMidi = newNote.midi + direction;
-                // Clamp the melody to stay within the 3rd and 4th octaves.
                 if (potentialMidi >= MIN_MIDI && potentialMidi <= MAX_MIDI) {
                     newNote.midi = potentialMidi;
                 }
             } else if (mutationType < 0.7) {
-                // Change duration
                 newNote.duration *= (0.5 + Math.random());
             }
-            // 30% chance to keep the note as is
             return newNote;
         });
     }
 
-    generateNextBar(barDuration: number, density: number, drumSettings: Omit<DrumSettings, 'volume'> & { enabled: boolean }): { melody: Phrase, bass: Phrase, drums: DrumsScore } {
+    private getChordTones(rootDegree: number): number[] {
+        const scale = [0, 2, 4, 5, 7, 9, 11]; // C Major scale intervals
+        const tones: number[] = [];
+        // Get root, third, and fifth
+        for(let i=0; i<3; i++) {
+            const degreeIndex = (rootDegree + i * 2) % scale.length;
+            const octaveOffset = Math.floor((rootDegree + i * 2) / scale.length);
+            // Accompaniment in 3rd octave
+            const baseNote = 48; // C3
+            tones.push(baseNote + (octaveOffset * 12) + scale[degreeIndex]);
+        }
+        return tones;
+    }
+
+    generateNextBar(barDuration: number, density: number, drumSettings: Omit<DrumSettings, 'volume'> & { enabled: boolean }): { melody: Phrase, bass: Phrase, accompaniment: Phrase, drums: DrumsScore } {
         this.barSinceAnchor++;
 
-        // Every 8 bars, return to an anchor
         if (this.barSinceAnchor >= 8) {
             this.currentPhrase = this.anchors[0];
             this.barSinceAnchor = 0;
         } else {
-            // Otherwise, mutate the current phrase
             this.currentPhrase = this.mutate(this.currentPhrase);
         }
         
-        // Generate bass note for the bar
-        const bassMidi = this.bassNotes[Math.floor(Math.random() * this.bassNotes.length)];
+        const currentChordRootDegree = this.chordProgression[Math.floor(this.barCount / 2) % this.chordProgression.length];
+
+        const bassMidi = this.bassNotes[currentChordRootDegree % this.bassNotes.length];
         const bass: Phrase = [{ midi: bassMidi, time: 0, duration: barDuration, velocity: 0.6 }];
 
-        // Assign timings to the melody phrase within the bar
-        const melody = this.currentPhrase.map((note, index) => {
-            return {
-                ...note,
-                time: (index / this.currentPhrase.length) * barDuration,
-                velocity: 0.5 + Math.random() * 0.3
-            };
-        }).filter(() => Math.random() < density); // Apply density
+        const melody = this.currentPhrase.map((note, index) => ({
+            ...note,
+            time: (index / this.currentPhrase.length) * barDuration,
+            velocity: 0.5 + Math.random() * 0.3
+        })).filter(() => Math.random() < density);
 
-        // Generate drums
+        const chordTones = this.getChordTones(currentChordRootDegree);
+        const accompaniment: Phrase = chordTones.map(midi => ({
+            midi,
+            time: 0, // Worklet handles timing
+            duration: barDuration,
+            velocity: 0.6
+        }));
+
         const drums: DrumsScore = [];
         if (drumSettings.enabled) {
              const notesInBar = 16;
              const step = barDuration / notesInBar;
              if (drumSettings.pattern === 'ambient_beat' || drumSettings.pattern === 'composer') {
                 for (let i = 0; i < notesInBar; i++) {
-                     if (i % 8 === 0) drums.push({ note: 'C4', time: i * step, velocity: 1.0 }); // Kick
-                     if (i % 8 === 4) drums.push({ note: 'D4', time: i * step, velocity: 0.7 }); // Snare
-                     if (i % 4 === 2) drums.push({ note: 'E4', time: i * step, velocity: 0.4 }); // Hi-hat
+                     if (i % 8 === 0) drums.push({ note: 'C4', time: i * step, velocity: 1.0 });
+                     if (i % 8 === 4) drums.push({ note: 'D4', time: i * step, velocity: 0.7 });
+                     if (i % 4 === 2) drums.push({ note: 'E4', time: i * step, velocity: 0.4 });
                 }
              }
         }
+        
+        this.barCount = (this.barCount || 0) + 1;
 
-        return { melody, bass, drums };
+        return { melody, bass, accompaniment, drums };
     }
+     private barCount = 0;
 }
 
 
@@ -114,6 +129,7 @@ const Scheduler = {
         instrumentSettings: { 
             bass: { name: "portamento" as BassInstrument, volume: 0.5 },
             melody: { name: "synth" as MelodyInstrument, volume: 0.5 },
+            accompaniment: { name: "poly_synth" as AccompanimentInstrument, volume: 0.5 },
         },
         density: 0.5,
     } as WorkerSettings,
@@ -150,58 +166,55 @@ const Scheduler = {
 
     createScoreForNextBar(): Score {
         if (this.settings.score === 'dreamtales') {
-            const { melody, bass, drums } = this.evolutionEngine.generateNextBar(this.barDuration, this.settings.density, this.settings.drumSettings);
-            return { melody, bass, drums };
+            const { melody, bass, accompaniment, drums } = this.evolutionEngine.generateNextBar(this.barDuration, this.settings.density, this.settings.drumSettings);
+            return { melody, bass, accompaniment, drums };
         }
 
         // --- Fallback to simple generator for other styles ---
         const bass: Note[] = [];
         const melody: Note[] = [];
+        const accompaniment: Note[] = [];
         const drums: DrumsScore = [];
         const effects: EffectsScore = [];
 
-        const maxVoices = 4;
-        const notesInBar = 16; // 16th notes
+        const notesInBar = 16;
         const step = this.barDuration / notesInBar;
-        const bassNotes = [36, 38, 40, 41, 43, 45, 47]; // C2 Major
-        const melodyNotes = [48, 50, 52, 53, 55, 57, 59, 60]; // C3-C4 Major
+        const bassNotes = [36, 38, 40, 41, 43, 45, 47];
+        const melodyNotes = [48, 50, 52, 53, 55, 57, 59, 60];
+        
+        const rootDegree = Math.floor(this.barCount / 2) % bassNotes.length;
 
-        let activeSynthNotes = 0;
+        // Bass
+        if (this.settings.instrumentSettings.bass.name !== 'none') {
+             bass.push({ midi: bassNotes[rootDegree], time: 0, duration: this.barDuration / 2, velocity: 0.6 });
+        }
+        
+        // Accompaniment
+        if (this.settings.instrumentSettings.accompaniment.name !== 'none') {
+            const chordTones = [rootDegree, rootDegree + 2, rootDegree + 4].map(d => bassNotes[d % bassNotes.length] + 12);
+            accompaniment.push(...chordTones.map(midi => ({ midi, time: 0, duration: this.barDuration, velocity: 0.5})));
+        }
 
-        for (let i = 0; i < notesInBar; i++) {
-             const time = i * step;
-
-            // Bass on the downbeat
-            if (i % 8 === 0) {
-                 if (activeSynthNotes < maxVoices) {
-                    const midi = bassNotes[Math.floor(this.barCount / 2) % bassNotes.length];
-                    bass.push({ midi, time, duration: this.barDuration / 2, velocity: 0.6 });
-                    activeSynthNotes++;
-                 }
-            }
-
-            // Melody with density
-            if (Math.random() < this.settings.density / 4) {
-                 if (activeSynthNotes < maxVoices) {
+        // Melody
+        if (this.settings.instrumentSettings.melody.name !== 'none') {
+            for (let i = 0; i < notesInBar; i++) {
+                 if (Math.random() < this.settings.density / 2) {
                     const midi = melodyNotes[Math.floor(Math.random() * melodyNotes.length)];
-                    melody.push({ midi, time, duration: step * (Math.floor(Math.random() * 3) + 2), velocity: 0.5 + Math.random() * 0.3 });
-                    activeSynthNotes++;
+                    melody.push({ midi, time: i * step, duration: step * 2, velocity: 0.5 + Math.random() * 0.3 });
                 }
             }
-
-            // Drums
-            if (this.settings.drumSettings.enabled) {
-                if (i % 8 === 0) drums.push({ note: 'C4', time, velocity: 1.0 }); // Kick
-                if (i % 8 === 4) drums.push({ note: 'D4', time, velocity: 0.7 }); // Snare
-                if (i % 2 === 0) drums.push({ note: 'E4', time, velocity: 0.4 }); // Hi-hat
-            }
-
-             // Effects
-            if (i === 0 && this.barCount % 8 === 0 && Math.random() < 0.5) {
-                effects.push({ note: 'A4', time: time + step * 0.5, velocity: 0.3 + Math.random() * 0.3 });
+        }
+        
+        // Drums
+        if (this.settings.drumSettings.enabled) {
+            for (let i = 0; i < notesInBar; i++) {
+                if (i % 8 === 0) drums.push({ note: 'C4', time: i * step, velocity: 1.0 }); // Kick
+                if (i % 8 === 4) drums.push({ note: 'D4', time: i * step, velocity: 0.7 }); // Snare
+                if (i % 2 === 0) drums.push({ note: 'E4', time: i * step, velocity: 0.4 }); // Hi-hat
             }
         }
-        return { bass, melody, drums, effects };
+        
+        return { bass, melody, accompaniment, drums, effects };
     },
 
     tick() {
