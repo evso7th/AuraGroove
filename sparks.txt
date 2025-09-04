@@ -17,9 +17,11 @@ public/assets/music/pads/Electricity.ogg
 public/assets/music/pads/SalvingPad.ogg
 public/assets/music/pads/Gulls.ogg
 public/assets/music/pads/livecircle.mp3
+public/assets/music/pads/things.mp3
 public/assets/music/pads/BirdFX.ogg
 public/assets/music/pads/Confusion.ogg
 public/assets/music/pads/Abstruse.ogg
+public/assets/music/pads/pure_energy.mp3
 public/assets/music/pads/Freakystones.ogg
 public/assets/music/pads/EPstein.ogg
 public/assets/music/pads/Dizzy.ogg
@@ -31,6 +33,7 @@ public/assets/music/pads/Koto1.ogg
 public/assets/music/pads/BladeWalker.ogg
 public/assets/music/pads/Fearsome.ogg
 public/assets/music/pads/AcChord.ogg
+public/assets/music/pads/Tibetan bowls.mp3
 public/assets/music/pads/Tubator.ogg
 public/assets/music/pads/Sleep.ogg
 public/assets/music/pads/Grounding.ogg

@@ -14,7 +14,7 @@ const SCALE_INTERVALS = [0, 2, 3, 5, 7, 8, 10]; // E Natural Minor
 
 const PADS_BY_STYLE: Record<ScoreName, string> = {
     dreamtales: 'livecircle.mp3',
-    evolve: 'HousedBass7.ogg',
+    evolve: 'Tibetan bowls.mp3',
     omega: 'Grounding.ogg',
     promenade: 'Starter.ogg',
 };
@@ -104,7 +104,7 @@ const Composer = {
     },
 
     generateDrums(barIndex: number, density: number): DrumsScore {
-        if (!Scheduler.settings.drumSettings.enabled || density < 0.1) return [];
+        if (!Scheduler.settings.drumSettings.enabled) return [];
         
         const drums: DrumsScore = [];
         const step = Scheduler.barDuration / 16;
