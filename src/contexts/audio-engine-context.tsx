@@ -3,7 +3,7 @@
 
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import type { WorkerSettings, Score, Note, DrumsScore, EffectsScore, BassInstrument, InstrumentPart } from '@/types/music';
+import type { WorkerSettings, Score, Note, DrumsScore, EffectsScore, BassInstrument, InstrumentPart, MelodyInstrument } from '@/types/music';
 import { DrumMachine } from '@/lib/drum-machine';
 
 // --- Type Definitions ---
@@ -157,7 +157,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     return true;
   }, [isInitialized, isInitializing, toast]);
 
-  const getPresetParams = (instrumentName: BassInstrument, note: Note) => {
+  const getPresetParams = (instrumentName: BassInstrument | MelodyInstrument, note: Note) => {
     let freq = 0;
     try {
         freq = 440 * Math.pow(2, (note.midi - 69) / 12);
@@ -183,6 +183,18 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
                 filterCutoff: 1000,
                 oscType: 'triangle'
             };
+        case 'synth':
+             return {
+                type: 'noteOn',
+                frequency: freq,
+                velocity: note.velocity || 0.7,
+                attack: 0.05,
+                release: 1.5,
+                portamento: 0,
+                filterCutoff: 2500,
+                q: 1.2,
+                oscType: 'sawtooth'
+            };
         default: // 'none' or other cases
              return null;
     }
@@ -194,43 +206,48 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     const currentSettings = settingsRef.current;
     
     const bassNotes = score.bass || [];
+    const melodyNotes = score.melody || [];
     
-    bassNotes.forEach(note => {
-        const voice = synthPoolRef.current[nextVoiceRef.current % synthPoolRef.current.length];
-        const bassGainNode = gainNodesRef.current.bass;
-        
-        if (voice && bassGainNode) {
-            let params;
-            if (currentSettings) {
-                params = getPresetParams(currentSettings.instrumentSettings.bass.name, note);
-            } else {
-                 console.warn("[AudioEngine] No settings found for bass note scheduling");
-                 return;
+    const schedulePart = (notes: Note[], part: 'bass' | 'melody') => {
+        if (!currentSettings) return;
+
+        const instrumentName = currentSettings.instrumentSettings[part].name;
+        const gainNode = gainNodesRef.current[part];
+
+        if (instrumentName === 'none' || !gainNode) return;
+
+        notes.forEach(note => {
+            const voice = synthPoolRef.current[nextVoiceRef.current % synthPoolRef.current.length];
+            nextVoiceRef.current++;
+
+            if (voice) {
+                const params = getPresetParams(instrumentName, note);
+                if (!params) return;
+
+                voice.disconnect();
+                voice.connect(gainNode);
+
+                const noteOnTime = now + note.time;
+                voice.port.postMessage({ ...params, when: noteOnTime });
+
+                const noteOffTime = noteOnTime + note.duration;
+                const delayUntilOff = (noteOffTime - audioContext.currentTime);
+                
+                setTimeout(() => {
+                    voice.port.postMessage({ type: 'noteOff', release: params.release });
+                }, delayUntilOff > 0 ? delayUntilOff * 1000 : 0);
             }
-            
-            if (!params) {
-                return;
-            }
+        });
+    };
 
-            voice.disconnect();
-            voice.connect(bassGainNode);
-
-            const noteOnTime = now + note.time;
-            voice.port.postMessage({ ...params, when: noteOnTime });
-
-            const noteOffTime = noteOnTime + note.duration;
-            const delayUntilOff = (noteOffTime - audioContext.currentTime);
-            
-            setTimeout(() => {
-                voice.port.postMessage({ type: 'noteOff' });
-            }, delayUntilOff > 0 ? delayUntilOff * 1000 : 0);
-        }
-        nextVoiceRef.current++;
-    });
-
+    schedulePart(bassNotes, 'bass');
+    schedulePart(melodyNotes, 'melody');
+    
     const drumScore = score.drums || [];
     if (drumScore.length > 0 && drumMachineRef.current) {
-        drumMachineRef.current.schedule(drumScore, now);
+        if (currentSettings?.drumSettings.enabled) {
+            drumMachineRef.current.schedule(drumScore, now);
+        }
     }
   };
 

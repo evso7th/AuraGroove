@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from "react";
-import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings, BassInstrument, InstrumentPart } from '@/types/music';
+import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings, BassInstrument, InstrumentPart, MelodyInstrument } from '@/types/music';
 import { useAudioEngine } from "@/contexts/audio-engine-context";
 
 export const useAuraGroove = () => {
@@ -11,6 +11,7 @@ export const useAuraGroove = () => {
   const [drumSettings, setDrumSettings] = useState<DrumSettings>({ pattern: 'none', volume: 0.5 });
   const [instrumentSettings, setInstrumentSettings] = useState<InstrumentSettings>({
     bass: { name: "portamento", volume: 0.7 },
+    melody: { name: "synth", volume: 0.6 },
   });
   const [bpm, setBpm] = useState(75);
   const [score, setScore] = useState<ScoreName>('dreamtales');
@@ -50,7 +51,7 @@ export const useAuraGroove = () => {
     setEngineIsPlaying(!isPlaying);
   }, [isInitialized, isPlaying, initialize, setEngineIsPlaying]);
 
-  const handleInstrumentChange = (part: keyof InstrumentSettings, name: BassInstrument) => {
+  const handleInstrumentChange = (part: keyof InstrumentSettings, name: BassInstrument | MelodyInstrument) => {
     setInstrumentSettings(prev => ({
       ...prev,
       [part]: { ...prev[part], name }
@@ -59,10 +60,10 @@ export const useAuraGroove = () => {
 
   const handleVolumeChange = (part: InstrumentPart, value: number) => {
     console.log(`[UI] Volume slider changed`, { part, volume: value });
-    if (part === 'bass') {
+    if (part === 'bass' || part === 'melody') {
       setInstrumentSettings(prev => ({
         ...prev,
-        bass: { ...prev.bass, volume: value }
+        [part]: { ...prev[part], volume: value }
       }));
     } else if (part === 'drums') {
         setDrumSettings(prev => ({ ...prev, volume: value }));

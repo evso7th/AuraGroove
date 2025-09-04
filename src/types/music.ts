@@ -28,6 +28,7 @@ export type Score = {
 
 // --- UI Types ---
 export type BassInstrument = 'portamento' | 'none';
+export type MelodyInstrument = 'synth' | 'none';
 export type InstrumentPart = 'bass' | 'melody' | 'drums' | 'effects';
 
 
@@ -36,8 +37,10 @@ export type InstrumentSettings = {
       name: BassInstrument;
       volume: number; // 0-1
   };
-  // Future parts can be added here
-  // melody: { ... }
+  melody: {
+      name: MelodyInstrument;
+      volume: number; // 0-1
+  };
 };
 
 export type DrumSettings = {

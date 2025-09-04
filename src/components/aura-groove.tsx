@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import Image from 'next/image';
 import { Slider } from "@/components/ui/slider";
-import type { DrumSettings, InstrumentSettings, ScoreName, EffectsSettings, BassInstrument, InstrumentPart } from '@/types/music';
+import type { DrumSettings, InstrumentSettings, ScoreName, EffectsSettings, BassInstrument, InstrumentPart, MelodyInstrument } from '@/types/music';
 
 // This is now a "dumb" UI component controlled by the useAuraGroove hook.
 export type AuraGrooveProps = {
@@ -18,7 +18,7 @@ export type AuraGrooveProps = {
   drumSettings: DrumSettings;
   setDrumSettings: (settings: React.SetStateAction<DrumSettings>) => void;
   instrumentSettings: InstrumentSettings;
-  setInstrumentSettings: (part: keyof InstrumentSettings, name: BassInstrument) => void;
+  setInstrumentSettings: (part: keyof InstrumentSettings, name: BassInstrument | MelodyInstrument) => void;
   handleVolumeChange: (part: InstrumentPart, value: number) => void;
   effectsSettings: EffectsSettings;
   handleToggleEffects: () => void;
@@ -143,7 +143,7 @@ export function AuraGroove({
                         <Label htmlFor={`${part}-instrument`} className="font-semibold flex items-center gap-2 capitalize"><Music className="h-5 w-5" /> {part}</Label>
                          <Select
                           value={settings.name}
-                          onValueChange={(v) => setInstrumentSettings(part as keyof InstrumentSettings, v as BassInstrument)}
+                          onValueChange={(v) => setInstrumentSettings(part as keyof InstrumentSettings, v as any)}
                           disabled={isInitializing || isPlaying}
                         >
                           <SelectTrigger id={`${part}-instrument`} className="w-[150px]">
@@ -154,6 +154,11 @@ export function AuraGroove({
                              {part === 'bass' && (
                                 <>
                                     <SelectItem value="portamento">Portamento</SelectItem>
+                                </>
+                             )}
+                             {part === 'melody' && (
+                                <>
+                                    <SelectItem value="synth">Synth</SelectItem>
                                 </>
                              )}
                           </SelectContent>
