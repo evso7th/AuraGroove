@@ -239,24 +239,29 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     }
   };
 
+  const stopAllSounds = useCallback(() => {
+    accompanimentManagerRef.current?.allNotesOff();
+    bassManagerRef.current?.allNotesOff();
+    padPlayerRef.current?.stop();
+  }, []);
 
-  const setIsPlayingCallback = useCallback((playing: boolean) => {
+
+  const setIsPlayingCallback = useCallback(async (playing: boolean) => {
     if (!isInitialized || !workerRef.current || !audioContextRef.current) return;
     
-    const command = playing ? 'start' : 'stop';
-    if(playing && audioContextRef.current.state === 'suspended') {
-      audioContextRef.current.resume();
+    if (playing) {
+        if (audioContextRef.current.state === 'suspended') {
+            await audioContextRef.current.resume();
+        }
+        workerRef.current.postMessage({ command: 'start' });
+        setIsPlaying(true);
+    } else {
+        stopAllSounds();
+        workerRef.current.postMessage({ command: 'stop' });
+        setIsPlaying(false);
     }
 
-    workerRef.current.postMessage({ command });
-    setIsPlaying(playing);
-    if (!playing) {
-        accompanimentManagerRef.current?.stop();
-        bassManagerRef.current?.stop();
-        padPlayerRef.current?.stop();
-    }
-
-  }, [isInitialized]);
+  }, [isInitialized, stopAllSounds]);
 
   const updateSettingsCallback = useCallback((settings: Partial<WorkerSettings>) => {
      if (!isInitialized || !workerRef.current) return;

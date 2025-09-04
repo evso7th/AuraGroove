@@ -94,6 +94,10 @@ export class BassSynthManager {
         this.workletNode.port.postMessage({ type: 'setMode', mode: technique });
     }
 
+    public allNotesOff() {
+        this.stop();
+    }
+
     public stop() {
         // Clear all scheduled note-off events
         this.scheduledTimeouts.forEach(timeoutId => clearTimeout(timeoutId));

@@ -68,6 +68,12 @@ export class AccompanimentSynthManager {
         }
     }
 
+    public allNotesOff() {
+        if (this.workletNode) {
+            this.workletNode.port.postMessage({ type: 'noteOff' });
+        }
+    }
+
     public stop() {
         if (this.workletNode) {
             this.workletNode.port.postMessage({ type: 'noteOff' });
