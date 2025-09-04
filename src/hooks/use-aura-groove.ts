@@ -30,7 +30,7 @@ export const useAuraGroove = () => {
   });
   const [textureSettings, setTextureSettings] = useState<TextureSettings>({
       sparkles: { enabled: true, volume: 0.6 },
-      pads: { enabled: true, volume: 0.8 },
+      pads: { enabled: true, volume: 0.4 },
   });
   const [bpm, setBpm] = useState(75);
   const [score, setScore] = useState<ScoreName>('dreamtales');
