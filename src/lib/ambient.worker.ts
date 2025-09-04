@@ -21,10 +21,10 @@ class EvolutionEngine {
     constructor() {
         this.anchors = [
             [
-                { midi: 48, duration: 0.5, time: 0 }, // C3
-                { midi: 52, duration: 0.5, time: 0.5 }, // E3
-                { midi: 55, duration: 0.5, time: 1.0 }, // G3
-                { midi: 57, duration: 0.5, time: 1.5 }, // A3 - was C4 (60)
+                { midi: 48, duration: 0.5, time: 0 },    // C3
+                { midi: 52, duration: 0.5, time: 0.5 },    // E3
+                { midi: 55, duration: 0.5, time: 1.0 },    // G3
+                { midi: 48, duration: 0.5, time: 1.5 },    // C3 - was A3
             ]
         ];
         this.currentPhrase = this.anchors[0];
@@ -133,15 +133,17 @@ const Scheduler = {
     INTRO_DURATION_BARS: 8,
     // Randomize instrument introduction order
     introOrder: [] as InstrumentPart[],
+    lastSparkleTime: -Infinity, // Time when the last sparkle was generated
     
     settings: {
         bpm: 75,
         score: 'dreamtales',
         drumSettings: { pattern: 'none', enabled: false },
         instrumentSettings: { 
-            bass: { name: "glideBass" as BassInstrument, volume: 0.5 },
+            bass: { name: "glideBass" as BassInstrument, volume: 0.5, technique: 'arpeggio' },
             melody: { name: "synth" as MelodyInstrument, volume: 0.5 },
-            accompaniment: { name: "poly_synth" as AccompanimentInstrument, volume: 0.5 },
+            accompaniment: { name: "synth" as AccompanimentInstrument, volume: 0.5 },
+            effects: { volume: 0.5 }
         },
         density: 0.5,
     } as WorkerSettings,
@@ -157,6 +159,7 @@ const Scheduler = {
         this.state = 'intro';
         this.barCount = 0;
         this.introBarCount = 0;
+        this.lastSparkleTime = -Infinity;
 
         // Shuffle the intro order for variety each time
         const parts: InstrumentPart[] = ['drums', 'bass', 'accompaniment', 'melody'];
@@ -208,7 +211,7 @@ const Scheduler = {
         }
         if (playAccompaniment) {
              const chordTones = [48, 52, 55]; // Simple C Major triad
-             score.accompaniment?.push({ midi: chordTones[this.introBarCount % 3], time: 0, duration: this.barDuration, velocity: 0.4 });
+             score.accompaniment?.push(...chordTones.map(midi => ({ midi, time: 0, duration: this.barDuration, velocity: 0.4})));
         }
         if (playMelody) {
             if (Math.random() < this.settings.density * 0.5) { // Melody is sparse in intro
@@ -223,6 +226,43 @@ const Scheduler = {
             this.state = 'looping';
         }
         return score;
+    },
+    
+    // --- Sparkle/In-krap-le-ni-ye Logic ---
+    shouldAddSparkle(currentTime: number, score: Score): boolean {
+        // Rule 1: Rarity (1-3 minutes)
+        const timeSinceLast = currentTime - this.lastSparkleTime;
+        const minTime = 60; // 1 minute
+        if (timeSinceLast < minTime) return false;
+
+        // Rule 2: Only when quiet (low density)
+        const noteCount = (score.bass?.length || 0) + (score.melody?.length || 0) + (score.accompaniment?.length || 0);
+        const density = noteCount / 3; // Normalize density
+        if (density > (this.settings.density * 0.5)) return false; // Only if current density is less than half the max
+
+        // Rule 3: Chance
+        const chance = (timeSinceLast - minTime) / (180 - minTime); // Increase chance over time
+        return Math.random() < (chance * 0.3); // 30% chance at max time
+    },
+    
+    createSparkleScore(timeOffset: number): Note[] {
+        const notes: Note[] = [];
+        const baseNotes = [55, 57, 59, 60]; // G3, A3, B3, C4
+        const duration = 3 + Math.random() * 5; // 3-8 seconds
+        let currentTime = 0;
+
+        while (currentTime < duration) {
+            const midi = baseNotes[Math.floor(Math.random() * baseNotes.length)];
+            const vel = 0.3 + Math.random() * 0.2; // 0.3 - 0.5
+            const dur = 0.5 + Math.random() * 1.5; // long notes for "plink" effect
+            const gap = 0.5 + Math.random(); // gap between notes
+
+            if (currentTime + dur <= duration) {
+                notes.push({ midi, time: timeOffset + currentTime, duration: dur, velocity: vel });
+            }
+            currentTime += dur + gap;
+        }
+        return notes;
     },
 
     createLoopingScore(): Score {
@@ -267,6 +307,8 @@ const Scheduler = {
         if (!this.isRunning) return;
         
         let score: Score;
+        const currentTime = this.barCount * this.barDuration;
+
         switch(this.state) {
             case 'intro':
                 score = this.createIntroScore();
@@ -278,6 +320,16 @@ const Scheduler = {
             default:
                 score = {};
                 break;
+        }
+
+        // --- Add Sparkles ---
+        if (this.state === 'looping' && this.shouldAddSparkle(currentTime, score)) {
+            const sparkleNotes = this.createSparkleScore(0); // time is relative to bar start
+            if (!score.melody) {
+                score.melody = [];
+            }
+            score.melody.push(...sparkleNotes);
+            this.lastSparkleTime = currentTime;
         }
         
         self.postMessage({
@@ -312,7 +364,5 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
-
-    
 
     
