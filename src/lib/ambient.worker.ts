@@ -48,7 +48,7 @@ function createSparkleScore(): Note[] {
         const gap = 0.5 + Math.random();
 
         if (currentTime + noteDuration <= duration) {
-            notes.push({ midi, time: currentTime, duration: noteDuration, velocity });
+            notes.push({ midi, time: currentTime, duration: noteDuration, velocity, part: 'spark' });
         }
         currentTime += noteDuration + gap;
     }
@@ -170,7 +170,6 @@ const Scheduler = {
             bass: { name: "glideBass", volume: 0.5, technique: 'arpeggio' },
             melody: { name: "synth", volume: 0.5 },
             accompaniment: { name: "synth", volume: 0.5 },
-            effects: { volume: 0.5 }
         },
         density: 0.5,
     } as WorkerSettings,
@@ -222,9 +221,23 @@ const Scheduler = {
 
         const currentTime = this.barCount * this.barDuration;
         if (shouldAddSparkle(currentTime, this.settings.density)) {
-             score.melody?.push(...createSparkleScore());
+             score.effects?.push(...createSparkleScore());
              lastSparkleTime = currentTime;
         }
+
+        self.postMessage({
+            type: 'debug',
+            message: `[Worker Tick #${this.barCount}] Generated Score`,
+            data: {
+                bassNotes: score.bass?.length ?? 0,
+                melodyNotes: score.melody?.length ?? 0,
+                accompanimentNotes: score.accompaniment?.length ?? 0,
+                drumNotes: score.drums?.length ?? 0,
+                effectNotes: score.effects?.length ?? 0,
+                stage: stage.name,
+                progress: progress.toFixed(2)
+            }
+        });
 
         self.postMessage({
             type: 'score',
