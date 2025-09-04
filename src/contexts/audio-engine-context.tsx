@@ -131,12 +131,15 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
             console.log(`[AudioEngine] Creating synth pool with ${numVoices} voices`);
             
             const melodyGain = gainNodesRef.current.melody;
-            if(!melodyGain) {
-                throw new Error("Melody gain node not initialized");
+            const bassGain = gainNodesRef.current.bass;
+
+            if(!melodyGain || !bassGain) {
+                throw new Error("Gain nodes not initialized");
             }
+            
             for(let i = 0; i < numVoices; i++) {
                 const node = new AudioWorkletNode(audioContextRef.current, 'synth-processor');
-                node.connect(melodyGain);
+                // Don't connect here, connect on demand
                 synthPoolRef.current.push(node);
             }
              console.log('[AudioEngine] Synth pool created', { voices: synthPoolRef.current.length });
@@ -187,7 +190,6 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
 
 
   const scheduleScore = (score: Score, audioContext: AudioContext) => {
-    console.log('[AudioEngine] DIAG: scheduleScore received score', { hasDrums: !!score.drums && score.drums.length > 0 });
     const now = audioContext.currentTime;
     const currentSettings = settingsRef.current;
     
@@ -228,7 +230,6 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
 
     const drumScore = score.drums || [];
     if (drumScore.length > 0 && drumMachineRef.current) {
-        console.log('[AudioEngine] DIAG: Scheduling drums');
         drumMachineRef.current.schedule(drumScore, now);
     }
   };

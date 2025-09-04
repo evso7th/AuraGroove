@@ -7,7 +7,7 @@
  * and samplers (drums, effects) and sends them to the main thread for execution.
  * It is completely passive and only works when commanded.
  */
-import type { WorkerSettings, Score, Note, DrumsScore, EffectsScore, BassInstrument } from '@/types/music';
+import type { WorkerSettings, Score, Note, DrumsScore, EffectsScore, BassInstrument, DrumSettings } from '@/types/music';
 
 type Phrase = Note[];
 
@@ -50,7 +50,7 @@ class EvolutionEngine {
         });
     }
 
-    generateNextBar(barDuration: number, density: number): { melody: Phrase, bass: Phrase } {
+    generateNextBar(barDuration: number, density: number, drumSettings: Omit<DrumSettings, 'volume'> & { enabled: boolean }): { melody: Phrase, bass: Phrase, drums: DrumsScore } {
         this.barSinceAnchor++;
 
         // Every 8 bars, return to an anchor
@@ -75,7 +75,21 @@ class EvolutionEngine {
             };
         }).filter(() => Math.random() < density); // Apply density
 
-        return { melody, bass };
+        // Generate drums
+        const drums: DrumsScore = [];
+        if (drumSettings.enabled) {
+             const notesInBar = 16;
+             const step = barDuration / notesInBar;
+             if (drumSettings.pattern === 'ambient_beat' || drumSettings.pattern === 'composer') {
+                for (let i = 0; i < notesInBar; i++) {
+                     if (i % 8 === 0) drums.push({ note: 'C4', time: i * step, velocity: 1.0 }); // Kick
+                     if (i % 8 === 4) drums.push({ note: 'D4', time: i * step, velocity: 0.7 }); // Snare
+                     if (i % 4 === 2) drums.push({ note: 'E4', time: i * step, velocity: 0.4 }); // Hi-hat
+                }
+             }
+        }
+
+        return { melody, bass, drums };
     }
 }
 
@@ -129,8 +143,8 @@ const Scheduler = {
 
     createScoreForNextBar(): Score {
         if (this.settings.score === 'dreamtales') {
-            const { melody, bass } = this.evolutionEngine.generateNextBar(this.barDuration, this.settings.density);
-            return { melody, bass }; // Drums and effects can be added here later
+            const { melody, bass, drums } = this.evolutionEngine.generateNextBar(this.barDuration, this.settings.density, this.settings.drumSettings);
+            return { melody, bass, drums };
         }
 
         // --- Fallback to simple generator for other styles ---
@@ -188,12 +202,6 @@ const Scheduler = {
         
         const score = this.createScoreForNextBar();
         
-        self.postMessage({
-            type: 'debug',
-            message: `[Worker] DIAG: Generated score. Drums count: ${score.drums?.length ?? 0}`,
-            data: { hasDrums: !!score.drums && score.drums.length > 0 }
-        });
-
         self.postMessage({
             type: 'score',
             score: score
