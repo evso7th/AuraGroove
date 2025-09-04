@@ -149,9 +149,11 @@ export function AuraGroove({
             {Object.entries(instrumentSettings).map(([part, settings]) => {
                 let instrumentList: (BassInstrument | MelodyInstrument | AccompanimentInstrument | 'none')[] = [];
                 if (part === 'bass') {
-                    instrumentList = ['classicBass', 'glideBass', 'ambientDrone', 'resonantGliss', 'none'];
-                } else {
+                    instrumentList = ['classicBass', 'glideBass', 'ambientDrone', 'resonantGliss', 'hypnoticDrone', 'livingRiff', 'none'];
+                } else if (part === 'melody') {
                     instrumentList = ['synth', 'organ', 'mellotron', 'theremin', 'none'];
+                } else { // accompaniment
+                    instrumentList = ['poly_synth', 'none'];
                 }
 
                 return (
@@ -170,7 +172,7 @@ export function AuraGroove({
                           </SelectTrigger>
                           <SelectContent>
                              {instrumentList.map(instrument => (
-                                <SelectItem key={instrument} value={instrument}>{instrument.charAt(0).toUpperCase() + instrument.slice(1)}</SelectItem>
+                                <SelectItem key={instrument} value={instrument}>{instrument.charAt(0).toUpperCase() + instrument.slice(1).replace(/([A-Z])/g, ' $1')}</SelectItem>
                              ))}
                           </SelectContent>
                         </Select>

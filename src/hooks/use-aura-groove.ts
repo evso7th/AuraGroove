@@ -12,7 +12,7 @@ export const useAuraGroove = () => {
   const [instrumentSettings, setInstrumentSettings] = useState<InstrumentSettings>({
     bass: { name: "glideBass", volume: 0.7 },
     melody: { name: "synth", volume: 0.6 },
-    accompaniment: { name: "organ", volume: 0.5 },
+    accompaniment: { name: "poly_synth", volume: 0.5 },
   });
   const [bpm, setBpm] = useState(75);
   const [score, setScore] = useState<ScoreName>('dreamtales');

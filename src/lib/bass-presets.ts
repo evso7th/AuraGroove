@@ -1,75 +1,93 @@
 
 export type BassPreset = {
-  wave: 'sine' | 'triangle' | 'sawtooth';
-  attack: number;       // 0.001 – 2.0
-  release: number;      // 0.1 – 5.0
-  cutoff: number;       // 50 – 800 Hz
-  portamento?: number;  // 0.01 – 0.1
-  distortion?: number;  // 0.0 – 0.3
-  filterQ?: number;     // 0.5 – 1.5
-  color: string;        // для UI
-  description: string;  // для пользователя
+  // Layer 1
+  wave1: 'sine' | 'triangle' | 'sawtooth';
+  attack1: number;      
+  release1: number;     
+  portamento1?: number; 
+  
+  // Layer 2 (optional)
+  wave2?: 'sine' | 'triangle' | 'sawtooth';
+  attack2?: number;      
+  release2?: number;     
+  portamento2?: number; 
+  
+  // Shared
+  cutoff: number;       
+  distortion?: number;  
+  filterQ?: number;     
+  stagger?: number; // ms delay for layer 2
+
+  // UI
+  color: string;        
+  description: string;  
 };
 
 export const BASS_PRESETS: Record<string, BassPreset> = {
-  /**
-   * 🎸 1. Classic Bass Guitar
-   * Как настоящая бас-гитара: чёткий attack, короткий sustain, идеален для ритма
-   */
   classicBass: {
-    wave: 'sawtooth',
-    attack: 0.01,
-    release: 0.3,
+    wave1: 'sawtooth',
+    attack1: 0.01,
+    release1: 0.3,
     cutoff: 400,
     distortion: 0.05,
     filterQ: 0.7,
-    color: '#8B4513', // Ржаво-коричневый
+    color: '#8B4513',
     description: 'Чёткий, ритмичный, как настоящая бас-гитара'
   },
-
-  /**
-   * 🌀 2. Smooth Glide Bass
-   * Плавный, с длинным release, идеален для портаменто и глиссандо
-   */
   glideBass: {
-    wave: 'triangle',
-    attack: 0.05,
-    release: 1.5,
+    wave1: 'triangle',
+    attack1: 0.05,
+    release1: 1.5,
+    portamento1: 0.03,
     cutoff: 300,
-    portamento: 0.03,
     filterQ: 0.5,
-    color: '#4169E1', // Королевский синий
+    color: '#4169E1',
     description: 'Плавный, как скольжение по струне'
   },
-
-  /**
-   * 🌑 3. Deep Ambient Drone
-   * Очень длинный, плотный, с мягким фильтром — как вибрация земли
-   */
   ambientDrone: {
-    wave: 'sine',
-    attack: 0.2,
-    release: 3.0,
+    wave1: 'sine',
+    attack1: 0.2,
+    release1: 3.0,
+    portamento1: 0.08,
     cutoff: 120,
-    portamento: 0.08,
     filterQ: 1.2,
-    color: '#1A0033', // Глубокий фиолетовый
+    color: '#1A0033',
     description: 'Тёмный, плотный, как вибрация под землёй'
   },
-
-  /**
-   * 🌀 4. Resonant Glissando Bass
-   * С акцентом на обертоны, с фильтром и медленным глиссандо — как электронный виолончель
-   */
   resonantGliss: {
-    wave: 'sawtooth',
-    attack: 0.02,
-    release: 1.0,
+    wave1: 'sawtooth',
+    attack1: 0.02,
+    release1: 1.0,
+    portamento1: 0.06,
     cutoff: 500,
-    portamento: 0.06,
     filterQ: 1.4,
     distortion: 0.1,
-    color: '#8B008B', // Темно-пурпурный
+    color: '#8B008B',
     description: 'Резонирующий, с "пением", идеален для глиссандо'
+  },
+  hypnoticDrone: {
+    wave1: 'sine',
+    attack1: 0.2,
+    release1: 3.0,
+    wave2: 'triangle',
+    attack2: 0.1,
+    release2: 2.0,
+    cutoff: 150, // lower cutoff for drone
+    stagger: 0.015, // 15ms
+    color: '#483D8B', // Dark Slate Blue
+    description: 'Вибрация земли со стерео-движением'
+  },
+  livingRiff: {
+    wave1: 'sine',
+    attack1: 0.01,
+    release1: 1.0,
+    wave2: 'sawtooth',
+    attack2: 0.05,
+    release2: 1.5,
+    distortion: 0.1,
+    cutoff: 350,
+    stagger: 0.005, // 5ms
+    color: '#FF4500', // Orange Red
+    description: 'Живой, дышащий рифф с характером'
   }
 };

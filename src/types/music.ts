@@ -28,9 +28,9 @@ export type Score = {
 };
 
 // --- UI Types ---
-export type BassInstrument = 'classicBass' | 'glideBass' | 'ambientDrone' | 'resonantGliss' | 'none';
+export type BassInstrument = 'classicBass' | 'glideBass' | 'ambientDrone' | 'resonantGliss' | 'hypnoticDrone' | 'livingRiff' | 'none';
 export type MelodyInstrument = 'synth' | 'organ' | 'mellotron' | 'theremin' | 'none';
-export type AccompanimentInstrument = MelodyInstrument;
+export type AccompanimentInstrument = 'poly_synth' | 'none';
 export type InstrumentPart = 'bass' | 'melody' | 'accompaniment' | 'drums' | 'effects';
 
 
