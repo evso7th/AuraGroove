@@ -32,7 +32,7 @@ export default function Home() {
             <Image src="/assets/icon8.jpeg" alt="AuraGroove Logo" width={80} height={80} className="rounded-full" />
           </div>
           <CardTitle className="font-headline text-4xl">Welcome to AuraGroove</CardTitle>
-          <CardDescription className="text-lg">Your personal AI-powered ambient music generator.</CardDescription>
+          <CardDescription className="text-lg">Your personal pure digital ambient music generator.</CardDescription>
         </CardHeader>
         <CardContent>
           <p className="text-muted-foreground min-h-[20px]">
