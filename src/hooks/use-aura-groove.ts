@@ -2,15 +2,15 @@
 'use client';
 
 import { useState, useEffect, useCallback } from "react";
-import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings, BassInstrument, InstrumentPart, MelodyInstrument, AccompanimentInstrument } from '@/types/music';
+import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings, BassInstrument, InstrumentPart, MelodyInstrument, AccompanimentInstrument, BassTechnique } from '@/types/music';
 import { useAudioEngine } from "@/contexts/audio-engine-context";
 
 export const useAuraGroove = () => {
-  const { isInitialized, isPlaying, initialize, setIsPlaying: setEngineIsPlaying, updateSettings, setVolume, setInstrument } = useAudioEngine();
+  const { isInitialized, isPlaying, initialize, setIsPlaying: setEngineIsPlaying, updateSettings, setVolume, setInstrument, setBassTechnique } = useAudioEngine();
   
   const [drumSettings, setDrumSettings] = useState<DrumSettings>({ pattern: 'none', volume: 0.5 });
   const [instrumentSettings, setInstrumentSettings] = useState<InstrumentSettings>({
-    bass: { name: "glideBass", volume: 0.7 },
+    bass: { name: "glideBass", volume: 0.7, technique: 'arpeggio' },
     melody: { name: "synth", volume: 0.6 },
     accompaniment: { name: "poly_synth", volume: 0.5 },
   });
@@ -43,7 +43,9 @@ export const useAuraGroove = () => {
         setInstrument('bass', instrumentSettings.bass.name);
         setInstrument('melody', instrumentSettings.melody.name);
         setInstrument('accompaniment', instrumentSettings.accompaniment.name);
-
+        
+        // Set initial bass technique
+        setBassTechnique(instrumentSettings.bass.technique);
     }
   }, [isInitialized]);
 
@@ -68,6 +70,14 @@ export const useAuraGroove = () => {
       [part]: { ...prev[part], name }
     }));
     setInstrument(part as 'bass' | 'melody' | 'accompaniment', name);
+  };
+  
+  const handleBassTechniqueChange = (technique: BassTechnique) => {
+      setInstrumentSettings(prev => ({
+        ...prev,
+        bass: { ...prev.bass, technique }
+      }));
+      setBassTechnique(technique);
   };
 
   const handleVolumeChange = (part: InstrumentPart, value: number) => {
@@ -98,6 +108,7 @@ export const useAuraGroove = () => {
     setDrumSettings: handleDrumSettingsChange,
     instrumentSettings,
     setInstrumentSettings: handleInstrumentChange,
+    handleBassTechniqueChange,
     handleVolumeChange,
     effectsSettings: { enabled: false }, // Placeholder
     handleToggleEffects: () => {}, // Placeholder

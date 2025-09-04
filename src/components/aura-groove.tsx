@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import Image from 'next/image';
 import { Slider } from "@/components/ui/slider";
-import type { DrumSettings, InstrumentSettings, ScoreName, EffectsSettings, BassInstrument, InstrumentPart, MelodyInstrument, AccompanimentInstrument } from '@/types/music';
+import type { DrumSettings, InstrumentSettings, ScoreName, EffectsSettings, BassInstrument, InstrumentPart, MelodyInstrument, AccompanimentInstrument, BassTechnique } from '@/types/music';
 
 // This is now a "dumb" UI component controlled by the useAuraGroove hook.
 export type AuraGrooveProps = {
@@ -19,6 +19,7 @@ export type AuraGrooveProps = {
   setDrumSettings: (settings: React.SetStateAction<DrumSettings>) => void;
   instrumentSettings: InstrumentSettings;
   setInstrumentSettings: (part: keyof InstrumentSettings, name: BassInstrument | MelodyInstrument | AccompanimentInstrument) => void;
+  handleBassTechniqueChange: (technique: BassTechnique) => void;
   handleVolumeChange: (part: InstrumentPart, value: number) => void;
   effectsSettings: EffectsSettings;
   handleToggleEffects: () => void;
@@ -39,6 +40,7 @@ export function AuraGroove({
   setDrumSettings,
   instrumentSettings,
   setInstrumentSettings,
+  handleBassTechniqueChange,
   handleVolumeChange,
   effectsSettings,
   handleToggleEffects,
@@ -177,6 +179,29 @@ export function AuraGroove({
                           </SelectContent>
                         </Select>
                     </div>
+
+                    {part === 'bass' && (
+                        <div className="flex justify-between items-center">
+                            <Label htmlFor="bass-technique" className="font-semibold flex items-center gap-2 capitalize">Technique</Label>
+                            <Select
+                                value={settings.technique}
+                                onValueChange={(v) => handleBassTechniqueChange(v as BassTechnique)}
+                                disabled={isInitializing || isPlaying || settings.name === 'none'}
+                            >
+                                <SelectTrigger id="bass-technique" className="w-[150px]">
+                                    <SelectValue placeholder="Select technique" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="arpeggio">Arpeggio</SelectItem>
+                                    <SelectItem value="portamento">Portamento</SelectItem>
+                                    <SelectItem value="glissando">Glissando</SelectItem>
+                                    <SelectItem value="glide">Glide</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+
+
                      <div className="space-y-2 pt-2">
                          <div className="flex items-center justify-between">
                              <Label className="text-xs text-muted-foreground flex items-center gap-1.5"><Speaker className="h-4 w-4"/> Volume</Label>

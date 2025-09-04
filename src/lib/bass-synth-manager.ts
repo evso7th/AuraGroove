@@ -1,16 +1,17 @@
 
-import type { Note, BassInstrument } from "@/types/music";
+import type { Note, BassInstrument, BassTechnique } from "@/types/music";
 import { BASS_PRESETS } from "./bass-presets";
 
 export class BassSynthManager {
     private audioContext: AudioContext;
     private workletNode: AudioWorkletNode | null = null;
-    private outputNode: AudioNode;
+    private outputNode: GainNode;
     public isInitialized = false;
 
     constructor(audioContext: AudioContext, destination: AudioNode) {
         this.audioContext = audioContext;
-        this.outputNode = destination;
+        this.outputNode = this.audioContext.createGain();
+        this.outputNode.connect(destination);
     }
 
     async init() {
@@ -21,6 +22,7 @@ export class BassSynthManager {
             this.workletNode.connect(this.outputNode);
             this.isInitialized = true;
             this.setPreset('glideBass'); 
+            this.setTechnique('arpeggio');
             console.log('[BassSynthManager] Initialized successfully with new bass-processor.');
         } catch (e) {
             console.error('[BassSynthManager] Failed to initialize:', e);
@@ -60,6 +62,11 @@ export class BassSynthManager {
                 ...preset
              });
         }
+    }
+
+    public setTechnique(technique: BassTechnique) {
+        if (!this.workletNode) return;
+        this.workletNode.port.postMessage({ type: 'setMode', mode: technique });
     }
 
     public stop() {

@@ -3,7 +3,7 @@
 
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import type { WorkerSettings, Score, Note, DrumsScore, InstrumentPart, BassInstrument, MelodyInstrument, AccompanimentInstrument } from '@/types/music';
+import type { WorkerSettings, Score, Note, DrumsScore, InstrumentPart, BassInstrument, MelodyInstrument, AccompanimentInstrument, BassTechnique } from '@/types/music';
 import { DrumMachine } from '@/lib/drum-machine';
 import { AccompanimentSynthManager } from '@/lib/accompaniment-synth-manager';
 import { BassSynthManager } from '@/lib/bass-synth-manager';
@@ -41,6 +41,7 @@ interface AudioEngineContextType {
   updateSettings: (settings: Partial<WorkerSettings>) => void;
   setVolume: (part: InstrumentPart, volume: number) => void;
   setInstrument: (part: 'bass' | 'melody' | 'accompaniment', name: BassInstrument | MelodyInstrument | AccompanimentInstrument) => void;
+  setBassTechnique: (technique: BassTechnique) => void;
 }
 
 const AudioEngineContext = createContext<AudioEngineContextType | null>(null);
@@ -283,6 +284,12 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     }
   }, [updateSettingsCallback]);
 
+  const setBassTechniqueCallback = useCallback((technique: BassTechnique) => {
+    if (bassManagerRef.current) {
+      bassManagerRef.current.setTechnique(technique);
+    }
+  }, []);
+
   useEffect(() => {
     return () => {
         workerRef.current?.terminate();
@@ -301,6 +308,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         updateSettings: updateSettingsCallback,
         setVolume: setVolumeCallback,
         setInstrument: setInstrumentCallback,
+        setBassTechnique: setBassTechniqueCallback,
     }}>
       {children}
     </AudioEngineContext.Provider>

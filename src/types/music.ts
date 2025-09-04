@@ -1,5 +1,4 @@
 
-
 // A musical note to be played by a synthesizer.
 export type Note = {
     midi: number;         // MIDI note number (e.g., 60 for C4).
@@ -32,12 +31,14 @@ export type BassInstrument = 'classicBass' | 'glideBass' | 'ambientDrone' | 'res
 export type MelodyInstrument = 'synth' | 'organ' | 'mellotron' | 'theremin' | 'none';
 export type AccompanimentInstrument = 'poly_synth' | 'none';
 export type InstrumentPart = 'bass' | 'melody' | 'accompaniment' | 'drums' | 'effects';
+export type BassTechnique = 'arpeggio' | 'portamento' | 'glissando' | 'glide';
 
 
 export type InstrumentSettings = {
   bass: {
       name: BassInstrument;
       volume: number; // 0-1
+      technique: BassTechnique;
   };
   melody: {
       name: MelodyInstrument;
