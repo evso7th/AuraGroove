@@ -1,122 +1,158 @@
 
 /**
- * @file AuraGroove Music Worker (Architecture: "Hybrid Engine Composer")
+ * @file AuraGroove Music Worker (Architecture: "The Trance Architect")
  *
- * This worker's only responsibility is to compose music for all parts.
- * It generates arrays of notes (scores) for synths (bass, melody, accompaniment)
- * and samplers (drums, effects) and sends them to the main thread for execution.
- * It is completely passive and only works when commanded.
+ * This worker acts as a minimalist composer, following a detailed 12-minute musical score.
+ * Its purpose is to generate a hypnotic, gradually evolving piece of music.
+ * It is completely passive and only composes the next bar when commanded via a 'tick'.
  */
-import type { WorkerSettings, Score, Note, DrumsScore, EffectsScore, BassInstrument, MelodyInstrument, AccompanimentInstrument, DrumSettings, InstrumentPart } from '@/types/music';
+import type { WorkerSettings, Score, Note, DrumsScore, InstrumentPart } from '@/types/music';
 
-type Phrase = Note[];
+const TOTAL_DURATION_SECONDS = 12 * 60; // 12 minutes
+const BPM = 60;
+const BEATS_PER_BAR = 4;
+const BAR_DURATION = (60 / BPM) * BEATS_PER_BAR;
+const TOTAL_BARS = TOTAL_DURATION_SECONDS / BAR_DURATION;
 
-class EvolutionEngine {
-    private anchors: Phrase[];
-    private currentPhrase: Phrase;
-    private barSinceAnchor: number;
-    private bassNotes = [36, 38, 40, 41, 43, 45, 47]; // C2-B2
-    private chordProgression = [0, 4, 5, 3]; // I-V-vi-IV in C Major scale degrees
+// --- Musical Constants ---
+const KEY_ROOT_MIDI = 40; // E2
+const SCALE_INTERVALS = [0, 2, 3, 5, 7, 8, 10]; // E Natural Minor
 
-    constructor() {
-        this.anchors = [
-            [
-                { midi: 48, duration: 0.5, time: 0 },    // C3
-                { midi: 52, duration: 0.5, time: 0.5 },    // E3
-                { midi: 55, duration: 0.5, time: 1.0 },    // G3
-                { midi: 48, duration: 0.5, time: 1.5 },    // C3 - was A3
-            ]
-        ];
-        this.currentPhrase = this.anchors[0];
-        this.barSinceAnchor = 0;
+// --- "Sparkle" (In-krap-le-ni-ye) Logic ---
+let lastSparkleTime = -Infinity;
+
+function shouldAddSparkle(currentTime: number, density: number): boolean {
+    const timeSinceLast = currentTime - lastSparkleTime;
+    const minTime = 60;       // 1 minute
+    const maxTime = 3 * 60;   // 3 minutes
+
+    if (timeSinceLast < minTime) return false;
+    if (density > 0.3) return false; // Only when quiet
+
+    // Chance increases over time
+    const chance = (timeSinceLast - minTime) / (maxTime - minTime);
+    return Math.random() < chance;
+}
+
+function createSparkleScore(): Note[] {
+    const notes: Note[] = [];
+    let currentTime = 0;
+    const duration = 3 + Math.random() * 5; // 3-8 seconds
+    // G3 to C4
+    const midiRange = [55, 57, 59, 60]; 
+
+    while (currentTime < duration) {
+        const midi = midiRange[Math.floor(Math.random() * midiRange.length)];
+        const velocity = 0.3 + Math.random() * 0.2; // 0.3-0.5
+        const noteDuration = 0.5 + Math.random() * 1.5;
+        const gap = 0.5 + Math.random();
+
+        if (currentTime + noteDuration <= duration) {
+            notes.push({ midi, time: currentTime, duration: noteDuration, velocity });
+        }
+        currentTime += noteDuration + gap;
     }
+    return notes;
+}
 
-    private mutate(phrase: Phrase): Phrase {
-        return phrase.map(note => {
-            const newNote = { ...note };
-            const mutationType = Math.random();
-            const MIN_MIDI = 48; // C3
-            const MAX_MIDI = 67; // G4 - Keep it from being too piercing
 
-            if (mutationType < 0.4) {
-                const direction = Math.random() < 0.5 ? 1 : -1;
-                const potentialMidi = newNote.midi + direction;
-                
-                if (potentialMidi >= MIN_MIDI && potentialMidi <= MAX_MIDI) {
-                    newNote.midi = potentialMidi;
-                } else {
-                    // If we hit the boundary, bounce back
-                    newNote.midi = newNote.midi - direction;
-                }
+// --- Main Composition Engine ---
+const Composer = {
+    getStage(progress: number) {
+        if (progress < 2 / 12) return { name: 'intro', complexity: 0.1 };
+        if (progress < 6 / 12) return { name: 'development', complexity: 0.3 + (progress - 2/12) * 4/12 * 0.3 };
+        if (progress < 8 / 12) return { name: 'climax', complexity: 0.9 };
+        if (progress < 10 / 12) return { name: 'density', complexity: 1.0 };
+        return { name: 'return', complexity: 0.2 };
+    },
 
-            } else if (mutationType < 0.7) {
-                newNote.duration *= (0.5 + Math.random());
+    generateBass(barIndex: number, stage: { name: string, complexity: number }): Note[] {
+        const riffPattern = [28, 28, 28, 31]; // E1, E1, E1, G1
+        const beatDuration = BAR_DURATION / 4;
+        let notes: Note[] = [];
+
+        // Basic riff
+        notes.push({ midi: riffPattern[barIndex % 4], time: (barIndex % 4) * beatDuration, duration: beatDuration, velocity: 0.7 });
+
+        // Evolution
+        if (stage.complexity > 0.3) { // Level 2: Add octave
+             notes.push({ midi: riffPattern[barIndex % 4] + 12, time: (barIndex % 4) * beatDuration, duration: beatDuration, velocity: 0.5 });
+        }
+        if (stage.complexity > 0.6) { // Level 3: Arpeggio
+            const arpNotes = [28, 31, 35]; // E1, G1, B1
+            const step = beatDuration / 3;
+            for(let i=0; i<3; i++) {
+                notes.push({ midi: arpNotes[i], time: (barIndex % 4) * beatDuration + i * step, duration: step, velocity: 0.6});
             }
-            return newNote;
-        });
-    }
-
-    private getChordTones(rootDegree: number): number[] {
-        const scale = [0, 2, 4, 5, 7, 9, 11]; // C Major scale intervals
-        const tones: number[] = [];
-        // Get root, third, and fifth
-        for(let i=0; i<3; i++) {
-            const degreeIndex = (rootDegree + i * 2) % scale.length;
-            const octaveOffset = Math.floor((rootDegree + i * 2) / scale.length);
-            // Accompaniment in 3rd octave
-            const baseNote = 48; // C3
-            tones.push(baseNote + (octaveOffset * 12) + scale[degreeIndex]);
         }
-        return tones;
-    }
+       
+        return notes;
+    },
 
-    generateNextBar(barDuration: number, density: number, drumSettings: Omit<DrumSettings, 'volume'> & { enabled: boolean }): { melody: Phrase, bass: Phrase, accompaniment: Phrase, drums: DrumsScore } {
-        this.barSinceAnchor++;
+    generateMelody(barIndex: number, stage: { name: string, complexity: number }): Note[] {
+       if (stage.name === 'intro' || stage.name === 'return') return [];
 
-        if (this.barSinceAnchor >= 8) {
-            this.currentPhrase = this.anchors[0];
-            this.barSinceAnchor = 0;
-        } else {
-            this.currentPhrase = this.mutate(this.currentPhrase);
-        }
+       const notes: Note[] = [];
+       const notesInBar = Math.floor(4 + stage.complexity * 12); // From 4 to 16 notes
+       const step = BAR_DURATION / notesInBar;
+       let lastMidi = 60; // Start at C4
+
+       for (let i = 0; i < notesInBar; i++) {
+            const direction = Math.random() < 0.6 ? 1 : -1;
+            const scaleIndex = (lastMidi - KEY_ROOT_MIDI + direction) % SCALE_INTERVALS.length;
+            const nextMidi = KEY_ROOT_MIDI + 24 + SCALE_INTERVALS[scaleIndex]; // Base C4 + scale note
+
+            if (nextMidi < 79) { // G5 limit
+                 lastMidi = nextMidi;
+            }
+            notes.push({ midi: lastMidi, time: i * step, duration: step * (1 + Math.random()), velocity: 0.4 + stage.complexity * 0.3 });
+       }
+       return notes;
+    },
+    
+    generateAccompaniment(barIndex: number, stage: { name: string, complexity: number }): Note[] {
+        const notes: Note[] = [];
+        const beatDuration = BAR_DURATION / 4;
+        const rootMidi = KEY_ROOT_MIDI + 12; // C3
         
-        const currentChordRootDegree = this.chordProgression[Math.floor(this.barCount / 2) % this.chordProgression.length];
+        // Don't play on climax/density for contrast
+        if (stage.name === 'climax' || stage.name === 'density') return [];
 
-        const bassMidi = this.bassNotes[currentChordRootDegree % this.bassNotes.length];
-        const bass: Phrase = [{ midi: bassMidi, time: 0, duration: barDuration, velocity: 0.6 }];
+        if (stage.complexity > 0.2) {
+            // "Left hand" arpeggio in 3rd octave
+            const arpPattern = [rootMidi, rootMidi + 3, rootMidi + 7]; // C3, Eb3, G3
+            for (let i=0; i<4; i++) {
+                notes.push({midi: arpPattern[i%3], time: i * beatDuration, duration: beatDuration, velocity: 0.4});
+            }
+        }
+         if (stage.complexity > 0.5) {
+            // "Right hand" melody in 4th octave
+            const melodyPattern = [rootMidi + 12, rootMidi + 15, rootMidi + 19, rootMidi+15]; // C4, Eb4, G4
+             for (let i=0; i<4; i++) {
+                notes.push({midi: melodyPattern[i%4], time: i * beatDuration + beatDuration/2, duration: beatDuration, velocity: 0.5});
+            }
+        }
+        return notes;
+    },
 
-        const melody = this.currentPhrase.map((note, index) => ({
-            ...note,
-            time: (index / this.currentPhrase.length) * barDuration,
-            velocity: 0.5 + Math.random() * 0.3
-        })).filter(() => Math.random() < density);
-
-        const chordTones = this.getChordTones(currentChordRootDegree);
-        const accompaniment: Phrase = chordTones.map(midi => ({
-            midi,
-            time: 0, // Worklet handles timing
-            duration: barDuration,
-            velocity: 0.6
-        }));
-
+    generateDrums(barIndex: number, stage: { name: string, complexity: number }): DrumsScore {
+        if (stage.name === 'intro' || stage.name === 'return' || !Scheduler.settings.drumSettings.enabled) return [];
         const drums: DrumsScore = [];
-        if (drumSettings.enabled) {
-             const notesInBar = 16;
-             const step = barDuration / notesInBar;
-             if (drumSettings.pattern === 'ambient_beat' || drumSettings.pattern === 'composer') {
-                for (let i = 0; i < notesInBar; i++) {
-                     if (i % 8 === 0) drums.push({ note: 'C4', time: i * step, velocity: 1.0 });
-                     if (i % 8 === 4) drums.push({ note: 'D4', time: i * step, velocity: 0.7 });
-                     if (i % 4 === 2) drums.push({ note: 'E4', time: i * step, velocity: 0.4 });
-                }
+        const step = BAR_DURATION / 16;
+        
+        if (stage.complexity > 0.2) {
+             for (let i = 0; i < 16; i++) {
+                 if (i % 8 === 0) drums.push({ note: 'C4', time: i * step, velocity: 0.8 * stage.complexity }); // Kick
+                 if (i % 8 === 4) drums.push({ note: 'D4', time: i * step, velocity: 0.6 * stage.complexity }); // Snare
              }
         }
-        
-        this.barCount = (this.barCount || 0) + 1;
-
-        return { melody, bass, accompaniment, drums };
+        if (stage.complexity > 0.4) {
+            for (let i = 0; i < 16; i++) {
+                 if (i % 2 === 1) drums.push({ note: 'E4', time: i * step, velocity: 0.3 * stage.complexity }); // Hihat
+            }
+        }
+        return drums;
     }
-     private barCount = 0;
 }
 
 
@@ -125,24 +161,15 @@ const Scheduler = {
     loopId: null as any,
     isRunning: false,
     barCount: 0,
-    evolutionEngine: new EvolutionEngine(),
-
-    // --- State Machine for Composition ---
-    state: 'stopped' as 'stopped' | 'intro' | 'looping',
-    introBarCount: 0,
-    INTRO_DURATION_BARS: 8,
-    // Randomize instrument introduction order
-    introOrder: [] as InstrumentPart[],
-    lastSparkleTime: -Infinity, // Time when the last sparkle was generated
     
     settings: {
-        bpm: 75,
-        score: 'dreamtales',
+        bpm: 60,
+        score: 'dreamtales', // This setting is now conceptual, as we follow the 12-min score
         drumSettings: { pattern: 'none', enabled: false },
         instrumentSettings: { 
-            bass: { name: "glideBass" as BassInstrument, volume: 0.5, technique: 'arpeggio' },
-            melody: { name: "synth" as MelodyInstrument, volume: 0.5 },
-            accompaniment: { name: "synth" as AccompanimentInstrument, volume: 0.5 },
+            bass: { name: "glideBass", volume: 0.5, technique: 'arpeggio' },
+            melody: { name: "synth", volume: 0.5 },
+            accompaniment: { name: "synth", volume: 0.5 },
             effects: { volume: 0.5 }
         },
         density: 0.5,
@@ -156,14 +183,8 @@ const Scheduler = {
         if (this.isRunning) return;
         
         this.isRunning = true;
-        this.state = 'intro';
         this.barCount = 0;
-        this.introBarCount = 0;
-        this.lastSparkleTime = -Infinity;
-
-        // Shuffle the intro order for variety each time
-        const parts: InstrumentPart[] = ['drums', 'bass', 'accompaniment', 'melody'];
-        this.introOrder = parts.sort(() => Math.random() - 0.5);
+        lastSparkleTime = -Infinity;
         
         const loop = () => {
             if (!this.isRunning) return;
@@ -176,7 +197,6 @@ const Scheduler = {
 
     stop() {
         this.isRunning = false;
-        this.state = 'stopped';
         if (this.loopId) {
             clearTimeout(this.loopId);
             this.loopId = null;
@@ -187,151 +207,25 @@ const Scheduler = {
        this.settings = { ...this.settings, ...newSettings };
     },
 
-    createIntroScore(): Score {
-        const score: Score = { bass: [], melody: [], accompaniment: [], drums: [], effects: [] };
-        const step = this.barDuration / 16;
-        
-        // Determine which instruments play in this bar of the intro
-        const playDrums = this.settings.drumSettings.enabled && this.introOrder.indexOf('drums') * 2 <= this.introBarCount;
-        const playBass = this.settings.instrumentSettings.bass.name !== 'none' && this.introOrder.indexOf('bass') * 2 <= this.introBarCount;
-        const playAccompaniment = this.settings.instrumentSettings.accompaniment.name !== 'none' && this.introOrder.indexOf('accompaniment') * 2 <= this.introBarCount;
-        const playMelody = this.settings.instrumentSettings.melody.name !== 'none' && this.introOrder.indexOf('melody') * 2 <= this.introBarCount;
-
-        if (playDrums) {
-            if (this.introBarCount % 2 === 0) { // Play only on every other bar during intro
-                 for (let i = 0; i < 16; i+=4) {
-                    score.drums?.push({ note: 'E4', time: i * step, velocity: 0.3 }); // Gentle hi-hat
-                 }
-            }
-        }
-        if (playBass) {
-            const bassNotes = [36, 40, 43, 38];
-            const note = bassNotes[this.introBarCount % bassNotes.length];
-            score.bass?.push({ midi: note, time: 0, duration: this.barDuration, velocity: 0.5 });
-        }
-        if (playAccompaniment) {
-             const chordTones = [48, 52, 55]; // Simple C Major triad
-             score.accompaniment?.push(...chordTones.map(midi => ({ midi, time: 0, duration: this.barDuration, velocity: 0.4})));
-        }
-        if (playMelody) {
-            if (Math.random() < this.settings.density * 0.5) { // Melody is sparse in intro
-                const melodyNotes = [60, 64, 67, 72];
-                const note = melodyNotes[Math.floor(Math.random() * melodyNotes.length)];
-                score.melody?.push({ midi: note, time: step * Math.floor(Math.random() * 8), duration: step * 4, velocity: 0.6 });
-            }
-        }
-
-        this.introBarCount++;
-        if (this.introBarCount >= this.INTRO_DURATION_BARS) {
-            this.state = 'looping';
-        }
-        return score;
-    },
-    
-    // --- Sparkle/In-krap-le-ni-ye Logic ---
-    shouldAddSparkle(currentTime: number, score: Score): boolean {
-        // Rule 1: Rarity (1-3 minutes)
-        const timeSinceLast = currentTime - this.lastSparkleTime;
-        const minTime = 60; // 1 minute
-        if (timeSinceLast < minTime) return false;
-
-        // Rule 2: Only when quiet (low density)
-        const noteCount = (score.bass?.length || 0) + (score.melody?.length || 0) + (score.accompaniment?.length || 0);
-        const density = noteCount / 3; // Normalize density
-        if (density > (this.settings.density * 0.5)) return false; // Only if current density is less than half the max
-
-        // Rule 3: Chance
-        const chance = (timeSinceLast - minTime) / (180 - minTime); // Increase chance over time
-        return Math.random() < (chance * 0.3); // 30% chance at max time
-    },
-    
-    createSparkleScore(timeOffset: number): Note[] {
-        const notes: Note[] = [];
-        const baseNotes = [55, 57, 59, 60]; // G3, A3, B3, C4
-        const duration = 3 + Math.random() * 5; // 3-8 seconds
-        let currentTime = 0;
-
-        while (currentTime < duration) {
-            const midi = baseNotes[Math.floor(Math.random() * baseNotes.length)];
-            const vel = 0.3 + Math.random() * 0.2; // 0.3 - 0.5
-            const dur = 0.5 + Math.random() * 1.5; // long notes for "plink" effect
-            const gap = 0.5 + Math.random(); // gap between notes
-
-            if (currentTime + dur <= duration) {
-                notes.push({ midi, time: timeOffset + currentTime, duration: dur, velocity: vel });
-            }
-            currentTime += dur + gap;
-        }
-        return notes;
-    },
-
-    createLoopingScore(): Score {
-        if (this.settings.score === 'dreamtales') {
-            return this.evolutionEngine.generateNextBar(this.barDuration, this.settings.density, this.settings.drumSettings);
-        }
-
-        // Fallback generator for other styles
-        const score: Score = { bass: [], melody: [], accompaniment: [], drums: [], effects: [] };
-        const notesInBar = 16;
-        const step = this.barDuration / notesInBar;
-        const bassNotes = [36, 38, 40, 41, 43, 45, 47];
-        const melodyNotes = [48, 50, 52, 53, 55, 57, 59, 60];
-        const rootDegree = Math.floor(this.barCount / 2) % bassNotes.length;
-
-        if (this.settings.instrumentSettings.bass.name !== 'none') {
-             score.bass?.push({ midi: bassNotes[rootDegree], time: 0, duration: this.barDuration / 2, velocity: 0.6 });
-        }
-        if (this.settings.instrumentSettings.accompaniment.name !== 'none') {
-            const chordTones = [rootDegree, rootDegree + 2, rootDegree + 4].map(d => bassNotes[d % bassNotes.length] + 12);
-            score.accompaniment?.push(...chordTones.map(midi => ({ midi, time: 0, duration: this.barDuration, velocity: 0.5})));
-        }
-        if (this.settings.instrumentSettings.melody.name !== 'none') {
-            for (let i = 0; i < notesInBar; i++) {
-                 if (Math.random() < this.settings.density / 2) {
-                    const midi = melodyNotes[Math.floor(Math.random() * melodyNotes.length)];
-                    score.melody?.push({ midi, time: i * step, duration: step * 2, velocity: 0.5 + Math.random() * 0.3 });
-                }
-            }
-        }
-        if (this.settings.drumSettings.enabled) {
-            for (let i = 0; i < notesInBar; i++) {
-                if (i % 8 === 0) score.drums?.push({ note: 'C4', time: i * step, velocity: 1.0 });
-                if (i % 8 === 4) score.drums?.push({ note: 'D4', time: i * step, velocity: 0.7 });
-                if (i % 2 === 0) score.drums?.push({ note: 'E4', time: i * step, velocity: 0.4 });
-            }
-        }
-        return score;
-    },
-
     tick() {
         if (!this.isRunning) return;
         
-        let score: Score;
-        const currentTime = this.barCount * this.barDuration;
+        const progress = (this.barCount % TOTAL_BARS) / TOTAL_BARS;
+        const stage = Composer.getStage(progress);
 
-        switch(this.state) {
-            case 'intro':
-                score = this.createIntroScore();
-                break;
-            case 'looping':
-                score = this.createLoopingScore();
-                break;
-            case 'stopped':
-            default:
-                score = {};
-                break;
-        }
-
-        // --- Add Sparkles ---
-        if (this.state === 'looping' && this.shouldAddSparkle(currentTime, score)) {
-            const sparkleNotes = this.createSparkleScore(0); // time is relative to bar start
-            if (!score.melody) {
-                score.melody = [];
-            }
-            score.melody.push(...sparkleNotes);
-            this.lastSparkleTime = currentTime;
-        }
+        const bass = Composer.generateBass(this.barCount, stage);
+        const melody = Composer.generateMelody(this.barCount, stage);
+        const accompaniment = Composer.generateAccompaniment(this.barCount, stage);
+        const drums = Composer.generateDrums(this.barCount, stage);
         
+        const score: Score = { bass, melody, accompaniment, drums, effects: [] };
+
+        const currentTime = this.barCount * this.barDuration;
+        if (shouldAddSparkle(currentTime, this.settings.density)) {
+             score.melody?.push(...createSparkleScore());
+             lastSparkleTime = currentTime;
+        }
+
         self.postMessage({
             type: 'score',
             score: score
@@ -364,5 +258,3 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
-
-    
