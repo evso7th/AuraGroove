@@ -8,7 +8,7 @@ import { useAudioEngine } from "@/contexts/audio-engine-context";
 export const useAuraGroove = () => {
   const { isInitialized, isPlaying, initialize, setIsPlaying: setEngineIsPlaying, updateSettings, setVolume, setInstrument, setBassTechnique } = useAudioEngine();
   
-  const [drumSettings, setDrumSettings] = useState<DrumSettings>({ pattern: 'none', volume: 0.5 });
+  const [drumSettings, setDrumSettings] = useState<DrumSettings>({ pattern: 'composer', volume: 0.5 });
   const [instrumentSettings, setInstrumentSettings] = useState<InstrumentSettings>({
     bass: { name: "glideBass", volume: 0.7, technique: 'arpeggio' },
     melody: { name: "synth", volume: 0.6 },
