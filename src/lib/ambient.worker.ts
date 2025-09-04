@@ -189,6 +189,12 @@ const Scheduler = {
         const score = this.createScoreForNextBar();
         
         self.postMessage({
+            type: 'debug',
+            message: `[Worker] DIAG: Generated score. Drums count: ${score.drums?.length ?? 0}`,
+            data: { hasDrums: !!score.drums && score.drums.length > 0 }
+        });
+
+        self.postMessage({
             type: 'score',
             score: score
         });

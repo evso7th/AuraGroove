@@ -130,11 +130,13 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
             const numVoices = isMobile() ? 6 : 8;
             console.log(`[AudioEngine] Creating synth pool with ${numVoices} voices`);
             
+            const melodyGain = gainNodesRef.current.melody;
+            if(!melodyGain) {
+                throw new Error("Melody gain node not initialized");
+            }
             for(let i = 0; i < numVoices; i++) {
                 const node = new AudioWorkletNode(audioContextRef.current, 'synth-processor');
-                // We connect to a default gain node here. It will be reconnected in scheduleScore.
-                const melodyGain = gainNodesRef.current.melody;
-                if(melodyGain) node.connect(melodyGain);
+                node.connect(melodyGain);
                 synthPoolRef.current.push(node);
             }
              console.log('[AudioEngine] Synth pool created', { voices: synthPoolRef.current.length });
@@ -185,7 +187,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
 
 
   const scheduleScore = (score: Score, audioContext: AudioContext) => {
-    console.log('[AudioEngine] Scheduling score', { score });
+    console.log('[AudioEngine] DIAG: scheduleScore received score', { hasDrums: !!score.drums && score.drums.length > 0 });
     const now = audioContext.currentTime;
     const currentSettings = settingsRef.current;
     
@@ -212,7 +214,6 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
             voice.connect(bassGainNode);
 
             const noteOnTime = now + note.time;
-            console.log('[AudioEngine] Posting message to worklet', { params: {...params, when: noteOnTime} });
             voice.port.postMessage({ ...params, when: noteOnTime });
 
             const noteOffTime = noteOnTime + note.duration;
@@ -227,6 +228,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
 
     const drumScore = score.drums || [];
     if (drumScore.length > 0 && drumMachineRef.current) {
+        console.log('[AudioEngine] DIAG: Scheduling drums');
         drumMachineRef.current.schedule(drumScore, now);
     }
   };

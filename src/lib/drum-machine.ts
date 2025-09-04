@@ -38,6 +38,7 @@ function createSampler(audioContext: AudioContext, output: AudioNode): Sampler {
     };
 
     const triggerAttack = (note: string, time: number, velocity = 1) => {
+        console.log(`[DrumMachine] DIAG: triggerAttack called for note: ${note} at time: ${time}`);
         const buffer = buffers.get(note);
         if (!buffer) {
             console.warn(`[DrumMachine] Sample for note ${note} not found.`);
@@ -90,6 +91,7 @@ export class DrumMachine {
     }
 
     schedule(score: SamplerNote[], time: number) {
+        console.log(`[DrumMachine] DIAG: schedule called with ${score.length} notes.`);
         if (!this.sampler || !this.isInitialized) {
             console.warn('[DrumMachine] Tried to schedule score before initialization.');
             return;
