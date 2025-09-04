@@ -15,16 +15,17 @@ class EvolutionEngine {
     private anchors: Phrase[];
     private currentPhrase: Phrase;
     private barSinceAnchor: number;
-    private bassNotes = [36, 38, 40, 41, 43, 45, 47, 48]; // C2 Major
+    // Bass notes restricted to the 2nd octave (C2 to B2)
+    private bassNotes = [36, 38, 40, 41, 43, 45, 47]; // C-Major scale in 2nd octave
 
     constructor() {
-        // Simple Anchor Phrase: C major triad arpeggio
+        // Anchor Phrase lowered by one octave to be primarily in the 3rd, touching the 4th.
         this.anchors = [
             [
-                { midi: 60, duration: 0.5, time: 0 },
-                { midi: 64, duration: 0.5, time: 0.5 },
-                { midi: 67, duration: 0.5, time: 1.0 },
-                { midi: 72, duration: 0.5, time: 1.5 },
+                { midi: 48, duration: 0.5, time: 0 }, // C3
+                { midi: 52, duration: 0.5, time: 0.5 }, // E3
+                { midi: 55, duration: 0.5, time: 1.0 }, // G3
+                { midi: 60, duration: 0.5, time: 1.5 }, // C4
             ]
         ];
         this.currentPhrase = this.anchors[0];
@@ -35,12 +36,17 @@ class EvolutionEngine {
         return phrase.map(note => {
             const newNote = { ...note };
             const mutationType = Math.random();
+            const MIN_MIDI = 48; // C3
+            const MAX_MIDI = 71; // B4
 
             if (mutationType < 0.4) {
-                // Transpose note by one step in the scale
+                // Transpose note by one semitone
                 const direction = Math.random() < 0.5 ? 1 : -1;
-                // Simple transposition for now, doesn't respect scale perfectly but works
-                newNote.midi += direction; 
+                const potentialMidi = newNote.midi + direction;
+                // Clamp the melody to stay within the 3rd and 4th octaves.
+                if (potentialMidi >= MIN_MIDI && potentialMidi <= MAX_MIDI) {
+                    newNote.midi = potentialMidi;
+                }
             } else if (mutationType < 0.7) {
                 // Change duration
                 newNote.duration *= (0.5 + Math.random());
@@ -107,6 +113,7 @@ const Scheduler = {
         drumSettings: { pattern: 'none', enabled: false },
         instrumentSettings: { 
             bass: { name: "portamento" as BassInstrument, volume: 0.5 },
+            melody: { name: "synth" as MelodyInstrument, volume: 0.5 },
         },
         density: 0.5,
     } as WorkerSettings,
@@ -156,8 +163,8 @@ const Scheduler = {
         const maxVoices = 4;
         const notesInBar = 16; // 16th notes
         const step = this.barDuration / notesInBar;
-        const bassNotes = [36, 38, 40, 41, 43, 45, 47, 48]; // C2 Major
-        const melodyNotes = [60, 62, 64, 65, 67, 69, 71, 72]; // C4 Major
+        const bassNotes = [36, 38, 40, 41, 43, 45, 47]; // C2 Major
+        const melodyNotes = [48, 50, 52, 53, 55, 57, 59, 60]; // C3-C4 Major
 
         let activeSynthNotes = 0;
 
