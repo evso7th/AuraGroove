@@ -21,7 +21,7 @@ export class AccompanimentSynthManager {
             this.workletNode = new AudioWorkletNode(this.audioContext, 'chord-processor');
             this.workletNode.connect(this.gainNode);
             this.isInitialized = true;
-            this.setPreset('organ'); // Set a default preset
+            this.setPreset('synth'); // Set a default preset
             console.log('[AccompanimentManager] Initialized successfully.');
         } catch (e) {
             console.error('[AccompanimentManager] Failed to initialize:', e);

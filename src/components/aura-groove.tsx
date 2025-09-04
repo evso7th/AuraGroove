@@ -149,13 +149,11 @@ export function AuraGroove({
         <div className="space-y-4 rounded-lg border p-4">
            <h3 className="text-lg font-medium text-primary flex items-center gap-2"><SlidersHorizontal className="h-5 w-5" /> Instrument Channels</h3>
             {Object.entries(instrumentSettings).map(([part, settings]) => {
-                let instrumentList: (BassInstrument | MelodyInstrument | AccompanimentInstrument | 'none')[] = [];
+                let instrumentList: (BassInstrument | MelodyInstrument | 'none')[] = [];
                 if (part === 'bass') {
                     instrumentList = ['classicBass', 'glideBass', 'ambientDrone', 'resonantGliss', 'hypnoticDrone', 'livingRiff', 'none'];
-                } else if (part === 'melody') {
+                } else if (part === 'melody' || part === 'accompaniment') {
                     instrumentList = ['synth', 'organ', 'mellotron', 'theremin', 'none'];
-                } else { // accompaniment
-                    instrumentList = ['poly_synth', 'none'];
                 }
 
                 return (
