@@ -51,7 +51,7 @@ function createSampler(audioContext: AudioContext, output: AudioNode): Sampler {
         gainNode.gain.setValueAtTime(velocity, audioContext.currentTime);
         
         source.connect(gainNode);
-        gainNode.connect(output);
+        gainNode.connect(output); // Corrected: connect to the provided output gain node
         source.start(time);
     };
 
@@ -61,32 +61,19 @@ function createSampler(audioContext: AudioContext, output: AudioNode): Sampler {
 export class DrumMachine {
     private audioContext: AudioContext;
     private sampler: Sampler | null = null;
-    private volumeNode: GainNode;
+    private outputNode: AudioNode;
     public isInitialized = false;
 
-    constructor(audioContext: AudioContext) {
+    constructor(audioContext: AudioContext, destination: AudioNode) {
         this.audioContext = audioContext;
-        this.volumeNode = this.audioContext.createGain();
-        this.volumeNode.connect(this.audioContext.destination);
+        this.outputNode = destination;
     }
 
     async init() {
         if (this.isInitialized) return;
-        this.sampler = createSampler(this.audioContext, this.volumeNode);
+        this.sampler = createSampler(this.audioContext, this.outputNode);
         await this.sampler.load(DRUM_SAMPLES);
         this.isInitialized = true;
-    }
-    
-    getVolumeNode(): GainNode {
-        return this.volumeNode;
-    }
-
-    setVolume(volume: number, time?: number) {
-        if (time) {
-            this.volumeNode.gain.linearRampToValueAtTime(volume, time);
-        } else {
-            this.volumeNode.gain.value = volume;
-        }
     }
 
     schedule(score: SamplerNote[], time: number) {
@@ -98,5 +85,11 @@ export class DrumMachine {
         for (const note of score) {
             this.sampler.triggerAttack(note.note, time + note.time, note.velocity);
         }
+    }
+
+    public stop() {
+        // Since we schedule samples with precise timing and they are short-lived,
+        // a specific 'stop' for scheduled notes is often not necessary.
+        // If we were using Tone.Part, we would call part.stop() here.
     }
 }
