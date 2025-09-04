@@ -15,7 +15,7 @@ class EvolutionEngine {
     private anchors: Phrase[];
     private currentPhrase: Phrase;
     private barSinceAnchor: number;
-    private bassNotes = [36, 38, 40, 41, 43, 45, 47]; // C-Major scale in 2nd octave
+    private bassNotes = [36, 38, 40, 41, 43, 45, 47]; // C2-B2
     private chordProgression = [0, 4, 5, 3]; // I-V-vi-IV in C Major scale degrees
 
     constructor() {
@@ -41,6 +41,8 @@ class EvolutionEngine {
             if (mutationType < 0.4) {
                 const direction = Math.random() < 0.5 ? 1 : -1;
                 const potentialMidi = newNote.midi + direction;
+                
+                // Restrict melody to 3rd and 4th octaves (48-71)
                 if (potentialMidi >= MIN_MIDI && potentialMidi <= MAX_MIDI) {
                     newNote.midi = potentialMidi;
                 }
@@ -121,13 +123,20 @@ const Scheduler = {
     isRunning: false,
     barCount: 0,
     evolutionEngine: new EvolutionEngine(),
+
+    // --- State Machine for Composition ---
+    state: 'stopped' as 'stopped' | 'intro' | 'looping',
+    introBarCount: 0,
+    INTRO_DURATION_BARS: 8,
+    // Randomize instrument introduction order
+    introOrder: [] as InstrumentPart[],
     
     settings: {
         bpm: 75,
         score: 'dreamtales',
         drumSettings: { pattern: 'none', enabled: false },
         instrumentSettings: { 
-            bass: { name: "portamento" as BassInstrument, volume: 0.5 },
+            bass: { name: "glideBass" as BassInstrument, volume: 0.5 },
             melody: { name: "synth" as MelodyInstrument, volume: 0.5 },
             accompaniment: { name: "poly_synth" as AccompanimentInstrument, volume: 0.5 },
         },
@@ -140,8 +149,15 @@ const Scheduler = {
 
     start() {
         if (this.isRunning) return;
+        
         this.isRunning = true;
+        this.state = 'intro';
         this.barCount = 0;
+        this.introBarCount = 0;
+
+        // Shuffle the intro order for variety each time
+        const parts: InstrumentPart[] = ['drums', 'bass', 'accompaniment', 'melody'];
+        this.introOrder = parts.sort(() => Math.random() - 0.5);
         
         const loop = () => {
             if (!this.isRunning) return;
@@ -154,6 +170,7 @@ const Scheduler = {
 
     stop() {
         this.isRunning = false;
+        this.state = 'stopped';
         if (this.loopId) {
             clearTimeout(this.loopId);
             this.loopId = null;
@@ -164,63 +181,101 @@ const Scheduler = {
        this.settings = { ...this.settings, ...newSettings };
     },
 
-    createScoreForNextBar(): Score {
-        if (this.settings.score === 'dreamtales') {
-            const { melody, bass, accompaniment, drums } = this.evolutionEngine.generateNextBar(this.barDuration, this.settings.density, this.settings.drumSettings);
-            return { melody, bass, accompaniment, drums };
+    createIntroScore(): Score {
+        const score: Score = { bass: [], melody: [], accompaniment: [], drums: [], effects: [] };
+        const step = this.barDuration / 16;
+        
+        // Determine which instruments play in this bar of the intro
+        const playDrums = this.settings.drumSettings.enabled && this.introOrder.indexOf('drums') * 2 <= this.introBarCount;
+        const playBass = this.settings.instrumentSettings.bass.name !== 'none' && this.introOrder.indexOf('bass') * 2 <= this.introBarCount;
+        const playAccompaniment = this.settings.instrumentSettings.accompaniment.name !== 'none' && this.introOrder.indexOf('accompaniment') * 2 <= this.introBarCount;
+        const playMelody = this.settings.instrumentSettings.melody.name !== 'none' && this.introOrder.indexOf('melody') * 2 <= this.introBarCount;
+
+        if (playDrums) {
+            if (this.introBarCount % 2 === 0) { // Play only on every other bar during intro
+                 for (let i = 0; i < 16; i+=4) {
+                    score.drums?.push({ note: 'E4', time: i * step, velocity: 0.3 }); // Gentle hi-hat
+                 }
+            }
+        }
+        if (playBass) {
+            const bassNotes = [36, 40, 43, 38];
+            const note = bassNotes[this.introBarCount % bassNotes.length];
+            score.bass?.push({ midi: note, time: 0, duration: this.barDuration, velocity: 0.5 });
+        }
+        if (playAccompaniment) {
+             const chordTones = [48, 52, 55]; // Simple C Major triad
+             score.accompaniment?.push({ midi: chordTones[this.introBarCount % 3], time: 0, duration: this.barDuration, velocity: 0.4 });
+        }
+        if (playMelody) {
+            if (Math.random() < this.settings.density * 0.5) { // Melody is sparse in intro
+                const melodyNotes = [60, 64, 67, 72];
+                const note = melodyNotes[Math.floor(Math.random() * melodyNotes.length)];
+                score.melody?.push({ midi: note, time: step * Math.floor(Math.random() * 8), duration: step * 4, velocity: 0.6 });
+            }
         }
 
-        // --- Fallback to simple generator for other styles ---
-        const bass: Note[] = [];
-        const melody: Note[] = [];
-        const accompaniment: Note[] = [];
-        const drums: DrumsScore = [];
-        const effects: EffectsScore = [];
+        this.introBarCount++;
+        if (this.introBarCount >= this.INTRO_DURATION_BARS) {
+            this.state = 'looping';
+        }
+        return score;
+    },
 
+    createLoopingScore(): Score {
+        if (this.settings.score === 'dreamtales') {
+            return this.evolutionEngine.generateNextBar(this.barDuration, this.settings.density, this.settings.drumSettings);
+        }
+
+        // Fallback generator for other styles
+        const score: Score = { bass: [], melody: [], accompaniment: [], drums: [], effects: [] };
         const notesInBar = 16;
         const step = this.barDuration / notesInBar;
         const bassNotes = [36, 38, 40, 41, 43, 45, 47];
         const melodyNotes = [48, 50, 52, 53, 55, 57, 59, 60];
-        
         const rootDegree = Math.floor(this.barCount / 2) % bassNotes.length;
 
-        // Bass
         if (this.settings.instrumentSettings.bass.name !== 'none') {
-             bass.push({ midi: bassNotes[rootDegree], time: 0, duration: this.barDuration / 2, velocity: 0.6 });
+             score.bass?.push({ midi: bassNotes[rootDegree], time: 0, duration: this.barDuration / 2, velocity: 0.6 });
         }
-        
-        // Accompaniment
         if (this.settings.instrumentSettings.accompaniment.name !== 'none') {
             const chordTones = [rootDegree, rootDegree + 2, rootDegree + 4].map(d => bassNotes[d % bassNotes.length] + 12);
-            accompaniment.push(...chordTones.map(midi => ({ midi, time: 0, duration: this.barDuration, velocity: 0.5})));
+            score.accompaniment?.push(...chordTones.map(midi => ({ midi, time: 0, duration: this.barDuration, velocity: 0.5})));
         }
-
-        // Melody
         if (this.settings.instrumentSettings.melody.name !== 'none') {
             for (let i = 0; i < notesInBar; i++) {
                  if (Math.random() < this.settings.density / 2) {
                     const midi = melodyNotes[Math.floor(Math.random() * melodyNotes.length)];
-                    melody.push({ midi, time: i * step, duration: step * 2, velocity: 0.5 + Math.random() * 0.3 });
+                    score.melody?.push({ midi, time: i * step, duration: step * 2, velocity: 0.5 + Math.random() * 0.3 });
                 }
             }
         }
-        
-        // Drums
         if (this.settings.drumSettings.enabled) {
             for (let i = 0; i < notesInBar; i++) {
-                if (i % 8 === 0) drums.push({ note: 'C4', time: i * step, velocity: 1.0 }); // Kick
-                if (i % 8 === 4) drums.push({ note: 'D4', time: i * step, velocity: 0.7 }); // Snare
-                if (i % 2 === 0) drums.push({ note: 'E4', time: i * step, velocity: 0.4 }); // Hi-hat
+                if (i % 8 === 0) score.drums?.push({ note: 'C4', time: i * step, velocity: 1.0 });
+                if (i % 8 === 4) score.drums?.push({ note: 'D4', time: i * step, velocity: 0.7 });
+                if (i % 2 === 0) score.drums?.push({ note: 'E4', time: i * step, velocity: 0.4 });
             }
         }
-        
-        return { bass, melody, accompaniment, drums, effects };
+        return score;
     },
 
     tick() {
         if (!this.isRunning) return;
         
-        const score = this.createScoreForNextBar();
+        let score: Score;
+        switch(this.state) {
+            case 'intro':
+                score = this.createIntroScore();
+                break;
+            case 'looping':
+                score = this.createLoopingScore();
+                break;
+            case 'stopped':
+            default:
+                score = {};
+                break;
+        }
         
         self.postMessage({
             type: 'score',
@@ -254,3 +309,5 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
+
+    
