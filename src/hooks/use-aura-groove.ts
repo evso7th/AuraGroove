@@ -102,13 +102,8 @@ export const useAuraGroove = () => {
 
   const handleExit = () => {
     setEngineIsPlaying(false);
-    // Use a small timeout to ensure the engine has a moment to process the stop command
-    // before the page reloads.
-    setTimeout(() => {
-        router.push('/');
-        // A full reload ensures all states and audio contexts are cleared.
-        window.location.reload();
-    }, 50); 
+    // Directly setting the href is the most reliable way to navigate and force a full page reload.
+    window.location.href = '/';
   };
 
   const handleGoHome = () => {
