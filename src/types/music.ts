@@ -74,7 +74,7 @@ export type TextureSettings = {
     };
 };
 
-export type ScoreName = 'evolve' | 'omega' | 'promenade' | 'dreamtales';
+export type ScoreName = 'evolve' | 'omega' | 'journey' | 'dreamtales';
 
 // Settings sent from the UI to the main engine/worker.
 export type WorkerSettings = {

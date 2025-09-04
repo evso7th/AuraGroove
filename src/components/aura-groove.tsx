@@ -130,7 +130,7 @@ export function AuraGroove({
                         <SelectItem value="dreamtales">Dreamtales (Anchor)</SelectItem>
                         <SelectItem value="evolve">Evolve (L-Logic)</SelectItem>
                         <SelectItem value="omega">Omega (Fractal)</SelectItem>
-                        <SelectItem value="promenade">Promenade</SelectItem>
+                        <SelectItem value="journey">Journey</SelectItem>
                     </SelectContent>
                 </Select>
             </div>

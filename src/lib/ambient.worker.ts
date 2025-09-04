@@ -16,7 +16,7 @@ const PADS_BY_STYLE: Record<ScoreName, string> = {
     dreamtales: 'livecircle.mp3',
     evolve: 'Tibetan bowls.mp3',
     omega: 'things.mp3',
-    promenade: 'pure_energy.mp3',
+    journey: 'pure_energy.mp3',
 };
 
 // --- "Sparkle" (In-krap-le-ni-ye) Logic ---
