@@ -18,7 +18,7 @@ type WorkerMessage = {
 // --- Constants ---
 const VOICE_BALANCE = {
   bass: 1.0,
-  melody: 0.7, // Higher frequencies are perceived as louder
+  melody: 0.5, // Higher frequencies are perceived as louder
   drums: 0.8,
   effects: 0.6,
 };
