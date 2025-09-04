@@ -59,8 +59,8 @@ function createSparkleScore(): Note[] {
 // --- Main Composition Engine ---
 const Composer = {
     getStage(progress: number) {
-        if (progress < 2 / 12) return { name: 'intro', complexity: 0.1 };
-        if (progress < 6 / 12) return { name: 'development', complexity: 0.3 + (progress - 2/12) * 4/12 * 0.3 };
+        if (progress < 2 / 12) return { name: 'intro', complexity: progress * (12 / 2) * 0.1 }; // Gradual complexity in intro
+        if (progress < 6 / 12) return { name: 'development', complexity: 0.1 + (progress - 2/12) * (12/4) * 0.5 };
         if (progress < 8 / 12) return { name: 'climax', complexity: 0.9 };
         if (progress < 10 / 12) return { name: 'density', complexity: 1.0 };
         return { name: 'return', complexity: 0.2 };
@@ -90,16 +90,17 @@ const Composer = {
     },
 
     generateMelody(barIndex: number, stage: { name: string, complexity: number }): Note[] {
-       if (stage.name === 'intro' || stage.name === 'return') return [];
+       if (stage.name === 'return') return [];
+       if (stage.name === 'intro' && Math.random() > stage.complexity * 2) return []; // Sparse melody in intro
 
        const notes: Note[] = [];
-       const notesInBar = Math.floor(4 + stage.complexity * 12); // From 4 to 16 notes
+       const notesInBar = Math.floor(2 + stage.complexity * 14); // From 2 to 16 notes
        const step = BAR_DURATION / notesInBar;
        let lastMidi = 60; // Start at C4
 
        for (let i = 0; i < notesInBar; i++) {
             const direction = Math.random() < 0.6 ? 1 : -1;
-            const scaleIndex = (lastMidi - KEY_ROOT_MIDI + direction) % SCALE_INTERVALS.length;
+            const scaleIndex = (lastMidi - KEY_ROOT_MIDI + direction + SCALE_INTERVALS.length) % SCALE_INTERVALS.length;
             const nextMidi = KEY_ROOT_MIDI + 24 + SCALE_INTERVALS[scaleIndex]; // Base C4 + scale note
 
             if (nextMidi < 79) { // G5 limit
@@ -113,23 +114,31 @@ const Composer = {
     generateAccompaniment(barIndex: number, stage: { name: string, complexity: number }): Note[] {
         const notes: Note[] = [];
         const beatDuration = BAR_DURATION / 4;
-        const rootMidi = KEY_ROOT_MIDI + 12; // C3
+        const rootMidi = KEY_ROOT_MIDI + 12; // E3
         
         // Don't play on climax/density for contrast
         if (stage.name === 'climax' || stage.name === 'density') return [];
+        
+        const playChance = stage.name === 'intro' ? stage.complexity : 1;
+        if (Math.random() > playChance) return [];
 
-        if (stage.complexity > 0.2) {
+        if (stage.complexity >= 0.05) { // Start very sparsely
             // "Left hand" arpeggio in 3rd octave
-            const arpPattern = [rootMidi, rootMidi + 3, rootMidi + 7]; // C3, Eb3, G3
-            for (let i=0; i<4; i++) {
-                notes.push({midi: arpPattern[i%3], time: i * beatDuration, duration: beatDuration, velocity: 0.4});
+            const arpPattern = [rootMidi, rootMidi + 3, rootMidi + 7]; // E3, G3, B3
+            const notesToPlay = stage.name === 'intro' ? 1 : (barIndex % 2 === 0 ? 2 : 3);
+             for (let i=0; i<4; i++) {
+                if(i < notesToPlay && Math.random() < 0.7) {
+                    notes.push({midi: arpPattern[i%3], time: i * beatDuration, duration: beatDuration * 2, velocity: 0.4});
+                }
             }
         }
          if (stage.complexity > 0.5) {
             // "Right hand" melody in 4th octave
-            const melodyPattern = [rootMidi + 12, rootMidi + 15, rootMidi + 19, rootMidi+15]; // C4, Eb4, G4
+            const melodyPattern = [rootMidi + 12, rootMidi + 15, rootMidi + 19, rootMidi+15]; // E4, G4, B4
              for (let i=0; i<4; i++) {
-                notes.push({midi: melodyPattern[i%4], time: i * beatDuration + beatDuration/2, duration: beatDuration, velocity: 0.5});
+                if (Math.random() < stage.complexity - 0.4) {
+                    notes.push({midi: melodyPattern[i%4], time: i * beatDuration + beatDuration/2, duration: beatDuration, velocity: 0.5});
+                }
             }
         }
         return notes;
@@ -209,7 +218,7 @@ const Scheduler = {
     tick() {
         if (!this.isRunning) return;
         
-        const progress = (this.barCount % TOTAL_BARS) / TOTAL_BARS;
+        const progress = (this.barCount * this.barDuration) / TOTAL_DURATION_SECONDS;
         const stage = Composer.getStage(progress);
 
         const bass = Composer.generateBass(this.barCount, stage);
@@ -257,3 +266,5 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
+
+    
