@@ -15,6 +15,14 @@ type WorkerMessage = {
     data?: any;
 };
 
+// --- Constants ---
+const VOICE_BALANCE = {
+  bass: 1.0,
+  melody: 0.7, // Higher frequencies are perceived as louder
+  drums: 0.8,
+  effects: 0.6,
+};
+
 const isMobile = () => {
     if (typeof window === 'undefined') return false;
     return /Android|iPhone|iPad|iPod|WebOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -92,7 +100,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     if (audioContextRef.current && !gainNodesRef.current.bass) {
         console.log('[AudioEngine] Creating GainNodes');
         const context = audioContextRef.current;
-        const parts: InstrumentPart[] = ['bass', 'melody', 'effects']; // drums is handled by DrumMachine
+        const parts: InstrumentPart[] = ['bass', 'melody', 'effects', 'drums'];
         parts.forEach(part => {
             const gainNode = context.createGain();
             gainNode.connect(context.destination);
@@ -102,11 +110,18 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
 
     if (!drumMachineRef.current && audioContextRef.current) {
         console.log('[AudioEngine] Creating DrumMachine');
-        drumMachineRef.current = new DrumMachine(audioContextRef.current);
+        // The drum machine now gets its dedicated GainNode from the pre-created map
+        const drumGainNode = gainNodesRef.current.drums;
+        if (!drumGainNode) {
+            console.error("[AudioEngine] Drum gain node not found during initialization.");
+            setIsInitializing(false);
+            return false;
+        }
+        drumMachineRef.current = new DrumMachine(audioContextRef.current, drumGainNode);
         await drumMachineRef.current.init();
-        gainNodesRef.current.drums = drumMachineRef.current.getVolumeNode();
         console.log('[AudioEngine] DrumMachine created');
     }
+
 
     if (!workerRef.current) {
         const worker = new Worker(new URL('../lib/ambient.worker.ts', import.meta.url), { type: 'module' });
@@ -129,13 +144,6 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
             await audioContextRef.current.audioWorklet.addModule('/worklets/synth-processor.js');
             const numVoices = isMobile() ? 6 : 8;
             console.log(`[AudioEngine] Creating synth pool with ${numVoices} voices`);
-            
-            const melodyGain = gainNodesRef.current.melody;
-            const bassGain = gainNodesRef.current.bass;
-
-            if(!melodyGain || !bassGain) {
-                throw new Error("Gain nodes not initialized");
-            }
             
             for(let i = 0; i < numVoices; i++) {
                 const node = new AudioWorkletNode(audioContextRef.current, 'synth-processor');
@@ -195,6 +203,18 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
                 q: 1.2,
                 oscType: 'sawtooth'
             };
+        case 'melody_synth':
+             return {
+                type: 'noteOn',
+                frequency: freq,
+                velocity: note.velocity || 0.7,
+                attack: 0.02,
+                release: 0.8,
+                portamento: 0,
+                filterCutoff: 4000,
+                q: 1.0,
+                oscType: 'fatsine' // A slightly richer sine wave
+            };
         default: // 'none' or other cases
              return null;
     }
@@ -205,15 +225,17 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     const now = audioContext.currentTime;
     const currentSettings = settingsRef.current;
     
-    const bassNotes = score.bass || [];
-    const melodyNotes = score.melody || [];
+    const parts: { partName: 'bass' | 'melody', notes: Note[] }[] = [
+        { partName: 'bass', notes: score.bass || [] },
+        { partName: 'melody', notes: score.melody || [] },
+    ];
     
-    const schedulePart = (notes: Note[], part: 'bass' | 'melody') => {
+    parts.forEach(({ partName, notes }) => {
         if (!currentSettings) return;
 
-        const instrumentName = currentSettings.instrumentSettings[part].name;
-        const gainNode = gainNodesRef.current[part];
-
+        const instrumentName = currentSettings.instrumentSettings[partName].name;
+        const gainNode = gainNodesRef.current[partName];
+        
         if (instrumentName === 'none' || !gainNode) return;
 
         notes.forEach(note => {
@@ -221,7 +243,8 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
             nextVoiceRef.current++;
 
             if (voice) {
-                const params = getPresetParams(instrumentName, note);
+                 const finalInstrument = partName === 'melody' ? 'melody_synth' : instrumentName;
+                 const params = getPresetParams(finalInstrument as MelodyInstrument, note);
                 if (!params) return;
 
                 voice.disconnect();
@@ -238,10 +261,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
                 }, delayUntilOff > 0 ? delayUntilOff * 1000 : 0);
             }
         });
-    };
-
-    schedulePart(bassNotes, 'bass');
-    schedulePart(melodyNotes, 'melody');
+    });
     
     const drumScore = score.drums || [];
     if (drumScore.length > 0 && drumMachineRef.current) {
@@ -282,8 +302,10 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   const setVolumeCallback = useCallback((part: InstrumentPart, volume: number) => {
     const gainNode = gainNodesRef.current[part];
     if (gainNode) {
-        gainNode.gain.value = volume;
-        console.log(`[AudioEngine] Volume change`, { part, volume });
+        // Apply balancing coefficient
+        const balancedVolume = volume * (VOICE_BALANCE[part as keyof typeof VOICE_BALANCE] ?? 1);
+        gainNode.gain.value = balancedVolume;
+        console.log(`[AudioEngine] Volume change`, { part, raw: volume, balanced: balancedVolume });
     } else {
         console.warn(`[AudioEngine] Attempted to set volume for non-existent part: ${part}`);
     }
