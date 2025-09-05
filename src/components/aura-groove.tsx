@@ -42,10 +42,12 @@ export type AuraGrooveProps = {
 
 const EQ_BANDS = [
   { freq: '60', label: '60' },
-  { freq: '230', label: '230' },
-  { freq: '910', label: '910' },
+  { freq: '125', label: '125' },
+  { freq: '250', label: '250' },
+  { freq: '500', label: '500' },
+  { freq: '1k', label: '1k' },
+  { freq: '2k', label: '2k' },
   { freq: '4k', label: '4k' },
-  { freq: '14k', label: '14k' },
 ];
 
 export function AuraGroove({
