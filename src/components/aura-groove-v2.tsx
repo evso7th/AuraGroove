@@ -1,7 +1,8 @@
 
 "use client";
 
-import { SlidersHorizontal, Music, Pause, Speaker, FileMusic, Drum, GitBranch, Atom, Piano, Home, X, Sparkles, Sprout, LayoutList, Waves, LayoutGrid } from "lucide-react";
+import { useState, useEffect } from "react";
+import { SlidersHorizontal, Music, Pause, Speaker, FileMusic, Drum, GitBranch, Atom, Piano, Home, X, Sparkles, Sprout, LayoutGrid, LayoutList } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -26,6 +27,11 @@ export function AuraGrooveV2({
 }: AuraGrooveProps) {
 
   const router = useRouter();
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   const handleBack = () => {
     router.push('/aura-groove-legacy');
@@ -42,24 +48,26 @@ export function AuraGrooveV2({
           </div>
           <div className="flex items-center gap-1">
             <Button variant="ghost" size="icon" onClick={handleGoHome} aria-label="Go to Home"><Home className="h-5 w-5" /></Button>
-            <Button variant="ghost" size="icon" onClick={handleBack} aria-label="Go back to original UI"><LayoutGrid className="h-5 w-5" /></Button>
-            <Dialog open={isEqModalOpen} onOpenChange={setIsEqModalOpen}>
-              <DialogTrigger asChild>
-                <Button variant="ghost" className="h-9 w-9 px-2" aria-label="Open Equalizer">EQ</Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader><DialogTitle>System Equalizer</DialogTitle></DialogHeader>
-                <div className="flex justify-around items-end pt-4 h-48">
-                  {EQ_BANDS.map((band, index) => (
-                    <div key={index} className="flex flex-col items-center justify-end space-y-2">
-                      <span className="text-xs font-mono text-muted-foreground">{eqSettings[index] > 0 ? '+' : ''}{eqSettings[index].toFixed(1)}</span>
-                      <Slider value={[eqSettings[index]]} min={-10} max={10} step={0.5} onValueChange={(v) => handleEqChange(index, v[0])} orientation="vertical" className="h-32" />
-                      <Label className="text-xs text-muted-foreground">{band.label}</Label>
-                    </div>
-                  ))}
-                </div>
-              </DialogContent>
-            </Dialog>
+            <Button variant="ghost" size="icon" onClick={handleBack} aria-label="Go back to original UI"><LayoutList className="h-5 w-5" /></Button>
+            {isClient && (
+              <Dialog open={isEqModalOpen} onOpenChange={setIsEqModalOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" className="h-9 w-9 px-2" aria-label="Open Equalizer">EQ</Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader><DialogTitle>System Equalizer</DialogTitle></DialogHeader>
+                  <div className="flex justify-around items-end pt-4 h-48">
+                    {EQ_BANDS.map((band, index) => (
+                      <div key={index} className="flex flex-col items-center justify-end space-y-2">
+                        <span className="text-xs font-mono text-muted-foreground">{eqSettings[index] > 0 ? '+' : ''}{eqSettings[index].toFixed(1)}</span>
+                        <Slider value={[eqSettings[index]]} min={-10} max={10} step={0.5} onValueChange={(v) => handleEqChange(index, v[0])} orientation="vertical" className="h-32" />
+                        <Label className="text-xs text-muted-foreground">{band.label}</Label>
+                      </div>
+                    ))}
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
           </div>
         </div>
         <div className="flex flex-col items-center gap-1 pt-2 pb-1.5">
@@ -206,9 +214,11 @@ export function AuraGrooveV2({
         </Tabs>
       </main>
 
-      {/* Footer */}
-      <footer className="flex-shrink-0 mt-auto">
+      
+      <footer className="flex-shrink-0 pt-1 mt-auto mb-1">
       </footer>
     </div>
   );
 }
+
+    
