@@ -2,7 +2,7 @@
 
 "use client";
 
-import { Loader2, Music, Pause, Speaker, FileMusic, Drum, SlidersHorizontal, Waves, GitBranch, Atom, Piano, Home, X, Sparkles, Sprout } from "lucide-react";
+import { Loader2, Music, Pause, Speaker, FileMusic, Drum, SlidersHorizontal, Waves, GitBranch, Atom, Piano, Home, X, Sparkles, Sprout, Equalizer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -11,6 +11,7 @@ import Image from 'next/image';
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import type { DrumSettings, InstrumentSettings, ScoreName, BassInstrument, InstrumentPart, MelodyInstrument, AccompanimentInstrument, BassTechnique, TextureSettings } from '@/types/music';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 // This is now a "dumb" UI component controlled by the useAuraGroove hook.
 export type AuraGrooveProps = {
@@ -34,7 +35,21 @@ export type AuraGrooveProps = {
   setDensity: (value: number) => void;
   handleGoHome: () => void;
   handleExit: () => void;
+  isEqModalOpen: boolean;
+  setIsEqModalOpen: (isOpen: boolean) => void;
+  eqSettings: number[];
+  handleEqChange: (bandIndex: number, gain: number) => void;
 };
+
+const EQ_BANDS = [
+  { freq: '31 Hz', label: 'Vibration' },
+  { freq: '62 Hz', label: 'Bass Body' },
+  { freq: '125 Hz', label: 'Punch' },
+  { freq: '250 Hz', label: 'Warmth' },
+  { freq: '500 Hz', label: 'Tension' },
+  { freq: '1.5 kHz', label: 'Clarity' },
+  { freq: '8 kHz', label: 'Air' },
+];
 
 export function AuraGroove({
   isPlaying,
@@ -57,6 +72,10 @@ export function AuraGroove({
   setDensity,
   handleGoHome,
   handleExit,
+  isEqModalOpen,
+  setIsEqModalOpen,
+  eqSettings,
+  handleEqChange,
 }: AuraGrooveProps) {
 
   const PartIcon = ({ part }: { part: string }) => {
@@ -104,13 +123,44 @@ export function AuraGroove({
             <Button variant="ghost" size="icon" onClick={handleExit} aria-label="Exit Application">
                 <X className="h-5 w-5" />
             </Button>
+            <Dialog open={isEqModalOpen} onOpenChange={setIsEqModalOpen}>
+                <DialogTrigger asChild>
+                    <Button variant="ghost" size="icon" aria-label="Open Equalizer">
+                        <Equalizer className="h-5 w-5" />
+                    </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle>System Equalizer</DialogTitle>
+                    </DialogHeader>
+                    <div className="grid grid-cols-7 gap-x-2 gap-y-4 pt-4">
+                        {EQ_BANDS.map((band, index) => (
+                             <div key={index} className="flex flex-col items-center justify-end space-y-2">
+                                <span className="text-xs font-mono text-muted-foreground">
+                                    {eqSettings[index] > 0 ? '+' : ''}{eqSettings[index].toFixed(1)}
+                                </span>
+                                <Slider
+                                    orientation="vertical"
+                                    value={[eqSettings[index]]}
+                                    min={-12}
+                                    max={12}
+                                    step={0.5}
+                                    onValueChange={(v) => handleEqChange(index, v[0])}
+                                    className="h-32"
+                                />
+                                <Label className="text-xs text-muted-foreground">{band.freq}</Label>
+                            </div>
+                        ))}
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
       <CardHeader className="text-center pt-12">
         <div className="mx-auto mb-4">
             <Image src="/assets/icon8.jpeg" alt="AuraGroove Logo" width={64} height={64} className="rounded-full" />
         </div>
         <CardTitle className="font-headline text-3xl">AuraGroove</CardTitle>
-        <CardDescription>AI-powered ambient music generator</CardDescription>
+        <CardDescription>Your personal pure digital ambient music generator</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
 

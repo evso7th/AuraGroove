@@ -17,7 +17,8 @@ export const useAuraGroove = () => {
     setVolume, 
     setInstrument, 
     setBassTechnique,
-    setTextureSettings: setEngineTextureSettings
+    setTextureSettings: setEngineTextureSettings,
+    setEQGain
   } = useAudioEngine();
   
   const router = useRouter();
@@ -35,6 +36,10 @@ export const useAuraGroove = () => {
   const [bpm, setBpm] = useState(75);
   const [score, setScore] = useState<ScoreName>('dreamtales');
   const [density, setDensity] = useState(0.5);
+
+  const [isEqModalOpen, setIsEqModalOpen] = useState(false);
+  const [eqSettings, setEqSettings] = useState<number[]>(Array(7).fill(0));
+
 
   const getFullSettings = useCallback((): WorkerSettings => {
     return {
@@ -127,6 +132,15 @@ export const useAuraGroove = () => {
     setVolume('drums', newSettings.volume);
   };
 
+  const handleEqChange = (bandIndex: number, gain: number) => {
+      setEqSettings(prev => {
+          const newSettings = [...prev];
+          newSettings[bandIndex] = gain;
+          setEQGain(bandIndex, gain);
+          return newSettings;
+      });
+  };
+
   const handleExit = () => {
     setEngineIsPlaying(false);
     window.location.href = '/';
@@ -158,5 +172,9 @@ export const useAuraGroove = () => {
     setDensity,
     handleGoHome,
     handleExit,
+    isEqModalOpen,
+    setIsEqModalOpen,
+    eqSettings,
+    handleEqChange,
   };
 };

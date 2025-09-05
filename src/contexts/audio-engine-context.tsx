@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
@@ -34,6 +33,8 @@ const VOICE_BALANCE = {
   pads: 0.9,
 };
 
+const EQ_FREQUENCIES = [31, 62, 125, 250, 500, 1500, 8000];
+
 const isMobile = () => {
     if (typeof window === 'undefined') return false;
     return /Android|iPhone|iPad|iPod|WebOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -50,6 +51,7 @@ interface AudioEngineContextType {
   setInstrument: (part: 'bass' | 'melody' | 'accompaniment', name: BassInstrument | MelodyInstrument | AccompanimentInstrument) => void;
   setBassTechnique: (technique: BassTechnique) => void;
   setTextureSettings: (settings: TextureSettings) => void;
+  setEQGain: (bandIndex: number, gain: number) => void;
 }
 
 const AudioEngineContext = createContext<AudioEngineContextType | null>(null);
@@ -89,6 +91,8 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     sparkles: null,
     pads: null,
   });
+
+  const eqNodesRef = useRef<BiquadFilterNode[]>([]);
   
   const { toast } = useToast();
   
@@ -108,13 +112,36 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
             await audioContextRef.current.resume();
         }
 
+        // --- EQ Chain Setup ---
+        if (eqNodesRef.current.length === 0) {
+            const context = audioContextRef.current;
+            const eqChain: BiquadFilterNode[] = EQ_FREQUENCIES.map((freq, i) => {
+                const filter = context.createBiquadFilter();
+                if (i === 0) filter.type = 'lowshelf';
+                else if (i === EQ_FREQUENCIES.length - 1) filter.type = 'highshelf';
+                else filter.type = 'peaking';
+                filter.frequency.value = freq;
+                filter.Q.value = 1.0;
+                filter.gain.value = 0;
+                return filter;
+            });
+
+            for (let i = 0; i < eqChain.length - 1; i++) {
+                eqChain[i].connect(eqChain[i + 1]);
+            }
+            eqChain[eqChain.length - 1].connect(context.destination);
+            eqNodesRef.current = eqChain;
+        }
+
+        const eqInput = eqNodesRef.current[0];
+
         if (!gainNodesRef.current.bass) {
             const context = audioContextRef.current;
             const parts: InstrumentPart[] = ['bass', 'melody', 'accompaniment', 'effects', 'drums', 'sparkles', 'pads'];
             parts.forEach(part => {
                 if (!gainNodesRef.current[part]) {
                     const gainNode = context.createGain();
-                    gainNode.connect(context.destination);
+                    gainNode.connect(eqInput); // Connect to EQ chain instead of destination
                     gainNodesRef.current[part] = gainNode;
                 }
             });
@@ -340,6 +367,13 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     }
   }, [updateSettingsCallback]);
 
+  const setEQGainCallback = useCallback((bandIndex: number, gain: number) => {
+      const filterNode = eqNodesRef.current[bandIndex];
+      if (filterNode && audioContextRef.current) {
+          filterNode.gain.setTargetAtTime(gain, audioContextRef.current.currentTime, 0.01);
+      }
+  }, []);
+
   useEffect(() => {
     return () => {
         workerRef.current?.terminate();
@@ -361,6 +395,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         setInstrument: setInstrumentCallback,
         setBassTechnique: setBassTechniqueCallback,
         setTextureSettings: setTextureSettingsCallback,
+        setEQGain: setEQGainCallback,
     }}>
       {children}
     </AudioEngineContext.Provider>
