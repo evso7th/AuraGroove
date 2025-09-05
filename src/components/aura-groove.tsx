@@ -120,7 +120,7 @@ export function AuraGroove({
   return (
     <Card className="w-full max-w-lg shadow-2xl relative">
        <div className="absolute top-2 right-2 flex items-center gap-1">
-            <Button variant="ghost" size="icon" onClick={() => router.push('/aura-groove-ui')} aria-label="Switch to new UI">
+            <Button variant="ghost" size="icon" onClick={() => router.push('/aura-groove')} aria-label="Switch to new UI">
                 <LayoutGrid className="h-5 w-5" />
             </Button>
             <Button variant="ghost" size="icon" onClick={handleGoHome} aria-label="Go to Home">

@@ -28,11 +28,11 @@ export function AuraGrooveV2({
   const router = useRouter();
 
   const handleBack = () => {
-    router.push('/aura-groove');
+    router.push('/aura-groove-legacy');
   };
   
   return (
-    <div className="w-full h-full flex flex-col p-3">
+    <div className="w-full h-full flex flex-col p-3 bg-card">
       {/* Header */}
       <header className="flex-shrink-0 pb-2">
         <div className="flex items-center justify-between">
@@ -73,124 +73,126 @@ export function AuraGrooveV2({
             <TabsTrigger value="samples">Samples</TabsTrigger>
           </TabsList>
           
-          <TabsContent value="composition" className="space-y-1.5 pt-2">
-            <Card className="border-0 shadow-none">
-              <CardHeader className="p-2"><CardTitle className="flex items-center gap-2 text-base"><FileMusic className="h-4 w-4"/> Composition</CardTitle></CardHeader>
-              <CardContent className="space-y-2 p-3 pt-0">
-                <div className="grid grid-cols-3 items-center gap-2">
-                    <Label htmlFor="score-selector" className="text-right text-xs">Style</Label>
-                    <Select value={score} onValueChange={(v) => handleScoreChange(v as any)} disabled={isInitializing || isPlaying}>
-                        <SelectTrigger id="score-selector" className="col-span-2 h-8 text-xs"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="dreamtales">Dreamtales</SelectItem>
-                            <SelectItem value="evolve">Evolve</SelectItem>
-                            <SelectItem value="omega">Omega</SelectItem>
-                            <SelectItem value="journey">Journey</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-                <div className="grid grid-cols-3 items-center gap-2">
-                  <Label htmlFor="bpm-slider" className="text-right text-xs">BPM</Label>
-                  <Slider id="bpm-slider" value={[bpm]} min={60} max={160} step={5} onValueChange={(v) => handleBpmChange(v[0])} className="col-span-2" disabled={isInitializing}/>
-                </div>
-                <div className="grid grid-cols-3 items-center gap-2">
-                  <Label htmlFor="density-slider" className="text-right text-xs">Density</Label>
-                  <Slider id="density-slider" value={[density]} min={0.1} max={1} step={0.05} onValueChange={(v) => setDensity(v[0])} className="col-span-2" disabled={isInitializing}/>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="instruments" className="space-y-1.5 pt-2">
-             <Card className="border-0 shadow-none">
-                <CardHeader className="p-2"><CardTitle className="flex items-center gap-2 text-base"><SlidersHorizontal className="h-4 w-4"/> Instruments</CardTitle></CardHeader>
-                <CardContent className="space-y-1.5 p-3 pt-0">
-                    {Object.entries(instrumentSettings).map(([part, settings]) => (
-                        <div key={part} className="p-2 border rounded-md">
-                           <div className="flex justify-between items-center mb-1">
-                                <Label className="font-semibold flex items-center gap-1.5 capitalize text-sm"><Waves className="h-4 w-4"/>{part}</Label>
-                                <Select value={settings.name} onValueChange={(v) => setInstrumentSettings(part as any, v as any)} disabled={isInitializing || isPlaying}>
-                                    <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        {(part === 'bass' ? ['classicBass', 'glideBass', 'ambientDrone', 'resonantGliss', 'hypnoticDrone', 'livingRiff', 'none'] : ['synth', 'organ', 'mellotron', 'theremin', 'none']).map(inst => (
-                                          <SelectItem key={inst} value={inst} className="text-xs">{inst.charAt(0).toUpperCase() + inst.slice(1).replace(/([A-Z])/g, ' $1')}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                             {part === 'bass' && (
-                                <div className="flex justify-between items-center mb-1">
-                                    <Label className="font-semibold flex items-center gap-1.5 capitalize text-sm"><GitBranch className="h-4 w-4"/>Technique</Label>
-                                     <Select value={settings.technique} onValueChange={(v) => handleBassTechniqueChange(v as any)} disabled={isInitializing || isPlaying || settings.name === 'none'}>
-                                        <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue/></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="arpeggio" className="text-xs">Arpeggio</SelectItem>
-                                            <SelectItem value="portamento" className="text-xs">Portamento</SelectItem>
-                                            <SelectItem value="glissando" className="text-xs">Glissando</SelectItem>
-                                            <SelectItem value="glide" className="text-xs">Glide</SelectItem>
-                                            <SelectItem value="pulse" className="text-xs">Pulse</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            )}
-                            <div className="flex items-center gap-2">
-                                <Label className="text-xs text-muted-foreground"><Speaker className="h-3 w-3 inline-block mr-1"/>Volume</Label>
-                                <Slider value={[settings.volume]} max={1} step={0.05} onValueChange={(v) => handleVolumeChange(part as any, v[0])} disabled={isInitializing || settings.name === 'none'}/>
-                                <span className="text-xs w-8 text-right font-mono">{Math.round(settings.volume * 100)}</span>
-                            </div>
-                        </div>
-                    ))}
+          <div className="grid">
+            <TabsContent value="composition" className="space-y-1.5 pt-2 col-start-1 row-start-1">
+              <Card className="border-0 shadow-none">
+                <CardHeader className="p-2"><CardTitle className="flex items-center gap-2 text-base"><FileMusic className="h-4 w-4"/> Composition</CardTitle></CardHeader>
+                <CardContent className="space-y-2 p-3 pt-0">
+                  <div className="grid grid-cols-3 items-center gap-2">
+                      <Label htmlFor="score-selector" className="text-right text-xs">Style</Label>
+                      <Select value={score} onValueChange={(v) => handleScoreChange(v as any)} disabled={isInitializing || isPlaying}>
+                          <SelectTrigger id="score-selector" className="col-span-2 h-8 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                              <SelectItem value="dreamtales">Dreamtales</SelectItem>
+                              <SelectItem value="evolve">Evolve</SelectItem>
+                              <SelectItem value="omega">Omega</SelectItem>
+                              <SelectItem value="journey">Journey</SelectItem>
+                          </SelectContent>
+                      </Select>
+                  </div>
+                  <div className="grid grid-cols-3 items-center gap-2">
+                    <Label htmlFor="bpm-slider" className="text-right text-xs">BPM</Label>
+                    <Slider id="bpm-slider" value={[bpm]} min={60} max={160} step={5} onValueChange={(v) => handleBpmChange(v[0])} className="col-span-2" disabled={isInitializing}/>
+                  </div>
+                  <div className="grid grid-cols-3 items-center gap-2">
+                    <Label htmlFor="density-slider" className="text-right text-xs">Density</Label>
+                    <Slider id="density-slider" value={[density]} min={0.1} max={1} step={0.05} onValueChange={(v) => setDensity(v[0])} className="col-span-2" disabled={isInitializing}/>
+                  </div>
                 </CardContent>
-            </Card>
-          </TabsContent>
+              </Card>
+            </TabsContent>
 
-          <TabsContent value="samples" className="space-y-1.5 pt-2">
-             <Card className="border-0 shadow-none">
-                <CardHeader className="p-2"><CardTitle className="flex items-center gap-2 text-base"><Atom className="h-4 w-4"/> Sampled Textures</CardTitle></CardHeader>
-                <CardContent className="space-y-1.5 p-3 pt-0">
-                    <div className="p-2 border rounded-md">
-                        <div className="flex justify-between items-center mb-1">
-                            <Label className="font-semibold flex items-center gap-1.5 text-sm"><Sparkles className="h-4 w-4"/>Sparkles</Label>
-                            <Switch checked={textureSettings.sparkles.enabled} onCheckedChange={(c) => handleTextureEnabledChange('sparkles', c)} disabled={isInitializing}/>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <Label className="text-xs text-muted-foreground"><Speaker className="h-3 w-3 inline-block mr-1"/>Volume</Label>
-                            <Slider value={[textureSettings.sparkles.volume]} max={1} step={0.05} onValueChange={(v) => handleVolumeChange('sparkles', v[0])} disabled={isInitializing || !textureSettings.sparkles.enabled}/>
-                             <span className="text-xs w-8 text-right font-mono">{Math.round(textureSettings.sparkles.volume * 100)}</span>
-                        </div>
-                    </div>
-                     <div className="p-2 border rounded-md">
-                        <div className="flex justify-between items-center mb-1">
-                            <Label className="font-semibold flex items-center gap-1.5 text-sm"><Waves className="h-4 w-4"/>Pads</Label>
-                            <Switch checked={textureSettings.pads.enabled} onCheckedChange={(c) => handleTextureEnabledChange('pads', c)} disabled={isInitializing}/>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <Label className="text-xs text-muted-foreground"><Speaker className="h-3 w-3 inline-block mr-1"/>Volume</Label>
-                            <Slider value={[textureSettings.pads.volume]} max={1} step={0.05} onValueChange={(v) => handleVolumeChange('pads', v[0])} disabled={isInitializing || !textureSettings.pads.enabled}/>
-                            <span className="text-xs w-8 text-right font-mono">{Math.round(textureSettings.pads.volume * 100)}</span>
-                        </div>
-                    </div>
-                     <div className="p-2 border rounded-md">
-                        <div className="flex justify-between items-center mb-1">
-                            <Label className="font-semibold flex items-center gap-1.5 text-sm"><Drum className="h-4 w-4"/>Drums</Label>
-                             <Select value={drumSettings.pattern} onValueChange={(v) => setDrumSettings(d => ({...d, pattern: v as any}))} disabled={isInitializing || isPlaying}>
-                                <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="none" className="text-xs">None</SelectItem>
-                                    <SelectItem value="ambient_beat" className="text-xs">Ambient</SelectItem>
-                                    <SelectItem value="composer" className="text-xs">Composer</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <Label className="text-xs text-muted-foreground"><Speaker className="h-3 w-3 inline-block mr-1"/>Volume</Label>
-                            <Slider value={[drumSettings.volume]} max={1} step={0.05} onValueChange={(v) => setDrumSettings(d => ({...d, volume: v[0]}))} disabled={isInitializing || drumSettings.pattern === 'none'}/>
-                             <span className="text-xs w-8 text-right font-mono">{Math.round(drumSettings.volume * 100)}</span>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
-          </TabsContent>
+            <TabsContent value="instruments" className="space-y-1.5 pt-2 col-start-1 row-start-1">
+               <Card className="border-0 shadow-none">
+                  <CardHeader className="p-2"><CardTitle className="flex items-center gap-2 text-base"><SlidersHorizontal className="h-4 w-4"/> Instruments</CardTitle></CardHeader>
+                  <CardContent className="space-y-1.5 p-3 pt-0">
+                      {Object.entries(instrumentSettings).map(([part, settings]) => (
+                          <div key={part} className="p-2 border rounded-md">
+                             <div className="flex justify-between items-center mb-1">
+                                  <Label className="font-semibold flex items-center gap-1.5 capitalize text-sm"><Waves className="h-4 w-4"/>{part}</Label>
+                                  <Select value={settings.name} onValueChange={(v) => setInstrumentSettings(part as any, v as any)} disabled={isInitializing || isPlaying}>
+                                      <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue /></SelectTrigger>
+                                      <SelectContent>
+                                          {(part === 'bass' ? ['classicBass', 'glideBass', 'ambientDrone', 'resonantGliss', 'hypnoticDrone', 'livingRiff', 'none'] : ['synth', 'organ', 'mellotron', 'theremin', 'none']).map(inst => (
+                                            <SelectItem key={inst} value={inst} className="text-xs">{inst.charAt(0).toUpperCase() + inst.slice(1).replace(/([A-Z])/g, ' $1')}</SelectItem>
+                                          ))}
+                                      </SelectContent>
+                                  </Select>
+                              </div>
+                               {part === 'bass' && (
+                                  <div className="flex justify-between items-center mb-1">
+                                      <Label className="font-semibold flex items-center gap-1.5 capitalize text-sm"><GitBranch className="h-4 w-4"/>Technique</Label>
+                                       <Select value={settings.technique} onValueChange={(v) => handleBassTechniqueChange(v as any)} disabled={isInitializing || isPlaying || settings.name === 'none'}>
+                                          <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue/></SelectTrigger>
+                                          <SelectContent>
+                                              <SelectItem value="arpeggio" className="text-xs">Arpeggio</SelectItem>
+                                              <SelectItem value="portamento" className="text-xs">Portamento</SelectItem>
+                                              <SelectItem value="glissando" className="text-xs">Glissando</SelectItem>
+                                              <SelectItem value="glide" className="text-xs">Glide</SelectItem>
+                                              <SelectItem value="pulse" className="text-xs">Pulse</SelectItem>
+                                          </SelectContent>
+                                      </Select>
+                                  </div>
+                              )}
+                              <div className="flex items-center gap-2">
+                                  <Label className="text-xs text-muted-foreground"><Speaker className="h-3 w-3 inline-block mr-1"/>Volume</Label>
+                                  <Slider value={[settings.volume]} max={1} step={0.05} onValueChange={(v) => handleVolumeChange(part as any, v[0])} disabled={isInitializing || settings.name === 'none'}/>
+                                  <span className="text-xs w-8 text-right font-mono">{Math.round(settings.volume * 100)}</span>
+                              </div>
+                          </div>
+                      ))}
+                  </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="samples" className="space-y-1.5 pt-2 col-start-1 row-start-1">
+               <Card className="border-0 shadow-none">
+                  <CardHeader className="p-2"><CardTitle className="flex items-center gap-2 text-base"><Atom className="h-4 w-4"/> Sampled Textures</CardTitle></CardHeader>
+                  <CardContent className="space-y-1.5 p-3 pt-0">
+                      <div className="p-2 border rounded-md">
+                          <div className="flex justify-between items-center mb-1">
+                              <Label className="font-semibold flex items-center gap-1.5 text-sm"><Sparkles className="h-4 w-4"/>Sparkles</Label>
+                              <Switch checked={textureSettings.sparkles.enabled} onCheckedChange={(c) => handleTextureEnabledChange('sparkles', c)} disabled={isInitializing}/>
+                          </div>
+                          <div className="flex items-center gap-2">
+                              <Label className="text-xs text-muted-foreground"><Speaker className="h-3 w-3 inline-block mr-1"/>Volume</Label>
+                              <Slider value={[textureSettings.sparkles.volume]} max={1} step={0.05} onValueChange={(v) => handleVolumeChange('sparkles', v[0])} disabled={isInitializing || !textureSettings.sparkles.enabled}/>
+                               <span className="text-xs w-8 text-right font-mono">{Math.round(textureSettings.sparkles.volume * 100)}</span>
+                          </div>
+                      </div>
+                       <div className="p-2 border rounded-md">
+                          <div className="flex justify-between items-center mb-1">
+                              <Label className="font-semibold flex items-center gap-1.5 text-sm"><Waves className="h-4 w-4"/>Pads</Label>
+                              <Switch checked={textureSettings.pads.enabled} onCheckedChange={(c) => handleTextureEnabledChange('pads', c)} disabled={isInitializing}/>
+                          </div>
+                          <div className="flex items-center gap-2">
+                              <Label className="text-xs text-muted-foreground"><Speaker className="h-3 w-3 inline-block mr-1"/>Volume</Label>
+                              <Slider value={[textureSettings.pads.volume]} max={1} step={0.05} onValueChange={(v) => handleVolumeChange('pads', v[0])} disabled={isInitializing || !textureSettings.pads.enabled}/>
+                              <span className="text-xs w-8 text-right font-mono">{Math.round(textureSettings.pads.volume * 100)}</span>
+                          </div>
+                      </div>
+                       <div className="p-2 border rounded-md">
+                          <div className="flex justify-between items-center mb-1">
+                              <Label className="font-semibold flex items-center gap-1.5 text-sm"><Drum className="h-4 w-4"/>Drums</Label>
+                               <Select value={drumSettings.pattern} onValueChange={(v) => setDrumSettings(d => ({...d, pattern: v as any}))} disabled={isInitializing || isPlaying}>
+                                  <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                      <SelectItem value="none" className="text-xs">None</SelectItem>
+                                      <SelectItem value="ambient_beat" className="text-xs">Ambient</SelectItem>
+                                      <SelectItem value="composer" className="text-xs">Composer</SelectItem>
+                                  </SelectContent>
+                              </Select>
+                          </div>
+                          <div className="flex items-center gap-2">
+                              <Label className="text-xs text-muted-foreground"><Speaker className="h-3 w-3 inline-block mr-1"/>Volume</Label>
+                              <Slider value={[drumSettings.volume]} max={1} step={0.05} onValueChange={(v) => setDrumSettings(d => ({...d, volume: v[0]}))} disabled={isInitializing || drumSettings.pattern === 'none'}/>
+                               <span className="text-xs w-8 text-right font-mono">{Math.round(drumSettings.volume * 100)}</span>
+                          </div>
+                      </div>
+                  </CardContent>
+              </Card>
+            </TabsContent>
+          </div>
 
         </Tabs>
       </main>
