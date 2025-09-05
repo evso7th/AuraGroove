@@ -138,13 +138,12 @@ export function AuraGroove({
                                     {eqSettings[index] > 0 ? '+' : ''}{eqSettings[index].toFixed(1)}
                                 </span>
                                 <Slider
-                                    orientation="vertical"
                                     value={[eqSettings[index]]}
                                     min={-10}
                                     max={10}
                                     step={0.5}
                                     onValueChange={(v) => handleEqChange(index, v[0])}
-                                    className="h-32"
+                                    className="h-32 [writing-mode:bt-lr]"
                                 />
                                 <Label className="text-xs text-muted-foreground">{band.label}</Label>
                             </div>
@@ -399,5 +398,3 @@ export function AuraGroove({
     </Card>
   );
 }
-
-    
