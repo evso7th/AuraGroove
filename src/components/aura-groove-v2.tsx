@@ -74,7 +74,7 @@ export function AuraGrooveV2({
            <p className="text-muted-foreground text-xs min-h-[16px]">
               {isPlaying ? `Playing at ${bpm} BPM...` : "Press play to start the music"}
            </p>
-           <Button type="button" onClick={handleTogglePlay} disabled={isInitializing} className="w-full max-w-xs text-base h-10">
+           <Button type="button" onClick={handleTogglePlay} disabled={isInitializing} className="w-[60%] text-base h-10">
               {isPlaying ? <Pause className="mr-2 h-5 w-5" /> : <Music className="mr-2 h-5 w-5" />}
               {isPlaying ? "Stop" : "Play"}
            </Button>
@@ -91,7 +91,7 @@ export function AuraGrooveV2({
           </TabsList>
           
           <div className="grid">
-            <TabsContent value="composition" className="space-y-1.5 pt-2 col-start-1 row-start-1">
+            <TabsContent value="composition" className="space-y-1.5 pt-2 col-start-1 row-start-1 px-1">
               <Card className="border-0 shadow-none">
                 <CardHeader className="p-2"><CardTitle className="flex items-center gap-2 text-sm"><FileMusic className="h-4 w-4"/> Composition</CardTitle></CardHeader>
                 <CardContent className="space-y-2 p-3 pt-0">
@@ -119,7 +119,7 @@ export function AuraGrooveV2({
               </Card>
             </TabsContent>
 
-            <TabsContent value="instruments" className="space-y-1 pt-2 col-start-1 row-start-1">
+            <TabsContent value="instruments" className="space-y-1 pt-2 col-start-1 row-start-1 px-1">
                <Card className="border-0 shadow-none">
                   <CardHeader className="p-2"><CardTitle className="flex items-center gap-2 text-sm"><SlidersHorizontal className="h-4 w-4"/> Instruments</CardTitle></CardHeader>
                   <CardContent className="space-y-1 p-3 pt-0">
@@ -162,7 +162,7 @@ export function AuraGrooveV2({
               </Card>
             </TabsContent>
 
-            <TabsContent value="samples" className="space-y-1.5 pt-2 col-start-1 row-start-1">
+            <TabsContent value="samples" className="space-y-1.5 pt-2 col-start-1 row-start-1 px-1">
                <Card className="border-0 shadow-none">
                   <CardHeader className="p-2"><CardTitle className="flex items-center gap-2 text-sm"><Atom className="h-4 w-4"/> Sampled Textures</CardTitle></CardHeader>
                   <CardContent className="space-y-1.5 p-3 pt-0">
