@@ -42,7 +42,7 @@ export function AuraGrooveV2({
       {/* Header */}
       <header className="flex-shrink-0 pb-2">
         <div className="flex items-center justify-between">
-          <div className="flex flex-col">
+          <div className="flex flex-col pl-1">
             <h1 className="text-lg font-bold text-primary">AuraGroove</h1>
             <p className="text-xs text-muted-foreground">Your personal pure digital ambient music generator</p>
           </div>
@@ -213,10 +213,6 @@ export function AuraGrooveV2({
 
         </Tabs>
       </main>
-
-      
-      <footer className="flex-shrink-0 pt-1 mt-auto mb-1">
-      </footer>
     </div>
   );
 }
