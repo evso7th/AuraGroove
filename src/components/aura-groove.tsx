@@ -133,7 +133,7 @@ export function AuraGroove({
                     <DialogHeader>
                         <DialogTitle>System Equalizer</DialogTitle>
                     </DialogHeader>
-                    <div className="grid grid-cols-7 gap-x-2 gap-y-4 pt-4">
+                    <div className="flex justify-around items-end pt-4 h-48">
                         {EQ_BANDS.map((band, index) => (
                              <div key={index} className="flex flex-col items-center justify-end space-y-2">
                                 <span className="text-xs font-mono text-muted-foreground">
