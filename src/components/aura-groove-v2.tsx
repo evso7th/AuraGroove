@@ -32,7 +32,7 @@ export function AuraGrooveV2({
   };
   
   return (
-    <div className="w-full max-w-md h-[calc(100vh-2rem)] flex flex-col">
+    <div className="w-full max-w-md h-full flex flex-col">
       {/* Header */}
       <header className="flex-shrink-0 pb-2">
         <div className="flex items-center justify-between">
@@ -65,22 +65,22 @@ export function AuraGrooveV2({
       </header>
 
       {/* Content */}
-      <main className="flex-grow overflow-y-auto">
+      <main className="flex-grow overflow-y-auto pr-2 -mr-2">
         <Tabs defaultValue="composition" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-3 h-9">
             <TabsTrigger value="composition">Composition</TabsTrigger>
             <TabsTrigger value="instruments">Instruments</TabsTrigger>
             <TabsTrigger value="samples">Samples</TabsTrigger>
           </TabsList>
           
-          <TabsContent value="composition" className="space-y-2 pt-2">
+          <TabsContent value="composition" className="space-y-1.5 pt-2">
             <Card>
-              <CardHeader className="p-3"><CardTitle className="flex items-center gap-2 text-lg"><FileMusic className="h-5 w-5"/> Composition</CardTitle></CardHeader>
-              <CardContent className="space-y-3 p-3 pt-0">
-                <div className="grid grid-cols-3 items-center gap-3">
+              <CardHeader className="p-2"><CardTitle className="flex items-center gap-2 text-base"><FileMusic className="h-4 w-4"/> Composition</CardTitle></CardHeader>
+              <CardContent className="space-y-2 p-3 pt-0">
+                <div className="grid grid-cols-3 items-center gap-2">
                     <Label htmlFor="score-selector" className="text-right text-xs">Style</Label>
                     <Select value={score} onValueChange={(v) => handleScoreChange(v as any)} disabled={isInitializing || isPlaying}>
-                        <SelectTrigger id="score-selector" className="col-span-2 h-9"><SelectValue /></SelectTrigger>
+                        <SelectTrigger id="score-selector" className="col-span-2 h-8 text-xs"><SelectValue /></SelectTrigger>
                         <SelectContent>
                             <SelectItem value="dreamtales">Dreamtales</SelectItem>
                             <SelectItem value="evolve">Evolve</SelectItem>
@@ -89,11 +89,11 @@ export function AuraGrooveV2({
                         </SelectContent>
                     </Select>
                 </div>
-                <div className="grid grid-cols-3 items-center gap-3">
+                <div className="grid grid-cols-3 items-center gap-2">
                   <Label htmlFor="bpm-slider" className="text-right text-xs">BPM</Label>
                   <Slider id="bpm-slider" value={[bpm]} min={60} max={160} step={5} onValueChange={(v) => handleBpmChange(v[0])} className="col-span-2" disabled={isInitializing}/>
                 </div>
-                <div className="grid grid-cols-3 items-center gap-3">
+                <div className="grid grid-cols-3 items-center gap-2">
                   <Label htmlFor="density-slider" className="text-right text-xs">Density</Label>
                   <Slider id="density-slider" value={[density]} min={0.1} max={1} step={0.05} onValueChange={(v) => setDensity(v[0])} className="col-span-2" disabled={isInitializing}/>
                 </div>
@@ -101,16 +101,16 @@ export function AuraGrooveV2({
             </Card>
           </TabsContent>
 
-          <TabsContent value="instruments" className="space-y-2 pt-2">
+          <TabsContent value="instruments" className="space-y-1.5 pt-2">
             <Card>
-                <CardHeader className="p-3"><CardTitle className="flex items-center gap-2 text-lg"><SlidersHorizontal className="h-5 w-5"/> Instruments</CardTitle></CardHeader>
-                <CardContent className="space-y-2 p-3 pt-0">
+                <CardHeader className="p-2"><CardTitle className="flex items-center gap-2 text-base"><SlidersHorizontal className="h-4 w-4"/> Instruments</CardTitle></CardHeader>
+                <CardContent className="space-y-1.5 p-3 pt-0">
                     {Object.entries(instrumentSettings).map(([part, settings]) => (
-                        <div key={part} className="p-2 border rounded-lg">
-                           <div className="flex justify-between items-center mb-1.5">
-                                <Label className="font-semibold flex items-center gap-2 capitalize text-sm"><Waves className="h-4 w-4"/>{part}</Label>
+                        <div key={part} className="p-2 border rounded-md">
+                           <div className="flex justify-between items-center mb-1">
+                                <Label className="font-semibold flex items-center gap-1.5 capitalize text-sm"><Waves className="h-4 w-4"/>{part}</Label>
                                 <Select value={settings.name} onValueChange={(v) => setInstrumentSettings(part as any, v as any)} disabled={isInitializing || isPlaying}>
-                                    <SelectTrigger className="w-[160px] h-9 text-xs"><SelectValue /></SelectTrigger>
+                                    <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue /></SelectTrigger>
                                     <SelectContent>
                                         {(part === 'bass' ? ['classicBass', 'glideBass', 'ambientDrone', 'resonantGliss', 'hypnoticDrone', 'livingRiff', 'none'] : ['synth', 'organ', 'mellotron', 'theremin', 'none']).map(inst => (
                                           <SelectItem key={inst} value={inst} className="text-xs">{inst.charAt(0).toUpperCase() + inst.slice(1).replace(/([A-Z])/g, ' $1')}</SelectItem>
@@ -119,10 +119,10 @@ export function AuraGrooveV2({
                                 </Select>
                             </div>
                              {part === 'bass' && (
-                                <div className="flex justify-between items-center mb-1.5">
-                                    <Label className="font-semibold flex items-center gap-2 capitalize text-sm"><GitBranch className="h-4 w-4"/>Technique</Label>
+                                <div className="flex justify-between items-center mb-1">
+                                    <Label className="font-semibold flex items-center gap-1.5 capitalize text-sm"><GitBranch className="h-4 w-4"/>Technique</Label>
                                      <Select value={settings.technique} onValueChange={(v) => handleBassTechniqueChange(v as any)} disabled={isInitializing || isPlaying || settings.name === 'none'}>
-                                        <SelectTrigger className="w-[160px] h-9 text-xs"><SelectValue/></SelectTrigger>
+                                        <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue/></SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="arpeggio" className="text-xs">Arpeggio</SelectItem>
                                             <SelectItem value="portamento" className="text-xs">Portamento</SelectItem>
@@ -134,7 +134,7 @@ export function AuraGrooveV2({
                                 </div>
                             )}
                             <div className="flex items-center gap-2">
-                                <Label className="text-xs text-muted-foreground"><Speaker className="h-4 w-4 inline-block mr-1"/>Volume</Label>
+                                <Label className="text-xs text-muted-foreground"><Speaker className="h-3 w-3 inline-block mr-1"/>Volume</Label>
                                 <Slider value={[settings.volume]} max={1} step={0.05} onValueChange={(v) => handleVolumeChange(part as any, v[0])} disabled={isInitializing || settings.name === 'none'}/>
                                 <span className="text-xs w-8 text-right font-mono">{Math.round(settings.volume * 100)}</span>
                             </div>
@@ -144,37 +144,37 @@ export function AuraGrooveV2({
             </Card>
           </TabsContent>
 
-          <TabsContent value="samples" className="space-y-2 pt-2">
+          <TabsContent value="samples" className="space-y-1.5 pt-2">
              <Card>
-                <CardHeader className="p-3"><CardTitle className="flex items-center gap-2 text-lg"><Atom className="h-5 w-5"/> Sampled Textures</CardTitle></CardHeader>
-                <CardContent className="space-y-2 p-3 pt-0">
-                    <div className="p-2 border rounded-lg">
-                        <div className="flex justify-between items-center mb-1.5">
-                            <Label className="font-semibold flex items-center gap-2 text-sm"><Sparkles className="h-4 w-4"/>Sparkles</Label>
+                <CardHeader className="p-2"><CardTitle className="flex items-center gap-2 text-base"><Atom className="h-4 w-4"/> Sampled Textures</CardTitle></CardHeader>
+                <CardContent className="space-y-1.5 p-3 pt-0">
+                    <div className="p-2 border rounded-md">
+                        <div className="flex justify-between items-center mb-1">
+                            <Label className="font-semibold flex items-center gap-1.5 text-sm"><Sparkles className="h-4 w-4"/>Sparkles</Label>
                             <Switch checked={textureSettings.sparkles.enabled} onCheckedChange={(c) => handleTextureEnabledChange('sparkles', c)} disabled={isInitializing}/>
                         </div>
                         <div className="flex items-center gap-2">
-                            <Label className="text-xs text-muted-foreground"><Speaker className="h-4 w-4 inline-block mr-1"/>Volume</Label>
+                            <Label className="text-xs text-muted-foreground"><Speaker className="h-3 w-3 inline-block mr-1"/>Volume</Label>
                             <Slider value={[textureSettings.sparkles.volume]} max={1} step={0.05} onValueChange={(v) => handleVolumeChange('sparkles', v[0])} disabled={isInitializing || !textureSettings.sparkles.enabled}/>
                              <span className="text-xs w-8 text-right font-mono">{Math.round(textureSettings.sparkles.volume * 100)}</span>
                         </div>
                     </div>
-                     <div className="p-2 border rounded-lg">
-                        <div className="flex justify-between items-center mb-1.5">
-                            <Label className="font-semibold flex items-center gap-2 text-sm"><Waves className="h-4 w-4"/>Pads</Label>
+                     <div className="p-2 border rounded-md">
+                        <div className="flex justify-between items-center mb-1">
+                            <Label className="font-semibold flex items-center gap-1.5 text-sm"><Waves className="h-4 w-4"/>Pads</Label>
                             <Switch checked={textureSettings.pads.enabled} onCheckedChange={(c) => handleTextureEnabledChange('pads', c)} disabled={isInitializing}/>
                         </div>
                         <div className="flex items-center gap-2">
-                            <Label className="text-xs text-muted-foreground"><Speaker className="h-4 w-4 inline-block mr-1"/>Volume</Label>
+                            <Label className="text-xs text-muted-foreground"><Speaker className="h-3 w-3 inline-block mr-1"/>Volume</Label>
                             <Slider value={[textureSettings.pads.volume]} max={1} step={0.05} onValueChange={(v) => handleVolumeChange('pads', v[0])} disabled={isInitializing || !textureSettings.pads.enabled}/>
                             <span className="text-xs w-8 text-right font-mono">{Math.round(textureSettings.pads.volume * 100)}</span>
                         </div>
                     </div>
-                     <div className="p-2 border rounded-lg">
-                        <div className="flex justify-between items-center mb-1.5">
-                            <Label className="font-semibold flex items-center gap-2 text-sm"><Drum className="h-4 w-4"/>Drums</Label>
+                     <div className="p-2 border rounded-md">
+                        <div className="flex justify-between items-center mb-1">
+                            <Label className="font-semibold flex items-center gap-1.5 text-sm"><Drum className="h-4 w-4"/>Drums</Label>
                              <Select value={drumSettings.pattern} onValueChange={(v) => setDrumSettings(d => ({...d, pattern: v as any}))} disabled={isInitializing || isPlaying}>
-                                <SelectTrigger className="w-[160px] h-9 text-xs"><SelectValue /></SelectTrigger>
+                                <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="none" className="text-xs">None</SelectItem>
                                     <SelectItem value="ambient_beat" className="text-xs">Ambient</SelectItem>
@@ -183,7 +183,7 @@ export function AuraGrooveV2({
                             </Select>
                         </div>
                         <div className="flex items-center gap-2">
-                            <Label className="text-xs text-muted-foreground"><Speaker className="h-4 w-4 inline-block mr-1"/>Volume</Label>
+                            <Label className="text-xs text-muted-foreground"><Speaker className="h-3 w-3 inline-block mr-1"/>Volume</Label>
                             <Slider value={[drumSettings.volume]} max={1} step={0.05} onValueChange={(v) => setDrumSettings(d => ({...d, volume: v[0]}))} disabled={isInitializing || drumSettings.pattern === 'none'}/>
                              <span className="text-xs w-8 text-right font-mono">{Math.round(drumSettings.volume * 100)}</span>
                         </div>
@@ -199,10 +199,10 @@ export function AuraGrooveV2({
       <footer className="flex-shrink-0 pt-2 mt-auto">
         <Card className="shadow-none border-t border-border rounded-none -mx-4 -mb-4 sm:-mx-6 sm:-mb-6">
             <CardContent className="p-3 flex flex-col items-center gap-1">
-                 <p className="text-muted-foreground text-xs min-h-[18px]">
+                 <p className="text-muted-foreground text-xs min-h-[16px]">
                     {isPlaying ? `Playing at ${bpm} BPM...` : "Press play to start the music"}
                  </p>
-                 <Button type="button" onClick={handleTogglePlay} disabled={isInitializing} className="w-full max-w-xs text-base py-4">
+                 <Button type="button" onClick={handleTogglePlay} disabled={isInitializing} className="w-full max-w-xs text-base h-10">
                     {isPlaying ? <Pause className="mr-2 h-5 w-5" /> : <Music className="mr-2 h-5 w-5" />}
                     {isPlaying ? "Stop" : "Play"}
                  </Button>
