@@ -2,7 +2,7 @@
 
 "use client";
 
-import { Loader2, Music, Pause, Speaker, FileMusic, Drum, SlidersHorizontal, Waves, GitBranch, Atom, Piano, Home, X, Sparkles, Sprout, Equalizer } from "lucide-react";
+import { Loader2, Music, Pause, Speaker, FileMusic, Drum, SlidersHorizontal, Waves, GitBranch, Atom, Piano, Home, X, Sparkles, Sprout } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -116,7 +116,7 @@ export function AuraGroove({
 
   return (
     <Card className="w-full max-w-lg shadow-2xl relative">
-       <div className="absolute top-2 right-2 flex gap-1">
+       <div className="absolute top-2 right-2 flex items-center gap-1">
             <Button variant="ghost" size="icon" onClick={handleGoHome} aria-label="Go to Home">
                 <Home className="h-5 w-5" />
             </Button>
@@ -125,8 +125,8 @@ export function AuraGroove({
             </Button>
             <Dialog open={isEqModalOpen} onOpenChange={setIsEqModalOpen}>
                 <DialogTrigger asChild>
-                    <Button variant="ghost" size="icon" aria-label="Open Equalizer">
-                        <Equalizer className="h-5 w-5" />
+                    <Button variant="ghost" className="h-9 w-9 px-2" aria-label="Open Equalizer">
+                        EQ
                     </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[425px]">
@@ -401,3 +401,5 @@ export function AuraGroove({
     </Card>
   );
 }
+
+    
