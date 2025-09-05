@@ -62,6 +62,15 @@ export function AuraGrooveV2({
             </Dialog>
           </div>
         </div>
+        <div className="flex flex-col items-center gap-1 pt-2 pb-1.5">
+           <p className="text-muted-foreground text-xs min-h-[16px]">
+              {isPlaying ? `Playing at ${bpm} BPM...` : "Press play to start the music"}
+           </p>
+           <Button type="button" onClick={handleTogglePlay} disabled={isInitializing} className="w-full max-w-xs text-base h-10">
+              {isPlaying ? <Pause className="mr-2 h-5 w-5" /> : <Music className="mr-2 h-5 w-5" />}
+              {isPlaying ? "Stop" : "Play"}
+           </Button>
+        </div>
       </header>
 
       {/* Content */}
@@ -199,17 +208,6 @@ export function AuraGrooveV2({
 
       {/* Footer */}
       <footer className="flex-shrink-0 mt-auto">
-        <Card className="shadow-none rounded-none -mx-3 -mb-3 border-t">
-            <CardContent className="p-3 flex flex-col items-center gap-1 pt-1 pb-2">
-                 <p className="text-muted-foreground text-xs min-h-[16px]">
-                    {isPlaying ? `Playing at ${bpm} BPM...` : "Press play to start the music"}
-                 </p>
-                 <Button type="button" onClick={handleTogglePlay} disabled={isInitializing} className="w-full max-w-xs text-base h-10">
-                    {isPlaying ? <Pause className="mr-2 h-5 w-5" /> : <Music className="mr-2 h-5 w-5" />}
-                    {isPlaying ? "Stop" : "Play"}
-                 </Button>
-            </CardContent>
-        </Card>
       </footer>
     </div>
   );
