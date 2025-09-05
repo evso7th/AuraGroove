@@ -8,8 +8,10 @@ export default function AuraGrooveUIPage() {
   const auraGrooveProps = useAuraGroove();
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-start p-4 sm:p-6 bg-background">
-      <AuraGrooveV2 {...auraGrooveProps} />
+    <main className="flex min-h-screen flex-col items-center justify-center p-4 sm:p-6 bg-background">
+       <div className="w-[400px] h-[900px] border rounded-lg flex flex-col overflow-hidden shadow-2xl bg-card text-card-foreground">
+        <AuraGrooveV2 {...auraGrooveProps} />
+      </div>
     </main>
   );
 }

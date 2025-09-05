@@ -32,7 +32,7 @@ export function AuraGrooveV2({
   };
   
   return (
-    <div className="w-full max-w-md h-full flex flex-col">
+    <div className="w-full h-full flex flex-col p-3">
       {/* Header */}
       <header className="flex-shrink-0 pb-2">
         <div className="flex items-center justify-between">
@@ -74,7 +74,7 @@ export function AuraGrooveV2({
           </TabsList>
           
           <TabsContent value="composition" className="space-y-1.5 pt-2">
-            <Card>
+            <Card className="border-0 shadow-none">
               <CardHeader className="p-2"><CardTitle className="flex items-center gap-2 text-base"><FileMusic className="h-4 w-4"/> Composition</CardTitle></CardHeader>
               <CardContent className="space-y-2 p-3 pt-0">
                 <div className="grid grid-cols-3 items-center gap-2">
@@ -102,7 +102,7 @@ export function AuraGrooveV2({
           </TabsContent>
 
           <TabsContent value="instruments" className="space-y-1.5 pt-2">
-            <Card>
+             <Card className="border-0 shadow-none">
                 <CardHeader className="p-2"><CardTitle className="flex items-center gap-2 text-base"><SlidersHorizontal className="h-4 w-4"/> Instruments</CardTitle></CardHeader>
                 <CardContent className="space-y-1.5 p-3 pt-0">
                     {Object.entries(instrumentSettings).map(([part, settings]) => (
@@ -145,7 +145,7 @@ export function AuraGrooveV2({
           </TabsContent>
 
           <TabsContent value="samples" className="space-y-1.5 pt-2">
-             <Card>
+             <Card className="border-0 shadow-none">
                 <CardHeader className="p-2"><CardTitle className="flex items-center gap-2 text-base"><Atom className="h-4 w-4"/> Sampled Textures</CardTitle></CardHeader>
                 <CardContent className="space-y-1.5 p-3 pt-0">
                     <div className="p-2 border rounded-md">
@@ -197,7 +197,7 @@ export function AuraGrooveV2({
 
       {/* Footer */}
       <footer className="flex-shrink-0 pt-2 mt-auto">
-        <Card className="shadow-none border-t border-border rounded-none -mx-4 -mb-4 sm:-mx-6 sm:-mb-6">
+        <Card className="shadow-none rounded-none -mx-3 -mb-3 border-t">
             <CardContent className="p-3 flex flex-col items-center gap-1">
                  <p className="text-muted-foreground text-xs min-h-[16px]">
                     {isPlaying ? `Playing at ${bpm} BPM...` : "Press play to start the music"}
@@ -212,5 +212,3 @@ export function AuraGrooveV2({
     </div>
   );
 }
-
-    
