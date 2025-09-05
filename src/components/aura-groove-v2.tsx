@@ -107,11 +107,11 @@ export function AuraGrooveV2({
                   <CardHeader className="p-2"><CardTitle className="flex items-center gap-2 text-base"><SlidersHorizontal className="h-4 w-4"/> Instruments</CardTitle></CardHeader>
                   <CardContent className="space-y-1.5 p-3 pt-0">
                       {Object.entries(instrumentSettings).map(([part, settings]) => (
-                          <div key={part} className="p-2 border rounded-md">
-                             <div className="flex justify-between items-center mb-1">
+                          <div key={part} className="p-2 border rounded-md space-y-2">
+                             <div className="grid grid-cols-2 items-center gap-2">
                                   <Label className="font-semibold flex items-center gap-1.5 capitalize text-sm"><Waves className="h-4 w-4"/>{part}</Label>
                                   <Select value={settings.name} onValueChange={(v) => setInstrumentSettings(part as any, v as any)} disabled={isInitializing || isPlaying}>
-                                      <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue /></SelectTrigger>
+                                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                                       <SelectContent>
                                           {(part === 'bass' ? ['classicBass', 'glideBass', 'ambientDrone', 'resonantGliss', 'hypnoticDrone', 'livingRiff', 'none'] : ['synth', 'organ', 'mellotron', 'theremin', 'none']).map(inst => (
                                             <SelectItem key={inst} value={inst} className="text-xs">{inst.charAt(0).toUpperCase() + inst.slice(1).replace(/([A-Z])/g, ' $1')}</SelectItem>
@@ -120,10 +120,10 @@ export function AuraGrooveV2({
                                   </Select>
                               </div>
                                {part === 'bass' && (
-                                  <div className="flex justify-between items-center mb-1">
+                                  <div className="grid grid-cols-2 items-center gap-2">
                                       <Label className="font-semibold flex items-center gap-1.5 capitalize text-sm"><GitBranch className="h-4 w-4"/>Technique</Label>
                                        <Select value={settings.technique} onValueChange={(v) => handleBassTechniqueChange(v as any)} disabled={isInitializing || isPlaying || settings.name === 'none'}>
-                                          <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue/></SelectTrigger>
+                                          <SelectTrigger className="h-8 text-xs"><SelectValue/></SelectTrigger>
                                           <SelectContent>
                                               <SelectItem value="arpeggio" className="text-xs">Arpeggio</SelectItem>
                                               <SelectItem value="portamento" className="text-xs">Portamento</SelectItem>
