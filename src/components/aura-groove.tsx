@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { Loader2, Music, Pause, Speaker, FileMusic, Drum, SlidersHorizontal, Waves, GitBranch, Atom, Piano, Home, X, Sparkles, Sprout } from "lucide-react";
@@ -143,7 +142,8 @@ export function AuraGroove({
                                     max={10}
                                     step={0.5}
                                     onValueChange={(v) => handleEqChange(index, v[0])}
-                                    className="h-32 [writing-mode:bt-lr]"
+                                    orientation="vertical"
+                                    className="h-32"
                                 />
                                 <Label className="text-xs text-muted-foreground">{band.label}</Label>
                             </div>
