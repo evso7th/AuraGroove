@@ -37,7 +37,7 @@ export function AuraGrooveV2({
       <header className="flex-shrink-0 pb-2">
         <div className="flex items-center justify-between">
           <div className="flex flex-col">
-            <h1 className="text-xl font-bold text-primary">AuraGroove</h1>
+            <h1 className="text-lg font-bold text-primary">AuraGroove</h1>
             <p className="text-xs text-muted-foreground">Your personal pure digital ambient music generator</p>
           </div>
           <div className="flex items-center gap-1">
@@ -67,16 +67,16 @@ export function AuraGrooveV2({
       {/* Content */}
       <main className="flex-grow overflow-y-auto pr-2 -mr-2">
         <Tabs defaultValue="composition" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 h-9">
-            <TabsTrigger value="composition">Composition</TabsTrigger>
-            <TabsTrigger value="instruments">Instruments</TabsTrigger>
-            <TabsTrigger value="samples">Samples</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-3 h-8">
+            <TabsTrigger value="composition" className="text-xs">Composition</TabsTrigger>
+            <TabsTrigger value="instruments" className="text-xs">Instruments</TabsTrigger>
+            <TabsTrigger value="samples" className="text-xs">Samples</TabsTrigger>
           </TabsList>
           
           <div className="grid">
             <TabsContent value="composition" className="space-y-1.5 pt-2 col-start-1 row-start-1">
               <Card className="border-0 shadow-none">
-                <CardHeader className="p-2"><CardTitle className="flex items-center gap-2 text-base"><FileMusic className="h-4 w-4"/> Composition</CardTitle></CardHeader>
+                <CardHeader className="p-2"><CardTitle className="flex items-center gap-2 text-sm"><FileMusic className="h-4 w-4"/> Composition</CardTitle></CardHeader>
                 <CardContent className="space-y-2 p-3 pt-0">
                   <div className="grid grid-cols-3 items-center gap-2">
                       <Label htmlFor="score-selector" className="text-right text-xs">Style</Label>
@@ -104,7 +104,7 @@ export function AuraGrooveV2({
 
             <TabsContent value="instruments" className="space-y-1.5 pt-2 col-start-1 row-start-1">
                <Card className="border-0 shadow-none">
-                  <CardHeader className="p-2"><CardTitle className="flex items-center gap-2 text-base"><SlidersHorizontal className="h-4 w-4"/> Instruments</CardTitle></CardHeader>
+                  <CardHeader className="p-2"><CardTitle className="flex items-center gap-2 text-sm"><SlidersHorizontal className="h-4 w-4"/> Instruments</CardTitle></CardHeader>
                   <CardContent className="space-y-1.5 p-3 pt-0">
                       {Object.entries(instrumentSettings).map(([part, settings]) => (
                           <div key={part} className="p-2 border rounded-md space-y-2">
@@ -147,7 +147,7 @@ export function AuraGrooveV2({
 
             <TabsContent value="samples" className="space-y-1.5 pt-2 col-start-1 row-start-1">
                <Card className="border-0 shadow-none">
-                  <CardHeader className="p-2"><CardTitle className="flex items-center gap-2 text-base"><Atom className="h-4 w-4"/> Sampled Textures</CardTitle></CardHeader>
+                  <CardHeader className="p-2"><CardTitle className="flex items-center gap-2 text-sm"><Atom className="h-4 w-4"/> Sampled Textures</CardTitle></CardHeader>
                   <CardContent className="space-y-1.5 p-3 pt-0">
                       <div className="p-2 border rounded-md">
                           <div className="flex justify-between items-center mb-1">
