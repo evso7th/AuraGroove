@@ -38,7 +38,7 @@ export const useAuraGroove = () => {
   const [density, setDensity] = useState(0.5);
 
   const [isEqModalOpen, setIsEqModalOpen] = useState(false);
-  const [eqSettings, setEqSettings] = useState<number[]>(Array(7).fill(0));
+  const [eqSettings, setEqSettings] = useState<number[]>(Array(5).fill(0));
 
 
   const getFullSettings = useCallback((): WorkerSettings => {

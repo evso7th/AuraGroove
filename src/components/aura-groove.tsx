@@ -42,13 +42,11 @@ export type AuraGrooveProps = {
 };
 
 const EQ_BANDS = [
-  { freq: '31 Hz', label: 'Vibration' },
-  { freq: '62 Hz', label: 'Bass Body' },
-  { freq: '125 Hz', label: 'Punch' },
-  { freq: '250 Hz', label: 'Warmth' },
-  { freq: '500 Hz', label: 'Tension' },
-  { freq: '1.5 kHz', label: 'Clarity' },
-  { freq: '8 kHz', label: 'Air' },
+  { freq: '60', label: '60' },
+  { freq: '230', label: '230' },
+  { freq: '910', label: '910' },
+  { freq: '4k', label: '4k' },
+  { freq: '14k', label: '14k' },
 ];
 
 export function AuraGroove({
@@ -129,28 +127,35 @@ export function AuraGroove({
                         EQ
                     </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-[425px]">
+                <DialogContent className="sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle>System Equalizer</DialogTitle>
                     </DialogHeader>
-                    <div className="flex justify-around items-end pt-4 h-48">
-                        {EQ_BANDS.map((band, index) => (
-                             <div key={index} className="flex flex-col items-center justify-end space-y-2">
-                                <span className="text-xs font-mono text-muted-foreground">
-                                    {eqSettings[index] > 0 ? '+' : ''}{eqSettings[index].toFixed(1)}
-                                </span>
-                                <Slider
-                                    orientation="vertical"
-                                    value={[eqSettings[index]]}
-                                    min={-12}
-                                    max={12}
-                                    step={0.5}
-                                    onValueChange={(v) => handleEqChange(index, v[0])}
-                                    className="h-32"
-                                />
-                                <Label className="text-xs text-muted-foreground">{band.freq}</Label>
-                            </div>
-                        ))}
+                    <div className="flex items-center gap-4 pt-4">
+                        <div className="flex flex-col justify-between h-40 text-xs text-muted-foreground font-mono">
+                            <span>+10 dB</span>
+                            <span>0 dB</span>
+                            <span>-10 dB</span>
+                        </div>
+                        <div className="flex-1 grid grid-cols-5 gap-x-2 h-48">
+                            {EQ_BANDS.map((band, index) => (
+                                 <div key={index} className="flex flex-col items-center justify-end space-y-2">
+                                    <span className="text-xs font-mono text-muted-foreground">
+                                        {eqSettings[index] > 0 ? '+' : ''}{eqSettings[index].toFixed(1)}
+                                    </span>
+                                    <Slider
+                                        orientation="vertical"
+                                        value={[eqSettings[index]]}
+                                        min={-10}
+                                        max={10}
+                                        step={0.5}
+                                        onValueChange={(v) => handleEqChange(index, v[0])}
+                                        className="h-32"
+                                    />
+                                    <Label className="text-xs text-muted-foreground">{band.label}</Label>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </DialogContent>
             </Dialog>

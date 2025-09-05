@@ -33,7 +33,8 @@ const VOICE_BALANCE = {
   pads: 0.9,
 };
 
-const EQ_FREQUENCIES = [31, 62, 125, 250, 500, 1500, 8000];
+const EQ_FREQUENCIES = [60, 230, 910, 4000, 14000];
+
 
 const isMobile = () => {
     if (typeof window === 'undefined') return false;
