@@ -109,7 +109,7 @@ export function AuraGrooveV2({
                       {Object.entries(instrumentSettings).map(([part, settings]) => (
                           <div key={part} className="p-2 border rounded-md space-y-2">
                              <div className="grid grid-cols-2 items-center gap-2">
-                                  <Label className="font-semibold flex items-center gap-1.5 capitalize text-sm"><Waves className="h-4 w-4"/>{part}</Label>
+                                  <Label className="font-semibold flex items-center gap-1.5 capitalize text-xs"><Waves className="h-4 w-4"/>{part}</Label>
                                   <Select value={settings.name} onValueChange={(v) => setInstrumentSettings(part as any, v as any)} disabled={isInitializing || isPlaying}>
                                       <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                                       <SelectContent>
@@ -121,7 +121,7 @@ export function AuraGrooveV2({
                               </div>
                                {part === 'bass' && (
                                   <div className="grid grid-cols-2 items-center gap-2">
-                                      <Label className="font-semibold flex items-center gap-1.5 capitalize text-sm"><GitBranch className="h-4 w-4"/>Technique</Label>
+                                      <Label className="font-semibold flex items-center gap-1.5 capitalize text-xs"><GitBranch className="h-4 w-4"/>Technique</Label>
                                        <Select value={settings.technique} onValueChange={(v) => handleBassTechniqueChange(v as any)} disabled={isInitializing || isPlaying || settings.name === 'none'}>
                                           <SelectTrigger className="h-8 text-xs"><SelectValue/></SelectTrigger>
                                           <SelectContent>
@@ -198,9 +198,9 @@ export function AuraGrooveV2({
       </main>
 
       {/* Footer */}
-      <footer className="flex-shrink-0 pt-2 mt-auto">
+      <footer className="flex-shrink-0 mt-auto">
         <Card className="shadow-none rounded-none -mx-3 -mb-3 border-t">
-            <CardContent className="p-3 flex flex-col items-center gap-1">
+            <CardContent className="p-3 flex flex-col items-center gap-1 pt-1 pb-2">
                  <p className="text-muted-foreground text-xs min-h-[16px]">
                     {isPlaying ? `Playing at ${bpm} BPM...` : "Press play to start the music"}
                  </p>
