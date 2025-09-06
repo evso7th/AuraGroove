@@ -29,7 +29,7 @@ const VOICE_BALANCE = {
   accompaniment: 0.6,
   drums: 0.8,
   effects: 0.6,
-  sparkles: 0.7,
+  sparkles: 0.35,
   pads: 0.9,
 };
 
