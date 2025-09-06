@@ -276,11 +276,15 @@ const Scheduler = {
         const density = this.settings.density;
         let bass, melody, accompaniment, drums;
         
+        console.log('[Worker] Tick. Current style:', this.settings.score);
+
         if (this.settings.score === 'multeity') {
+             console.log('[Worker] Using MulteityComposer');
              bass = MulteityComposer.generateBass(this.barCount, density);
              melody = MulteityComposer.generateMelody(this.barCount, density);
              accompaniment = MulteityComposer.generateAccompaniment(this.barCount, density);
         } else {
+             console.log('[Worker] Using default Composer');
              bass = Composer.generateBass(this.barCount, density);
              melody = Composer.generateMelody(this.barCount, density);
              accompaniment = Composer.generateAccompaniment(this.barCount, density);
@@ -332,6 +336,7 @@ self.onmessage = async (event: MessageEvent) => {
                 break;
 
             case 'update_settings':
+                console.log('[Worker] Received update_settings command with data:', data);
                 Scheduler.updateSettings(data);
                 break;
         }

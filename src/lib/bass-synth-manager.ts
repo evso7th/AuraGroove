@@ -37,7 +37,7 @@ export class BassSynthManager {
     }
 
     public schedule(notes: Note[], startTime: number) {
-        console.log('[BassSynthManager] Scheduling notes:', notes);
+        console.log('[BassSynthManager] Received notes to schedule:', notes);
         if (!this.workletNode || !this.isInitialized) {
             console.warn('[BassSynthManager] Tried to schedule before initialized.');
             return;
@@ -45,7 +45,10 @@ export class BassSynthManager {
         
         notes.forEach(note => {
             const freq = 440 * Math.pow(2, (note.midi - 69) / 12);
-            if (isNaN(freq)) return;
+            if (isNaN(freq)) {
+                console.error('[BassSynthManager] NaN frequency for note:', note);
+                return;
+            }
 
             const noteOnTime = startTime + note.time;
             const noteOffTime = noteOnTime + note.duration;

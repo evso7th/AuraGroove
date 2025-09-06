@@ -3,7 +3,7 @@
 
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import type { WorkerSettings, Score, Note, DrumsScore, InstrumentPart, BassInstrument, MelodyInstrument, AccompanimentInstrument, BassTechnique, TextureSettings } from '@/types/music';
+import type { WorkerSettings, Score, Note, DrumsScore, InstrumentPart, BassInstrument, MelodyInstrument, AccompanimentInstrument, BassTechnique, TextureSettings, ScoreName } from '@/types/music';
 import { DrumMachine } from '@/lib/drum-machine';
 import { AccompanimentSynthManager } from '@/lib/accompaniment-synth-manager';
 import { BassSynthManager } from '@/lib/bass-synth-manager';
@@ -219,7 +219,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   }, [isInitialized, isInitializing, toast]);
 
   const scheduleScore = (score: Score, audioContext: AudioContext) => {
-    console.log('[AudioEngine] Scheduling score:', score);
+    // console.log('[AudioEngine] Scheduling score:', score);
     const now = audioContext.currentTime;
     const currentSettings = settingsRef.current;
     
@@ -242,9 +242,10 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
                     voice.disconnect();
                     voice.connect(gainNode);
                     const noteOnTime = now + note.time;
-                    voice.port.postMessage({ ...params, when: noteOnTime });
+                    voice.port.postMessage({ ...params, type: 'noteOn', when: noteOnTime });
                     const noteOffTime = noteOnTime + note.duration;
                     const delayUntilOff = (noteOffTime - audioContext.currentTime);
+
                     setTimeout(() => {
                         if (voice) {
                             voice.port.postMessage({ type: 'noteOff', release: params.release });
@@ -296,6 +297,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
      if (!isInitialized || !workerRef.current) return;
      const newSettings = { ...settingsRef.current, ...settings } as WorkerSettings;
      settingsRef.current = newSettings;
+     console.log('[AudioEngineProvider] Sending settings to worker:', newSettings);
      workerRef.current.postMessage({ command: 'update_settings', data: newSettings });
   }, [isInitialized]);
 

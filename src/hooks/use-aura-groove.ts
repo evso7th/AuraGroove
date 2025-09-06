@@ -30,7 +30,7 @@ export const useAuraGroove = () => {
     accompaniment: { name: "synth", volume: 0.5 },
   });
   const [textureSettings, setTextureSettings] = useState<TextureSettings>({
-      sparkles: { enabled: true, volume: 0.6 },
+      sparkles: { enabled: true, volume: 0.35 },
       pads: { enabled: true, volume: 0.8 },
   });
   const [bpm, setBpm] = useState(75);
@@ -74,12 +74,15 @@ export const useAuraGroove = () => {
         
         setBassTechnique(instrumentSettings.bass.technique);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isInitialized]);
 
   // Sync settings with engine whenever they change
   useEffect(() => {
       if (isInitialized) {
-          updateSettings(getFullSettings());
+          const fullSettings = getFullSettings();
+          console.log('[useAuraGroove] Syncing settings to AudioEngine. Style:', fullSettings.score);
+          updateSettings(fullSettings);
       }
   }, [bpm, score, density, drumSettings, instrumentSettings, textureSettings, isInitialized, updateSettings, getFullSettings]);
 
