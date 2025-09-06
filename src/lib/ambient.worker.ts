@@ -18,7 +18,7 @@ const PADS_BY_STYLE: Record<ScoreName, string | null> = {
     evolve: 'Tibetan bowls.mp3',
     omega: 'things.mp3',
     journey: 'pure_energy.mp3',
-    multeity: null, // No pad for this style
+    multeity: 'uneverse.mp3',
 };
 
 // --- "Sparkle" (In-krap-le-ni-ye) Logic ---

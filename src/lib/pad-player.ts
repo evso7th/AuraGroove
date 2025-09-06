@@ -32,6 +32,7 @@ const PAD_SAMPLES: Record<string, string> = {
     'things.mp3': '/assets/music/pads/things.mp3',
     'pure_energy.mp3': '/assets/music/pads/pure_energy.mp3',
     'Tibetan bowls.mp3': '/assets/music/pads/Tibetan bowls.mp3',
+    'uneverse.mp3': '/assets/music/pads/uneverse.mp3',
 };
 
 export class PadPlayer {

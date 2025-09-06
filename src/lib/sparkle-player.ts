@@ -6,6 +6,9 @@ const SPARKLE_SAMPLES = [
     '/assets/music/droplets/vibes_a.ogg',
     '/assets/music/droplets/sweepingbells.ogg',
     '/assets/music/droplets/belldom.ogg',
+    '/assets/music/droplets/dreams.mp3',
+    '/assets/music/droplets/end.mp3',
+    '/assets/music/droplets/ocean.mp3',
 ];
 
 export class SparklePlayer {
