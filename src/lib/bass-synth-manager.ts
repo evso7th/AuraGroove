@@ -24,7 +24,6 @@ export class BassSynthManager {
             this.isInitialized = true;
             this.setPreset('glideBass'); 
             this.setTechnique('arpeggio');
-            console.log('[BassSynthManager] Initialized successfully with new bass-processor.');
         } catch (e) {
             console.error('[BassSynthManager] Failed to initialize:', e);
         }
@@ -37,7 +36,6 @@ export class BassSynthManager {
     }
 
     public schedule(notes: Note[], startTime: number) {
-        console.log('[BassSynthManager] Received notes to schedule:', notes);
         if (!this.workletNode || !this.isInitialized) {
             console.warn('[BassSynthManager] Tried to schedule before initialized.');
             return;

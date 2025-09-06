@@ -34,7 +34,6 @@ function createSampler(audioContext: AudioContext, output: AudioNode): Sampler {
             }
         });
         await Promise.all(promises);
-        console.log('[DrumMachine] All samples loaded.');
     };
 
     const triggerAttack = (note: string, time: number, velocity = 1) => {
@@ -77,7 +76,6 @@ export class DrumMachine {
     }
 
     schedule(score: SamplerNote[], time: number) {
-        console.log('[DrumMachine] Scheduling score:', score);
         if (!this.sampler || !this.isInitialized) {
             console.warn('[DrumMachine] Tried to schedule score before initialization.');
             return;

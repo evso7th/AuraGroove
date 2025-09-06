@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect, useCallback } from "react";
@@ -34,7 +33,7 @@ export const useAuraGroove = () => {
       pads: { enabled: true, volume: 0.8 },
   });
   const [bpm, setBpm] = useState(75);
-  const [score, setScore] = useState<ScoreName>('dreamtales');
+  const [score, setScore] = useState<ScoreName>('multeity');
   const [density, setDensity] = useState(0.5);
 
   const [isEqModalOpen, setIsEqModalOpen] = useState(false);
@@ -81,7 +80,6 @@ export const useAuraGroove = () => {
   useEffect(() => {
       if (isInitialized) {
           const fullSettings = getFullSettings();
-          console.log('[useAuraGroove] Syncing settings to AudioEngine. Style:', fullSettings.score);
           updateSettings(fullSettings);
       }
   }, [bpm, score, density, drumSettings, instrumentSettings, textureSettings, isInitialized, updateSettings, getFullSettings]);

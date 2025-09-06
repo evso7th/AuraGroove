@@ -7,6 +7,7 @@ export class AccompanimentSynthManager {
     private workletNode: AudioWorkletNode | null = null;
     private gainNode: GainNode;
     public isInitialized = false;
+    private scheduledTimeouts = new Set<NodeJS.Timeout>();
 
     constructor(audioContext: AudioContext, destination: AudioNode) {
         this.audioContext = audioContext;
@@ -22,7 +23,6 @@ export class AccompanimentSynthManager {
             this.workletNode.connect(this.gainNode);
             this.isInitialized = true;
             this.setPreset('synth'); // Set a default preset
-            console.log('[AccompanimentManager] Initialized successfully.');
         } catch (e) {
             console.error('[AccompanimentManager] Failed to initialize:', e);
         }
@@ -33,26 +33,43 @@ export class AccompanimentSynthManager {
     }
 
     public schedule(notes: Note[], time: number) {
-        console.log('[AccompanimentManager] Scheduling notes:', notes);
         if (!this.workletNode || !this.isInitialized) {
             console.warn('[AccompanimentManager] Tried to schedule before initialized.');
             return;
         }
+
+        const chordNotes = notes.map(n => ({ midi: n.midi, duration: n.duration, velocity: n.velocity ?? 0.6 }));
+        const maxDuration = Math.max(...notes.map(n => n.duration));
+
+        if (chordNotes.length === 0) return;
         
-        // The worklet handles timing internally based on `when`, so we send the absolute time.
+        // Schedule Note On for the chord
+        const noteOnTime = time;
         this.workletNode.port.postMessage({
             type: 'playChord',
-            notes: notes.map(n => ({ midi: n.midi, duration: n.duration })),
-            stagger: 0.05, // Create a slight arpeggio effect
-            velocity: 0.6,
-            when: time
+            notes: chordNotes,
+            stagger: 0.05,
+            when: noteOnTime
         });
+
+        // Schedule Note Off for the chord
+        const noteOffTime = noteOnTime + maxDuration;
+        const delayUntilOff = (noteOffTime - this.audioContext.currentTime) * 1000;
+
+        if (delayUntilOff > 0) {
+            const timeoutId = setTimeout(() => {
+                if (this.workletNode) {
+                    this.workletNode.port.postMessage({ type: 'noteOff' });
+                }
+                this.scheduledTimeouts.delete(timeoutId);
+            }, delayUntilOff);
+            this.scheduledTimeouts.add(timeoutId);
+        }
     }
+
 
     public setPreset(instrumentName: MelodyInstrument) {
         if (!this.workletNode || instrumentName === 'none') return;
-        // We use a placeholder note because getPresetParams needs one, but the chord processor
-        // only cares about the preset parameters, not the note-specific ones.
         const placeholderNote: Note = { midi: 60, time: 0, duration: 1 };
         const params = getPresetParams(instrumentName, placeholderNote);
         
@@ -69,12 +86,12 @@ export class AccompanimentSynthManager {
     }
 
     public allNotesOff() {
-        if (this.workletNode) {
-            this.workletNode.port.postMessage({ type: 'noteOff' });
-        }
+        this.stop();
     }
 
     public stop() {
+        this.scheduledTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
+        this.scheduledTimeouts.clear();
         if (this.workletNode) {
             this.workletNode.port.postMessage({ type: 'noteOff' });
         }

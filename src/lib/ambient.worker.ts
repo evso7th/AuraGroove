@@ -51,16 +51,15 @@ const MulteityComposer = {
         const notes: Note[] = [];
         const beatDuration = Scheduler.barDuration / 4;
         const step = beatDuration / 4; // 16th notes
-        const rootMidi = KEY_ROOT_MIDI; // E2
-        const progression = [0, 3, 5, 2]; // i-iv-VI-III (Am, Dm, F, C in A minor, transposed to E)
+        const rootMidi = KEY_ROOT_MIDI;
+        const progression = [0, 3, 5, 2];
         const chordRootDegree = progression[Math.floor(barIndex / 2) % progression.length];
 
         for (let i = 0; i < 16; i++) {
             if (Math.random() < density * 0.8) {
-                const octave = (i % 8 < 4) ? 2 : 3; // Alternate between 2nd and 3rd octave
-                const degree = chordRootDegree + (i % 4); // Simple arpeggio pattern
-                const midi = getNoteFromDegree(degree, SCALE_INTERVALS, rootMidi, octave-2);
-                 if (midi < 40 || midi > 64) continue; // Ensure within E2-E4 range (approx)
+                const octave = (i % 8 < 4) ? 0 : 1; // E2 to E3 range
+                const degree = chordRootDegree + (i % 4);
+                const midi = getNoteFromDegree(degree, SCALE_INTERVALS, rootMidi, octave);
                 notes.push({ midi, time: i * step, duration: step, velocity: 0.6 + Math.random() * 0.2 });
             }
         }
@@ -70,17 +69,16 @@ const MulteityComposer = {
         const notes: Note[] = [];
         const beatDuration = Scheduler.barDuration / 4;
         const step = beatDuration / 4; // 16th notes
-        const rootMidi = KEY_ROOT_MIDI; // E2
+        const rootMidi = KEY_ROOT_MIDI;
         const progression = [0, 3, 5, 2];
         const chordRootDegree = progression[Math.floor(barIndex / 2) % progression.length];
         
         const pattern = [0, 2, 4, 2]; // Arpeggio pattern over chord tones
         for (let i = 0; i < 16; i++) {
              if (Math.random() < density * 0.9) {
-                const octave = 3; // 3rd and 4th octave
+                const octave = 2; // E4 to E5 range
                 const degree = chordRootDegree + pattern[i % pattern.length];
                 const midi = getNoteFromDegree(degree, SCALE_INTERVALS, rootMidi, octave);
-                if (midi < 52 || midi > 76) continue; // E3 - E5
                 notes.push({ midi, time: i * step, duration: step * 1.5, velocity: 0.4 + Math.random() * 0.2 });
             }
         }
@@ -88,22 +86,20 @@ const MulteityComposer = {
     },
     generateMelody(barIndex: number, density: number): Note[] {
         const notes: Note[] = [];
-        if (Math.random() > density * 0.8) return notes; // Melody is less frequent
+        if (Math.random() > density * 0.8) return notes;
 
         const rootMidi = KEY_ROOT_MIDI;
-        const numNotes = Math.floor(density * 12) + 4; // 4 to 16 notes per bar
+        const numNotes = Math.floor(density * 12) + 4;
         const step = Scheduler.barDuration / numNotes;
         let lastDegree = (barIndex * 3) % SCALE_INTERVALS.length + 7;
 
         for (let i = 0; i < numNotes; i++) {
-             const useChromatic = Math.random() < (density * 0.1); // Small chance for chromatic passing tone
+             const useChromatic = Math.random() < (density * 0.1);
              const interval = useChromatic ? (Math.random() < 0.5 ? 1 : -1) : (Math.floor(Math.random() * 3) - 1) * 2;
              lastDegree += interval;
              
-             const octave = Math.random() < 0.3 ? 4 : 3; // Chance to jump to 4th octave
+             const octave = Math.random() < 0.3 ? 3 : 2; // E4 - E5 range
              const midi = getNoteFromDegree(lastDegree, SCALE_INTERVALS, rootMidi, octave);
-             if (midi < 52 || midi > 76) continue; // E3-E5
-             
              notes.push({ midi, time: i * step, duration: step * (1.5 + Math.random()), velocity: 0.5 + density * 0.3 });
         }
         return notes;
@@ -276,15 +272,11 @@ const Scheduler = {
         const density = this.settings.density;
         let bass, melody, accompaniment, drums;
         
-        console.log('[Worker] Tick. Current style:', this.settings.score);
-
         if (this.settings.score === 'multeity') {
-             console.log('[Worker] Using MulteityComposer');
              bass = MulteityComposer.generateBass(this.barCount, density);
              melody = MulteityComposer.generateMelody(this.barCount, density);
              accompaniment = MulteityComposer.generateAccompaniment(this.barCount, density);
         } else {
-             console.log('[Worker] Using default Composer');
              bass = Composer.generateBass(this.barCount, density);
              melody = Composer.generateMelody(this.barCount, density);
              accompaniment = Composer.generateAccompaniment(this.barCount, density);
@@ -298,7 +290,7 @@ const Scheduler = {
 
         const currentTime = this.barCount * this.barDuration;
         
-        if (this.settings.textureSettings.sparkles.enabled && this.settings.score !== 'multeity') {
+        if (this.settings.textureSettings.sparkles.enabled) {
             if (shouldAddSparkle(currentTime, density)) {
                  self.postMessage({ type: 'sparkle', time: 0 });
                  lastSparkleTime = currentTime;
@@ -336,7 +328,6 @@ self.onmessage = async (event: MessageEvent) => {
                 break;
 
             case 'update_settings':
-                console.log('[Worker] Received update_settings command with data:', data);
                 Scheduler.updateSettings(data);
                 break;
         }

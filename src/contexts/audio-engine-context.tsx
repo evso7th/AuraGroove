@@ -219,7 +219,6 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   }, [isInitialized, isInitializing, toast]);
 
   const scheduleScore = (score: Score, audioContext: AudioContext) => {
-    // console.log('[AudioEngine] Scheduling score:', score);
     const now = audioContext.currentTime;
     const currentSettings = settingsRef.current;
     
@@ -297,7 +296,6 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
      if (!isInitialized || !workerRef.current) return;
      const newSettings = { ...settingsRef.current, ...settings } as WorkerSettings;
      settingsRef.current = newSettings;
-     console.log('[AudioEngineProvider] Sending settings to worker:', newSettings);
      workerRef.current.postMessage({ command: 'update_settings', data: newSettings });
   }, [isInitialized]);
 
