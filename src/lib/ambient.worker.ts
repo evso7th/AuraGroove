@@ -21,6 +21,47 @@ const PADS_BY_STYLE: Record<ScoreName, string | null> = {
     multeity: 'uneverse.mp3',
 };
 
+const SPARKLE_SAMPLES = [
+    '/assets/music/droplets/merimbo.ogg',
+    '/assets/music/droplets/icepad.ogg',
+    '/assets/music/droplets/vibes_a.ogg',
+    '/assets/music/droplets/sweepingbells.ogg',
+    '/assets/music/droplets/belldom.ogg',
+    '/assets/music/droplets/dreams.mp3',
+    '/assets/music/droplets/end.mp3',
+    '/assets/music/droplets/ocean.mp3',
+];
+
+const DRUM_FILL_PATTERNS: DrumsScore[] = [
+    // Fill 1: Simple tom roll
+    [
+        { note: 'A4', time: 0, velocity: 0.7 },
+        { note: 'A4', time: 0.25, velocity: 0.75 },
+        { note: 'G4', time: 0.5, velocity: 0.8 },
+        { note: 'G4', time: 0.75, velocity: 0.85 },
+    ],
+    // Fill 2: Snare build-up
+    [
+        { note: 'D4', time: 0, velocity: 0.5 },
+        { note: 'D4', time: 0.125, velocity: 0.6 },
+        { note: 'D4', time: 0.25, velocity: 0.7 },
+        { note: 'D4', time: 0.375, velocity: 0.8 },
+        { note: 'D4', time: 0.5, velocity: 0.9 },
+        { note: 'D4', time: 0.625, velocity: 1.0 },
+        { note: 'D4', time: 0.75, velocity: 1.0 },
+        { note: 'G4', time: 0.875, velocity: 0.9 },
+    ],
+    // Fill 3: Syncopated kick/snare
+    [
+        { note: 'C4', time: 0, velocity: 0.9 },
+        { note: 'C4', time: 0.375, velocity: 0.7 },
+        { note: 'D4', time: 0.5, velocity: 0.8 },
+        { note: 'A4', time: 0.75, velocity: 0.6 },
+        { note: 'G4', time: 0.875, velocity: 0.7 },
+    ]
+];
+
+
 // --- "Sparkle" (In-krap-le-ni-ye) Logic ---
 let lastSparkleTime = -Infinity;
 
@@ -79,7 +120,9 @@ const MulteityComposer = {
                 const octave = 2; // E4 to E5 range
                 const degree = chordRootDegree + pattern[i % pattern.length];
                 const midi = getNoteFromDegree(degree, SCALE_INTERVALS, rootMidi, octave);
-                notes.push({ midi, time: i * step, duration: step * 1.5, velocity: 0.4 + Math.random() * 0.2 });
+                 if (midi > 40 && midi < 80) { // Keep notes in a reasonable range
+                    notes.push({ midi, time: i * step, duration: step * 1.5, velocity: 0.4 + Math.random() * 0.2 });
+                 }
             }
         }
         return notes;
@@ -91,16 +134,18 @@ const MulteityComposer = {
         const rootMidi = KEY_ROOT_MIDI;
         const numNotes = Math.floor(density * 12) + 4;
         const step = Scheduler.barDuration / numNotes;
-        let lastDegree = (barIndex * 3) % SCALE_INTERVALS.length + 7;
+        let lastDegree = (barIndex * 3) % SCALE_INTERVALS.length + 14; // Start higher
 
         for (let i = 0; i < numNotes; i++) {
              const useChromatic = Math.random() < (density * 0.1);
              const interval = useChromatic ? (Math.random() < 0.5 ? 1 : -1) : (Math.floor(Math.random() * 3) - 1) * 2;
              lastDegree += interval;
              
-             const octave = Math.random() < 0.3 ? 3 : 2; // E4 - E5 range
+             const octave = Math.random() < 0.3 ? 3 : 2; 
              const midi = getNoteFromDegree(lastDegree, SCALE_INTERVALS, rootMidi, octave);
-             notes.push({ midi, time: i * step, duration: step * (1.5 + Math.random()), velocity: 0.5 + density * 0.3 });
+             if (midi > 52 && midi < 88) { // Keep melody in a reasonable range
+                notes.push({ midi, time: i * step, duration: step * (1.5 + Math.random()), velocity: 0.5 + density * 0.3 });
+             }
         }
         return notes;
     }
@@ -178,10 +223,21 @@ const Composer = {
     generateDrums(barIndex: number, density: number): DrumsScore {
         if (!Scheduler.settings.drumSettings.enabled) return [];
         
-        const drums: DrumsScore = [];
         const step = Scheduler.barDuration / 16;
+
+        // Check for a fill every 8 bars, more likely with higher density
+        if (barIndex > 0 && barIndex % 8 === 7 && Math.random() < density * 0.8) {
+            const fillPattern = DRUM_FILL_PATTERNS[Math.floor(Math.random() * DRUM_FILL_PATTERNS.length)];
+            const fillDuration = Scheduler.barDuration / 2; // Fills are half a bar
+            return fillPattern.map(note => ({
+                ...note,
+                time: (note.time * fillDuration) + (Scheduler.barDuration / 2) // Place fill in the second half of the bar
+            }));
+        }
+
+        const drums: DrumsScore = [];
         
-        // Always play kick and snare
+        // Basic kick and snare
         for (let i = 0; i < 16; i++) {
             if (i % 8 === 0) drums.push({ note: 'C4', time: i * step, velocity: 0.8 }); // Kick
             if (i % 8 === 4) drums.push({ note: 'D4', time: i * step, velocity: 0.6 }); // Snare
@@ -335,3 +391,5 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
+
+
