@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from "react";
 import { SlidersHorizontal, Music, Pause, Speaker, FileMusic, Drum, GitBranch, Atom, Piano, Home, X, Sparkles, Sprout, LayoutGrid, LayoutList, Waves } from "lucide-react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -42,7 +43,8 @@ export function AuraGrooveV2({
       {/* Header */}
       <header className="flex-shrink-0 pb-2">
         <div className="flex items-center justify-between">
-          <div className="flex flex-col pl-1">
+          <div className="flex flex-row items-center gap-2 pl-1">
+            <Image src="/assets/icon8.jpeg" alt="AuraGroove Logo" width={32} height={32} className="rounded-full" />
             <h1 className="text-lg font-bold text-primary">AuraGroove</h1>
           </div>
           <div className="flex items-center gap-1">
