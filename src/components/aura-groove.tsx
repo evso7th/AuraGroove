@@ -87,17 +87,15 @@ export function AuraGroove({
     const instrumentName = instrumentSettings[part].name;
     if (instrumentName === 'none') return 'hsl(var(--muted-foreground))';
     if (part === 'bass') {
-      return BASS_PRESETS[instrumentName as BassInstrument]?.color || 'hsl(var(--foreground))';
+        const preset = BASS_PRESETS[instrumentName as BassInstrument];
+        return preset?.color || 'hsl(var(--foreground))';
     }
-    // For melody and accompaniment, we need to get the color from the preset params.
-    const preset = getPresetParams(instrumentName as MelodyInstrument, { midi: 60, time: 0, duration: 1 });
-    // This is a bit of a hack, as getPresetParams doesn't directly return color.
-    // Let's assume a default color scheme for now.
+    // For melody and accompaniment, we can define some default colors
     switch (instrumentName) {
-        case 'synth': return '#8B5CF6';
-        case 'organ': return '#38BDF8';
-        case 'mellotron': return '#F97316';
-        case 'theremin': return '#EC4899';
+        case 'synth': return '#8B5CF6'; // A nice purple
+        case 'organ': return '#38BDF8'; // A sky blue
+        case 'mellotron': return '#F97316'; // A warm orange
+        case 'theremin': return '#EC4899'; // A vibrant pink
         default: return 'hsl(var(--foreground))';
     }
   };
@@ -211,6 +209,7 @@ export function AuraGroove({
                         <SelectItem value="evolve">Evolve (L-Logic)</SelectItem>
                         <SelectItem value="omega">Omega (Fractal)</SelectItem>
                         <SelectItem value="journey">Journey</SelectItem>
+                        <SelectItem value="multeity">Multeity (Prog)</SelectItem>
                     </SelectContent>
                 </Select>
             </div>
@@ -306,7 +305,10 @@ export function AuraGroove({
                             max={1} 
                             step={0.05} 
                             onValueChange={(v) => handleVolumeChange(part as InstrumentPart, v[0])} 
-                            disabled={isInitializing || settings.name === 'none'} />
+                            disabled={isInitializing || settings.name === 'none'}
+                            style={{ '--slider-color': getPartColor(part) } as React.CSSProperties}
+                            className="[&>span>span]:bg-[var(--slider-color)]"
+                         />
                     </div>
                  </div>
                 )

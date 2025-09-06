@@ -1,4 +1,5 @@
 
+
 /**
  * @file AuraGroove Music Worker (Architecture: "The Dynamic Composer")
  *
@@ -12,11 +13,12 @@ import type { WorkerSettings, Score, Note, DrumsScore, ScoreName } from '@/types
 const KEY_ROOT_MIDI = 40; // E2
 const SCALE_INTERVALS = [0, 2, 3, 5, 7, 8, 10]; // E Natural Minor
 
-const PADS_BY_STYLE: Record<ScoreName, string> = {
+const PADS_BY_STYLE: Record<ScoreName, string | null> = {
     dreamtales: 'livecircle.mp3',
     evolve: 'Tibetan bowls.mp3',
     omega: 'things.mp3',
     journey: 'pure_energy.mp3',
+    multeity: null, // No pad for this style
 };
 
 // --- "Sparkle" (In-krap-le-ni-ye) Logic ---
@@ -34,7 +36,81 @@ function shouldAddSparkle(currentTime: number, density: number): boolean {
     return Math.random() < chance;
 }
 
-// --- Main Composition Engine ---
+// --- Note Generation Helpers ---
+const getNoteFromDegree = (degree: number, scale: number[], root: number, octave: number) => {
+    const scaleLength = scale.length;
+    const noteInScale = scale[((degree % scaleLength) + scaleLength) % scaleLength];
+    const octaveOffset = Math.floor(degree / scaleLength);
+    return root + (octave + octaveOffset) * 12 + noteInScale;
+};
+
+// --- Main Composition Engines ---
+
+const MulteityComposer = {
+    generateBass(barIndex: number, density: number): Note[] {
+        const notes: Note[] = [];
+        const beatDuration = Scheduler.barDuration / 4;
+        const step = beatDuration / 4; // 16th notes
+        const rootMidi = KEY_ROOT_MIDI; // E2
+        const progression = [0, 3, 5, 2]; // i-iv-VI-III (Am, Dm, F, C in A minor, transposed to E)
+        const chordRootDegree = progression[Math.floor(barIndex / 2) % progression.length];
+
+        for (let i = 0; i < 16; i++) {
+            if (Math.random() < density * 0.8) {
+                const octave = (i % 8 < 4) ? 2 : 3; // Alternate between 2nd and 3rd octave
+                const degree = chordRootDegree + (i % 4); // Simple arpeggio pattern
+                const midi = getNoteFromDegree(degree, SCALE_INTERVALS, rootMidi, octave-2);
+                 if (midi < 40 || midi > 64) continue; // Ensure within E2-E4 range (approx)
+                notes.push({ midi, time: i * step, duration: step, velocity: 0.6 + Math.random() * 0.2 });
+            }
+        }
+        return notes;
+    },
+    generateAccompaniment(barIndex: number, density: number): Note[] {
+        const notes: Note[] = [];
+        const beatDuration = Scheduler.barDuration / 4;
+        const step = beatDuration / 4; // 16th notes
+        const rootMidi = KEY_ROOT_MIDI; // E2
+        const progression = [0, 3, 5, 2];
+        const chordRootDegree = progression[Math.floor(barIndex / 2) % progression.length];
+        
+        const pattern = [0, 2, 4, 2]; // Arpeggio pattern over chord tones
+        for (let i = 0; i < 16; i++) {
+             if (Math.random() < density * 0.9) {
+                const octave = 3; // 3rd and 4th octave
+                const degree = chordRootDegree + pattern[i % pattern.length];
+                const midi = getNoteFromDegree(degree, SCALE_INTERVALS, rootMidi, octave);
+                if (midi < 52 || midi > 76) continue; // E3 - E5
+                notes.push({ midi, time: i * step, duration: step * 1.5, velocity: 0.4 + Math.random() * 0.2 });
+            }
+        }
+        return notes;
+    },
+    generateMelody(barIndex: number, density: number): Note[] {
+        const notes: Note[] = [];
+        if (Math.random() > density * 0.8) return notes; // Melody is less frequent
+
+        const rootMidi = KEY_ROOT_MIDI;
+        const numNotes = Math.floor(density * 12) + 4; // 4 to 16 notes per bar
+        const step = Scheduler.barDuration / numNotes;
+        let lastDegree = (barIndex * 3) % SCALE_INTERVALS.length + 7;
+
+        for (let i = 0; i < numNotes; i++) {
+             const useChromatic = Math.random() < (density * 0.1); // Small chance for chromatic passing tone
+             const interval = useChromatic ? (Math.random() < 0.5 ? 1 : -1) : (Math.floor(Math.random() * 3) - 1) * 2;
+             lastDegree += interval;
+             
+             const octave = Math.random() < 0.3 ? 4 : 3; // Chance to jump to 4th octave
+             const midi = getNoteFromDegree(lastDegree, SCALE_INTERVALS, rootMidi, octave);
+             if (midi < 52 || midi > 76) continue; // E3-E5
+             
+             notes.push({ midi, time: i * step, duration: step * (1.5 + Math.random()), velocity: 0.5 + density * 0.3 });
+        }
+        return notes;
+    }
+}
+
+
 const Composer = {
     generateBass(barIndex: number, density: number): Note[] {
         const beatDuration = Scheduler.barDuration / 4;
@@ -198,10 +274,19 @@ const Scheduler = {
         if (!this.isRunning) return;
         
         const density = this.settings.density;
-        const bass = Composer.generateBass(this.barCount, density);
-        const melody = Composer.generateMelody(this.barCount, density);
-        const accompaniment = Composer.generateAccompaniment(this.barCount, density);
-        const drums = Composer.generateDrums(this.barCount, density);
+        let bass, melody, accompaniment, drums;
+        
+        if (this.settings.score === 'multeity') {
+             bass = MulteityComposer.generateBass(this.barCount, density);
+             melody = MulteityComposer.generateMelody(this.barCount, density);
+             accompaniment = MulteityComposer.generateAccompaniment(this.barCount, density);
+        } else {
+             bass = Composer.generateBass(this.barCount, density);
+             melody = Composer.generateMelody(this.barCount, density);
+             accompaniment = Composer.generateAccompaniment(this.barCount, density);
+        }
+
+        drums = Composer.generateDrums(this.barCount, density);
         
         const score: Score = { bass, melody, accompaniment, drums };
 
@@ -218,8 +303,11 @@ const Scheduler = {
         
         if (this.settings.textureSettings.pads.enabled) {
             const currentStyle = this.settings.score;
+            const padName = PADS_BY_STYLE[currentStyle];
             if (currentStyle !== lastPadStyle) {
-                self.postMessage({ type: 'pad', padName: PADS_BY_STYLE[currentStyle], time: 0 });
+                 if (padName) {
+                    self.postMessage({ type: 'pad', padName: padName, time: 0 });
+                 }
                 lastPadStyle = currentStyle;
             }
         }
