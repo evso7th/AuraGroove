@@ -12,6 +12,8 @@ import { Switch } from "@/components/ui/switch";
 import type { DrumSettings, InstrumentSettings, ScoreName, BassInstrument, InstrumentPart, MelodyInstrument, AccompanimentInstrument, BassTechnique, TextureSettings } from '@/types/music';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useRouter } from "next/navigation";
+import { BASS_PRESETS } from "@/lib/bass-presets";
+import { getPresetParams } from "@/lib/presets";
 
 
 // This is now a "dumb" UI component controlled by the useAuraGroove hook.
@@ -81,12 +83,34 @@ export function AuraGroove({
 
   const router = useRouter();
 
-  const PartIcon = ({ part }: { part: string }) => {
+  const getPartColor = (part: keyof InstrumentSettings) => {
+    const instrumentName = instrumentSettings[part].name;
+    if (instrumentName === 'none') return 'hsl(var(--muted-foreground))';
+    if (part === 'bass') {
+      return BASS_PRESETS[instrumentName as BassInstrument]?.color || 'hsl(var(--foreground))';
+    }
+    // For melody and accompaniment, we need to get the color from the preset params.
+    const preset = getPresetParams(instrumentName as MelodyInstrument, { midi: 60, time: 0, duration: 1 });
+    // This is a bit of a hack, as getPresetParams doesn't directly return color.
+    // Let's assume a default color scheme for now.
+    switch (instrumentName) {
+        case 'synth': return '#8B5CF6';
+        case 'organ': return '#38BDF8';
+        case 'mellotron': return '#F97316';
+        case 'theremin': return '#EC4899';
+        default: return 'hsl(var(--foreground))';
+    }
+  };
+
+  const PartIcon = ({ part }: { part: keyof InstrumentSettings }) => {
+    const color = getPartColor(part);
+    const iconProps = { className: "h-5 w-5", style: { color } };
+    
     switch (part) {
-        case 'bass': return <Waves className="h-5 w-5" />;
-        case 'melody': return <GitBranch className="h-5 w-5" />;
-        case 'accompaniment': return <Piano className="h-5 w-5" />;
-        default: return <Music className="h-5 w-5" />;
+        case 'bass': return <Waves {...iconProps} />;
+        case 'melody': return <GitBranch {...iconProps} />;
+        case 'accompaniment': return <Piano {...iconProps} />;
+        default: return <Music {...iconProps} />;
     }
   };
 
@@ -218,8 +242,9 @@ export function AuraGroove({
         
         <div className="space-y-4 rounded-lg border p-4">
            <h3 className="text-lg font-medium text-primary flex items-center gap-2"><SlidersHorizontal className="h-5 w-5" /> Instrument Channels</h3>
-            {Object.entries(instrumentSettings).map(([part, settings]) => {
-                let instrumentList: (BassInstrument | MelodyInstrument | 'none')[] = [];
+            {(Object.keys(instrumentSettings) as Array<keyof InstrumentSettings>).map((part) => {
+                const settings = instrumentSettings[part];
+                let instrumentList: (BassInstrument | MelodyInstrument | AccompanimentInstrument | 'none')[] = [];
                 if (part === 'bass') {
                     instrumentList = ['classicBass', 'glideBass', 'ambientDrone', 'resonantGliss', 'hypnoticDrone', 'livingRiff', 'none'];
                 } else if (part === 'melody' || part === 'accompaniment') {
@@ -234,7 +259,7 @@ export function AuraGroove({
                         </Label>
                          <Select
                           value={settings.name}
-                          onValueChange={(v) => setInstrumentSettings(part as keyof InstrumentSettings, v as any)}
+                          onValueChange={(v) => setInstrumentSettings(part as any, v as any)}
                           disabled={isInitializing || isPlaying}
                         >
                           <SelectTrigger id={`${part}-instrument`} className="w-[150px]">
@@ -248,7 +273,7 @@ export function AuraGroove({
                         </Select>
                     </div>
 
-                    {part === 'bass' && (
+                    {part === 'bass' && 'technique' in settings && (
                         <div className="flex justify-between items-center">
                             <Label htmlFor="bass-technique" className="font-semibold flex items-center gap-2 capitalize">Technique</Label>
                             <Select
@@ -407,5 +432,3 @@ export function AuraGroove({
     </Card>
   );
 }
-
-    
