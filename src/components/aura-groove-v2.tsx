@@ -44,7 +44,6 @@ export function AuraGrooveV2({
         <div className="flex items-center justify-between">
           <div className="flex flex-col pl-1">
             <h1 className="text-lg font-bold text-primary">AuraGroove</h1>
-            <p className="text-xs text-muted-foreground">Your personal pure digital ambient music generator</p>
           </div>
           <div className="flex items-center gap-1">
             <Button variant="ghost" size="icon" onClick={handleGoHome} aria-label="Go to Home"><Home className="h-5 w-5" /></Button>
@@ -71,9 +70,6 @@ export function AuraGrooveV2({
           </div>
         </div>
         <div className="flex flex-col items-center gap-1 pt-2 pb-1.5">
-           <p className="text-muted-foreground text-xs min-h-[16px]">
-              {isPlaying ? `Playing at ${bpm} BPM...` : "Press play to start the music"}
-           </p>
            <Button type="button" onClick={handleTogglePlay} disabled={isInitializing} className="w-[60%] text-base h-10">
               {isPlaying ? <Pause className="mr-2 h-5 w-5" /> : <Music className="mr-2 h-5 w-5" />}
               {isPlaying ? "Stop" : "Play"}
