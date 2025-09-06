@@ -9,7 +9,7 @@ import { AccompanimentSynthManager } from '@/lib/accompaniment-synth-manager';
 import { BassSynthManager } from '@/lib/bass-synth-manager';
 import { SparklePlayer } from '@/lib/sparkle-player';
 import { PadPlayer } from '@/lib/pad-player';
-import { getPresetParams } from '@/lib/presets';
+import { getPresetParams } from "@/lib/presets";
 
 // --- Type Definitions ---
 type WorkerMessage = {
@@ -176,7 +176,6 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         if (!workerRef.current) {
             const worker = new Worker(new URL('../lib/ambient.worker.ts', import.meta.url), { type: 'module' });
             worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
-                console.log('[AudioEngine] Received message from worker:', event.data);
                 const now = audioContextRef.current?.currentTime ?? 0;
                 const scheduleTime = event.data.time ? now + event.data.time : now;
 
@@ -247,7 +246,9 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
                     const noteOffTime = noteOnTime + note.duration;
                     const delayUntilOff = (noteOffTime - audioContext.currentTime);
                     setTimeout(() => {
-                        voice.port.postMessage({ type: 'noteOff', release: params.release });
+                        if (voice) {
+                            voice.port.postMessage({ type: 'noteOff', release: params.release });
+                        }
                     }, delayUntilOff > 0 ? delayUntilOff * 1000 : 0);
                 }
             });

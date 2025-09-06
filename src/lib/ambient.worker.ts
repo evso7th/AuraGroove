@@ -294,7 +294,7 @@ const Scheduler = {
 
         const currentTime = this.barCount * this.barDuration;
         
-        if (this.settings.textureSettings.sparkles.enabled) {
+        if (this.settings.textureSettings.sparkles.enabled && this.settings.score !== 'multeity') {
             if (shouldAddSparkle(currentTime, density)) {
                  self.postMessage({ type: 'sparkle', time: 0 });
                  lastSparkleTime = currentTime;
@@ -303,8 +303,8 @@ const Scheduler = {
         
         if (this.settings.textureSettings.pads.enabled) {
             const currentStyle = this.settings.score;
-            const padName = PADS_BY_STYLE[currentStyle];
             if (currentStyle !== lastPadStyle) {
+                 const padName = PADS_BY_STYLE[currentStyle];
                  if (padName) {
                     self.postMessage({ type: 'pad', padName: padName, time: 0 });
                  }
