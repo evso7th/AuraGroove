@@ -291,12 +291,12 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
             await audioContextRef.current.resume();
         }
         workerRef.current.postMessage({ command: 'start' });
-        setIsPlaying(true);
+        
     } else {
         stopAllSounds();
         workerRef.current.postMessage({ command: 'stop' });
-        setIsPlaying(false);
     }
+    setIsPlaying(playing);
 
   }, [isInitialized, stopAllSounds]);
 

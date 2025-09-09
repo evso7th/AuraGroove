@@ -185,10 +185,7 @@ export const useAuraGroove = () => {
   const handleToggleTimer = () => {
     setTimerSettings(prev => {
         const newIsActive = !prev.isActive;
-        if (newIsActive) { // Starting timer
-            if (!isPlaying) {
-                handleTogglePlay();
-            }
+        if (newIsActive) {
             return { ...prev, timeLeft: prev.duration, isActive: true };
         } else { // Stopping timer
             cancelMasterFadeOut();
