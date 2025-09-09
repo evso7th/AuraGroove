@@ -74,6 +74,12 @@ export type TextureSettings = {
     };
 };
 
+export type TimerSettings = {
+    duration: number; // in seconds
+    timeLeft: number;
+    isActive: boolean;
+};
+
 export type ScoreName = 'evolve' | 'omega' | 'journey' | 'dreamtales' | 'multeity';
 
 // Settings sent from the UI to the main engine/worker.

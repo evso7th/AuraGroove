@@ -1,7 +1,7 @@
 
 "use client";
 
-import { Loader2, Music, Pause, Speaker, FileMusic, Drum, SlidersHorizontal, Waves, GitBranch, Atom, Piano, Home, X, Sparkles, Sprout, LayoutGrid } from "lucide-react";
+import { Loader2, Music, Pause, Speaker, FileMusic, Drum, SlidersHorizontal, Waves, GitBranch, Atom, Piano, Home, X, Sparkles, Sprout, LayoutGrid, Timer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import Image from 'next/image';
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import type { DrumSettings, InstrumentSettings, ScoreName, BassInstrument, InstrumentPart, MelodyInstrument, AccompanimentInstrument, BassTechnique, TextureSettings } from '@/types/music';
+import type { DrumSettings, InstrumentSettings, ScoreName, BassInstrument, InstrumentPart, MelodyInstrument, AccompanimentInstrument, BassTechnique, TextureSettings, TimerSettings } from '@/types/music';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useRouter } from "next/navigation";
 import { BASS_PRESETS } from "@/lib/bass-presets";
@@ -42,6 +42,9 @@ export type AuraGrooveProps = {
   setIsEqModalOpen: (isOpen: boolean) => void;
   eqSettings: number[];
   handleEqChange: (bandIndex: number, gain: number) => void;
+  timerSettings: TimerSettings;
+  handleTimerDurationChange: (minutes: number) => void;
+  handleToggleTimer: () => void;
 };
 
 const EQ_BANDS = [
@@ -79,6 +82,9 @@ export function AuraGroove({
   setIsEqModalOpen,
   eqSettings,
   handleEqChange,
+  timerSettings,
+  handleTimerDurationChange,
+  handleToggleTimer,
 }: AuraGrooveProps) {
 
   const router = useRouter();

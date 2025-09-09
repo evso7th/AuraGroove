@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { SlidersHorizontal, Music, Pause, Speaker, FileMusic, Drum, GitBranch, Atom, Piano, Home, X, Sparkles, Sprout, LayoutGrid, LayoutList, Waves } from "lucide-react";
+import { SlidersHorizontal, Music, Pause, Speaker, FileMusic, Drum, GitBranch, Atom, Piano, Home, X, Sparkles, Sprout, LayoutGrid, LayoutList, Waves, Timer } from "lucide-react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import type { AuraGrooveProps } from "./aura-groove";
 import { useRouter } from "next/navigation";
+import { formatTime } from "@/lib/utils";
 
 const EQ_BANDS = [
   { freq: '60', label: '60' }, { freq: '125', label: '125' }, { freq: '250', label: '250' },
@@ -25,6 +26,7 @@ export function AuraGrooveV2({
   setInstrumentSettings, handleBassTechniqueChange, handleVolumeChange, textureSettings, handleTextureEnabledChange,
   bpm, handleBpmChange, score, handleScoreChange, density, setDensity, handleGoHome,
   isEqModalOpen, setIsEqModalOpen, eqSettings, handleEqChange,
+  timerSettings, handleTimerDurationChange, handleToggleTimer,
 }: AuraGrooveProps) {
 
   const router = useRouter();
@@ -115,6 +117,35 @@ export function AuraGrooveV2({
                     <Label htmlFor="density-slider" className="text-right text-xs">Density</Label>
                     <Slider id="density-slider" value={[density]} min={0.1} max={1} step={0.05} onValueChange={(v) => setDensity(v[0])} className="col-span-2" disabled={isInitializing}/>
                   </div>
+                </CardContent>
+              </Card>
+               <Card className="border-0 shadow-none mt-2">
+                <CardHeader className="p-2"><CardTitle className="flex items-center gap-2 text-sm"><Timer className="h-4 w-4"/> Sleep Timer</CardTitle></CardHeader>
+                <CardContent className="space-y-2 p-3 pt-0">
+                    <div className="grid grid-cols-[1fr_2fr_auto] items-center gap-2">
+                        <Label htmlFor="timer-slider" className="text-right text-xs">Minutes</Label>
+                        <Slider
+                            id="timer-slider"
+                            value={[timerSettings.duration / 60]}
+                            min={0}
+                            max={30}
+                            step={5}
+                            onValueChange={(v) => handleTimerDurationChange(v[0])}
+                            className="col-span-1"
+                            disabled={isInitializing || timerSettings.isActive}
+                        />
+                        <span className="text-xs w-8 text-right font-mono">{timerSettings.duration / 60}</span>
+                    </div>
+                    <div className="flex justify-center items-center gap-4 pt-2">
+                         <Button
+                            onClick={handleToggleTimer}
+                            disabled={isInitializing || timerSettings.duration === 0}
+                            variant={timerSettings.isActive ? 'destructive' : 'secondary'}
+                            className="w-full h-8 text-xs"
+                        >
+                            {timerSettings.isActive ? `Stop Timer (${formatTime(timerSettings.timeLeft)})` : 'Start Timer'}
+                        </Button>
+                    </div>
                 </CardContent>
               </Card>
             </TabsContent>

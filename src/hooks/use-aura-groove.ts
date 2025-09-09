@@ -1,10 +1,12 @@
 
 'use client';
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings, BassInstrument, InstrumentPart, MelodyInstrument, AccompanimentInstrument, BassTechnique, TextureSettings } from '@/types/music';
+import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings, BassInstrument, InstrumentPart, MelodyInstrument, AccompanimentInstrument, BassTechnique, TextureSettings, TimerSettings } from '@/types/music';
 import { useAudioEngine } from "@/contexts/audio-engine-context";
+
+const FADE_OUT_DURATION = 120; // 2 minutes
 
 export const useAuraGroove = () => {
   const { 
@@ -17,7 +19,9 @@ export const useAuraGroove = () => {
     setInstrument, 
     setBassTechnique,
     setTextureSettings: setEngineTextureSettings,
-    setEQGain
+    setEQGain,
+    startMasterFadeOut,
+    cancelMasterFadeOut,
   } = useAudioEngine();
   
   const router = useRouter();
@@ -38,6 +42,13 @@ export const useAuraGroove = () => {
 
   const [isEqModalOpen, setIsEqModalOpen] = useState(false);
   const [eqSettings, setEqSettings] = useState<number[]>(Array(7).fill(0));
+  
+  const [timerSettings, setTimerSettings] = useState<TimerSettings>({
+    duration: 0, // in seconds
+    timeLeft: 0,
+    isActive: false
+  });
+  const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
 
   const getFullSettings = useCallback((): WorkerSettings => {
@@ -59,21 +70,18 @@ export const useAuraGroove = () => {
     if (isInitialized) {
         updateSettings(getFullSettings());
         
-        // Set initial volumes
         Object.entries(instrumentSettings).forEach(([part, settings]) => {
             setVolume(part as InstrumentPart, settings.volume);
         });
         setVolume('drums', drumSettings.volume);
         setEngineTextureSettings(textureSettings);
         
-        // Set initial instruments
         setInstrument('bass', instrumentSettings.bass.name);
         setInstrument('melody', instrumentSettings.melody.name);
         setInstrument('accompaniment', instrumentSettings.accompaniment.name);
         
         setBassTechnique(instrumentSettings.bass.technique);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isInitialized]);
 
   // Sync settings with engine whenever they change
@@ -84,6 +92,34 @@ export const useAuraGroove = () => {
       }
   }, [bpm, score, density, drumSettings, instrumentSettings, textureSettings, isInitialized, updateSettings, getFullSettings]);
 
+  // Timer logic
+  useEffect(() => {
+    if (timerSettings.isActive && timerSettings.timeLeft > 0) {
+      timerIntervalRef.current = setInterval(() => {
+        setTimerSettings(prev => {
+          const newTimeLeft = prev.timeLeft - 1;
+          if (newTimeLeft === FADE_OUT_DURATION) {
+            startMasterFadeOut(FADE_OUT_DURATION);
+          }
+          if (newTimeLeft <= 0) {
+            clearInterval(timerIntervalRef.current!);
+            setEngineIsPlaying(false);
+            return { ...prev, timeLeft: 0, isActive: false };
+          }
+          return { ...prev, timeLeft: newTimeLeft };
+        });
+      }, 1000);
+    } else if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+    }
+    
+    return () => {
+        if (timerIntervalRef.current) {
+            clearInterval(timerIntervalRef.current);
+        }
+    };
+  }, [timerSettings.isActive, timerSettings.timeLeft, setEngineIsPlaying, startMasterFadeOut]);
   
   const handleTogglePlay = useCallback(async () => {
     if (!isInitialized) {
@@ -142,6 +178,27 @@ export const useAuraGroove = () => {
       });
   };
 
+  const handleTimerDurationChange = (minutes: number) => {
+      setTimerSettings(prev => ({...prev, duration: minutes * 60, timeLeft: minutes * 60 }));
+  };
+
+  const handleToggleTimer = () => {
+    setTimerSettings(prev => {
+        const newIsActive = !prev.isActive;
+        if (newIsActive) { // Starting timer
+            if (!isPlaying) {
+                handleTogglePlay();
+            }
+            return { ...prev, timeLeft: prev.duration, isActive: true };
+        } else { // Stopping timer
+            cancelMasterFadeOut();
+            if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+            return { ...prev, timeLeft: prev.duration, isActive: false };
+        }
+    });
+  };
+
+
   const handleExit = () => {
     setEngineIsPlaying(false);
     window.location.href = '/';
@@ -177,5 +234,8 @@ export const useAuraGroove = () => {
     setIsEqModalOpen,
     eqSettings,
     handleEqChange,
+    timerSettings,
+    handleTimerDurationChange,
+    handleToggleTimer,
   };
 };

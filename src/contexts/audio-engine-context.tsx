@@ -53,6 +53,8 @@ interface AudioEngineContextType {
   setBassTechnique: (technique: BassTechnique) => void;
   setTextureSettings: (settings: TextureSettings) => void;
   setEQGain: (bandIndex: number, gain: number) => void;
+  startMasterFadeOut: (durationInSeconds: number) => void;
+  cancelMasterFadeOut: () => void;
 }
 
 const AudioEngineContext = createContext<AudioEngineContextType | null>(null);
@@ -83,6 +85,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   const sparklePlayerRef = useRef<SparklePlayer | null>(null);
   const padPlayerRef = useRef<PadPlayer | null>(null);
 
+  const masterGainNodeRef = useRef<GainNode | null>(null);
   const gainNodesRef = useRef<Record<InstrumentPart, GainNode | null>>({
     bass: null,
     melody: null,
@@ -113,9 +116,15 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
             await audioContextRef.current.resume();
         }
 
+        const context = audioContextRef.current;
+        
+        // Master Gain Node
+        if (!masterGainNodeRef.current) {
+            masterGainNodeRef.current = context.createGain();
+        }
+
         // --- EQ Chain Setup ---
         if (eqNodesRef.current.length === 0) {
-            const context = audioContextRef.current;
             const eqChain: BiquadFilterNode[] = EQ_FREQUENCIES.map((freq, i) => {
                 const filter = context.createBiquadFilter();
                 if (i === 0) filter.type = 'lowshelf';
@@ -134,15 +143,14 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
             eqNodesRef.current = eqChain;
         }
 
-        const eqInput = eqNodesRef.current[0];
+        masterGainNodeRef.current.connect(eqNodesRef.current[0]); // Connect master gain to EQ chain
 
         if (!gainNodesRef.current.bass) {
-            const context = audioContextRef.current;
             const parts: InstrumentPart[] = ['bass', 'melody', 'accompaniment', 'effects', 'drums', 'sparkles', 'pads'];
             parts.forEach(part => {
                 if (!gainNodesRef.current[part]) {
                     const gainNode = context.createGain();
-                    gainNode.connect(eqInput); // Connect to EQ chain instead of destination
+                    gainNode.connect(masterGainNodeRef.current!); // Connect to master gain
                     gainNodesRef.current[part] = gainNode;
                 }
             });
@@ -376,6 +384,19 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
       }
   }, []);
 
+  const startMasterFadeOut = useCallback((durationInSeconds: number) => {
+      if (masterGainNodeRef.current && audioContextRef.current) {
+          masterGainNodeRef.current.gain.linearRampToValueAtTime(0, audioContextRef.current.currentTime + durationInSeconds);
+      }
+  }, []);
+
+  const cancelMasterFadeOut = useCallback(() => {
+      if (masterGainNodeRef.current && audioContextRef.current) {
+          masterGainNodeRef.current.gain.cancelScheduledValues(audioContextRef.current.currentTime);
+          masterGainNodeRef.current.gain.linearRampToValueAtTime(1, audioContextRef.current.currentTime + 0.5);
+      }
+  }, []);
+
   useEffect(() => {
     return () => {
         workerRef.current?.terminate();
@@ -398,6 +419,8 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         setBassTechnique: setBassTechniqueCallback,
         setTextureSettings: setTextureSettingsCallback,
         setEQGain: setEQGainCallback,
+        startMasterFadeOut,
+        cancelMasterFadeOut,
     }}>
       {children}
     </AudioEngineContext.Provider>
