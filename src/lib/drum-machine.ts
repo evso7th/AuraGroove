@@ -1,13 +1,31 @@
 
 import type { SamplerNote } from "@/types/music";
 
-const DRUM_SAMPLES = {
+const DRUM_SAMPLES: Record<string, string> = {
+    // Basic Kit
     'C4': '/assets/drums/kick_drum6.wav',
     'D4': '/assets/drums/snare.wav',
     'E4': '/assets/drums/closed_hi_hat_accented.wav',
     'F4': '/assets/drums/open_hh_top2.wav',
     'G4': '/assets/drums/crash1.wav',
     'A4': '/assets/drums/hightom.wav',
+
+    // Percussion one-shots (mapped to C2-D#3)
+    'C2': '/assets/drums/perc-001.wav',
+    'C#2': '/assets/drums/perc-002.wav',
+    'D2': '/assets/drums/perc-003.wav',
+    'D#2': '/assets/drums/perc-004.wav',
+    'E2': '/assets/drums/perc-005.wav',
+    'F2': '/assets/drums/perc-006.wav',
+    'F#2': '/assets/drums/perc-007.wav',
+    'G2': '/assets/drums/perc-008.wav',
+    'G#2': '/assets/drums/perc-009.wav',
+    'A2': '/assets/drums/perc-010.wav',
+    'A#2': '/assets/drums/perc-011.wav',
+    'B2': '/assets/drums/perc-012.wav',
+    'C3': '/assets/drums/perc-013.wav',
+    'C#3': '/assets/drums/perc-014.wav',
+    'D3': '/assets/drums/perc-015.wav',
 };
 
 type Sampler = {

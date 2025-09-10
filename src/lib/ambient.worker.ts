@@ -32,6 +32,11 @@ const SPARKLE_SAMPLES = [
     '/assets/music/droplets/ocean.mp3',
 ];
 
+const PERCUSSION_SOUNDS = [
+    'C2', 'C#2', 'D2', 'D#2', 'E2', 'F2', 'F#2', 'G2', 
+    'G#2', 'A2', 'A#2', 'B2', 'C3', 'C#3', 'D3' 
+];
+
 const DRUM_FILL_PATTERNS: DrumsScore[] = [
     // Fill 1: Simple tom roll
     [
@@ -224,36 +229,38 @@ const Composer = {
         if (!Scheduler.settings.drumSettings.enabled) return [];
         
         const step = Scheduler.barDuration / 16;
-
-        // Check for a fill every 8 bars, more likely with higher density
-        if (barIndex > 0 && barIndex % 8 === 7 && Math.random() < density * 0.8) {
-            const fillPattern = DRUM_FILL_PATTERNS[Math.floor(Math.random() * DRUM_FILL_PATTERNS.length)];
-            const fillDuration = Scheduler.barDuration / 2; // Fills are half a bar
-            return fillPattern.map(note => ({
-                ...note,
-                time: (note.time * fillDuration) + (Scheduler.barDuration / 2) // Place fill in the second half of the bar
-            }));
-        }
-
         const drums: DrumsScore = [];
         
         // Basic kick and snare
-        for (let i = 0; i < 16; i++) {
-            if (i % 8 === 0) drums.push({ note: 'C4', time: i * step, velocity: 0.8 }); // Kick
-            if (i % 8 === 4) drums.push({ note: 'D4', time: i * step, velocity: 0.6 }); // Snare
-        }
+        if (Scheduler.settings.drumSettings.pattern === 'composer') {
+            for (let i = 0; i < 16; i++) {
+                if (i % 8 === 0) drums.push({ note: 'C4', time: i * step, velocity: 0.8 }); // Kick
+                if (i % 8 === 4) drums.push({ note: 'D4', time: i * step, velocity: 0.6 }); // Snare
+            }
 
-        // Add hi-hats based on density
-        if (density > 0.3) {
-             for (let i = 0; i < 16; i++) {
-                 if (i % 4 === 2 && Math.random() < density) drums.push({ note: 'E4', time: i * step, velocity: 0.4 * density });
+            // Add hi-hats based on density
+            if (density > 0.3) {
+                 for (let i = 0; i < 16; i++) {
+                     if (i % 4 === 2 && Math.random() < density) drums.push({ note: 'E4', time: i * step, velocity: 0.4 * density });
+                }
+            }
+             // Add crash cymbal based on density
+            if (density > 0.8 && barIndex % 4 === 0) {
+                drums.push({ note: 'G4', time: 0, velocity: 0.7 * density });
             }
         }
 
-        // Add crash cymbal based on density
-        if (density > 0.8 && barIndex % 4 === 0) {
-            drums.push({ note: 'G4', time: 0, velocity: 0.7 * density });
+        // Add percussive one-shots
+        if (density > 0.2) {
+            for (let i = 0; i < 16; i++) {
+                // Add on off-beats
+                if (i % 4 !== 0 && Math.random() < (density * 0.15)) {
+                    const randomPerc = PERCUSSION_SOUNDS[Math.floor(Math.random() * PERCUSSION_SOUNDS.length)];
+                    drums.push({ note: randomPerc, time: i * step, velocity: Math.random() * 0.3 + 0.2 });
+                }
+            }
         }
+        
         return drums;
     }
 }
@@ -358,7 +365,9 @@ const Scheduler = {
             if (currentStyle !== lastPadStyle) {
                  const padName = PADS_BY_STYLE[currentStyle];
                  if (padName) {
-                    self.postMessage({ type: 'pad', padName: padName, time: 0 });
+                    // Add a 1-second delay for the very first pad to allow it to load
+                    const delay = this.barCount === 0 ? 1 : 0;
+                    self.postMessage({ type: 'pad', padName: padName, time: delay });
                  }
                 lastPadStyle = currentStyle;
             }
@@ -391,5 +400,3 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
-
-

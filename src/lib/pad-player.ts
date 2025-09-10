@@ -63,23 +63,20 @@ export class PadPlayer {
 
     async init() {
         if (this.isInitialized) return;
-        try {
-            const loadPromises = Object.entries(PAD_SAMPLES).map(async ([name, url]) => {
-                const buffer = await this.loadBuffer(url);
-                this.buffers.set(name, buffer);
-            });
-            await Promise.all(loadPromises);
-            this.isInitialized = true;
-            console.log('[PadPlayer] Initialized and all pads loaded.');
-        } catch (e) {
-            console.error('[PadPlayer] Failed to initialize:', e);
-        }
+        this.isInitialized = true;
+        console.log('[PadPlayer] Initialized for on-demand loading.');
     }
 
     private async loadBuffer(url: string): Promise<AudioBuffer> {
-        const response = await fetch(url);
-        const arrayBuffer = await response.arrayBuffer();
-        return this.audioContext.decodeAudioData(arrayBuffer);
+        try {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`Failed to fetch: ${response.statusText}`);
+            const arrayBuffer = await response.arrayBuffer();
+            return this.audioContext.decodeAudioData(arrayBuffer);
+        } catch (error) {
+            console.error(`[PadPlayer] Failed to load buffer from ${url}`, error);
+            throw error;
+        }
     }
     
     private play(buffer: AudioBuffer, gainNode: GainNode): AudioBufferSourceNode {
@@ -91,15 +88,24 @@ export class PadPlayer {
         return source;
     }
 
-    public setPad(padName: string, time: number) {
+    public async setPad(padName: string, time: number) {
         if (!this.isInitialized) return;
 
-        const buffer = this.buffers.get(padName);
+        let buffer = this.buffers.get(padName);
         if (!buffer) {
-            console.warn(`[PadPlayer] Pad sample not found: ${padName}`);
-            return;
+            const url = PAD_SAMPLES[padName];
+            if (!url) {
+                 console.warn(`[PadPlayer] Pad sample not found in library: ${padName}`);
+                 return;
+            }
+            try {
+                buffer = await this.loadBuffer(url);
+                this.buffers.set(padName, buffer);
+            } catch (e) {
+                return; // Don't proceed if loading failed
+            }
         }
-
+        
         const fadeDuration = 5; // 5 second crossfade
 
         if (this.activeGain === 'A') {
@@ -107,13 +113,13 @@ export class PadPlayer {
             this.sourceB?.stop();
             this.sourceB = this.play(buffer, this.gainB);
             this.gainA.gain.linearRampToValueAtTime(0, time + fadeDuration);
-            this.gainB.gain.linearRampToValueAtTime(1, time + fadeDuration);
+            this.gainB.gain.linearRampToValueAtTime(this.masterGain.gain.value, time + fadeDuration);
             this.activeGain = 'B';
         } else {
             // Fade to A
             this.sourceA?.stop();
             this.sourceA = this.play(buffer, this.gainA);
-            this.gainA.gain.linearRampToValueAtTime(1, time + fadeDuration);
+            this.gainA.gain.linearRampToValueAtTime(this.masterGain.gain.value, time + fadeDuration);
             this.gainB.gain.linearRampToValueAtTime(0, time + fadeDuration);
             this.activeGain = 'A';
         }
@@ -121,6 +127,12 @@ export class PadPlayer {
     
     public setVolume(volume: number) {
         this.masterGain.gain.setTargetAtTime(volume, this.audioContext.currentTime, 0.01);
+        // Also update the target gain for the next crossfade
+        if (this.activeGain === 'A') {
+            this.gainA.gain.setTargetAtTime(volume, this.audioContext.currentTime, 0.01);
+        } else {
+            this.gainB.gain.setTargetAtTime(volume, this.audioContext.currentTime, 0.01);
+        }
     }
 
     public stop() {
@@ -137,5 +149,3 @@ export class PadPlayer {
         this.masterGain.disconnect();
     }
 }
-
-    
