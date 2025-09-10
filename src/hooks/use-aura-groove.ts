@@ -10,7 +10,8 @@ const FADE_OUT_DURATION = 120; // 2 minutes
 
 export const useAuraGroove = () => {
   const { 
-    isInitialized, 
+    isInitialized,
+    isInitializing,
     isPlaying, 
     initialize, 
     setIsPlaying: setEngineIsPlaying, 
@@ -207,9 +208,9 @@ export const useAuraGroove = () => {
 
 
   return {
-    isInitializing: !isInitialized,
+    isInitializing,
     isPlaying,
-    loadingText: !isInitialized ? 'Click to initialize audio' : 'Ready',
+    loadingText: isInitializing ? 'Initializing...' : (isInitialized ? 'Ready' : 'Click to initialize audio'),
     handleTogglePlay,
     drumSettings,
     setDrumSettings: handleDrumSettingsChange,

@@ -1,5 +1,4 @@
 
-
 /**
  * @file AuraGroove Music Worker (Architecture: "The Dynamic Composer")
  *
@@ -365,7 +364,6 @@ const Scheduler = {
             if (currentStyle !== lastPadStyle) {
                  const padName = PADS_BY_STYLE[currentStyle];
                  if (padName) {
-                    // Add a 1-second delay for the very first pad to allow it to load
                     const delay = this.barCount === 0 ? 1 : 0;
                     self.postMessage({ type: 'pad', padName: padName, time: delay });
                  }

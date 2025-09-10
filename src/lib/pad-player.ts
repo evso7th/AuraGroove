@@ -107,20 +107,21 @@ export class PadPlayer {
         }
         
         const fadeDuration = 5; // 5 second crossfade
+        const rampTime = time + fadeDuration;
 
         if (this.activeGain === 'A') {
             // Fade to B
             this.sourceB?.stop();
             this.sourceB = this.play(buffer, this.gainB);
-            this.gainA.gain.linearRampToValueAtTime(0, time + fadeDuration);
-            this.gainB.gain.linearRampToValueAtTime(this.masterGain.gain.value, time + fadeDuration);
+            this.gainA.gain.linearRampToValueAtTime(0, rampTime);
+            this.gainB.gain.linearRampToValueAtTime(this.masterGain.gain.value, rampTime);
             this.activeGain = 'B';
         } else {
             // Fade to A
             this.sourceA?.stop();
             this.sourceA = this.play(buffer, this.gainA);
-            this.gainA.gain.linearRampToValueAtTime(this.masterGain.gain.value, time + fadeDuration);
-            this.gainB.gain.linearRampToValueAtTime(0, time + fadeDuration);
+            this.gainA.gain.linearRampToValueAtTime(this.masterGain.gain.value, rampTime);
+            this.gainB.gain.linearRampToValueAtTime(0, rampTime);
             this.activeGain = 'A';
         }
     }
@@ -128,10 +129,11 @@ export class PadPlayer {
     public setVolume(volume: number) {
         this.masterGain.gain.setTargetAtTime(volume, this.audioContext.currentTime, 0.01);
         // Also update the target gain for the next crossfade
+        const targetGain = this.masterGain.gain.value;
         if (this.activeGain === 'A') {
-            this.gainA.gain.setTargetAtTime(volume, this.audioContext.currentTime, 0.01);
+            this.gainA.gain.setTargetAtTime(targetGain, this.audioContext.currentTime, 0.01);
         } else {
-            this.gainB.gain.setTargetAtTime(volume, this.audioContext.currentTime, 0.01);
+            this.gainB.gain.setTargetAtTime(targetGain, this.audioContext.currentTime, 0.01);
         }
     }
 

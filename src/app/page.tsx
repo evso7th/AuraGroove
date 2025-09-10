@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAudioEngine } from '@/contexts/audio-engine-context';
 import { Button } from '@/components/ui/button';
@@ -20,13 +20,14 @@ export default function Home() {
       router.push('/aura-groove');
       return;
     }
+    if (isInitializing) return;
+
     setError(null);
     const success = await initialize();
-    if (success) {
-      router.push('/aura-groove');
-    } else {
+    if (!success) {
       setError('Failed to initialize the audio engine. Please check the console for details.');
     }
+    // No automatic redirect here. The button state will change to "Enter".
   };
 
   const getButtonText = () => {
