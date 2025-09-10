@@ -1,9 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAudioEngine } from '@/contexts/audio-engine-context';
+import { useAuraGrooveLite } from '@/hooks/use-aura-groove';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Music } from 'lucide-react';
@@ -11,36 +9,13 @@ import Image from 'next/image';
 import LoadingDots from '@/components/ui/loading-dots';
 
 export default function Home() {
-  const { initialize, isInitializing, isInitialized } = useAudioEngine();
-  const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
-
-  const handleStart = async () => {
-    if (isInitialized) {
-      router.push('/aura-groove');
-      return;
-    }
-    if (isInitializing) return;
-
-    setError(null);
-    const success = await initialize();
-    if (!success) {
-      setError('Failed to initialize the audio engine. Please check the console for details.');
-    }
-    // No automatic redirect here. The button state will change to "Enter".
-  };
-
-  const getButtonText = () => {
-    if (isInitializing) return 'Initializing...';
-    if (isInitialized) return 'Enter';
-    return 'Start AuraGroove';
-  };
-  
-  const getInfoText = () => {
-    if (isInitializing) return 'Please wait, the audio engine is initializing...';
-    if (isInitialized) return 'Audio engine is ready.';
-    return 'Click the button below to initialize the audio engine.';
-  }
+  const { 
+    handleStart, 
+    isInitializing, 
+    isInitialized, 
+    buttonText, 
+    infoText 
+  } = useAuraGrooveLite();
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-4 sm:p-8">
@@ -54,15 +29,14 @@ export default function Home() {
         </CardHeader>
         <CardContent className="min-h-[60px] flex flex-col items-center justify-center">
           <p className="text-muted-foreground min-h-[20px]">
-            {getInfoText()}
+            {infoText}
           </p>
           {isInitializing && <LoadingDots />}
-          {error && <p className="text-destructive mt-2">{error}</p>}
         </CardContent>
         <CardFooter>
           <Button onClick={handleStart} disabled={isInitializing} className="w-full text-lg py-6">
             {!isInitializing && <Music className="mr-2 h-6 w-6" />}
-            {getButtonText()}
+            {buttonText}
           </Button>
         </CardFooter>
       </Card>
