@@ -331,6 +331,8 @@ const Scheduler = {
     tick() {
         if (!this.isRunning) return;
         
+        console.time('workerTick');
+
         const density = this.settings.density;
         let bass, melody, accompaniment, drums;
         
@@ -372,6 +374,7 @@ const Scheduler = {
         }
 
         this.barCount++;
+        console.timeEnd('workerTick');
     }
 };
 

@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { createContext, useContext, useState, useRef, useCallback } from 'react';
+import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import type { WorkerSettings, Score, InstrumentPart, BassInstrument, MelodyInstrument, AccompanimentInstrument, BassTechnique, TextureSettings, ScoreName } from '@/types/music';
 import { DrumMachine } from '@/lib/drum-machine';
@@ -87,6 +87,9 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   const { toast } = useToast();
   
   const scheduleScore = useCallback((score: Score, audioContext: AudioContext) => {
+    console.log(`[AudioEngine] Received score. Bass: ${score.bass?.length || 0}, Melody: ${score.melody?.length || 0}, Accomp: ${score.accompaniment?.length || 0}, Drums: ${score.drums?.length || 0}`);
+    console.time('scheduleScore');
+
     const now = audioContext.currentTime;
     const currentSettings = settingsRef.current;
     
@@ -126,6 +129,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     if (drumScore.length > 0 && drumMachineRef.current && currentSettings?.drumSettings.enabled) {
         drumMachineRef.current.schedule(drumScore, now);
     }
+    console.timeEnd('scheduleScore');
   }, []);
 
   const initialize = useCallback(async () => {
@@ -232,17 +236,19 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     bassManagerRef.current?.allNotesOff();
     padPlayerRef.current?.stop();
   }, []);
-
+  
   const setIsPlayingCallback = useCallback((playing: boolean) => {
+    setIsPlaying(playing);
     if (!isInitialized || !workerRef.current || !audioContextRef.current) return;
     if (playing) {
-        if (audioContextRef.current.state === 'suspended') audioContextRef.current.resume();
+        if (audioContextRef.current.state === 'suspended') {
+            audioContextRef.current.resume();
+        }
         workerRef.current.postMessage({ command: 'start' });
     } else {
         stopAllSounds();
         workerRef.current.postMessage({ command: 'stop' });
     }
-    setIsPlaying(playing);
   }, [isInitialized, stopAllSounds]);
 
   const updateSettingsCallback = useCallback((settings: Partial<WorkerSettings>) => {
