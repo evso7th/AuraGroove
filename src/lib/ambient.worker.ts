@@ -11,6 +11,7 @@ import type { WorkerSettings, Score, Note, DrumsScore, ScoreName } from '@/types
 // --- Musical Constants ---
 const KEY_ROOT_MIDI = 40; // E2
 const SCALE_INTERVALS = [0, 2, 3, 5, 7, 8, 10]; // E Natural Minor
+const BLUES_SCALE_INTERVALS = [0, 3, 5, 6, 7, 10]; // E Minor Blues Scale
 
 const PADS_BY_STYLE: Record<ScoreName, string | null> = {
     dreamtales: 'livecircle.mp3',
@@ -18,6 +19,7 @@ const PADS_BY_STYLE: Record<ScoreName, string | null> = {
     omega: 'things.mp3',
     journey: 'pure_energy.mp3',
     multeity: 'uneverse.mp3',
+    slow_blues: 'Grounding.ogg',
 };
 
 const SPARKLE_SAMPLES = [
@@ -35,36 +37,6 @@ const PERCUSSION_SOUNDS = [
     'C2', 'C#2', 'D2', 'D#2', 'E2', 'F2', 'F#2', 'G2', 
     'G#2', 'A2', 'A#2', 'B2', 'C3', 'C#3', 'D3' 
 ];
-
-const DRUM_FILL_PATTERNS: DrumsScore[] = [
-    // Fill 1: Simple tom roll
-    [
-        { note: 'A4', time: 0, velocity: 0.7 },
-        { note: 'A4', time: 0.25, velocity: 0.75 },
-        { note: 'G4', time: 0.5, velocity: 0.8 },
-        { note: 'G4', time: 0.75, velocity: 0.85 },
-    ],
-    // Fill 2: Snare build-up
-    [
-        { note: 'D4', time: 0, velocity: 0.5 },
-        { note: 'D4', time: 0.125, velocity: 0.6 },
-        { note: 'D4', time: 0.25, velocity: 0.7 },
-        { note: 'D4', time: 0.375, velocity: 0.8 },
-        { note: 'D4', time: 0.5, velocity: 0.9 },
-        { note: 'D4', time: 0.625, velocity: 1.0 },
-        { note: 'D4', time: 0.75, velocity: 1.0 },
-        { note: 'G4', time: 0.875, velocity: 0.9 },
-    ],
-    // Fill 3: Syncopated kick/snare
-    [
-        { note: 'C4', time: 0, velocity: 0.9 },
-        { note: 'C4', time: 0.375, velocity: 0.7 },
-        { note: 'D4', time: 0.5, velocity: 0.8 },
-        { note: 'A4', time: 0.75, velocity: 0.6 },
-        { note: 'G4', time: 0.875, velocity: 0.7 },
-    ]
-];
-
 
 // --- "Sparkle" (In-krap-le-ni-ye) Logic ---
 let lastSparkleTime = -Infinity;
@@ -90,6 +62,78 @@ const getNoteFromDegree = (degree: number, scale: number[], root: number, octave
 };
 
 // --- Main Composition Engines ---
+
+const BluesComposer = {
+    // 12-bar minor blues progression in E: Em-Em-Em-Em | Am-Am | Em-Em | B7-Am | Em-Em 
+    // Degrees in E minor scale: i (0), iv (3), v (4)
+    progression: [0, 0, 0, 0, 3, 3, 0, 0, 4, 3, 0, 0],
+    
+    generateBass(barIndex: number, density: number): Note[] {
+        const notes: Note[] = [];
+        const beatDuration = Scheduler.barDuration / 4;
+        const currentChordDegree = this.progression[barIndex % 12];
+        
+        // Classic "slow blues" feel: root on 1, fifth on 3.
+        const rootNoteMidi = getNoteFromDegree(currentChordDegree, SCALE_INTERVALS, KEY_ROOT_MIDI, 0); // E2 range
+        const fifthNoteMidi = getNoteFromDegree(currentChordDegree + 2, SCALE_INTERVALS, KEY_ROOT_MIDI, 0);
+
+        if (rootNoteMidi >= 40 && rootNoteMidi < 76) {
+            notes.push({ midi: rootNoteMidi, time: 0, duration: beatDuration, velocity: 0.7 });
+        }
+        if (Math.random() < density * 0.8 && fifthNoteMidi >= 40 && fifthNoteMidi < 76) {
+             notes.push({ midi: fifthNoteMidi, time: beatDuration * 2, duration: beatDuration, velocity: 0.65 });
+        }
+        // Add a walking note on the 4th beat if density is high
+        if (density > 0.6 && Math.random() < 0.5) {
+            const walkNoteMidi = getNoteFromDegree(currentChordDegree + 1, SCALE_INTERVALS, KEY_ROOT_MIDI, 0);
+             if (walkNoteMidi >= 40 && walkNoteMidi < 76) {
+                notes.push({ midi: walkNoteMidi, time: beatDuration * 3.5, duration: beatDuration / 2, velocity: 0.6 });
+            }
+        }
+        return notes;
+    },
+    generateAccompaniment(barIndex: number, density: number): Note[] {
+        const notes: Note[] = [];
+        const beatDuration = Scheduler.barDuration / 4;
+        const currentChordDegree = this.progression[barIndex % 12];
+
+        // Lazy, sustained chords (like an organ or pad)
+        if (Math.random() < density * 0.7) {
+            const chordTones = [0, 2, 4].map(interval => getNoteFromDegree(currentChordDegree + interval, SCALE_INTERVALS, KEY_ROOT_MIDI, 1)); // E3 range
+            chordTones.forEach((midi, index) => {
+                if (midi >= 40 && midi < 76) {
+                    notes.push({ midi, time: 0, duration: beatDuration * 4, velocity: 0.3 + (density * 0.2) });
+                }
+            });
+        }
+        return notes;
+    },
+    generateMelody(barIndex: number, density: number): Note[] {
+        const notes: Note[] = [];
+        if (Math.random() > density * 0.9) return notes; // Melody is less frequent
+
+        const beatDuration = Scheduler.barDuration / 4;
+        const numNotes = Math.floor(density * 5) + 1; // Fewer notes for a slower feel
+        const currentChordDegree = this.progression[barIndex % 12];
+        let lastDegree = currentChordDegree + 7; // Start on the fifth of the chord, in the next octave
+
+        for (let i = 0; i < numNotes; i++) {
+             if (Math.random() < density) {
+                 const step = Math.random() < 0.7 ? (Math.random() < 0.5 ? -1 : 1) : (Math.random() < 0.5 ? -2 : 2);
+                 lastDegree += step;
+                 const midi = getNoteFromDegree(lastDegree, BLUES_SCALE_INTERVALS, KEY_ROOT_MIDI, 2); // E4 range
+
+                 if(midi >= 40 && midi < 76) { // Check range
+                    const time = (i * (beatDuration / (numNotes/2))) + (Math.random() - 0.5) * 0.1; // Add swing
+                    const duration = beatDuration * (0.5 + Math.random());
+                    notes.push({ midi, time: time, duration, velocity: 0.5 + density * 0.3 });
+                 }
+            }
+        }
+        return notes;
+    }
+}
+
 
 const MulteityComposer = {
     generateBass(barIndex: number, density: number): Note[] {
@@ -336,14 +380,22 @@ const Scheduler = {
         const density = this.settings.density;
         let bass, melody, accompaniment, drums;
         
-        if (this.settings.score === 'multeity') {
-             bass = MulteityComposer.generateBass(this.barCount, density);
-             melody = MulteityComposer.generateMelody(this.barCount, density);
-             accompaniment = MulteityComposer.generateAccompaniment(this.barCount, density);
-        } else {
-             bass = Composer.generateBass(this.barCount, density);
-             melody = Composer.generateMelody(this.barCount, density);
-             accompaniment = Composer.generateAccompaniment(this.barCount, density);
+        switch(this.settings.score) {
+            case 'multeity':
+                bass = MulteityComposer.generateBass(this.barCount, density);
+                melody = MulteityComposer.generateMelody(this.barCount, density);
+                accompaniment = MulteityComposer.generateAccompaniment(this.barCount, density);
+                break;
+            case 'slow_blues':
+                bass = BluesComposer.generateBass(this.barCount, density);
+                melody = BluesComposer.generateMelody(this.barCount, density);
+                accompaniment = BluesComposer.generateAccompaniment(this.barCount, density);
+                break;
+            default:
+                bass = Composer.generateBass(this.barCount, density);
+                melody = Composer.generateMelody(this.barCount, density);
+                accompaniment = Composer.generateAccompaniment(this.barCount, density);
+                break;
         }
 
         drums = Composer.generateDrums(this.barCount, density);
@@ -401,3 +453,4 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
     }
 };
+

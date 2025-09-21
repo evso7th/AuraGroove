@@ -80,7 +80,7 @@ export type TimerSettings = {
     isActive: boolean;
 };
 
-export type ScoreName = 'evolve' | 'omega' | 'journey' | 'dreamtales' | 'multeity';
+export type ScoreName = 'evolve' | 'omega' | 'journey' | 'dreamtales' | 'multeity' | 'slow_blues';
 
 // Settings sent from the UI to the main engine/worker.
 export type WorkerSettings = {
@@ -91,3 +91,4 @@ export type WorkerSettings = {
     textureSettings: Omit<TextureSettings, 'volume'>;
     density: number; // Controls musical density, 0 to 1
 };
+
