@@ -70,6 +70,11 @@ const CelticComposer = {
     scene: 'A' as 'A' | 'B',
     sceneBar: 0,
 
+    reset() {
+        this.scene = 'A';
+        this.sceneBar = 0;
+    },
+
     generateBass(barIndex: number, density: number): Note[] {
         const notes: Note[] = [];
         const beatDuration = Scheduler.barDuration / 4;
@@ -136,6 +141,11 @@ const BluesComposer = {
     // 12-bar minor blues progression in E: Em-Em-Em-Em | Am-Am | Em-Em | B7-Am | Em-Em 
     // Degrees in E minor scale: i (0), iv (3), v (4)
     progression: [0, 0, 0, 0, 3, 3, 0, 0, 4, 3, 0, 0],
+    lastMelodyDegree: null as number | null,
+
+    reset() {
+        this.lastMelodyDegree = null;
+    },
     
     generateBass(barIndex: number, density: number): Note[] {
         const notes: Note[] = [];
@@ -184,27 +194,36 @@ const BluesComposer = {
         const beatDuration = Scheduler.barDuration / 4;
         const numNotes = Math.floor(density * 5) + 1; // Fewer notes for a slower feel
         const currentChordDegree = this.progression[barIndex % 12];
-        let lastDegree = currentChordDegree + 7; // Start on the fifth of the chord, in the next octave
+
+        if (this.lastMelodyDegree === null) {
+            this.lastMelodyDegree = currentChordDegree + 7; // Start on the fifth of the chord, in the next octave
+        }
+        
+        let currentDegree = this.lastMelodyDegree;
 
         for (let i = 0; i < numNotes; i++) {
              if (Math.random() < density) {
                  const step = Math.random() < 0.7 ? (Math.random() < 0.5 ? -1 : 1) : (Math.random() < 0.5 ? -2 : 2);
-                 lastDegree += step;
-                 const midi = getNoteFromDegree(lastDegree, BLUES_SCALE_INTERVALS, KEY_ROOT_MIDI, 2); // E4 range
+                 currentDegree += step;
+                 const midi = getNoteFromDegree(currentDegree, BLUES_SCALE_INTERVALS, KEY_ROOT_MIDI, 2); // E4 range
 
                  if(midi >= 40 && midi < 76) { // Check range
                     const time = (i * (beatDuration / (numNotes/2))) + (Math.random() - 0.5) * 0.1; // Add swing
                     const duration = beatDuration * (0.5 + Math.random());
-                    notes.push({ midi, time: time, duration, duration, velocity: 0.5 + density * 0.3 });
+                    notes.push({ midi, time: time, duration: duration, velocity: 0.5 + density * 0.3 });
                  }
             }
         }
+        this.lastMelodyDegree = currentDegree;
         return notes;
     }
 }
 
 
 const MulteityComposer = {
+    reset() {
+      // This composer is stateless between sessions, but we add the method for consistency.
+    },
     generateBass(barIndex: number, density: number): Note[] {
         const notes: Note[] = [];
         const beatDuration = Scheduler.barDuration / 4;
@@ -270,6 +289,12 @@ const MulteityComposer = {
 
 
 const Composer = {
+    lastMelodyDegree: null as number | null,
+
+    reset() {
+        this.lastMelodyDegree = null;
+    },
+
     generateBass(barIndex: number, density: number): Note[] {
         const beatDuration = Scheduler.barDuration / 4;
         let notes: Note[] = [];
@@ -296,20 +321,26 @@ const Composer = {
 
         const notesInBar = density > 0.6 ? 8 : 4;
         const step = Scheduler.barDuration / notesInBar;
-        let lastMidi = 60 + SCALE_INTERVALS[barIndex % SCALE_INTERVALS.length];
+
+        if (this.lastMelodyDegree === null) {
+            this.lastMelodyDegree = 60 + SCALE_INTERVALS[barIndex % SCALE_INTERVALS.length];
+        }
+
+        let currentDegreeMidi = this.lastMelodyDegree;
 
         for (let i = 0; i < notesInBar; i++) {
             if (Math.random() < density * 1.2) { // Chance to play a note
                 const direction = Math.random() < 0.5 ? 1 : -1;
-                const scaleIndex = (lastMidi - KEY_ROOT_MIDI + direction + SCALE_INTERVALS.length) % SCALE_INTERVALS.length;
+                const scaleIndex = (currentDegreeMidi - KEY_ROOT_MIDI + direction + SCALE_INTERVALS.length) % SCALE_INTERVALS.length;
                 const nextMidi = KEY_ROOT_MIDI + 24 + SCALE_INTERVALS[scaleIndex];
                 
                 if (nextMidi < 79) {
-                    lastMidi = nextMidi;
+                    currentDegreeMidi = nextMidi;
                 }
-                notes.push({ midi: lastMidi, time: i * step, duration: step * (1 + Math.random()), velocity: 0.5 * density });
+                notes.push({ midi: currentDegreeMidi, time: i * step, duration: step * (1 + Math.random()), velocity: 0.5 * density });
             }
         }
+        this.lastMelodyDegree = currentDegreeMidi;
         return notes;
     },
     
@@ -409,10 +440,16 @@ const Scheduler = {
     start() {
         if (this.isRunning) return;
         
-        this.isRunning = true;
+        // Reset all composers and states for a fresh start
         this.barCount = 0;
         lastSparkleTime = -Infinity;
         lastPadStyle = null; // Reset on start
+        Composer.reset();
+        BluesComposer.reset();
+        CelticComposer.reset();
+        MulteityComposer.reset();
+
+        this.isRunning = true;
         
         const loop = () => {
             if (!this.isRunning) return;
