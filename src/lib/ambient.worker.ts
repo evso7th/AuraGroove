@@ -12,7 +12,7 @@ import type { WorkerSettings, Score, Note, DrumsScore, ScoreName } from '@/types
 const KEY_ROOT_MIDI = 40; // E2
 const SCALE_INTERVALS = [0, 2, 3, 5, 7, 8, 10]; // E Natural Minor
 const BLUES_SCALE_INTERVALS = [0, 3, 5, 6, 7, 10]; // E Minor Blues Scale
-const CELTIC_SCALE_INTERVALS = [0, 2, 3, 5, 7, 8, 10]; // Using natural minor for a Celtic feel
+const CELTIC_SCALE_INTERVALS = [0, 2, 3, 5, 7, 9, 10]; // E Dorian Mode
 
 const PADS_BY_STYLE: Record<ScoreName, string | null> = {
     dreamtales: 'livecircle.mp3',
@@ -65,25 +65,28 @@ const getNoteFromDegree = (degree: number, scale: number[], root: number, octave
 // --- Main Composition Engines ---
 
 const CelticComposer = {
-    progression: [0, 5, 3, 4], // Am, G, F, G -> in C major, so degrees are 5, 4, 3, 4. In E minor: Em, D, C, D -> 0, 6, 5, 6
+    progression: [0, 3, 6, 5], // Em -> A -> D -> C (relative to E Dorian)
     scene: 'A' as 'A' | 'B',
     sceneBar: 0,
+    lastMelodyDegree: 14, // Start melody in a reasonable range (around E4)
 
     reset() {
         this.scene = 'A';
         this.sceneBar = 0;
+        this.lastMelodyDegree = 14;
     },
 
     generateBass(barIndex: number, density: number): Note[] {
         const notes: Note[] = [];
         const beatDuration = Scheduler.barDuration / 4;
+        // Chord changes every 2 bars
         const currentChordRootDegree = this.progression[Math.floor(barIndex / 2) % this.progression.length];
         
-        // Simple drone, one note per chord change
+        // Simple drone, one note per chord change, held for 2 bars
         if (barIndex % 2 === 0) {
-            const midi = getNoteFromDegree(currentChordRootDegree, CELTIC_SCALE_INTERVALS, KEY_ROOT_MIDI - 12, 0); // E1 range
-            if (midi >= 28 && midi < 52) {
-                notes.push({ midi, time: 0, duration: beatDuration * 8, velocity: 0.5 + density * 0.1 });
+            const midi = getNoteFromDegree(currentChordRootDegree, CELTIC_SCALE_INTERVALS, KEY_ROOT_MIDI, 0); // E2 range
+            if (midi >= 28 && midi < 52) { // E1 to E3
+                notes.push({ midi, time: 0, duration: Scheduler.barDuration * 2, velocity: 0.5 + density * 0.1 });
             }
         }
         return notes;
@@ -92,17 +95,30 @@ const CelticComposer = {
         const notes: Note[] = [];
         const currentChordRootDegree = this.progression[Math.floor(barIndex / 2) % this.progression.length];
         const beatDuration = Scheduler.barDuration / 4;
-        const step = beatDuration / (density > 0.6 ? 4 : 3); // 16ths or 8th triplets
+        const step = beatDuration / 2; // 8th notes for arpeggio
+        
+        // DADGAD-like drone on E and B
+        const droneNote1 = getNoteFromDegree(0, CELTIC_SCALE_INTERVALS, KEY_ROOT_MIDI, 1); // E3
+        const droneNote2 = getNoteFromDegree(4, CELTIC_SCALE_INTERVALS, KEY_ROOT_MIDI, 1); // B3
+
+        // Play drone notes throughout the bar
+        for (let i = 0; i < 8; i++) {
+             if (i % 4 === 0 && droneNote1 >= 40 && droneNote1 < 76) {
+                 notes.push({midi: droneNote1, time: i * step, duration: step, velocity: 0.2});
+             }
+             if (i % 4 === 2 && droneNote2 >= 40 && droneNote2 < 76) {
+                 notes.push({midi: droneNote2, time: i * step, duration: step, velocity: 0.15});
+             }
+        }
+        
         const chordTones = [0, 2, 4].map(offset => currentChordRootDegree + offset);
         
-        const numNotes = density > 0.6 ? 16 : 12;
-
-        for (let i = 0; i < numNotes; i++) {
-            if (Math.random() < density * 0.9) {
+        for (let i = 0; i < 8; i++) {
+            if (Math.random() < density * 0.7) {
                 const degree = chordTones[i % chordTones.length];
                 const midi = getNoteFromDegree(degree, CELTIC_SCALE_INTERVALS, KEY_ROOT_MIDI, 2); // E4 range
                 if (midi >= 52 && midi < 76) {
-                    notes.push({ midi, time: i * step, duration: step * 2, velocity: 0.35 + Math.random() * 0.1 });
+                    notes.push({ midi, time: i * step, duration: step * 1.5, velocity: 0.35 + Math.random() * 0.1 });
                 }
             }
         }
@@ -110,26 +126,36 @@ const CelticComposer = {
     },
     generateMelody(barIndex: number, density: number): Note[] {
         this.sceneBar++;
-        if ((this.scene === 'A' && this.sceneBar >= 4) || (this.scene === 'B' && this.sceneBar >= 2)) {
+        // Switch scene every 4 bars
+        if (this.sceneBar >= 4) {
             this.scene = this.scene === 'A' ? 'B' : 'A';
             this.sceneBar = 0;
         }
 
-        if (this.scene === 'B' || Math.random() > density * 0.8) {
+        // Scene 'B' is a melodic rest
+        if (this.scene === 'B' || Math.random() > (density * 1.1)) {
             return [];
         }
 
         const notes: Note[] = [];
-        const numNotes = Math.floor(density * 4) + 2;
+        const numNotes = Math.floor(density * 3) + 1; // Fewer, longer notes for a ballad feel
         const step = Scheduler.barDuration / numNotes;
-        let lastDegree = (barIndex * 2) % CELTIC_SCALE_INTERVALS.length + 14; 
 
         for (let i = 0; i < numNotes; i++) {
-            const direction = Math.random() < 0.6 ? 1 : -1;
-            lastDegree += direction;
-            const midi = getNoteFromDegree(lastDegree, CELTIC_SCALE_INTERVALS, KEY_ROOT_MIDI, 2); // E4/E5 range
-            if (midi >= 64 && midi < 88) {
-                notes.push({ midi, time: i * step, duration: step * (2 + Math.random()), velocity: 0.4 + density * 0.2 });
+            // Prefer smaller steps
+            const direction = Math.random() < 0.7 ? (Math.random() < 0.5 ? 1 : -1) : 0;
+            this.lastMelodyDegree += direction;
+
+            // Ensure the melody doesn't stray too far
+            if(this.lastMelodyDegree > 21) this.lastMelodyDegree = 20;
+            if(this.lastMelodyDegree < 7) this.lastMelodyDegree = 8;
+            
+            const midi = getNoteFromDegree(this.lastMelodyDegree, CELTIC_SCALE_INTERVALS, KEY_ROOT_MIDI, 2); // E4/E5 range
+            
+            if (midi >= 64 && midi < 88) { // E4 to E6
+                 const noteDuration = step * (1.5 + (Math.random() * density)); // Longer notes
+                 const noteVelocity = 0.4 + density * 0.2 + (Math.random() * 0.1);
+                 notes.push({ midi, time: i * step, duration: noteDuration, velocity: noteVelocity });
             }
         }
         return notes;
