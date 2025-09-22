@@ -12,6 +12,7 @@ import type { WorkerSettings, Score, Note, DrumsScore, ScoreName } from '@/types
 const KEY_ROOT_MIDI = 40; // E2
 const SCALE_INTERVALS = [0, 2, 3, 5, 7, 8, 10]; // E Natural Minor
 const BLUES_SCALE_INTERVALS = [0, 3, 5, 6, 7, 10]; // E Minor Blues Scale
+const CELTIC_SCALE_INTERVALS = [0, 2, 3, 5, 7, 8, 10]; // Using natural minor for a Celtic feel
 
 const PADS_BY_STYLE: Record<ScoreName, string | null> = {
     dreamtales: 'livecircle.mp3',
@@ -20,6 +21,7 @@ const PADS_BY_STYLE: Record<ScoreName, string | null> = {
     journey: 'pure_energy.mp3',
     multeity: 'uneverse.mp3',
     slow_blues: 'Grounding.ogg',
+    celtic_ballad: 'SalvingPad.ogg',
 };
 
 const SPARKLE_SAMPLES = [
@@ -62,6 +64,73 @@ const getNoteFromDegree = (degree: number, scale: number[], root: number, octave
 };
 
 // --- Main Composition Engines ---
+
+const CelticComposer = {
+    progression: [0, 5, 3, 4], // Am, G, F, G -> in C major, so degrees are 5, 4, 3, 4. In E minor: Em, D, C, D -> 0, 6, 5, 6
+    scene: 'A' as 'A' | 'B',
+    sceneBar: 0,
+
+    generateBass(barIndex: number, density: number): Note[] {
+        const notes: Note[] = [];
+        const beatDuration = Scheduler.barDuration / 4;
+        const currentChordRootDegree = this.progression[Math.floor(barIndex / 2) % this.progression.length];
+        
+        // Simple drone, one note per chord change
+        if (barIndex % 2 === 0) {
+            const midi = getNoteFromDegree(currentChordRootDegree, CELTIC_SCALE_INTERVALS, KEY_ROOT_MIDI - 12, 0); // E1 range
+            if (midi >= 28 && midi < 52) {
+                notes.push({ midi, time: 0, duration: beatDuration * 8, velocity: 0.5 + density * 0.1 });
+            }
+        }
+        return notes;
+    },
+    generateAccompaniment(barIndex: number, density: number): Note[] {
+        const notes: Note[] = [];
+        const currentChordRootDegree = this.progression[Math.floor(barIndex / 2) % this.progression.length];
+        const beatDuration = Scheduler.barDuration / 4;
+        const step = beatDuration / (density > 0.6 ? 4 : 3); // 16ths or 8th triplets
+        const chordTones = [0, 2, 4].map(offset => currentChordRootDegree + offset);
+        
+        const numNotes = density > 0.6 ? 16 : 12;
+
+        for (let i = 0; i < numNotes; i++) {
+            if (Math.random() < density * 0.9) {
+                const degree = chordTones[i % chordTones.length];
+                const midi = getNoteFromDegree(degree, CELTIC_SCALE_INTERVALS, KEY_ROOT_MIDI, 2); // E4 range
+                if (midi >= 52 && midi < 76) {
+                    notes.push({ midi, time: i * step, duration: step * 2, velocity: 0.35 + Math.random() * 0.1 });
+                }
+            }
+        }
+        return notes;
+    },
+    generateMelody(barIndex: number, density: number): Note[] {
+        this.sceneBar++;
+        if ((this.scene === 'A' && this.sceneBar >= 4) || (this.scene === 'B' && this.sceneBar >= 2)) {
+            this.scene = this.scene === 'A' ? 'B' : 'A';
+            this.sceneBar = 0;
+        }
+
+        if (this.scene === 'B' || Math.random() > density * 0.8) {
+            return [];
+        }
+
+        const notes: Note[] = [];
+        const numNotes = Math.floor(density * 4) + 2;
+        const step = Scheduler.barDuration / numNotes;
+        let lastDegree = (barIndex * 2) % CELTIC_SCALE_INTERVALS.length + 14; 
+
+        for (let i = 0; i < numNotes; i++) {
+            const direction = Math.random() < 0.6 ? 1 : -1;
+            lastDegree += direction;
+            const midi = getNoteFromDegree(lastDegree, CELTIC_SCALE_INTERVALS, KEY_ROOT_MIDI, 2); // E4/E5 range
+            if (midi >= 64 && midi < 88) {
+                notes.push({ midi, time: i * step, duration: step * (2 + Math.random()), velocity: 0.4 + density * 0.2 });
+            }
+        }
+        return notes;
+    }
+}
 
 const BluesComposer = {
     // 12-bar minor blues progression in E: Em-Em-Em-Em | Am-Am | Em-Em | B7-Am | Em-Em 
@@ -126,7 +195,7 @@ const BluesComposer = {
                  if(midi >= 40 && midi < 76) { // Check range
                     const time = (i * (beatDuration / (numNotes/2))) + (Math.random() - 0.5) * 0.1; // Add swing
                     const duration = beatDuration * (0.5 + Math.random());
-                    notes.push({ midi, time: time, duration, velocity: 0.5 + density * 0.3 });
+                    notes.push({ midi, time: time, duration, duration, velocity: 0.5 + density * 0.3 });
                  }
             }
         }
@@ -390,6 +459,11 @@ const Scheduler = {
                 bass = BluesComposer.generateBass(this.barCount, density);
                 melody = BluesComposer.generateMelody(this.barCount, density);
                 accompaniment = BluesComposer.generateAccompaniment(this.barCount, density);
+                break;
+            case 'celtic_ballad':
+                bass = CelticComposer.generateBass(this.barCount, density);
+                melody = CelticComposer.generateMelody(this.barCount, density);
+                accompaniment = CelticComposer.generateAccompaniment(this.barCount, density);
                 break;
             default:
                 bass = Composer.generateBass(this.barCount, density);

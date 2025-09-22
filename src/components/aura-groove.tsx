@@ -102,6 +102,8 @@ export function AuraGroove({
         case 'organ': return '#38BDF8'; // A sky blue
         case 'mellotron': return '#F97316'; // A warm orange
         case 'theremin': return '#EC4899'; // A vibrant pink
+        case 'flute': return '#10B981'; // Emerald green
+        case 'lute': return '#D97706'; // Amber
         default: return 'hsl(var(--foreground))';
     }
   };
@@ -216,6 +218,8 @@ export function AuraGroove({
                         <SelectItem value="omega">Omega (Fractal)</SelectItem>
                         <SelectItem value="journey">Journey</SelectItem>
                         <SelectItem value="multeity">Multeity (Prog)</SelectItem>
+                        <SelectItem value="slow_blues">Slow Blues</SelectItem>
+                        <SelectItem value="celtic_ballad">Celtic Ballad</SelectItem>
                     </SelectContent>
                 </Select>
             </div>
@@ -251,9 +255,9 @@ export function AuraGroove({
                 const settings = instrumentSettings[part];
                 let instrumentList: (BassInstrument | MelodyInstrument | AccompanimentInstrument | 'none')[] = [];
                 if (part === 'bass') {
-                    instrumentList = ['classicBass', 'glideBass', 'ambientDrone', 'resonantGliss', 'hypnoticDrone', 'livingRiff', 'none'];
+                    instrumentList = ['classicBass', 'glideBass', 'ambientDrone', 'resonantGliss', 'hypnoticDrone', 'livingRiff', 'cello', 'none'];
                 } else if (part === 'melody' || part === 'accompaniment') {
-                    instrumentList = ['synth', 'organ', 'mellotron', 'theremin', 'none'];
+                    instrumentList = ['synth', 'organ', 'mellotron', 'theremin', 'flute', 'lute', 'none'];
                 }
 
                 return (

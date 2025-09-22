@@ -89,5 +89,18 @@ export const BASS_PRESETS: Record<string, BassPreset> = {
     stagger: 0.005,
     color: '#FF4500',
     description: 'Живой, дышащий рифф с характером'
+  },
+  cello: {
+    wave1: 'sawtooth',
+    wave2: 'triangle',
+    attack1: 0.15,
+    release1: 1.8,
+    attack2: 0.2,
+    release2: 1.5,
+    cutoff: 800,
+    filterQ: 0.8,
+    stagger: 0.01,
+    color: '#A0522D',
+    description: 'Тёплый, насыщенный, смычковый'
   }
 };

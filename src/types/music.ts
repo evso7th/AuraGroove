@@ -31,8 +31,8 @@ export type Score = {
 };
 
 // --- UI Types ---
-export type BassInstrument = 'classicBass' | 'glideBass' | 'ambientDrone' | 'resonantGliss' | 'hypnoticDrone' | 'livingRiff' | 'none';
-export type MelodyInstrument = 'synth' | 'organ' | 'mellotron' | 'theremin' | 'none';
+export type BassInstrument = 'classicBass' | 'glideBass' | 'ambientDrone' | 'resonantGliss' | 'hypnoticDrone' | 'livingRiff' | 'cello' | 'none';
+export type MelodyInstrument = 'synth' | 'organ' | 'mellotron' | 'theremin' | 'flute' | 'lute' | 'none';
 export type AccompanimentInstrument = MelodyInstrument;
 export type InstrumentPart = 'bass' | 'melody' | 'accompaniment' | 'drums' | 'effects' | 'sparkles' | 'pads';
 export type BassTechnique = 'arpeggio' | 'portamento' | 'glissando' | 'glide' | 'pulse';
@@ -80,7 +80,7 @@ export type TimerSettings = {
     isActive: boolean;
 };
 
-export type ScoreName = 'evolve' | 'omega' | 'journey' | 'dreamtales' | 'multeity' | 'slow_blues';
+export type ScoreName = 'evolve' | 'omega' | 'journey' | 'dreamtales' | 'multeity' | 'slow_blues' | 'celtic_ballad';
 
 // Settings sent from the UI to the main engine/worker.
 export type WorkerSettings = {
@@ -91,4 +91,5 @@ export type WorkerSettings = {
     textureSettings: Omit<TextureSettings, 'volume'>;
     density: number; // Controls musical density, 0 to 1
 };
+
 

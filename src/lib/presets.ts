@@ -52,6 +52,22 @@ const PRESETS: Record<MelodyInstrument, Omit<PresetParams, 'type' | 'frequency' 
         q: 0.6,
         oscType: 'sine',
     },
+    flute: {
+        attack: 0.1,
+        release: 0.8,
+        portamento: 0.02,
+        filterCutoff: 1200,
+        q: 0.8,
+        oscType: 'sine',
+    },
+    lute: {
+        attack: 0.01,
+        release: 0.5,
+        portamento: 0,
+        filterCutoff: 4000,
+        q: 0.2,
+        oscType: 'square', // Using square for a plucky, harmonic sound
+    },
      portamento: { // Bass instrument
         attack: 0.1,
         release: isMobile() ? 2.0 : 4.0,
@@ -87,3 +103,4 @@ export const getPresetParams = (instrumentName: MelodyInstrument | 'portamento',
         ...preset,
     };
 };
+
