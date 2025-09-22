@@ -106,6 +106,7 @@ export function AuraGrooveV2({
                               <SelectItem value="journey">Journey</SelectItem>
                               <SelectItem value="multeity">Multeity</SelectItem>
                               <SelectItem value="slow_blues">Slow Blues</SelectItem>
+                              <SelectItem value="celtic_ballad">Celtic Ballad</SelectItem>
                           </SelectContent>
                       </Select>
                   </div>
@@ -162,7 +163,7 @@ export function AuraGrooveV2({
                                   <Select value={settings.name} onValueChange={(v) => setInstrumentSettings(part as any, v as any)} disabled={isInitializing || isPlaying}>
                                       <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                                       <SelectContent>
-                                          {(part === 'bass' ? ['classicBass', 'glideBass', 'ambientDrone', 'resonantGliss', 'hypnoticDrone', 'livingRiff', 'none'] : ['synth', 'organ', 'mellotron', 'theremin', 'none']).map(inst => (
+                                          {(part === 'bass' ? ['classicBass', 'glideBass', 'ambientDrone', 'resonantGliss', 'hypnoticDrone', 'livingRiff', 'cello', 'none'] : ['synth', 'organ', 'mellotron', 'theremin', 'flute', 'lute', 'none']).map(inst => (
                                             <SelectItem key={inst} value={inst} className="text-xs">{inst.charAt(0).toUpperCase() + inst.slice(1).replace(/([A-Z])/g, ' $1')}</SelectItem>
                                           ))}
                                       </SelectContent>
