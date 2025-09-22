@@ -58,9 +58,9 @@ export function AuraGrooveV2({
                   <Button variant="ghost" className="h-9 w-9 px-2" aria-label="Open Equalizer">EQ</Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-md">
-                  <DialogHeader>
+                  <DialogHeader className="flex-row justify-between items-center">
                     <DialogTitle>System Equalizer</DialogTitle>
-                     <div className="pt-2">
+                     <div className="w-[150px]">
                         <Select onValueChange={(value) => handleEqPresetChange(value as any)}>
                           <SelectTrigger className="h-8 text-xs">
                             <SelectValue placeholder="Select a preset" />
