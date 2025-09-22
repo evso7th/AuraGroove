@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import Image from 'next/image';
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import type { DrumSettings, InstrumentSettings, ScoreName, BassInstrument, InstrumentPart, MelodyInstrument, AccompanimentInstrument, BassTechnique, TextureSettings, TimerSettings } from '@/types/music';
+import type { DrumSettings, InstrumentSettings, ScoreName, BassInstrument, InstrumentPart, MelodyInstrument, AccompanimentInstrument, BassTechnique, TextureSettings, TimerSettings, EQPreset } from '@/types/music';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useRouter } from "next/navigation";
 import { BASS_PRESETS } from "@/lib/bass-presets";
@@ -42,6 +42,7 @@ export type AuraGrooveProps = {
   setIsEqModalOpen: (isOpen: boolean) => void;
   eqSettings: number[];
   handleEqChange: (bandIndex: number, gain: number) => void;
+  handleEqPresetChange: (preset: EQPreset) => void;
   timerSettings: TimerSettings;
   handleTimerDurationChange: (minutes: number) => void;
   handleToggleTimer: () => void;
@@ -82,6 +83,7 @@ export function AuraGroove({
   setIsEqModalOpen,
   eqSettings,
   handleEqChange,
+  handleEqPresetChange,
   timerSettings,
   handleTimerDurationChange,
   handleToggleTimer,
@@ -316,8 +318,7 @@ export function AuraGroove({
                             step={0.05} 
                             onValueChange={(v) => handleVolumeChange(part as InstrumentPart, v[0])} 
                             disabled={isInitializing || settings.name === 'none'}
-                            style={{ '--slider-color': getPartColor(part) } as React.CSSProperties}
-                            className="[&>span>span]:bg-[var(--slider-color)]"
+                            className="[&>span>span]:bg-primary"
                          />
                     </div>
                  </div>

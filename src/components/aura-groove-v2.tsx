@@ -25,7 +25,7 @@ export function AuraGrooveV2({
   isPlaying, isInitializing, handleTogglePlay, drumSettings, setDrumSettings, instrumentSettings,
   setInstrumentSettings, handleBassTechniqueChange, handleVolumeChange, textureSettings, handleTextureEnabledChange,
   bpm, handleBpmChange, score, handleScoreChange, density, setDensity, handleGoHome,
-  isEqModalOpen, setIsEqModalOpen, eqSettings, handleEqChange,
+  isEqModalOpen, setIsEqModalOpen, eqSettings, handleEqChange, handleEqPresetChange,
   timerSettings, handleTimerDurationChange, handleToggleTimer,
 }: AuraGrooveProps) {
 
@@ -58,7 +58,20 @@ export function AuraGrooveV2({
                   <Button variant="ghost" className="h-9 w-9 px-2" aria-label="Open Equalizer">EQ</Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-md">
-                  <DialogHeader><DialogTitle>System Equalizer</DialogTitle></DialogHeader>
+                  <DialogHeader>
+                    <DialogTitle>System Equalizer</DialogTitle>
+                     <div className="pt-2">
+                        <Select onValueChange={(value) => handleEqPresetChange(value as any)}>
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue placeholder="Select a preset" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="mobile" className="text-xs">Mobile Phones</SelectItem>
+                            <SelectItem value="acoustic" className="text-xs">Acoustic System</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                  </DialogHeader>
                   <div className="flex justify-around items-end pt-4 h-48">
                     {EQ_BANDS.map((band, index) => (
                       <div key={index} className="flex flex-col items-center justify-end space-y-2">
@@ -110,10 +123,9 @@ export function AuraGrooveV2({
                           </SelectContent>
                       </Select>
                   </div>
-                  <div className="grid grid-cols-[1fr_2fr_auto] items-center gap-2">
+                  <div className="grid grid-cols-3 items-center gap-2">
                     <Label htmlFor="bpm-slider" className="text-right text-xs">BPM</Label>
-                    <Slider id="bpm-slider" value={[bpm]} min={60} max={160} step={5} onValueChange={(v) => handleBpmChange(v[0])} className="col-span-1" disabled={isInitializing}/>
-                    <span className="text-xs w-8 text-right font-mono">{bpm}</span>
+                    <Slider id="bpm-slider" value={[bpm]} min={60} max={160} step={5} onValueChange={(v) => handleBpmChange(v[0])} className="col-span-2" disabled={isInitializing}/>
                   </div>
                   <div className="grid grid-cols-3 items-center gap-2">
                     <Label htmlFor="density-slider" className="text-right text-xs">Density</Label>
@@ -124,7 +136,7 @@ export function AuraGrooveV2({
                <Card className="border-0 shadow-none mt-2">
                 <CardHeader className="p-2"><CardTitle className="flex items-center gap-2 text-sm"><Timer className="h-4 w-4"/> Sleep Timer</CardTitle></CardHeader>
                 <CardContent className="space-y-2 p-3 pt-0">
-                    <div className="grid grid-cols-[1fr_2fr_auto] items-center gap-2">
+                    <div className="grid grid-cols-3 items-center gap-2">
                         <Label htmlFor="timer-slider" className="text-right text-xs">Minutes</Label>
                         <Slider
                             id="timer-slider"
@@ -133,10 +145,9 @@ export function AuraGrooveV2({
                             max={30}
                             step={5}
                             onValueChange={(v) => handleTimerDurationChange(v[0])}
-                            className="col-span-1"
+                            className="col-span-2"
                             disabled={isInitializing || timerSettings.isActive}
                         />
-                        <span className="text-xs w-8 text-right font-mono">{timerSettings.duration / 60}</span>
                     </div>
                     <div className="flex justify-center items-center gap-4 pt-2">
                          <Button
@@ -159,7 +170,7 @@ export function AuraGrooveV2({
                       {Object.entries(instrumentSettings).map(([part, settings]) => (
                           <div key={part} className="p-2 border rounded-md space-y-2">
                              <div className="grid grid-cols-2 items-center gap-2">
-                                  <Label className="font-semibold flex items-center gap-1.5 capitalize text-xs"><Waves className="h-4 w-4"/>{part}</Label>
+                                  <Label className="font-semibold flex items-center gap-1.5 capitalize text-xs"><Piano className="h-4 w-4"/>{part}</Label>
                                   <Select value={settings.name} onValueChange={(v) => setInstrumentSettings(part as any, v as any)} disabled={isInitializing || isPlaying}>
                                       <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                                       <SelectContent>
@@ -186,8 +197,7 @@ export function AuraGrooveV2({
                               )}
                               <div className="flex items-center gap-2">
                                   <Label className="text-xs text-muted-foreground"><Speaker className="h-3 w-3 inline-block mr-1"/>Volume</Label>
-                                  <Slider value={[settings.volume]} max={1} step={0.05} onValueChange={(v) => handleVolumeChange(part as any, v[0])} disabled={isInitializing || settings.name === 'none'}/>
-                                  <span className="text-xs w-8 text-right font-mono">{Math.round(settings.volume * 100)}</span>
+                                  <Slider value={[settings.volume]} max={1} step={0.05} onValueChange={(v) => handleVolumeChange(part as any, v[0])} disabled={isInitializing || settings.name === 'none'} className="[&>span>span]:bg-primary"/>
                               </div>
                           </div>
                       ))}
@@ -207,7 +217,6 @@ export function AuraGrooveV2({
                           <div className="flex items-center gap-2">
                               <Label className="text-xs text-muted-foreground"><Speaker className="h-3 w-3 inline-block mr-1"/>Volume</Label>
                               <Slider value={[textureSettings.sparkles.volume]} max={1} step={0.05} onValueChange={(v) => handleVolumeChange('sparkles', v[0])} disabled={isInitializing || !textureSettings.sparkles.enabled}/>
-                               <span className="text-xs w-8 text-right font-mono">{Math.round(textureSettings.sparkles.volume * 100)}</span>
                           </div>
                       </div>
                        <div className="p-2 border rounded-md">
@@ -218,7 +227,6 @@ export function AuraGrooveV2({
                           <div className="flex items-center gap-2">
                               <Label className="text-xs text-muted-foreground"><Speaker className="h-3 w-3 inline-block mr-1"/>Volume</Label>
                               <Slider value={[textureSettings.pads.volume]} max={1} step={0.05} onValueChange={(v) => handleVolumeChange('pads', v[0])} disabled={isInitializing || !textureSettings.pads.enabled}/>
-                              <span className="text-xs w-8 text-right font-mono">{Math.round(textureSettings.pads.volume * 100)}</span>
                           </div>
                       </div>
                        <div className="p-2 border rounded-md">
@@ -236,7 +244,6 @@ export function AuraGrooveV2({
                           <div className="flex items-center gap-2">
                               <Label className="text-xs text-muted-foreground"><Speaker className="h-3 w-3 inline-block mr-1"/>Volume</Label>
                               <Slider value={[drumSettings.volume]} max={1} step={0.05} onValueChange={(v) => setDrumSettings(d => ({...d, volume: v[0]}))} disabled={isInitializing || drumSettings.pattern === 'none'}/>
-                               <span className="text-xs w-8 text-right font-mono">{Math.round(drumSettings.volume * 100)}</span>
                           </div>
                       </div>
                   </CardContent>

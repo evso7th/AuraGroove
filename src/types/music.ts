@@ -82,6 +82,8 @@ export type TimerSettings = {
 
 export type ScoreName = 'evolve' | 'omega' | 'journey' | 'dreamtales' | 'multeity' | 'slow_blues' | 'celtic_ballad';
 
+export type EQPreset = 'mobile' | 'acoustic';
+
 // Settings sent from the UI to the main engine/worker.
 export type WorkerSettings = {
     bpm: number;

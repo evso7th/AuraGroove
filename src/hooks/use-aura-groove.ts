@@ -3,10 +3,16 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings, BassInstrument, InstrumentPart, MelodyInstrument, AccompanimentInstrument, BassTechnique, TextureSettings, TimerSettings } from '@/types/music';
+import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings, BassInstrument, InstrumentPart, MelodyInstrument, AccompanimentInstrument, BassTechnique, TextureSettings, TimerSettings, EQPreset } from '@/types/music';
 import { useAudioEngine } from "@/contexts/audio-engine-context";
 
 const FADE_OUT_DURATION = 120; // 2 minutes
+
+const EQ_PRESETS: Record<EQPreset, number[]> = {
+  'mobile': [0, 0, 0, 0, 0, 0, 0],
+  'acoustic': [-8.5, -6.0, -5.0, 0, 0, 0, 0],
+};
+
 
 /**
  * Облегченная версия хука для стартового экрана.
@@ -225,6 +231,14 @@ export const useAuraGroove = () => {
       });
   };
 
+  const handleEqPresetChange = (preset: EQPreset) => {
+    const newSettings = EQ_PRESETS[preset];
+    setEqSettings(newSettings);
+    newSettings.forEach((gain, index) => {
+        setEQGain(index, gain);
+    });
+  };
+
   const handleTimerDurationChange = (minutes: number) => {
       setTimerSettings(prev => ({...prev, duration: minutes * 60, timeLeft: minutes * 60 }));
   };
@@ -278,6 +292,7 @@ export const useAuraGroove = () => {
     setIsEqModalOpen,
     eqSettings,
     handleEqChange,
+    handleEqPresetChange,
     timerSettings,
     handleTimerDurationChange,
     handleToggleTimer,
