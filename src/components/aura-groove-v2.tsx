@@ -60,7 +60,7 @@ export function AuraGrooveV2({
                 <DialogContent className="sm:max-w-md">
                   <DialogHeader className="flex-row justify-between items-center">
                     <DialogTitle>System Equalizer</DialogTitle>
-                     <div className="w-[150px]">
+                     <div className="w-[150px] mr-8">
                         <Select onValueChange={(value) => handleEqPresetChange(value as any)}>
                           <SelectTrigger className="h-8 text-xs">
                             <SelectValue placeholder="Select a preset" />
