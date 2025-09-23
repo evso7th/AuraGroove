@@ -33,11 +33,22 @@ export default function Home() {
           </p>
           {isInitializing && <LoadingDots />}
         </CardContent>
-        <CardFooter>
+        <CardFooter className="flex-col gap-2">
           <Button onClick={handleStart} disabled={isInitializing} className="w-full text-lg py-6">
             {!isInitializing && <Music className="mr-2 h-6 w-6" />}
             {buttonText}
           </Button>
+          <p className="text-xs text-muted-foreground pt-2">
+            AuraGroove (с) 2025 Evgeniy Somov,{' '}
+            <a 
+              href="https://polyankastudio.ru/" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="underline hover:text-primary"
+            >
+              polyankastudio.ru
+            </a>
+          </p>
         </CardFooter>
       </Card>
     </main>
