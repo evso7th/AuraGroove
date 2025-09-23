@@ -5,6 +5,7 @@ import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import type { Note, InstrumentPart } from '@/types/music';
+import BackgroundAnimation from './background-animation';
 
 interface VisualizerProps {
   isOpen: boolean;
@@ -51,7 +52,6 @@ function midiToHue(midi: number): number {
     }
 }
 
-
 export function Visualizer({ isOpen, onClose, activeNotes, isPlaying }: VisualizerProps) {
   return (
     <AnimatePresence>
@@ -62,17 +62,11 @@ export function Visualizer({ isOpen, onClose, activeNotes, isPlaying }: Visualiz
           exit={{ opacity: 0 }}
           transition={{ duration: 0.5 }}
           onClick={onClose}
-          className="absolute inset-0 z-50 cursor-pointer bg-black"
+          className="absolute inset-0 z-50 cursor-pointer bg-black overflow-hidden"
         >
-          <svg width="100%" height="100%">
-            <defs>
-              <filter id="visualizer-goo">
-                <feGaussianBlur in="SourceGraphic" stdDeviation="10" result="blur" />
-                <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -7" result="goo" />
-                <feBlend in="SourceGraphic" in2="goo" />
-              </filter>
-            </defs>
-            <g filter="url(#visualizer-goo)">
+          {isPlaying && <BackgroundAnimation />}
+          <svg width="100%" height="100%" className="absolute inset-0 z-10">
+            <g>
               <AnimatePresence>
                 {isPlaying && activeNotes.map((note) => (
                   <motion.circle
