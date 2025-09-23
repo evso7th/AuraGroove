@@ -3,8 +3,9 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings, BassInstrument, InstrumentPart, MelodyInstrument, AccompanimentInstrument, BassTechnique, TextureSettings, TimerSettings, EQPreset } from '@/types/music';
+import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings, BassInstrument, InstrumentPart, MelodyInstrument, AccompanimentInstrument, BassTechnique, TextureSettings, TimerSettings, EQPreset, UIPreset } from '@/types/music';
 import { useAudioEngine } from "@/contexts/audio-engine-context";
+import { useToast } from "./use-toast";
 
 const FADE_OUT_DURATION = 120; // 2 minutes
 
@@ -12,6 +13,8 @@ const EQ_PRESETS: Record<EQPreset, number[]> = {
   'mobile': [0, 0, 0, 0, 0, 0, 0],
   'acoustic': [-8.5, -6.0, -5.0, 0, 0, 0, 0],
 };
+
+const PRESETS_STORAGE_KEY = 'auraGroovePresets-v2';
 
 
 /**
@@ -25,7 +28,7 @@ export const useAuraGrooveLite = () => {
 
   const handleStart = useCallback(async () => {
     if (isInitialized) {
-      router.push('/aura-groove');
+      router.push('/aura-groove-legacy');
       return;
     }
     if (isInitializing) return;
@@ -33,7 +36,7 @@ export const useAuraGrooveLite = () => {
     setLoadingText('Initializing Audio Engine...');
     const success = await initialize();
     if (success) {
-      router.push('/aura-groove');
+      router.push('/aura-groove-legacy');
     } else {
       setLoadingText('Failed to initialize. Please try again.');
     }
@@ -78,6 +81,7 @@ export const useAuraGroove = () => {
   } = useAudioEngine();
   
   const router = useRouter();
+  const { toast } = useToast();
   
   const [drumSettings, setDrumSettings] = useState<DrumSettings>({ pattern: 'composer', volume: 0.5 });
   const [instrumentSettings, setInstrumentSettings] = useState<InstrumentSettings>({
@@ -102,6 +106,96 @@ export const useAuraGroove = () => {
     isActive: false
   });
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  const [presets, setPresets] = useState<UIPreset[]>([]);
+
+  // Load presets from localStorage on mount
+  useEffect(() => {
+    try {
+      const savedPresets = localStorage.getItem(PRESETS_STORAGE_KEY);
+      if (savedPresets) {
+        setPresets(JSON.parse(savedPresets));
+      }
+    } catch (error) {
+      console.error("Failed to load presets from localStorage", error);
+    }
+  }, []);
+
+  const savePresetsToLocalStorage = (newPresets: UIPreset[]) => {
+    try {
+      localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(newPresets));
+    } catch (error) {
+      console.error("Failed to save presets to localStorage", error);
+      toast({ variant: 'destructive', title: 'Error', description: 'Could not save presets.' });
+    }
+  };
+
+  const handleSavePreset = () => {
+    const presetName = window.prompt("Enter a name for your preset:");
+    if (presetName && presetName.trim() !== '') {
+      const newPreset: UIPreset = {
+        name: presetName.trim(),
+        score,
+        bpm,
+        density,
+        instrumentSettings,
+        drumSettings,
+        textureSettings,
+        eqSettings,
+      };
+      const newPresets = [...presets.filter(p => p.name !== newPreset.name), newPreset];
+      setPresets(newPresets);
+      savePresetsToLocalStorage(newPresets);
+      toast({ title: 'Preset Saved', description: `"${newPreset.name}" has been saved.` });
+    }
+  };
+
+  const handleLoadPreset = (presetName: string) => {
+    const preset = presets.find(p => p.name === presetName);
+    if (preset) {
+      // Create a full settings object from the preset
+      const fullSettings: WorkerSettings = {
+        bpm: preset.bpm,
+        score: preset.score,
+        instrumentSettings: preset.instrumentSettings,
+        drumSettings: { ...preset.drumSettings, enabled: preset.drumSettings.pattern !== 'none' },
+        textureSettings: {
+          sparkles: { enabled: preset.textureSettings.sparkles.enabled },
+          pads: { enabled: preset.textureSettings.pads.enabled },
+        },
+        density: preset.density,
+      };
+      
+      // Update UI state first
+      setScore(preset.score);
+      setBpm(preset.bpm);
+      setDensity(preset.density);
+      setInstrumentSettings(preset.instrumentSettings);
+      setDrumSettings(preset.drumSettings);
+      setTextureSettings(preset.textureSettings);
+      setEqSettings(preset.eqSettings);
+      
+      // Then apply all settings to the audio engine at once
+      updateSettings(fullSettings);
+      
+      Object.entries(preset.instrumentSettings).forEach(([part, settings]) => {
+        setVolume(part as InstrumentPart, settings.volume);
+        setInstrument(part as keyof InstrumentSettings, settings.name as any);
+        if (part === 'bass') {
+          setBassTechnique(settings.technique);
+        }
+      });
+      setVolume('drums', preset.drumSettings.volume);
+      handleTextureEnabledChange('sparkles', preset.textureSettings.sparkles.enabled);
+      handleTextureEnabledChange('pads', preset.textureSettings.pads.enabled);
+      setVolume('sparkles', preset.textureSettings.sparkles.volume);
+      setVolume('pads', preset.textureSettings.pads.volume);
+      
+      preset.eqSettings.forEach((gain, index) => setEQGain(index, gain));
+
+      toast({ title: 'Preset Loaded', description: `"${presetName}" has been loaded.` });
+    }
+  };
 
 
   const getFullSettings = useCallback((): WorkerSettings => {
@@ -135,6 +229,7 @@ export const useAuraGroove = () => {
         
         setBassTechnique(instrumentSettings.bass.technique);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isInitialized]);
 
   // Sync settings with engine whenever they change
@@ -296,5 +391,8 @@ export const useAuraGroove = () => {
     timerSettings,
     handleTimerDurationChange,
     handleToggleTimer,
+    presets,
+    handleSavePreset,
+    handleLoadPreset,
   };
 };

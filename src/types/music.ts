@@ -94,4 +94,14 @@ export type WorkerSettings = {
     density: number; // Controls musical density, 0 to 1
 };
 
+export type UIPreset = {
+  name: string;
+  score: ScoreName;
+  bpm: number;
+  density: number;
+  instrumentSettings: InstrumentSettings;
+  drumSettings: DrumSettings;
+  textureSettings: TextureSettings;
+  eqSettings: number[];
+};
 

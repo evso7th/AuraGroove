@@ -1,7 +1,7 @@
 
 "use client";
 
-import { Loader2, Music, Pause, Speaker, FileMusic, Drum, SlidersHorizontal, Waves, GitBranch, Atom, Piano, Home, X, Sparkles, Sprout, LayoutGrid, Timer } from "lucide-react";
+import { Loader2, Music, Pause, Speaker, FileMusic, Drum, SlidersHorizontal, Waves, GitBranch, Atom, Piano, Home, X, Sparkles, Sprout, LayoutGrid, Timer, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -9,11 +9,12 @@ import { Label } from "@/components/ui/label";
 import Image from 'next/image';
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import type { DrumSettings, InstrumentSettings, ScoreName, BassInstrument, InstrumentPart, MelodyInstrument, AccompanimentInstrument, BassTechnique, TextureSettings, TimerSettings, EQPreset } from '@/types/music';
+import type { DrumSettings, InstrumentSettings, ScoreName, BassInstrument, InstrumentPart, MelodyInstrument, AccompanimentInstrument, BassTechnique, TextureSettings, TimerSettings, EQPreset, UIPreset } from '@/types/music';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useRouter } from "next/navigation";
 import { BASS_PRESETS } from "@/lib/bass-presets";
 import { getPresetParams } from "@/lib/presets";
+import { Separator } from "./ui/separator";
 
 
 // This is now a "dumb" UI component controlled by the useAuraGroove hook.
@@ -46,6 +47,9 @@ export type AuraGrooveProps = {
   timerSettings: TimerSettings;
   handleTimerDurationChange: (minutes: number) => void;
   handleToggleTimer: () => void;
+  presets: UIPreset[];
+  handleSavePreset: () => void;
+  handleLoadPreset: (name: string) => void;
 };
 
 const EQ_BANDS = [
@@ -87,6 +91,9 @@ export function AuraGroove({
   timerSettings,
   handleTimerDurationChange,
   handleToggleTimer,
+  presets,
+  handleSavePreset,
+  handleLoadPreset,
 }: AuraGrooveProps) {
 
   const router = useRouter();
@@ -168,9 +175,20 @@ export function AuraGroove({
                     </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                        <DialogTitle>System Equalizer</DialogTitle>
-                    </DialogHeader>
+                  <DialogHeader className="flex-row justify-between items-center">
+                    <DialogTitle>System Equalizer</DialogTitle>
+                     <div className="w-[150px] mr-8">
+                        <Select onValueChange={(value) => handleEqPresetChange(value as any)}>
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue placeholder="Select a preset" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="mobile" className="text-xs">Mobile Phones</SelectItem>
+                            <SelectItem value="acoustic" className="text-xs">Acoustic System</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                  </DialogHeader>
                     <div className="flex justify-around items-end pt-4 h-48">
                         {EQ_BANDS.map((band, index) => (
                             <div key={index} className="flex flex-col items-center justify-end space-y-2">
@@ -425,7 +443,7 @@ export function AuraGroove({
             </p>
         )}
       </CardContent>
-      <CardFooter className="flex-col gap-4">
+      <CardFooter className="flex flex-col gap-4 pt-4">
         <div className="flex gap-2 w-full">
           <Button
             type="button"
@@ -440,6 +458,25 @@ export function AuraGroove({
             )}
             {isPlaying ? "Stop" : "Play"}
           </Button>
+        </div>
+        <Separator className="my-2" />
+        <div className="w-full space-y-2">
+          <h4 className="text-sm font-medium text-center text-muted-foreground">Global Presets</h4>
+          <div className="flex gap-2 w-full">
+            <Select onValueChange={handleLoadPreset} disabled={presets.length === 0}>
+              <SelectTrigger className="flex-grow">
+                <SelectValue placeholder="Load a preset..." />
+              </SelectTrigger>
+              <SelectContent>
+                {presets.map(p => (
+                  <SelectItem key={p.name} value={p.name}>{p.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button variant="outline" onClick={handleSavePreset}>
+              <Save className="mr-2 h-4 w-4" /> Save Current
+            </Button>
+          </div>
         </div>
       </CardFooter>
     </Card>
