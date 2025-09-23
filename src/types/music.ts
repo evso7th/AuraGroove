@@ -108,7 +108,7 @@ export type UIPreset = {
 export type AuraGrooveProps = {
     isPlaying: boolean;
     isInitializing: boolean;
-    loadingText: string;
+    handleTogglePlay: () => void;
     drumSettings: DrumSettings;
     setDrumSettings: (settings: React.SetStateAction<DrumSettings>) => void;
     instrumentSettings: InstrumentSettings;
@@ -121,7 +121,6 @@ export type AuraGrooveProps = {
     handleBpmChange: (value: number) => void;
     score: ScoreName;
     handleScoreChange: (value: ScoreName) => void;
-    handleTogglePlay: () => void;
     density: number;
     setDensity: (value: number) => void;
     handleGoHome: () => void;

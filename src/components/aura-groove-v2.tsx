@@ -12,7 +12,7 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import type { AuraGrooveProps } from "./aura-groove";
+import type { AuraGrooveProps } from "@/types/music";
 import { useRouter } from "next/navigation";
 import { formatTime } from "@/lib/utils";
 import { Separator } from "./ui/separator";

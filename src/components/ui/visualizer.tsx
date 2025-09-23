@@ -106,13 +106,13 @@ export function Visualizer({ isOpen, onClose, colors, isPlaying }: VisualizerPro
                 <stop offset="50%" stopColor={colors[1] || 'hsl(var(--accent))'} />
                 <stop offset="100%" stopColor={colors[2] || 'hsl(var(--background))'} />
               </radialGradient>
-            </defs>
-            <path d={pathData} fill="url(#visualizerGradient)" filter="url(#gooey)" />
-             <filter id="gooey">
+               <filter id="gooey">
                 <feGaussianBlur in="SourceGraphic" stdDeviation="15" result="blur" />
                 <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 25 -10" result="goo" />
                 <feBlend in="SourceGraphic" in2="goo" />
-            </filter>
+              </filter>
+            </defs>
+            <path d={pathData} fill="url(#visualizerGradient)" filter="url(#gooey)" />
           </svg>
         </motion.div>
       )}

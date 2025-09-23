@@ -1,18 +1,7 @@
 
 "use client";
 
-import { Loader2, Music, Pause, Speaker, FileMusic, Drum, SlidersHorizontal, Waves, GitBranch, Atom, Piano, Home, X, Sparkles, Sprout, LayoutGrid, Timer, Save, Wand2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
-import Image from 'next/image';
-import { Slider } from "@/components/ui/slider";
-import { Switch } from "@/components/ui/switch";
 import type { DrumSettings, InstrumentSettings, ScoreName, BassInstrument, InstrumentPart, MelodyInstrument, AccompanimentInstrument, BassTechnique, TextureSettings, TimerSettings, EQPreset, UIPreset } from '@/types/music';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { useRouter } from "next/navigation";
-import { BASS_PRESETS } from "@/lib/bass-presets";
 
 // This is the V1 component, now considered legacy and will be deleted.
 // The new component is aura-groove-v2.tsx
@@ -21,7 +10,7 @@ import { BASS_PRESETS } from "@/lib/bass-presets";
 export type AuraGrooveProps = {
   isPlaying: boolean;
   isInitializing: boolean;
-  loadingText: string;
+  handleTogglePlay: () => void;
   drumSettings: DrumSettings;
   setDrumSettings: (settings: React.SetStateAction<DrumSettings>) => void;
   instrumentSettings: InstrumentSettings;
@@ -34,7 +23,6 @@ export type AuraGrooveProps = {
   handleBpmChange: (value: number) => void;
   score: ScoreName;
   handleScoreChange: (value: ScoreName) => void;
-  handleTogglePlay: () => void;
   density: number;
   setDensity: (value: number) => void;
   handleGoHome: () => void;
