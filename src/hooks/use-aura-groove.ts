@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings, BassInstrument, InstrumentPart, MelodyInstrument, AccompanimentInstrument, BassTechnique, TextureSettings, TimerSettings, EQPreset, UIPreset } from '@/types/music';
+import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings, BassInstrument, InstrumentPart, MelodyInstrument, AccompanimentInstrument, BassTechnique, TextureSettings, TimerSettings, EQPreset, UIPreset, Note } from '@/types/music';
 import { useAudioEngine } from "@/contexts/audio-engine-context";
 import { useToast } from "./use-toast";
 
@@ -86,6 +86,7 @@ export const useAuraGroove = () => {
     isInitialized,
     isInitializing,
     isPlaying, 
+    activeNotes,
     initialize, 
     setIsPlaying: setEngineIsPlaying, 
     updateSettings, 
@@ -436,6 +437,7 @@ export const useAuraGroove = () => {
   return {
     isInitializing,
     isPlaying,
+    activeNotes,
     loadingText: isInitializing ? 'Initializing...' : (isInitialized ? 'Ready' : 'Click to initialize audio'),
     handleTogglePlay,
     drumSettings,

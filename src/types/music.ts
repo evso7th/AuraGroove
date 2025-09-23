@@ -105,9 +105,12 @@ export type UIPreset = {
   eqSettings: number[];
 };
 
+export type ActiveNote = Note & { part: InstrumentPart };
+
 export type AuraGrooveProps = {
     isPlaying: boolean;
     isInitializing: boolean;
+    activeNotes: ActiveNote[];
     handleTogglePlay: () => void;
     drumSettings: DrumSettings;
     setDrumSettings: (settings: React.SetStateAction<DrumSettings>) => void;

@@ -14,7 +14,7 @@ export default function AuraGrooveUIPage() {
         <Visualizer 
           isOpen={auraGrooveProps.isVisualizerOpen}
           onClose={() => auraGrooveProps.setIsVisualizerOpen(false)}
-          colors={auraGrooveProps.visualizerColors}
+          activeNotes={auraGrooveProps.activeNotes}
           isPlaying={auraGrooveProps.isPlaying}
         />
         <AuraGrooveV2 {...auraGrooveProps} />

@@ -3,7 +3,7 @@
 
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import type { WorkerSettings, Score, InstrumentPart, BassInstrument, MelodyInstrument, AccompanimentInstrument, BassTechnique, TextureSettings, ScoreName } from '@/types/music';
+import type { WorkerSettings, Score, InstrumentPart, BassInstrument, MelodyInstrument, AccompanimentInstrument, BassTechnique, TextureSettings, ScoreName, Note } from '@/types/music';
 import { DrumMachine } from '@/lib/drum-machine';
 import { AccompanimentSynthManager } from '@/lib/accompaniment-synth-manager';
 import { BassSynthManager } from '@/lib/bass-synth-manager';
@@ -23,8 +23,8 @@ type WorkerMessage = {
 };
 
 // --- Constants ---
-const VOICE_BALANCE = {
-  bass: 1.0, melody: 0.5, accompaniment: 0.6, drums: 0.8,
+const VOICE_BALANCE: Record<InstrumentPart, number> = {
+  bass: 1.0, melody: 0.7, accompaniment: 0.6, drums: 0.8,
   effects: 0.6, sparkles: 0.35, pads: 0.9,
 };
 
@@ -32,11 +32,14 @@ const EQ_FREQUENCIES = [60, 125, 250, 500, 1000, 2000, 4000];
 
 const isMobile = () => typeof window !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
+type ActiveNote = Note & { part: InstrumentPart };
+
 // --- React Context ---
 interface AudioEngineContextType {
   isInitialized: boolean;
   isInitializing: boolean;
   isPlaying: boolean;
+  activeNotes: ActiveNote[];
   initialize: () => Promise<boolean>;
   setIsPlaying: (playing: boolean) => void;
   updateSettings: (settings: Partial<WorkerSettings>) => void;
@@ -64,6 +67,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   const [isInitialized, setIsInitialized] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [activeNotes, setActiveNotes] = useState<ActiveNote[]>([]);
   
   const workerRef = useRef<Worker | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -83,27 +87,37 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   });
 
   const eqNodesRef = useRef<BiquadFilterNode[]>([]);
+  const activeNoteTimeouts = useRef(new Map<string, NodeJS.Timeout>());
   
   const { toast } = useToast();
+
+  const addActiveNote = useCallback((note: Note, part: InstrumentPart) => {
+    const uniqueId = `${part}-${note.midi}-${note.time}`;
+    const fullNote = { ...note, part };
+    setActiveNotes(prev => [...prev, fullNote]);
+
+    const timeoutId = setTimeout(() => {
+      setActiveNotes(prev => prev.filter(n => `${n.part}-${n.midi}-${n.time}` !== uniqueId));
+      activeNoteTimeouts.current.delete(uniqueId);
+    }, note.duration * 1000);
+    activeNoteTimeouts.current.set(uniqueId, timeoutId);
+  }, []);
   
   const scheduleScore = useCallback((score: Score, audioContext: AudioContext) => {
-    console.log(`[AudioEngine] Received score. Bass: ${score.bass?.length || 0}, Melody: ${score.melody?.length || 0}, Accomp: ${score.accompaniment?.length || 0}, Drums: ${score.drums?.length || 0}`);
-    console.time('scheduleScore');
-
     const now = audioContext.currentTime;
     const currentSettings = settingsRef.current;
     
-    const bassScore = score.bass || [];
-    if (bassScore.length > 0 && bassManagerRef.current && currentSettings?.instrumentSettings.bass.name !== 'none') {
-        bassManagerRef.current.schedule(bassScore, now);
+    score.bass?.forEach(note => addActiveNote(note, 'bass'));
+    if (score.bass && bassManagerRef.current && currentSettings?.instrumentSettings.bass.name !== 'none') {
+        bassManagerRef.current.schedule(score.bass, now);
     }
     
-    const melodyScore = score.melody || [];
-    if (melodyScore.length > 0 && currentSettings) {
+    score.melody?.forEach(note => addActiveNote(note, 'melody'));
+    if (score.melody && currentSettings) {
         const instrumentName = currentSettings.instrumentSettings.melody.name;
         const gainNode = gainNodesRef.current.melody;
         if (instrumentName !== 'none' && gainNode) {
-            melodyScore.forEach(note => {
+            score.melody.forEach(note => {
                 const voice = synthPoolRef.current[nextVoiceRef.current++ % synthPoolRef.current.length];
                 if (voice) {
                     const params = getPresetParams(instrumentName, note);
@@ -120,17 +134,15 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         }
     }
     
-    const accompanimentScore = score.accompaniment || [];
-    if (accompanimentScore.length > 0 && accompanimentManagerRef.current && currentSettings?.instrumentSettings.accompaniment.name !== 'none') {
-        accompanimentManagerRef.current.schedule(accompanimentScore, now);
+    score.accompaniment?.forEach(note => addActiveNote(note, 'accompaniment'));
+    if (score.accompaniment && accompanimentManagerRef.current && currentSettings?.instrumentSettings.accompaniment.name !== 'none') {
+        accompanimentManagerRef.current.schedule(score.accompaniment, now);
     }
 
-    const drumScore = score.drums || [];
-    if (drumScore.length > 0 && drumMachineRef.current && currentSettings?.drumSettings.enabled) {
-        drumMachineRef.current.schedule(drumScore, now);
+    if (score.drums && drumMachineRef.current && currentSettings?.drumSettings.enabled) {
+        drumMachineRef.current.schedule(score.drums, now);
     }
-    console.timeEnd('scheduleScore');
-  }, []);
+  }, [addActiveNote]);
 
   const initialize = useCallback(async () => {
     if (isInitialized || isInitializing) return true;
@@ -235,6 +247,9 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
     accompanimentManagerRef.current?.allNotesOff();
     bassManagerRef.current?.allNotesOff();
     padPlayerRef.current?.stop();
+    activeNoteTimeouts.current.forEach(clearTimeout);
+    activeNoteTimeouts.current.clear();
+    setActiveNotes([]);
   }, []);
   
   const setIsPlayingCallback = useCallback((playing: boolean) => {
@@ -261,7 +276,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
   const setVolumeCallback = useCallback((part: InstrumentPart, volume: number) => {
     const gainNode = gainNodesRef.current[part];
     if (gainNode) {
-        const balancedVolume = volume * (VOICE_BALANCE[part as keyof typeof VOICE_BALANCE] ?? 1);
+        const balancedVolume = volume * (VOICE_BALANCE[part] ?? 1);
         gainNode.gain.setTargetAtTime(balancedVolume, audioContextRef.current?.currentTime ?? 0, 0.01);
     }
   }, []);
@@ -314,7 +329,7 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
 
   return (
     <AudioEngineContext.Provider value={{
-        isInitialized, isInitializing, isPlaying, initialize,
+        isInitialized, isInitializing, isPlaying, activeNotes, initialize,
         setIsPlaying: setIsPlayingCallback, updateSettings: updateSettingsCallback,
         setVolume: setVolumeCallback, setInstrument: setInstrumentCallback,
         setBassTechnique: setBassTechniqueCallback, setTextureSettings: setTextureSettingsCallback,

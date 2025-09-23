@@ -1,90 +1,50 @@
 
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
+import type { Note, InstrumentPart } from '@/types/music';
 
 interface VisualizerProps {
   isOpen: boolean;
   onClose: () => void;
-  colors: string[];
+  activeNotes: (Note & { part: InstrumentPart })[];
   isPlaying: boolean;
 }
 
-export function Visualizer({ isOpen, onClose, colors, isPlaying }: VisualizerProps) {
-  const isMobile = useIsMobile();
-  const svgRef = useRef<SVGSVGElement>(null);
-  const requestRef = useRef<number>();
-  const lastTimeRef = useRef<number>(0);
-  const phaseRef = useRef({ x: 0, y: 0, z: 0 });
+const PART_X_POSITION: Record<InstrumentPart, number> = {
+    bass: 20,
+    accompaniment: 50,
+    melody: 80,
+    drums: 50,
+    effects: 50,
+    sparkles: 50,
+    pads: 50,
+};
 
-  const [pathData, setPathData] = useState('');
+// Maps a MIDI note (21-108) to a hue value (approx. violet to yellow)
+function midiToHue(midi: number): number {
+    const minMidi = 21; // A0
+    const maxMidi = 108; // C8
+    const minHue = 270; // Violet
+    const maxHue = 60; // Yellow
 
-  const animate = (time: number) => {
-    if (lastTimeRef.current === 0) {
-      lastTimeRef.current = time;
-    }
-    const deltaTime = (time - lastTimeRef.current) * 0.001;
-    lastTimeRef.current = time;
+    if (midi <= minMidi) return minHue;
+    if (midi >= maxMidi) return maxHue;
+
+    const ratio = (midi - minMidi) / (maxMidi - minMidi);
     
-    if (isPlaying) {
-        phaseRef.current.x += deltaTime * 0.2;
-        phaseRef.current.y += deltaTime * 0.3;
-        phaseRef.current.z += deltaTime * 0.15;
+    // Hue wheel is circular, so we need to handle the wrap-around from 360 to 0
+    if (minHue > maxHue) {
+        return (minHue + ratio * (360 - minHue + maxHue)) % 360;
+    } else {
+        return minHue + ratio * (maxHue - minHue);
     }
+}
 
 
-    const svg = svgRef.current;
-    if (!svg) return;
-
-    const width = svg.clientWidth;
-    const height = svg.clientHeight;
-    const cx = width / 2;
-    const cy = height / 2;
-    const radiusX = width * 0.4;
-    const radiusY = height * 0.4;
-
-    const points = [];
-    const segments = 120;
-
-    for (let i = 0; i <= segments; i++) {
-      const angle = (i / segments) * Math.PI * 2;
-      
-      const p1 = Math.sin(phaseRef.current.x + angle * 3);
-      const p2 = Math.cos(phaseRef.current.y + angle * 5);
-      const p3 = Math.sin(phaseRef.current.z + angle * 2);
-
-      const offsetX = p1 * radiusX * 0.1;
-      const offsetY = p2 * radiusY * 0.1;
-      
-      const r = Math.min(radiusX, radiusY) * (0.8 + p3 * 0.2);
-
-      const x = cx + Math.cos(angle) * r + offsetX;
-      const y = cy + Math.sin(angle) * r + offsetY;
-      
-      points.push(`${i === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`);
-    }
-
-    setPathData(points.join(' ') + ' Z');
-
-    requestRef.current = requestAnimationFrame(animate);
-  };
-
-  useEffect(() => {
-    if (isOpen) {
-      lastTimeRef.current = 0;
-      requestRef.current = requestAnimationFrame(animate);
-    }
-    return () => {
-      if (requestRef.current) {
-        cancelAnimationFrame(requestRef.current);
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, isPlaying]);
-
+export function Visualizer({ isOpen, onClose, activeNotes, isPlaying }: VisualizerProps) {
   return (
     <AnimatePresence>
       {isOpen && (
@@ -94,25 +54,40 @@ export function Visualizer({ isOpen, onClose, colors, isPlaying }: VisualizerPro
           exit={{ opacity: 0 }}
           transition={{ duration: 0.5 }}
           onClick={onClose}
-          className={cn(
-            "z-50 cursor-pointer bg-background",
-            isMobile ? "fixed inset-0" : "absolute inset-0"
-          )}
+          className="absolute inset-0 z-50 cursor-pointer bg-black"
         >
-          <svg ref={svgRef} width="100%" height="100%">
+          <svg width="100%" height="100%">
             <defs>
-              <radialGradient id="visualizerGradient" cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor={colors[0] || 'hsl(var(--primary))'} />
-                <stop offset="50%" stopColor={colors[1] || 'hsl(var(--accent))'} />
-                <stop offset="100%" stopColor={colors[2] || 'hsl(var(--background))'} />
-              </radialGradient>
-               <filter id="gooey">
-                <feGaussianBlur in="SourceGraphic" stdDeviation="15" result="blur" />
-                <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 25 -10" result="goo" />
+              <filter id="visualizer-goo">
+                <feGaussianBlur in="SourceGraphic" stdDeviation="10" result="blur" />
+                <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -7" result="goo" />
                 <feBlend in="SourceGraphic" in2="goo" />
               </filter>
             </defs>
-            <path d={pathData} fill="url(#visualizerGradient)" filter="url(#gooey)" />
+            <g filter="url(#visualizer-goo)">
+              <AnimatePresence>
+                {isPlaying && activeNotes.map((note) => (
+                  <motion.circle
+                    key={`${note.part}-${note.midi}-${note.time}`}
+                    cx={`${PART_X_POSITION[note.part]}%`}
+                    cy={`${100 - ((note.midi - 20) / 88) * 100}%`}
+                    r={note.velocity ? 5 + note.velocity * 25 : 15}
+                    fill={`hsl(${midiToHue(note.midi)}, 100%, 70%)`}
+                    initial={{ opacity: 0, scale: 0.5 }}
+                    animate={{ 
+                      opacity: [0.5, 1, 0.5], 
+                      scale: 1,
+                      transition: { duration: note.duration, ease: "easeInOut" } 
+                    }}
+                    exit={{ 
+                      opacity: 0, 
+                      scale: 0,
+                      transition: { duration: 0.5 }
+                    }}
+                  />
+                ))}
+              </AnimatePresence>
+            </g>
           </svg>
         </motion.div>
       )}
