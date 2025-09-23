@@ -128,6 +128,9 @@ export const useAuraGroove = () => {
 
   const [presets, setPresets] = useState<UIPreset[]>([OMEGA_SAMPLE_PRESET]);
 
+  const [isVisualizerOpen, setIsVisualizerOpen] = useState(false);
+  const [visualizerColors, setVisualizerColors] = useState<string[]>(['hsl(var(--primary))', 'hsl(var(--accent))', 'hsl(var(--background))']);
+
   // Load user presets from localStorage on mount
   useEffect(() => {
     try {
@@ -142,6 +145,38 @@ export const useAuraGroove = () => {
       console.error("Failed to load presets from localStorage", error);
     }
   }, []);
+
+  // Update visualizer colors
+  useEffect(() => {
+    // This function will derive colors from score and density
+    const getColors = () => {
+        let hue1 = 270; // primary
+        let hue2 = 215; // accent
+        let bgLightness = 7;
+
+        switch(score) {
+            case 'dreamtales': hue1=270; hue2=215; break;
+            case 'evolve': hue1=150; hue2=200; break;
+            case 'omega': hue1=340; hue2=280; break;
+            case 'journey': hue1=25; hue2=180; break;
+            case 'multeity': hue1=210; hue2=30; break;
+            case 'slow_blues': hue1=220; hue2=25; break;
+            case 'celtic_ballad': hue1=100; hue2=160; break;
+        }
+
+        const saturation = 50 + (density * 30);
+        const lightness1 = 50 + (density * 15);
+        const lightness2 = 60 - (density * 20);
+        bgLightness = Math.max(3, 7 - (density * 4));
+
+        setVisualizerColors([
+            `hsl(${hue1}, ${saturation}%, ${lightness1}%)`,
+            `hsl(${hue2}, ${saturation}%, ${lightness2}%)`,
+            `hsl(0, 0%, ${bgLightness}%)`,
+        ]);
+    };
+    getColors();
+  }, [score, density]);
 
   const savePresetsToLocalStorage = (newPresets: UIPreset[]) => {
     try {
@@ -432,5 +467,8 @@ export const useAuraGroove = () => {
     handleLoadPreset,
     isPresetModalOpen,
     setIsPresetModalOpen,
+    isVisualizerOpen,
+    setIsVisualizerOpen,
+    visualizerColors
   };
 };

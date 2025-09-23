@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { SlidersHorizontal, Music, Pause, Speaker, FileMusic, Drum, GitBranch, Atom, Piano, Home, X, Sparkles, Sprout, LayoutGrid, LayoutList, Waves, Timer, Save } from "lucide-react";
+import { SlidersHorizontal, Music, Pause, Speaker, FileMusic, Drum, GitBranch, Atom, Piano, Home, X, Sparkles, Sprout, LayoutGrid, LayoutList, Waves, Timer, Save, Wand2 } from "lucide-react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,6 +30,7 @@ export function AuraGrooveV2({
   isEqModalOpen, setIsEqModalOpen, eqSettings, handleEqChange, handleEqPresetChange,
   timerSettings, handleTimerDurationChange, handleToggleTimer,
   isPresetModalOpen, setIsPresetModalOpen, presets, handleSavePreset, handleLoadPreset, handleExit,
+  isVisualizerOpen, setIsVisualizerOpen
 }: AuraGrooveProps) {
 
   const [isClient, setIsClient] = useState(false);
@@ -40,7 +41,7 @@ export function AuraGrooveV2({
 
   
   return (
-    <div className="w-full h-full flex flex-col p-3 bg-card">
+    <div className={`w-full h-full flex flex-col p-3 bg-card transition-opacity duration-500 ${isVisualizerOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
       {/* Header */}
       <header className="flex-shrink-0 pb-2">
         <div className="flex items-center justify-between">
@@ -258,6 +259,10 @@ export function AuraGrooveV2({
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
+
+              <Button variant="ghost" size="icon" onClick={() => setIsVisualizerOpen(true)} aria-label="Open Visualizer">
+                <Wand2 className="h-5 w-5" />
+              </Button>
 
               <Dialog open={isEqModalOpen} onOpenChange={setIsEqModalOpen}>
                 <DialogTrigger asChild>
