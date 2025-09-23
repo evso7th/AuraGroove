@@ -50,6 +50,8 @@ export type AuraGrooveProps = {
   presets: UIPreset[];
   handleSavePreset: () => void;
   handleLoadPreset: (name: string) => void;
+  isPresetModalOpen: boolean;
+  setIsPresetModalOpen: (isOpen: boolean) => void;
 };
 
 const EQ_BANDS = [
@@ -444,40 +446,19 @@ export function AuraGroove({
         )}
       </CardContent>
       <CardFooter className="flex flex-col gap-4 pt-4">
-        <div className="flex gap-2 w-full">
-          <Button
-            type="button"
-            onClick={handleTogglePlay}
-            disabled={isInitializing}
-            className="w-full text-lg py-6"
-          >
-            {isPlaying ? (
-              <Pause className="mr-2 h-6 w-6" />
-            ) : (
-              <Music className="mr-2 h-6 w-6" />
-            )}
-            {isPlaying ? "Stop" : "Play"}
-          </Button>
-        </div>
-        <Separator className="my-2" />
-        <div className="w-full space-y-2">
-          <h4 className="text-sm font-medium text-center text-muted-foreground">Global Presets</h4>
-          <div className="flex gap-2 w-full">
-            <Select onValueChange={handleLoadPreset} disabled={presets.length === 0}>
-              <SelectTrigger className="flex-grow">
-                <SelectValue placeholder="Load a preset..." />
-              </SelectTrigger>
-              <SelectContent>
-                {presets.map(p => (
-                  <SelectItem key={p.name} value={p.name}>{p.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button variant="outline" onClick={handleSavePreset}>
-              <Save className="mr-2 h-4 w-4" /> Save Current
-            </Button>
-          </div>
-        </div>
+        <Button
+          type="button"
+          onClick={handleTogglePlay}
+          disabled={isInitializing}
+          className="w-full text-lg py-6"
+        >
+          {isPlaying ? (
+            <Pause className="mr-2 h-6 w-6" />
+          ) : (
+            <Music className="mr-2 h-6 w-6" />
+          )}
+          {isPlaying ? "Stop" : "Play"}
+        </Button>
       </CardFooter>
     </Card>
   );

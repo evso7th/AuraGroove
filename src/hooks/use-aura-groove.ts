@@ -28,7 +28,7 @@ export const useAuraGrooveLite = () => {
 
   const handleStart = useCallback(async () => {
     if (isInitialized) {
-      router.push('/aura-groove-legacy');
+      router.push('/aura-groove');
       return;
     }
     if (isInitializing) return;
@@ -36,7 +36,7 @@ export const useAuraGrooveLite = () => {
     setLoadingText('Initializing Audio Engine...');
     const success = await initialize();
     if (success) {
-      router.push('/aura-groove-legacy');
+      router.push('/aura-groove');
     } else {
       setLoadingText('Failed to initialize. Please try again.');
     }
@@ -98,6 +98,7 @@ export const useAuraGroove = () => {
   const [density, setDensity] = useState(0.5);
 
   const [isEqModalOpen, setIsEqModalOpen] = useState(false);
+  const [isPresetModalOpen, setIsPresetModalOpen] = useState(false);
   const [eqSettings, setEqSettings] = useState<number[]>(Array(7).fill(0));
   
   const [timerSettings, setTimerSettings] = useState<TimerSettings>({
@@ -194,6 +195,7 @@ export const useAuraGroove = () => {
       preset.eqSettings.forEach((gain, index) => setEQGain(index, gain));
 
       toast({ title: 'Preset Loaded', description: `"${presetName}" has been loaded.` });
+      setIsPresetModalOpen(false); // Close modal after loading
     }
   };
 
@@ -394,5 +396,7 @@ export const useAuraGroove = () => {
     presets,
     handleSavePreset,
     handleLoadPreset,
+    isPresetModalOpen,
+    setIsPresetModalOpen,
   };
 };

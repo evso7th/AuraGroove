@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { SlidersHorizontal, Music, Pause, Speaker, FileMusic, Drum, GitBranch, Atom, Piano, Home, X, Sparkles, Sprout, LayoutGrid, LayoutList, Waves, Timer } from "lucide-react";
+import { SlidersHorizontal, Music, Pause, Speaker, FileMusic, Drum, GitBranch, Atom, Piano, Home, X, Sparkles, Sprout, LayoutGrid, LayoutList, Waves, Timer, Save } from "lucide-react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,10 +11,12 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import type { AuraGrooveProps } from "./aura-groove";
 import { useRouter } from "next/navigation";
 import { formatTime } from "@/lib/utils";
+import { Separator } from "./ui/separator";
+
 
 const EQ_BANDS = [
   { freq: '60', label: '60' }, { freq: '125', label: '125' }, { freq: '250', label: '250' },
@@ -27,18 +29,15 @@ export function AuraGrooveV2({
   bpm, handleBpmChange, score, handleScoreChange, density, setDensity, handleGoHome,
   isEqModalOpen, setIsEqModalOpen, eqSettings, handleEqChange, handleEqPresetChange,
   timerSettings, handleTimerDurationChange, handleToggleTimer,
+  isPresetModalOpen, setIsPresetModalOpen, presets, handleSavePreset, handleLoadPreset, handleExit,
 }: AuraGrooveProps) {
 
-  const router = useRouter();
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
   }, []);
 
-  const handleBack = () => {
-    router.push('/aura-groove-legacy');
-  };
   
   return (
     <div className="w-full h-full flex flex-col p-3 bg-card">
@@ -51,8 +50,37 @@ export function AuraGrooveV2({
           </div>
           <div className="flex items-center gap-1">
             <Button variant="ghost" size="icon" onClick={handleGoHome} aria-label="Go to Home"><Home className="h-5 w-5" /></Button>
-            <Button variant="ghost" size="icon" onClick={handleBack} aria-label="Go back to original UI"><LayoutList className="h-5 w-5" /></Button>
             {isClient && (
+             <>
+               <Dialog open={isPresetModalOpen} onOpenChange={setIsPresetModalOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="icon" aria-label="Save or Load Presets"><Save className="h-5 w-5" /></Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Global Presets</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                     <p className="text-sm text-muted-foreground">Load a saved preset or save your current settings.</p>
+                      <Select onValueChange={handleLoadPreset} disabled={presets.length === 0}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Load a preset..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {presets.map(p => (
+                            <SelectItem key={p.name} value={p.name}>{p.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                  </div>
+                  <DialogFooter>
+                     <Button variant="outline" onClick={handleSavePreset} className="w-full">
+                        <Save className="mr-2 h-4 w-4" /> Save Current Settings
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
               <Dialog open={isEqModalOpen} onOpenChange={setIsEqModalOpen}>
                 <DialogTrigger asChild>
                   <Button variant="ghost" className="h-9 w-9 px-2" aria-label="Open Equalizer">EQ</Button>
@@ -83,6 +111,10 @@ export function AuraGrooveV2({
                   </div>
                 </DialogContent>
               </Dialog>
+              <Button variant="ghost" size="icon" onClick={handleExit} aria-label="Exit Application">
+                <X className="h-5 w-5" />
+              </Button>
+             </>
             )}
           </div>
         </div>
