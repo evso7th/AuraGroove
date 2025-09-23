@@ -16,6 +16,24 @@ const EQ_PRESETS: Record<EQPreset, number[]> = {
 
 const PRESETS_STORAGE_KEY = 'auraGroovePresets-v2';
 
+const OMEGA_SAMPLE_PRESET: UIPreset = {
+  name: "Omega Sample Preset",
+  score: "omega",
+  bpm: 75,
+  density: 0.5,
+  instrumentSettings: {
+    bass: { name: "hypnoticDrone", technique: "arpeggio", volume: 0.4 },
+    melody: { name: "mellotron", volume: 0.6 },
+    accompaniment: { name: "organ", volume: 0.5 },
+  },
+  drumSettings: { pattern: "composer", volume: 0.5 },
+  textureSettings: {
+    sparkles: { enabled: true, volume: 0.15 },
+    pads: { enabled: true, volume: 0.2 },
+  },
+  eqSettings: Array(7).fill(0),
+};
+
 
 /**
  * Облегченная версия хука для стартового экрана.
@@ -108,14 +126,17 @@ export const useAuraGroove = () => {
   });
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const [presets, setPresets] = useState<UIPreset[]>([]);
+  const [presets, setPresets] = useState<UIPreset[]>([OMEGA_SAMPLE_PRESET]);
 
-  // Load presets from localStorage on mount
+  // Load user presets from localStorage on mount
   useEffect(() => {
     try {
-      const savedPresets = localStorage.getItem(PRESETS_STORAGE_KEY);
-      if (savedPresets) {
-        setPresets(JSON.parse(savedPresets));
+      const savedPresetsJSON = localStorage.getItem(PRESETS_STORAGE_KEY);
+      if (savedPresetsJSON) {
+        const savedUserPresets = JSON.parse(savedPresetsJSON) as UIPreset[];
+        // Combine default preset with user presets, ensuring no duplicates by name
+        const userPresets = savedUserPresets.filter(p => p.name !== OMEGA_SAMPLE_PRESET.name);
+        setPresets([OMEGA_SAMPLE_PRESET, ...userPresets]);
       }
     } catch (error) {
       console.error("Failed to load presets from localStorage", error);
@@ -124,7 +145,9 @@ export const useAuraGroove = () => {
 
   const savePresetsToLocalStorage = (newPresets: UIPreset[]) => {
     try {
-      localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(newPresets));
+      // Don't save the default preset to localStorage
+      const userPresets = newPresets.filter(p => p.name !== OMEGA_SAMPLE_PRESET.name);
+      localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(userPresets));
     } catch (error) {
       console.error("Failed to save presets to localStorage", error);
       toast({ variant: 'destructive', title: 'Error', description: 'Could not save presets.' });
@@ -134,6 +157,11 @@ export const useAuraGroove = () => {
   const handleSavePreset = () => {
     const presetName = window.prompt("Enter a name for your preset:");
     if (presetName && presetName.trim() !== '') {
+      if (presetName.trim() === OMEGA_SAMPLE_PRESET.name) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Cannot overwrite the default sample preset.' });
+        return;
+      }
+
       const newPreset: UIPreset = {
         name: presetName.trim(),
         score,
@@ -144,7 +172,13 @@ export const useAuraGroove = () => {
         textureSettings,
         eqSettings,
       };
-      const newPresets = [...presets.filter(p => p.name !== newPreset.name), newPreset];
+      
+      const newPresets = [
+        OMEGA_SAMPLE_PRESET,
+        ...presets.filter(p => p.name !== newPreset.name && p.name !== OMEGA_SAMPLE_PRESET.name), 
+        newPreset
+      ];
+
       setPresets(newPresets);
       savePresetsToLocalStorage(newPresets);
       toast({ title: 'Preset Saved', description: `"${newPreset.name}" has been saved.` });
