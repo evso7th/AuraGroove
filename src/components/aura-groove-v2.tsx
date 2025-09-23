@@ -49,73 +49,9 @@ export function AuraGrooveV2({
             <h1 className="text-lg font-bold text-primary">AuraGroove</h1>
           </div>
           <div className="flex items-center gap-0">
-            <Button variant="ghost" size="icon" onClick={handleGoHome} aria-label="Go to Home"><Home className="h-5 w-5" /></Button>
-            {isClient && (
-             <>
-               <Dialog open={isPresetModalOpen} onOpenChange={setIsPresetModalOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="ghost" size="icon" aria-label="Save or Load Presets"><Save className="h-5 w-5" /></Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Global Presets</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                     <p className="text-sm text-muted-foreground">Load a saved preset or save your current settings.</p>
-                      <Select onValueChange={handleLoadPreset} disabled={presets.length === 0}>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Load a preset..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {presets.map(p => (
-                            <SelectItem key={p.name} value={p.name}>{p.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                  </div>
-                  <DialogFooter>
-                     <Button variant="outline" onClick={handleSavePreset} className="w-full">
-                        <Save className="mr-2 h-4 w-4" /> Save Current Settings
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-
-              <Dialog open={isEqModalOpen} onOpenChange={setIsEqModalOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="ghost" size="icon" aria-label="Open Equalizer">EQ</Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-md">
-                  <DialogHeader className="flex-row justify-between items-center">
-                    <DialogTitle>System Equalizer</DialogTitle>
-                     <div className="w-[150px] mr-8">
-                        <Select onValueChange={(value) => handleEqPresetChange(value as any)}>
-                          <SelectTrigger className="h-8 text-xs">
-                            <SelectValue placeholder="Select a preset" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="mobile" className="text-xs">Mobile Phones</SelectItem>
-                            <SelectItem value="acoustic" className="text-xs">Acoustic System</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                  </DialogHeader>
-                  <div className="flex justify-around items-end pt-4 h-48">
-                    {EQ_BANDS.map((band, index) => (
-                      <div key={index} className="flex flex-col items-center justify-end space-y-2">
-                        <span className="text-xs font-mono text-muted-foreground">{eqSettings[index] > 0 ? '+' : ''}{eqSettings[index].toFixed(1)}</span>
-                        <Slider value={[eqSettings[index]]} min={-10} max={10} step={0.5} onValueChange={(v) => handleEqChange(index, v[0])} orientation="vertical" className="h-32" />
-                        <Label className="text-xs text-muted-foreground">{band.label}</Label>
-                      </div>
-                    ))}
-                  </div>
-                </DialogContent>
-              </Dialog>
-              <Button variant="ghost" size="icon" onClick={handleExit} aria-label="Exit Application">
+             <Button variant="ghost" size="icon" onClick={handleExit} aria-label="Exit Application">
                 <X className="h-5 w-5" />
               </Button>
-             </>
-            )}
           </div>
         </div>
         <div className="flex flex-col items-center gap-1 pt-2 pb-1.5">
@@ -285,6 +221,78 @@ export function AuraGrooveV2({
 
         </Tabs>
       </main>
+
+       {/* Footer */}
+      <footer className="flex-shrink-0 pt-3 mt-auto">
+        <Separator className="mb-3" />
+        <div className="flex items-center justify-center gap-2">
+          {isClient && (
+            <>
+              <Button variant="ghost" size="icon" onClick={handleGoHome} aria-label="Go to Home"><Home className="h-5 w-5" /></Button>
+
+              <Dialog open={isPresetModalOpen} onOpenChange={setIsPresetModalOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="icon" aria-label="Save or Load Presets"><Save className="h-5 w-5" /></Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Global Presets</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground">Load a saved preset or save your current settings.</p>
+                    <Select onValueChange={handleLoadPreset} disabled={presets.length === 0}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Load a preset..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {presets.map(p => (
+                          <SelectItem key={p.name} value={p.name}>{p.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={handleSavePreset} className="w-full">
+                      <Save className="mr-2 h-4 w-4" /> Save Current Settings
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              <Dialog open={isEqModalOpen} onOpenChange={setIsEqModalOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="icon" aria-label="Open Equalizer">EQ</Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader className="flex-row justify-between items-center">
+                    <DialogTitle>System Equalizer</DialogTitle>
+                    <div className="w-[150px] mr-8">
+                      <Select onValueChange={(value) => handleEqPresetChange(value as any)}>
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue placeholder="Select a preset" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="mobile" className="text-xs">Mobile Phones</SelectItem>
+                          <SelectItem value="acoustic" className="text-xs">Acoustic System</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </DialogHeader>
+                  <div className="flex justify-around items-end pt-4 h-48">
+                    {EQ_BANDS.map((band, index) => (
+                      <div key={index} className="flex flex-col items-center justify-end space-y-2">
+                        <span className="text-xs font-mono text-muted-foreground">{eqSettings[index] > 0 ? '+' : ''}{eqSettings[index].toFixed(1)}</span>
+                        <Slider value={[eqSettings[index]]} min={-10} max={10} step={0.5} onValueChange={(v) => handleEqChange(index, v[0])} orientation="vertical" className="h-32" />
+                        <Label className="text-xs text-muted-foreground">{band.label}</Label>
+                      </div>
+                    ))}
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </>
+          )}
+        </div>
+      </footer>
     </div>
   );
 }
