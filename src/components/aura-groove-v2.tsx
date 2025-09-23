@@ -48,7 +48,7 @@ export function AuraGrooveV2({
             <Image src="/assets/icon8.jpeg" alt="AuraGroove Logo" width={32} height={32} className="rounded-full" />
             <h1 className="text-lg font-bold text-primary">AuraGroove</h1>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0">
             <Button variant="ghost" size="icon" onClick={handleGoHome} aria-label="Go to Home"><Home className="h-5 w-5" /></Button>
             {isClient && (
              <>
@@ -83,7 +83,7 @@ export function AuraGrooveV2({
 
               <Dialog open={isEqModalOpen} onOpenChange={setIsEqModalOpen}>
                 <DialogTrigger asChild>
-                  <Button variant="ghost" className="h-9 w-9 px-2" aria-label="Open Equalizer">EQ</Button>
+                  <Button variant="ghost" size="icon" aria-label="Open Equalizer">EQ</Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-md">
                   <DialogHeader className="flex-row justify-between items-center">
