@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { SlidersHorizontal, Music, Pause, Speaker, FileMusic, Drum, GitBranch, Atom, Piano, Home, X, Sparkles, Sprout, LayoutGrid, LayoutList, Waves, Timer, Save, Wand2 } from "lucide-react";
+import { SlidersHorizontal, Music, Pause, Speaker, FileMusic, Drum, GitBranch, Atom, Piano, Home, X, Sparkles, Sprout, LayoutGrid, LayoutList, Waves, Timer, Save, Wand2, HelpCircle } from "lucide-react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +16,7 @@ import type { AuraGrooveProps, ScoreName, BassInstrument, BassTechnique } from "
 import { formatTime } from "@/lib/utils";
 import { Separator } from "./ui/separator";
 import { LanguageSwitcher } from "./ui/language-switcher";
+import { UserGuide } from "@/components/user-guide";
 
 
 const EQ_BANDS = [
@@ -34,6 +35,7 @@ export function AuraGrooveV2({
 }: AuraGrooveProps) {
 
   const [isClient, setIsClient] = useState(false);
+  const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
   const d = dictionary.auraGroove;
 
   useEffect(() => {
@@ -291,6 +293,17 @@ export function AuraGrooveV2({
                       </div>
                     ))}
                   </div>
+                </DialogContent>
+              </Dialog>
+              <Dialog open={isHelpModalOpen} onOpenChange={setIsHelpModalOpen}>
+                <DialogTrigger asChild>
+                    <Button variant="ghost" size="icon" aria-label={d.footer.help}><HelpCircle className="h-5 w-5" /></Button>
+                </DialogTrigger>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>{d.helpModal.title}</DialogTitle>
+                    </DialogHeader>
+                    <UserGuide dictionary={dictionary}/>
                 </DialogContent>
               </Dialog>
             </>
