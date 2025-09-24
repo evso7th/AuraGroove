@@ -53,7 +53,12 @@ export function Visualizer({ isOpen, onClose, activeNotes, isPlaying }: Visualiz
         >
           {isPlaying && <BackgroundAnimation />}
           <svg width="100%" height="100%" className="absolute inset-0 z-10">
-            <g>
+            <defs>
+              <filter id="blur-effect">
+                <feGaussianBlur in="SourceGraphic" stdDeviation="5" />
+              </filter>
+            </defs>
+            <g filter="url(#blur-effect)">
               <AnimatePresence>
                 {isPlaying && activeNotes.map((note) => (
                   <motion.circle
