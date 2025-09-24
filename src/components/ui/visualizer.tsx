@@ -54,7 +54,7 @@ export function Visualizer({ isOpen, onClose, activeNotes, isPlaying }: Visualiz
           {isPlaying && <BackgroundAnimation />}
           <svg width="100%" height="100%" className="absolute inset-0 z-10">
             <defs>
-              <filter id="blur-effect">
+              <filter id="blur-effect" x="-50%" y="-50%" width="200%" height="200%">
                 <feGaussianBlur in="SourceGraphic" stdDeviation="5" />
               </filter>
             </defs>
@@ -64,7 +64,7 @@ export function Visualizer({ isOpen, onClose, activeNotes, isPlaying }: Visualiz
                   <motion.circle
                     key={`${note.part}-${note.midi}-${note.time}`}
                     cx={`${getDynamicXPosition()}%`}
-                    cy={`${100 - ((note.midi - 20) / 88) * 100}%`}
+                    cy={`${100 - ((note.midi - 28) / (88 - 28)) * 100}%`}
                     r={note.velocity ? 5 + note.velocity * 25 : 15}
                     fill={`hsl(${midiToHue(note.midi)}, 100%, 70%)`}
                     initial={{ opacity: 0, scale: 0.5 }}
