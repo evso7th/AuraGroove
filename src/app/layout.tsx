@@ -3,6 +3,7 @@ import type {Metadata} from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster"
 import { AudioEngineProvider } from '@/contexts/audio-engine-context';
+import { LanguageProvider } from '@/contexts/language-context';
 
 export const metadata: Metadata = {
   title: 'AuraGroove',
@@ -24,9 +25,11 @@ export default function RootLayout({
         <link rel="manifest" href="/manifest.json" />
       </head>
       <body className="font-body antialiased bg-background text-foreground">
-        <AudioEngineProvider>
-            {children}
-        </AudioEngineProvider>
+        <LanguageProvider>
+          <AudioEngineProvider>
+              {children}
+          </AudioEngineProvider>
+        </LanguageProvider>
         <Toaster />
       </body>
     </html>

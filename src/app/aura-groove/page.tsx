@@ -5,22 +5,14 @@ import { AuraGrooveV2 } from '@/components/aura-groove-v2';
 import { Visualizer } from '@/components/ui/visualizer';
 import { useAuraGroove } from '@/hooks/use-aura-groove';
 import { cn } from '@/lib/utils';
-import { getDictionary } from '@/lib/get-dictionary';
-import { useEffect, useState } from 'react';
-import type { Dictionary } from '@/lib/dictionaries/en';
+import { useLanguage } from '@/contexts/language-context';
 import LoadingDots from '@/components/ui/loading-dots';
 
 export default function AuraGrooveUIPage() {
-  const [dict, setDict] = useState<Dictionary | null>(null);
-
-  useEffect(() => {
-    // For now, we'll default to English. A language switcher could change this.
-    getDictionary('en').then(setDict);
-  }, []);
-
+  const { dictionary: dict, loading: langLoading } = useLanguage();
   const auraGrooveProps = useAuraGroove(dict);
 
-  if (!dict) {
+  if (langLoading || !dict) {
     return <div className="flex min-h-screen items-center justify-center"><LoadingDots /></div>;
   }
   

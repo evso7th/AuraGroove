@@ -7,17 +7,12 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Music } from 'lucide-react';
 import Image from 'next/image';
 import LoadingDots from '@/components/ui/loading-dots';
-import { getDictionary } from '@/lib/get-dictionary';
-import { useEffect, useState } from 'react';
-import type { Dictionary } from '@/lib/dictionaries/en';
+import { useLanguage } from '@/contexts/language-context';
+import { LanguageSwitcher } from '@/components/ui/language-switcher';
+
 
 export default function Home() {
-  const [dict, setDict] = useState<Dictionary | null>(null);
-
-  useEffect(() => {
-    // For now, we'll default to English. A language switcher could change this.
-    getDictionary('en').then(setDict);
-  }, []);
+  const { dictionary: dict, loading: langLoading } = useLanguage();
 
   const { 
     handleStart, 
@@ -25,7 +20,7 @@ export default function Home() {
     isInitialized, 
   } = useAuraGrooveLite();
 
-  if (!dict) {
+  if (langLoading || !dict) {
     return <div className="flex min-h-screen flex-col items-center justify-center"><LoadingDots /></div>;
   }
 
@@ -43,6 +38,9 @@ export default function Home() {
     <main className="flex min-h-screen flex-col items-center justify-center p-4 sm:p-8">
       <Card className="w-full max-w-lg shadow-2xl text-center">
         <CardHeader>
+           <div className="absolute top-4 right-4">
+              <LanguageSwitcher />
+           </div>
           <div className="mx-auto mb-4">
             <Image src="/assets/icon8.jpeg" alt="AuraGroove Logo" width={80} height={80} className="rounded-full" />
           </div>

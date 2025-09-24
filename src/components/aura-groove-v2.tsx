@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import type { AuraGrooveProps, ScoreName, BassInstrument, BassTechnique } from "@/types/music";
 import { formatTime } from "@/lib/utils";
 import { Separator } from "./ui/separator";
+import { LanguageSwitcher } from "./ui/language-switcher";
 
 
 const EQ_BANDS = [
@@ -50,6 +51,7 @@ export function AuraGrooveV2({
             <h1 className="text-lg font-bold text-primary">{d.title}</h1>
           </div>
           <div className="flex items-center gap-0">
+             <LanguageSwitcher />
              <Button variant="ghost" size="icon" onClick={handleExit} aria-label="Exit Application">
                 <X className="h-5 w-5" />
               </Button>

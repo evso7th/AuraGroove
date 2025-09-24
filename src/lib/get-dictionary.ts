@@ -1,12 +1,13 @@
 
 import type { Locale } from '@/types/i18n';
+import { dictionary as enDictionary } from './dictionaries/en';
+import { dictionary as ruDictionary } from './dictionaries/ru';
 
-const dictionaries = {
-  en: () => import('@/lib/dictionaries/en').then((module) => module.dictionary),
-  ru: () => import('@/lib/dictionaries/ru').then((module) => module.dictionary),
-};
-
-export const getDictionary = async (locale: Locale) => {
-  const dictionaryLoader = dictionaries[locale] ?? dictionaries.en;
-  return dictionaryLoader();
+// This function is synchronous now, directly returning the imported object.
+export const getDictionary = (locale: Locale) => {
+  const dictionaries = {
+    en: enDictionary,
+    ru: ruDictionary,
+  };
+  return dictionaries[locale] ?? dictionaries.en;
 };

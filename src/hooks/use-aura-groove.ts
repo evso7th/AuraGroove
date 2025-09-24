@@ -18,8 +18,8 @@ const EQ_PRESETS: Record<EQPreset, number[]> = {
 
 const PRESETS_STORAGE_KEY = 'auraGroovePresets-v2';
 
-const OMEGA_SAMPLE_PRESET: UIPreset = {
-  name: "Omega Sample Preset",
+const getOmegaSamplePreset = (dict: Dictionary): UIPreset => ({
+  name: dict.auraGroove.scoreName.omega,
   score: "omega",
   bpm: 75,
   density: 0.5,
@@ -34,7 +34,7 @@ const OMEGA_SAMPLE_PRESET: UIPreset = {
     pads: { enabled: true, volume: 0.2 },
   },
   eqSettings: Array(7).fill(0),
-};
+});
 
 
 /**
@@ -42,7 +42,7 @@ const OMEGA_SAMPLE_PRESET: UIPreset = {
  * Не содержит логики управления музыкой, только инициализация и состояния.
  */
 export const useAuraGrooveLite = () => {
-  const { isInitialized, isInitializing, initialize } = useAudioEngine();
+  const { isInitialized, isInitializing, initialize, toast } = useAudioEngine();
   const router = useRouter();
 
   const handleStart = useCallback(async () => {
@@ -55,8 +55,14 @@ export const useAuraGrooveLite = () => {
     const success = await initialize();
     if (success) {
       router.push('/aura-groove');
+    } else {
+        toast({
+            variant: "destructive",
+            title: "Audio Error",
+            description: "Failed to initialize the audio engine. Please try again.",
+        });
     }
-  }, [isInitialized, isInitializing, initialize, router]);
+  }, [isInitialized, isInitializing, initialize, router, toast]);
 
   return {
     isInitializing,
@@ -124,10 +130,7 @@ export const useAuraGroove = (dictionary: Dictionary | null) => {
   
   useEffect(() => {
     if(dictionary) {
-      setPresets([{
-        ...OMEGA_SAMPLE_PRESET,
-        name: dictionary.auraGroove.scoreName.omega
-      }]);
+      setPresets([getOmegaSamplePreset(dictionary)]);
     }
   }, [dictionary]);
 
@@ -471,7 +474,7 @@ export const useAuraGroove = (dictionary: Dictionary | null) => {
 
   const handleExit = () => {
     setEngineIsPlaying(false);
-    window.location.href = '/';
+    router.push('/');
   };
 
   const handleGoHome = () => {
