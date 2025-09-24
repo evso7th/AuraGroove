@@ -9,6 +9,7 @@ export const metadata: Metadata = {
   description: 'AI-powered ambient music generator',
 };
 
+// This setup is for a single locale. For multiple locales, you'd use [locale] directory.
 export default function RootLayout({
   children,
 }: Readonly<{

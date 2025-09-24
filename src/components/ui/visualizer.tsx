@@ -6,12 +6,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import type { Note, InstrumentPart } from '@/types/music';
 import BackgroundAnimation from './background-animation';
+import type { Dictionary } from '@/lib/dictionaries/en';
 
 interface VisualizerProps {
   isOpen: boolean;
   onClose: () => void;
   activeNotes: (Note & { part: InstrumentPart })[];
   isPlaying: boolean;
+  dictionary: Dictionary;
 }
 
 type AuraText = {
@@ -47,7 +49,7 @@ function midiToHue(midi: number): number {
     }
 }
 
-export function Visualizer({ isOpen, onClose, activeNotes, isPlaying }: VisualizerProps) {
+export function Visualizer({ isOpen, onClose, activeNotes, isPlaying, dictionary }: VisualizerProps) {
   const [texts, setTexts] = useState<AuraText[]>([]);
 
   const addText = useCallback(() => {
@@ -123,7 +125,7 @@ export function Visualizer({ isOpen, onClose, activeNotes, isPlaying }: Visualiz
                     textShadow: `0 0 10px ${text.color}, 0 0 20px ${text.color}`,
                   }}
                 >
-                  AuraGroove
+                  {dictionary.auraGroove.title}
                 </motion.div>
               ))}
             </AnimatePresence>

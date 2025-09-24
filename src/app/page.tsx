@@ -7,15 +7,37 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Music } from 'lucide-react';
 import Image from 'next/image';
 import LoadingDots from '@/components/ui/loading-dots';
+import { getDictionary } from '@/lib/get-dictionary';
+import { useEffect, useState } from 'react';
+import type { Dictionary } from '@/lib/dictionaries/en';
 
 export default function Home() {
+  const [dict, setDict] = useState<Dictionary | null>(null);
+
+  useEffect(() => {
+    // For now, we'll default to English. A language switcher could change this.
+    getDictionary('en').then(setDict);
+  }, []);
+
   const { 
     handleStart, 
     isInitializing, 
     isInitialized, 
-    buttonText, 
-    infoText 
   } = useAuraGrooveLite();
+
+  if (!dict) {
+    return <div className="flex min-h-screen flex-col items-center justify-center"><LoadingDots /></div>;
+  }
+
+  const buttonText = isInitializing 
+    ? dict.home.initializing 
+    : (isInitialized ? dict.home.enter : dict.home.start);
+  
+  const infoText = isInitializing 
+    ? dict.home.infoInitializing 
+    : (isInitialized 
+        ? dict.home.infoReady 
+        : dict.home.infoNotReady);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-4 sm:p-8">
@@ -24,8 +46,8 @@ export default function Home() {
           <div className="mx-auto mb-4">
             <Image src="/assets/icon8.jpeg" alt="AuraGroove Logo" width={80} height={80} className="rounded-full" />
           </div>
-          <CardTitle className="font-headline text-4xl">Welcome to AuraGroove</CardTitle>
-          <CardDescription className="text-lg">Your personal pure digital ambient music generator.</CardDescription>
+          <CardTitle className="font-headline text-4xl">{dict.home.title}</CardTitle>
+          <CardDescription className="text-lg">{dict.home.description}</CardDescription>
         </CardHeader>
         <CardContent className="min-h-[60px] flex flex-col items-center justify-center">
           <p className="text-muted-foreground min-h-[20px]">
@@ -39,14 +61,14 @@ export default function Home() {
             {buttonText}
           </Button>
           <p className="text-xs text-muted-foreground pt-2">
-            AuraGroove (с) 2025 Evgeniy Somov,{' '}
+            {dict.home.footer('')}
             <a 
               href="https://polyankastudio.ru/" 
               target="_blank" 
               rel="noopener noreferrer"
               className="underline hover:text-primary"
             >
-              polyankastudio.ru
+              {dict.home.studio}
             </a>
           </p>
         </CardFooter>

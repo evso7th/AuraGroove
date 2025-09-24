@@ -3,9 +3,10 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings, BassInstrument, InstrumentPart, MelodyInstrument, AccompanimentInstrument, BassTechnique, TextureSettings, TimerSettings, EQPreset, UIPreset, Note } from '@/types/music';
+import type { DrumSettings, InstrumentSettings, ScoreName, WorkerSettings, BassInstrument, InstrumentPart, MelodyInstrument, AccompanimentInstrument, BassTechnique, TextureSettings, TimerSettings, EQPreset, UIPreset, ActiveNote } from '@/types/music';
 import { useAudioEngine } from "@/contexts/audio-engine-context";
 import { useToast } from "./use-toast";
+import type { Dictionary } from "@/lib/dictionaries/en";
 
 const FADE_OUT_DURATION = 120; // 2 minutes
 const SCREENSAVER_TIMEOUT = 60000; // 1 minute
@@ -42,7 +43,6 @@ const OMEGA_SAMPLE_PRESET: UIPreset = {
  */
 export const useAuraGrooveLite = () => {
   const { isInitialized, isInitializing, initialize } = useAudioEngine();
-  const [loadingText, setLoadingText] = useState('Click to initialize audio');
   const router = useRouter();
 
   const handleStart = useCallback(async () => {
@@ -52,29 +52,16 @@ export const useAuraGrooveLite = () => {
     }
     if (isInitializing) return;
 
-    setLoadingText('Initializing Audio Engine...');
     const success = await initialize();
     if (success) {
       router.push('/aura-groove');
-    } else {
-      setLoadingText('Failed to initialize. Please try again.');
     }
   }, [isInitialized, isInitializing, initialize, router]);
-
-  const buttonText = isInitializing ? 'Initializing...' : (isInitialized ? 'Enter' : 'Start AuraGroove');
-  
-  const infoText = isInitializing 
-    ? 'Please wait, the audio engine is initializing...' 
-    : (isInitialized 
-        ? 'Audio engine is ready.' 
-        : 'Click the button below to initialize the audio engine.');
 
   return {
     isInitializing,
     isInitialized,
     handleStart,
-    buttonText,
-    infoText
   };
 };
 
@@ -82,7 +69,7 @@ export const useAuraGrooveLite = () => {
 /**
  * Полная версия хука для основного UI управления музыкой.
  */
-export const useAuraGroove = () => {
+export const useAuraGroove = (dictionary: Dictionary | null) => {
   const { 
     isInitialized,
     isInitializing,
@@ -128,27 +115,37 @@ export const useAuraGroove = () => {
   });
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const [presets, setPresets] = useState<UIPreset[]>([OMEGA_SAMPLE_PRESET]);
+  const [presets, setPresets] = useState<UIPreset[]>([]);
 
   const [isVisualizerOpen, setIsVisualizerOpen] = useState(false);
   const [visualizerColors, setVisualizerColors] = useState<string[]>(['hsl(var(--primary))', 'hsl(var(--accent))', 'hsl(var(--background))']);
 
   const screensaverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  useEffect(() => {
+    if(dictionary) {
+      setPresets([{
+        ...OMEGA_SAMPLE_PRESET,
+        name: dictionary.auraGroove.scoreName.omega
+      }]);
+    }
+  }, [dictionary]);
 
   // Load user presets from localStorage on mount
   useEffect(() => {
+    if (!dictionary) return;
     try {
       const savedPresetsJSON = localStorage.getItem(PRESETS_STORAGE_KEY);
       if (savedPresetsJSON) {
         const savedUserPresets = JSON.parse(savedPresetsJSON) as UIPreset[];
-        // Combine default preset with user presets, ensuring no duplicates by name
-        const userPresets = savedUserPresets.filter(p => p.name !== OMEGA_SAMPLE_PRESET.name);
-        setPresets([OMEGA_SAMPLE_PRESET, ...userPresets]);
+        const defaultPresetName = dictionary.auraGroove.scoreName.omega;
+        const userPresets = savedUserPresets.filter(p => p.name !== defaultPresetName);
+        setPresets(prev => [prev[0], ...userPresets]);
       }
     } catch (error) {
       console.error("Failed to load presets from localStorage", error);
     }
-  }, []);
+  }, [dictionary]);
 
   // Update visualizer colors
   useEffect(() => {
@@ -183,21 +180,24 @@ export const useAuraGroove = () => {
   }, [score, density]);
 
   const savePresetsToLocalStorage = (newPresets: UIPreset[]) => {
+    if (!dictionary) return;
     try {
-      // Don't save the default preset to localStorage
-      const userPresets = newPresets.filter(p => p.name !== OMEGA_SAMPLE_PRESET.name);
+      const defaultPresetName = dictionary.auraGroove.scoreName.omega;
+      const userPresets = newPresets.filter(p => p.name !== defaultPresetName);
       localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(userPresets));
     } catch (error) {
       console.error("Failed to save presets to localStorage", error);
-      toast({ variant: 'destructive', title: 'Error', description: 'Could not save presets.' });
+      toast({ variant: 'destructive', title: 'Error', description: dictionary.auraGroove.toasts.saveError });
     }
   };
 
   const handleSavePreset = () => {
-    const presetName = window.prompt("Enter a name for your preset:");
+    if (!dictionary) return;
+    const presetName = window.prompt(dictionary.auraGroove.presetsModal.presetSavePrompt);
     if (presetName && presetName.trim() !== '') {
-      if (presetName.trim() === OMEGA_SAMPLE_PRESET.name) {
-        toast({ variant: 'destructive', title: 'Error', description: 'Cannot overwrite the default sample preset.' });
+      const defaultPresetName = dictionary.auraGroove.scoreName.omega;
+      if (presetName.trim() === defaultPresetName) {
+        toast({ variant: 'destructive', title: 'Error', description: dictionary.auraGroove.presetsModal.presetSaveError });
         return;
       }
 
@@ -213,18 +213,18 @@ export const useAuraGroove = () => {
       };
       
       const newPresets = [
-        OMEGA_SAMPLE_PRESET,
-        ...presets.filter(p => p.name !== newPreset.name && p.name !== OMEGA_SAMPLE_PRESET.name), 
+        ...presets.filter(p => p.name !== newPreset.name), 
         newPreset
       ];
 
       setPresets(newPresets);
       savePresetsToLocalStorage(newPresets);
-      toast({ title: 'Preset Saved', description: `"${newPreset.name}" has been saved.` });
+      toast({ title: dictionary.auraGroove.presetsModal.presetSaved, description: dictionary.auraGroove.toasts.presetSavedDescription(newPreset.name) });
     }
   };
 
   const handleLoadPreset = (presetName: string) => {
+    if (!dictionary) return;
     const preset = presets.find(p => p.name === presetName);
     if (preset) {
       // Create a full settings object from the preset
@@ -267,7 +267,7 @@ export const useAuraGroove = () => {
       
       preset.eqSettings.forEach((gain, index) => setEQGain(index, gain));
 
-      toast({ title: 'Preset Loaded', description: `"${presetName}" has been loaded.` });
+      toast({ title: dictionary.auraGroove.presetsModal.presetLoaded, description: dictionary.auraGroove.toasts.presetLoadedDescription(presetName) });
       setIsPresetModalOpen(false); // Close modal after loading
     }
   };
@@ -478,12 +478,61 @@ export const useAuraGroove = () => {
     handleExit();
   };
 
+  if (!dictionary) {
+    return {
+        dictionary: {} as Dictionary,
+        isInitializing: true,
+        isPlaying: false,
+        activeNotes: [],
+        handleTogglePlay: () => {},
+        drumSettings: { pattern: 'none', volume: 0 },
+        setDrumSettings: () => {},
+        instrumentSettings: {
+            bass: { name: 'none', volume: 0, technique: 'arpeggio' },
+            melody: { name: 'none', volume: 0 },
+            accompaniment: { name: 'none', volume: 0 },
+        },
+        setInstrumentSettings: () => {},
+        handleBassTechniqueChange: () => {},
+        handleVolumeChange: () => {},
+        textureSettings: {
+            sparkles: { enabled: false, volume: 0 },
+            pads: { enabled: false, volume: 0 },
+        },
+        handleTextureEnabledChange: () => {},
+        bpm: 120,
+        handleBpmChange: () => {},
+        score: 'dreamtales' as ScoreName,
+        handleScoreChange: () => {},
+        density: 0.5,
+        setDensity: () => {},
+        handleGoHome: () => {},
+        handleExit: () => {},
+        isEqModalOpen: false,
+        setIsEqModalOpen: () => {},
+        eqSettings: [],
+        handleEqChange: () => {},
+        handleEqPresetChange: () => {},
+        timerSettings: { duration: 0, timeLeft: 0, isActive: false },
+        handleTimerDurationChange: () => {},
+        handleToggleTimer: () => {},
+        presets: [],
+        handleSavePreset: () => {},
+        handleLoadPreset: () => {},
+        isPresetModalOpen: false,
+        setIsPresetModalOpen: () => {},
+        isVisualizerOpen: false,
+        setIsVisualizerOpen: () => {},
+        visualizerColors: []
+    }
+  }
+
 
   return {
+    dictionary,
     isInitializing,
     isPlaying,
     activeNotes,
-    loadingText: isInitializing ? 'Initializing...' : (isInitialized ? 'Ready' : 'Click to initialize audio'),
     handleTogglePlay,
     drumSettings,
     setDrumSettings: handleDrumSettingsChange,

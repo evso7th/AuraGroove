@@ -12,8 +12,7 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import type { AuraGrooveProps } from "@/types/music";
-import { useRouter } from "next/navigation";
+import type { AuraGrooveProps, ScoreName, BassInstrument, BassTechnique } from "@/types/music";
 import { formatTime } from "@/lib/utils";
 import { Separator } from "./ui/separator";
 
@@ -24,7 +23,7 @@ const EQ_BANDS = [
 ];
 
 export function AuraGrooveV2({
-  isPlaying, isInitializing, handleTogglePlay, drumSettings, setDrumSettings, instrumentSettings,
+  dictionary, isPlaying, isInitializing, handleTogglePlay, drumSettings, setDrumSettings, instrumentSettings,
   setInstrumentSettings, handleBassTechniqueChange, handleVolumeChange, textureSettings, handleTextureEnabledChange,
   bpm, handleBpmChange, score, handleScoreChange, density, setDensity, handleGoHome,
   isEqModalOpen, setIsEqModalOpen, eqSettings, handleEqChange, handleEqPresetChange,
@@ -34,6 +33,7 @@ export function AuraGrooveV2({
 }: AuraGrooveProps) {
 
   const [isClient, setIsClient] = useState(false);
+  const d = dictionary.auraGroove;
 
   useEffect(() => {
     setIsClient(true);
@@ -47,7 +47,7 @@ export function AuraGrooveV2({
         <div className="flex items-center justify-between">
           <div className="flex flex-row items-center gap-2 pl-1">
             <Image src="/assets/icon8.jpeg" alt="AuraGroove Logo" width={32} height={32} className="rounded-full" />
-            <h1 className="text-lg font-bold text-primary">AuraGroove</h1>
+            <h1 className="text-lg font-bold text-primary">{d.title}</h1>
           </div>
           <div className="flex items-center gap-0">
              <Button variant="ghost" size="icon" onClick={handleExit} aria-label="Exit Application">
@@ -58,7 +58,7 @@ export function AuraGrooveV2({
         <div className="flex flex-col items-center gap-1 pt-2 pb-1.5">
            <Button type="button" onClick={handleTogglePlay} disabled={isInitializing} className="w-[60%] text-base h-10">
               {isPlaying ? <Pause className="mr-2 h-5 w-5" /> : <Music className="mr-2 h-5 w-5" />}
-              {isPlaying ? "Stop" : "Play"}
+              {isPlaying ? d.stop : d.play}
            </Button>
         </div>
       </header>
@@ -67,46 +67,42 @@ export function AuraGrooveV2({
       <main className="flex-grow overflow-y-auto pr-2 -mr-2">
         <Tabs defaultValue="composition" className="w-full">
           <TabsList className="grid w-full grid-cols-3 h-8">
-            <TabsTrigger value="composition" className="text-xs">Composition</TabsTrigger>
-            <TabsTrigger value="instruments" className="text-xs">Instruments</TabsTrigger>
-            <TabsTrigger value="samples" className="text-xs">Samples</TabsTrigger>
+            <TabsTrigger value="composition" className="text-xs">{d.composition}</TabsTrigger>
+            <TabsTrigger value="instruments" className="text-xs">{d.instruments}</TabsTrigger>
+            <TabsTrigger value="samples" className="text-xs">{d.samples}</TabsTrigger>
           </TabsList>
           
           <div className="grid">
             <TabsContent value="composition" className="space-y-1.5 pt-2 col-start-1 row-start-1 px-1">
               <Card className="border-0 shadow-none">
-                <CardHeader className="p-2"><CardTitle className="flex items-center gap-2 text-sm"><FileMusic className="h-4 w-4"/> Composition</CardTitle></CardHeader>
+                <CardHeader className="p-2"><CardTitle className="flex items-center gap-2 text-sm"><FileMusic className="h-4 w-4"/> {d.composition}</CardTitle></CardHeader>
                 <CardContent className="space-y-2 p-3 pt-0">
                   <div className="grid grid-cols-3 items-center gap-2">
-                      <Label htmlFor="score-selector" className="text-right text-xs">Style</Label>
+                      <Label htmlFor="score-selector" className="text-right text-xs">{d.style}</Label>
                       <Select value={score} onValueChange={(v) => handleScoreChange(v as any)} disabled={isInitializing || isPlaying}>
                           <SelectTrigger id="score-selector" className="col-span-2 h-8 text-xs"><SelectValue /></SelectTrigger>
                           <SelectContent>
-                              <SelectItem value="dreamtales">Dreamtales</SelectItem>
-                              <SelectItem value="evolve">Evolve</SelectItem>
-                              <SelectItem value="omega">Omega</SelectItem>
-                              <SelectItem value="journey">Journey</SelectItem>
-                              <SelectItem value="multeity">Multeity</SelectItem>
-                              <SelectItem value="slow_blues">Slow Blues</SelectItem>
-                              <SelectItem value="celtic_ballad">Celtic Ballad</SelectItem>
+                              {Object.keys(d.scoreName).map(key => (
+                                <SelectItem key={key} value={key} className="text-xs">{d.scoreName[key as keyof typeof d.scoreName]}</SelectItem>
+                              ))}
                           </SelectContent>
                       </Select>
                   </div>
                   <div className="grid grid-cols-3 items-center gap-2">
-                    <Label htmlFor="bpm-slider" className="text-right text-xs">BPM</Label>
+                    <Label htmlFor="bpm-slider" className="text-right text-xs">{d.bpm}</Label>
                     <Slider id="bpm-slider" value={[bpm]} min={60} max={160} step={5} onValueChange={(v) => handleBpmChange(v[0])} className="col-span-2" disabled={isInitializing}/>
                   </div>
                   <div className="grid grid-cols-3 items-center gap-2">
-                    <Label htmlFor="density-slider" className="text-right text-xs">Density</Label>
+                    <Label htmlFor="density-slider" className="text-right text-xs">{d.density}</Label>
                     <Slider id="density-slider" value={[density]} min={0.1} max={1} step={0.05} onValueChange={(v) => setDensity(v[0])} className="col-span-2" disabled={isInitializing}/>
                   </div>
                 </CardContent>
               </Card>
                <Card className="border-0 shadow-none mt-2">
-                <CardHeader className="p-2"><CardTitle className="flex items-center gap-2 text-sm"><Timer className="h-4 w-4"/> Sleep Timer</CardTitle></CardHeader>
+                <CardHeader className="p-2"><CardTitle className="flex items-center gap-2 text-sm"><Timer className="h-4 w-4"/> {d.sleepTimer}</CardTitle></CardHeader>
                 <CardContent className="space-y-2 p-3 pt-0">
                     <div className="grid grid-cols-3 items-center gap-2">
-                        <Label htmlFor="timer-slider" className="text-right text-xs">Minutes</Label>
+                        <Label htmlFor="timer-slider" className="text-right text-xs">{d.minutes}</Label>
                         <Slider
                             id="timer-slider"
                             value={[timerSettings.duration / 60]}
@@ -125,7 +121,7 @@ export function AuraGrooveV2({
                             variant={timerSettings.isActive ? 'destructive' : 'secondary'}
                             className="w-full h-8 text-xs"
                         >
-                            {timerSettings.isActive ? `Stop Timer (${formatTime(timerSettings.timeLeft)})` : 'Start Timer'}
+                            {timerSettings.isActive ? d.stopTimer(formatTime(timerSettings.timeLeft)) : d.startTimer}
                         </Button>
                     </div>
                 </CardContent>
@@ -134,38 +130,39 @@ export function AuraGrooveV2({
 
             <TabsContent value="instruments" className="space-y-1 pt-2 col-start-1 row-start-1 px-1">
                <Card className="border-0 shadow-none">
-                  <CardHeader className="p-2"><CardTitle className="flex items-center gap-2 text-sm"><SlidersHorizontal className="h-4 w-4"/> Instruments</CardTitle></CardHeader>
+                  <CardHeader className="p-2"><CardTitle className="flex items-center gap-2 text-sm"><SlidersHorizontal className="h-4 w-4"/> {d.instruments}</CardTitle></CardHeader>
                   <CardContent className="space-y-1 p-3 pt-0">
                       {Object.entries(instrumentSettings).map(([part, settings]) => (
                           <div key={part} className="p-2 border rounded-md space-y-2">
                              <div className="grid grid-cols-2 items-center gap-2">
-                                  <Label className="font-semibold flex items-center gap-1.5 capitalize text-xs"><Piano className="h-4 w-4"/>{part}</Label>
+                                  <Label className="font-semibold flex items-center gap-1.5 capitalize text-xs"><Piano className="h-4 w-4"/>{d.part[part as keyof typeof d.part]}</Label>
                                   <Select value={settings.name} onValueChange={(v) => setInstrumentSettings(part as any, v as any)} disabled={isInitializing || isPlaying}>
                                       <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                                       <SelectContent>
-                                          {(part === 'bass' ? ['classicBass', 'glideBass', 'ambientDrone', 'resonantGliss', 'hypnoticDrone', 'livingRiff', 'cello', 'none'] : ['synth', 'organ', 'mellotron', 'theremin', 'flute', 'lute', 'none']).map(inst => (
-                                            <SelectItem key={inst} value={inst} className="text-xs">{inst.charAt(0).toUpperCase() + inst.slice(1).replace(/([A-Z])/g, ' $1')}</SelectItem>
+                                          {(part === 'bass' 
+                                            ? Object.keys(d.instrumentName).filter(k => ['classicBass', 'glideBass', 'ambientDrone', 'resonantGliss', 'hypnoticDrone', 'livingRiff', 'cello', 'none'].includes(k)) 
+                                            : Object.keys(d.instrumentName).filter(k => ['synth', 'organ', 'mellotron', 'theremin', 'flute', 'lute', 'none'].includes(k))
+                                          ).map(inst => (
+                                            <SelectItem key={inst} value={inst} className="text-xs">{d.instrumentName[inst as keyof typeof d.instrumentName]}</SelectItem>
                                           ))}
                                       </SelectContent>
                                   </Select>
                               </div>
                                {part === 'bass' && (
                                   <div className="grid grid-cols-2 items-center gap-2">
-                                      <Label className="font-semibold flex items-center gap-1.5 capitalize text-xs"><GitBranch className="h-4 w-4"/>Technique</Label>
-                                       <Select value={settings.technique} onValueChange={(v) => handleBassTechniqueChange(v as any)} disabled={isInitializing || isPlaying || settings.name === 'none'}>
+                                      <Label className="font-semibold flex items-center gap-1.5 capitalize text-xs"><GitBranch className="h-4 w-4"/>{d.bassTechnique}</Label>
+                                       <Select value={(settings as {technique: BassTechnique}).technique} onValueChange={(v) => handleBassTechniqueChange(v as any)} disabled={isInitializing || isPlaying || settings.name === 'none'}>
                                           <SelectTrigger className="h-8 text-xs"><SelectValue/></SelectTrigger>
                                           <SelectContent>
-                                              <SelectItem value="arpeggio" className="text-xs">Arpeggio</SelectItem>
-                                              <SelectItem value="portamento" className="text-xs">Portamento</SelectItem>
-                                              <SelectItem value="glissando" className="text-xs">Glissando</SelectItem>
-                                              <SelectItem value="glide" className="text-xs">Glide</SelectItem>
-                                              <SelectItem value="pulse" className="text-xs">Pulse</SelectItem>
+                                            {Object.keys(d.bassTechniqueName).map(tech => (
+                                              <SelectItem key={tech} value={tech} className="text-xs">{d.bassTechniqueName[tech as keyof typeof d.bassTechniqueName]}</SelectItem>
+                                            ))}
                                           </SelectContent>
                                       </Select>
                                   </div>
                               )}
                               <div className="flex items-center gap-2">
-                                  <Label className="text-xs text-muted-foreground"><Speaker className="h-3 w-3 inline-block mr-1"/>Volume</Label>
+                                  <Label className="text-xs text-muted-foreground"><Speaker className="h-3 w-3 inline-block mr-1"/>{d.volume}</Label>
                                   <Slider value={[settings.volume]} max={1} step={0.05} onValueChange={(v) => handleVolumeChange(part as any, v[0])} disabled={isInitializing || settings.name === 'none'} className="[&>span>span]:bg-primary"/>
                               </div>
                           </div>
@@ -176,42 +173,42 @@ export function AuraGrooveV2({
 
             <TabsContent value="samples" className="space-y-1.5 pt-2 col-start-1 row-start-1 px-1">
                <Card className="border-0 shadow-none">
-                  <CardHeader className="p-2"><CardTitle className="flex items-center gap-2 text-sm"><Atom className="h-4 w-4"/> Sampled Textures</CardTitle></CardHeader>
+                  <CardHeader className="p-2"><CardTitle className="flex items-center gap-2 text-sm"><Atom className="h-4 w-4"/>{d.sampledTextures}</CardTitle></CardHeader>
                   <CardContent className="space-y-1.5 p-3 pt-0">
                       <div className="p-2 border rounded-md">
                           <div className="flex justify-between items-center mb-1">
-                              <Label className="font-semibold flex items-center gap-1.5 text-sm"><Sparkles className="h-4 w-4"/>Sparkles</Label>
+                              <Label className="font-semibold flex items-center gap-1.5 text-sm"><Sparkles className="h-4 w-4"/>{d.sparkles}</Label>
                               <Switch checked={textureSettings.sparkles.enabled} onCheckedChange={(c) => handleTextureEnabledChange('sparkles', c)} disabled={isInitializing}/>
                           </div>
                           <div className="flex items-center gap-2">
-                              <Label className="text-xs text-muted-foreground"><Speaker className="h-3 w-3 inline-block mr-1"/>Volume</Label>
+                              <Label className="text-xs text-muted-foreground"><Speaker className="h-3 w-3 inline-block mr-1"/>{d.volume}</Label>
                               <Slider value={[textureSettings.sparkles.volume]} max={1} step={0.05} onValueChange={(v) => handleVolumeChange('sparkles', v[0])} disabled={isInitializing || !textureSettings.sparkles.enabled}/>
                           </div>
                       </div>
                        <div className="p-2 border rounded-md">
                           <div className="flex justify-between items-center mb-1">
-                              <Label className="font-semibold flex items-center gap-1.5 text-sm"><Waves className="h-4 w-4"/>Pads</Label>
+                              <Label className="font-semibold flex items-center gap-1.5 text-sm"><Waves className="h-4 w-4"/>{d.pads}</Label>
                               <Switch checked={textureSettings.pads.enabled} onCheckedChange={(c) => handleTextureEnabledChange('pads', c)} disabled={isInitializing}/>
                           </div>
                           <div className="flex items-center gap-2">
-                              <Label className="text-xs text-muted-foreground"><Speaker className="h-3 w-3 inline-block mr-1"/>Volume</Label>
+                              <Label className="text-xs text-muted-foreground"><Speaker className="h-3 w-3 inline-block mr-1"/>{d.volume}</Label>
                               <Slider value={[textureSettings.pads.volume]} max={1} step={0.05} onValueChange={(v) => handleVolumeChange('pads', v[0])} disabled={isInitializing || !textureSettings.pads.enabled}/>
                           </div>
                       </div>
                        <div className="p-2 border rounded-md">
                           <div className="flex justify-between items-center mb-1">
-                              <Label className="font-semibold flex items-center gap-1.5 text-sm"><Drum className="h-4 w-4"/>Drums</Label>
+                              <Label className="font-semibold flex items-center gap-1.5 text-sm"><Drum className="h-4 w-4"/>{d.drums}</Label>
                                <Select value={drumSettings.pattern} onValueChange={(v) => setDrumSettings(d => ({...d, pattern: v as any}))} disabled={isInitializing || isPlaying}>
                                   <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue /></SelectTrigger>
                                   <SelectContent>
-                                      <SelectItem value="none" className="text-xs">None</SelectItem>
-                                      <SelectItem value="ambient_beat" className="text-xs">Ambient</SelectItem>
-                                      <SelectItem value="composer" className="text-xs">Composer</SelectItem>
+                                      {Object.keys(d.drumPattern).map(p => (
+                                          <SelectItem key={p} value={p} className="text-xs">{d.drumPattern[p as keyof typeof d.drumPattern]}</SelectItem>
+                                      ))}
                                   </SelectContent>
                               </Select>
                           </div>
                           <div className="flex items-center gap-2">
-                              <Label className="text-xs text-muted-foreground"><Speaker className="h-3 w-3 inline-block mr-1"/>Volume</Label>
+                              <Label className="text-xs text-muted-foreground"><Speaker className="h-3 w-3 inline-block mr-1"/>{d.volume}</Label>
                               <Slider value={[drumSettings.volume]} max={1} step={0.05} onValueChange={(v) => setDrumSettings(d => ({...d, volume: v[0]}))} disabled={isInitializing || drumSettings.pattern === 'none'}/>
                           </div>
                       </div>
@@ -229,21 +226,21 @@ export function AuraGrooveV2({
         <div className="flex items-center justify-center gap-2">
           {isClient && (
             <>
-              <Button variant="ghost" size="icon" onClick={handleGoHome} aria-label="Go to Home"><Home className="h-5 w-5" /></Button>
+              <Button variant="ghost" size="icon" onClick={handleGoHome} aria-label={d.footer.home}><Home className="h-5 w-5" /></Button>
 
               <Dialog open={isPresetModalOpen} onOpenChange={setIsPresetModalOpen}>
                 <DialogTrigger asChild>
-                  <Button variant="ghost" size="icon" aria-label="Save or Load Presets"><Save className="h-5 w-5" /></Button>
+                  <Button variant="ghost" size="icon" aria-label={d.footer.presets}><Save className="h-5 w-5" /></Button>
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>Global Presets</DialogTitle>
+                    <DialogTitle>{d.presetsModal.title}</DialogTitle>
                   </DialogHeader>
                   <div className="space-y-4">
-                    <p className="text-sm text-muted-foreground">Load a saved preset or save your current settings.</p>
+                    <p className="text-sm text-muted-foreground">{d.presetsModal.description}</p>
                     <Select onValueChange={handleLoadPreset} disabled={presets.length === 0}>
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Load a preset..." />
+                        <SelectValue placeholder={d.presetsModal.loadPlaceholder} />
                       </SelectTrigger>
                       <SelectContent>
                         {presets.map(p => (
@@ -254,31 +251,31 @@ export function AuraGrooveV2({
                   </div>
                   <DialogFooter>
                     <Button variant="outline" onClick={handleSavePreset} className="w-full">
-                      <Save className="mr-2 h-4 w-4" /> Save Current Settings
+                      <Save className="mr-2 h-4 w-4" /> {d.presetsModal.saveButton}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
 
-              <Button variant="ghost" size="icon" onClick={() => setIsVisualizerOpen(true)} aria-label="Open Visualizer">
+              <Button variant="ghost" size="icon" onClick={() => setIsVisualizerOpen(true)} aria-label={d.footer.visualizer}>
                 <Wand2 className="h-5 w-5" />
               </Button>
 
               <Dialog open={isEqModalOpen} onOpenChange={setIsEqModalOpen}>
                 <DialogTrigger asChild>
-                  <Button variant="ghost" size="icon" aria-label="Open Equalizer">EQ</Button>
+                  <Button variant="ghost" size="icon" aria-label={d.footer.eq}>EQ</Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-md">
                   <DialogHeader className="flex-row justify-between items-center">
-                    <DialogTitle>System Equalizer</DialogTitle>
+                    <DialogTitle>{d.eqModal.title}</DialogTitle>
                     <div className="w-[150px] mr-8">
                       <Select onValueChange={(value) => handleEqPresetChange(value as any)}>
                         <SelectTrigger className="h-8 text-xs">
-                          <SelectValue placeholder="Select a preset" />
+                          <SelectValue placeholder={d.eqModal.presetPlaceholder} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="mobile" className="text-xs">Mobile Phones</SelectItem>
-                          <SelectItem value="acoustic" className="text-xs">Acoustic System</SelectItem>
+                          <SelectItem value="mobile" className="text-xs">{d.eqModal.presets.mobile}</SelectItem>
+                          <SelectItem value="acoustic" className="text-xs">{d.eqModal.presets.acoustic}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

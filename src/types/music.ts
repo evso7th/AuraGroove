@@ -1,4 +1,5 @@
 
+import type { Dictionary } from "@/lib/dictionaries/en";
 
 // A musical note to be played by a synthesizer.
 export type Note = {
@@ -108,6 +109,7 @@ export type UIPreset = {
 export type ActiveNote = Note & { part: InstrumentPart };
 
 export type AuraGrooveProps = {
+    dictionary: Dictionary;
     isPlaying: boolean;
     isInitializing: boolean;
     activeNotes: ActiveNote[];

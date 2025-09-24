@@ -3,13 +3,14 @@
 
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import type { WorkerSettings, Score, InstrumentPart, BassInstrument, MelodyInstrument, AccompanimentInstrument, BassTechnique, TextureSettings, ScoreName, Note } from '@/types/music';
+import type { WorkerSettings, Score, InstrumentPart, BassInstrument, MelodyInstrument, AccompanimentInstrument, BassTechnique, TextureSettings, Note } from '@/types/music';
 import { DrumMachine } from '@/lib/drum-machine';
 import { AccompanimentSynthManager } from '@/lib/accompaniment-synth-manager';
 import { BassSynthManager } from '@/lib/bass-synth-manager';
 import { SparklePlayer } from '@/lib/sparkle-player';
 import { PadPlayer } from '@/lib/pad-player';
 import { getPresetParams } from "@/lib/presets";
+import type { Dictionary } from '@/lib/dictionaries/en';
 
 // --- Type Definitions ---
 type WorkerMessage = {
@@ -32,7 +33,7 @@ const EQ_FREQUENCIES = [60, 125, 250, 500, 1000, 2000, 4000];
 
 const isMobile = () => typeof window !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-type ActiveNote = Note & { part: InstrumentPart };
+export type ActiveNote = Note & { part: InstrumentPart };
 
 // --- React Context ---
 interface AudioEngineContextType {
@@ -217,7 +218,9 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
                 if (event.data.type === 'score' && event.data.score) scheduleScore(event.data.score, context);
                 else if (event.data.type === 'sparkle') sparklePlayerRef.current?.playRandomSparkle(scheduleTime);
                 else if (event.data.type === 'pad' && event.data.padName) padPlayerRef.current?.setPad(event.data.padName, scheduleTime);
-                else if (event.data.type === 'error') toast({ variant: "destructive", title: "Worker Error", description: event.data.error });
+                else if (event.data.type === 'error') {
+                   // Toast is now handled in useAuraGroove hook
+                }
             };
             workerRef.current = worker;
         }
@@ -235,13 +238,13 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
         return true;
     } catch (e) {
         const errorMessage = e instanceof Error ? e.message : String(e);
-        toast({ variant: "destructive", title: "Audio Initialization Error", description: `Could not start audio: ${errorMessage}`});
+        // Toast is now handled in useAuraGroove hook
         console.error(e);
         return false;
     } finally {
         setIsInitializing(false);
     }
-  }, [isInitialized, isInitializing, toast, scheduleScore]);
+  }, [isInitialized, isInitializing, scheduleScore]);
 
   const stopAllSounds = useCallback(() => {
     accompanimentManagerRef.current?.allNotesOff();
@@ -326,6 +329,19 @@ export const AudioEngineProvider = ({ children }: { children: React.ReactNode })
           masterGainNodeRef.current.gain.linearRampToValueAtTime(1, audioContextRef.current.currentTime + 0.5);
       }
   }, []);
+
+  // Worker error handling
+  useEffect(() => {
+    const worker = workerRef.current;
+    const handleError = (event: MessageEvent) => {
+      if (event.data.type === 'error') {
+        toast({ variant: "destructive", title: "Worker Error", description: event.data.error });
+      }
+    };
+    worker?.addEventListener('message', handleError);
+    return () => worker?.removeEventListener('message', handleError);
+  }, [toast]);
+  
 
   return (
     <AudioEngineContext.Provider value={{
