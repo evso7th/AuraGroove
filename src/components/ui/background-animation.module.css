@@ -1,0 +1,92 @@
+.view {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  perspective: 400px;
+}
+
+.plane {
+  width: 120px;
+  height: 120px;
+  transform-style: preserve-3d;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: auto;
+  transform: rotateX(60deg) rotateZ(-30deg);
+  animation: rotate 20s infinite linear;
+}
+
+.circle {
+  width: 120px;
+  height: 120px;
+  position: absolute;
+  transform-style: preserve-3d;
+  border-radius: 100%;
+  box-sizing: border-box;
+  animation: animate-color 15s infinite linear;
+}
+
+.circle::before, .circle::after {
+  content: '';
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: auto;
+  width: 10%;
+  height: 10%;
+  border-radius: 100%;
+  background: var(--aura-color);
+  box-sizing: border-box;
+  box-shadow: 0 0 60px 2px var(--aura-color);
+}
+
+.circle::before {
+  transform: translateZ(-90px);
+}
+
+.circle::after {
+  transform: translateZ(90px);
+}
+
+.plane .circle:nth-child(1) { transform: rotateZ(72deg) rotateX(63.435deg); }
+.plane .circle:nth-child(2) { transform: rotateZ(144deg) rotateX(63.435deg); }
+.plane .circle:nth-child(3) { transform: rotateZ(216deg) rotateX(63.435deg); }
+.plane .circle:nth-child(4) { transform: rotateZ(288deg) rotateX(63.435deg); }
+.plane .circle:nth-child(5) { transform: rotateZ(360deg) rotateX(63.435deg); }
+.plane .circle:nth-child(6) { transform: rotateZ(432deg) rotateX(63.435deg); }
+
+@keyframes rotate {
+  0% {
+    transform: rotateX(0) rotateY(0) rotateZ(0);
+  }
+  100% {
+    transform: rotateX(360deg) rotateY(360deg) rotateZ(360deg);
+  }
+}
+
+@keyframes animate-color {
+  0% {
+    --aura-color: hsl(270, 40%, 55%);
+    box-shadow: 0 0 60px var(--aura-color), inset 0 0 60px var(--aura-color);
+  }
+  33% {
+    --aura-color: hsl(290, 50%, 65%);
+    box-shadow: 0 0 70px var(--aura-color), inset 0 0 70px var(--aura-color);
+  }
+  66% {
+    --aura-color: hsl(250, 45%, 60%);
+    box-shadow: 0 0 65px var(--aura-color), inset 0 0 65px var(--aura-color);
+  }
+  100% {
+    --aura-color: hsl(270, 40%, 55%);
+    box-shadow: 0 0 60px var(--aura-color), inset 0 0 60px var(--aura-color);
+  }
+}

@@ -1,17 +1,18 @@
 "use client";
 
 import React from 'react';
+import styles from './background-animation.module.css';
 
 const BackgroundAnimation = () => {
   return (
-    <div className="view">
-      <div className="plane main">
-        <div className="circle"></div>
-        <div className="circle"></div>
-        <div className="circle"></div>
-        <div className="circle"></div>
-        <div className="circle"></div>
-        <div className="circle"></div>
+    <div className={styles.view}>
+      <div className={styles.plane}>
+        <div className={styles.circle}></div>
+        <div className={styles.circle}></div>
+        <div className={styles.circle}></div>
+        <div className={styles.circle}></div>
+        <div className={styles.circle}></div>
+        <div className={styles.circle}></div>
       </div>
     </div>
   );
