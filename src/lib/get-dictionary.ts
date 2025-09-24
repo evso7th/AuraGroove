@@ -1,5 +1,4 @@
 
-import 'server-only';
 import type { Locale } from '@/types/i18n';
 
 const dictionaries = {
