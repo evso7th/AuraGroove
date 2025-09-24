@@ -14,16 +14,6 @@ interface VisualizerProps {
   isPlaying: boolean;
 }
 
-const PART_X_POSITION_BASE: Record<InstrumentPart, number> = {
-    bass: 20,
-    accompaniment: 50,
-    melody: 80,
-    drums: 50,
-    effects: 50,
-    sparkles: 50,
-    pads: 50,
-};
-
 // Returns a random horizontal position.
 function getDynamicXPosition(): number {
     return Math.random() * 90 + 5; // Random value between 5% and 95%
