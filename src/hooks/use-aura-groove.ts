@@ -8,6 +8,7 @@ import { useAudioEngine } from "@/contexts/audio-engine-context";
 import { useToast } from "./use-toast";
 
 const FADE_OUT_DURATION = 120; // 2 minutes
+const SCREENSAVER_TIMEOUT = 60000; // 1 minute
 
 const EQ_PRESETS: Record<EQPreset, number[]> = {
   'mobile': [0, 0, 0, 0, 0, 0, 0],
@@ -131,6 +132,8 @@ export const useAuraGroove = () => {
 
   const [isVisualizerOpen, setIsVisualizerOpen] = useState(false);
   const [visualizerColors, setVisualizerColors] = useState<string[]>(['hsl(var(--primary))', 'hsl(var(--accent))', 'hsl(var(--background))']);
+
+  const screensaverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load user presets from localStorage on mount
   useEffect(() => {
@@ -269,7 +272,6 @@ export const useAuraGroove = () => {
     }
   };
 
-
   const getFullSettings = useCallback((): WorkerSettings => {
     return {
       bpm,
@@ -283,6 +285,49 @@ export const useAuraGroove = () => {
       density,
     };
   }, [bpm, score, instrumentSettings, drumSettings, textureSettings, density]);
+  
+  // Screensaver logic
+  const resetScreensaverTimer = useCallback(() => {
+    if (screensaverTimeoutRef.current) {
+      clearTimeout(screensaverTimeoutRef.current);
+    }
+    if (isPlaying) {
+      screensaverTimeoutRef.current = setTimeout(() => {
+        setIsVisualizerOpen(true);
+      }, SCREENSAVER_TIMEOUT);
+    }
+  }, [isPlaying]);
+
+  useEffect(() => {
+    const activityEvents: (keyof WindowEventMap)[] = ['mousemove', 'mousedown', 'keydown', 'touchstart'];
+
+    const handleActivity = () => {
+      resetScreensaverTimer();
+    };
+
+    if (isPlaying) {
+      activityEvents.forEach(event => window.addEventListener(event, handleActivity));
+      resetScreensaverTimer();
+    }
+
+    return () => {
+      activityEvents.forEach(event => window.removeEventListener(event, handleActivity));
+      if (screensaverTimeoutRef.current) {
+        clearTimeout(screensaverTimeoutRef.current);
+      }
+    };
+  }, [isPlaying, resetScreensaverTimer]);
+
+  useEffect(() => {
+    if (isVisualizerOpen) {
+      if (screensaverTimeoutRef.current) {
+        clearTimeout(screensaverTimeoutRef.current);
+      }
+    } else {
+      resetScreensaverTimer();
+    }
+  }, [isVisualizerOpen, resetScreensaverTimer]);
+
 
   // Initial settings sync
   useEffect(() => {
@@ -474,3 +519,5 @@ export const useAuraGroove = () => {
     visualizerColors
   };
 };
+
+    
