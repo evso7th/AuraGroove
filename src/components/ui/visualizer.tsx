@@ -24,12 +24,9 @@ const PART_X_POSITION_BASE: Record<InstrumentPart, number> = {
     pads: 50,
 };
 
-// Adds some horizontal randomness to the note's position
-function getDynamicXPosition(part: InstrumentPart, time: number): number {
-    const base = PART_X_POSITION_BASE[part];
-    // A small random offset based on the note's timing and a random factor
-    const offset = (Math.sin(time * 2) * 5) + (Math.random() - 0.5) * 10;
-    return Math.max(5, Math.min(95, base + offset)); // Clamp between 5% and 95%
+// Returns a random horizontal position.
+function getDynamicXPosition(): number {
+    return Math.random() * 90 + 5; // Random value between 5% and 95%
 }
 
 // Maps a MIDI note (21-108) to a hue value (approx. violet to yellow)
@@ -71,7 +68,7 @@ export function Visualizer({ isOpen, onClose, activeNotes, isPlaying }: Visualiz
                 {isPlaying && activeNotes.map((note) => (
                   <motion.circle
                     key={`${note.part}-${note.midi}-${note.time}`}
-                    cx={`${getDynamicXPosition(note.part, note.time)}%`}
+                    cx={`${getDynamicXPosition()}%`}
                     cy={`${100 - ((note.midi - 20) / 88) * 100}%`}
                     r={note.velocity ? 5 + note.velocity * 25 : 15}
                     fill={`hsl(${midiToHue(note.midi)}, 100%, 70%)`}
